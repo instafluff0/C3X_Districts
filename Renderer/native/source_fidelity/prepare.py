@@ -168,7 +168,7 @@ def build_pack(output=PACK, terrain_pack=None):
     recipes=[unpack('IffIIIIff') for _ in range(nr)];assert pos==len(data)
     trees=[i for i,o in enumerate(objs) if o[1]==1];assert len(trees)==22 and nr==25 and sum(r[3] for r in recipes)==180
     assets=[]
-    def asset(path):
+    def asset(path,table=assets):
         p=(ROOT/path).resolve();p.relative_to(ROOT)
         if p==output.resolve() or output.resolve() in p.parents:
             raise ValueError('Natural source must not overlap generated output')
@@ -178,8 +178,8 @@ def build_pack(output=PACK, terrain_pack=None):
         elif dst.read_bytes()!=raw:
             raise ValueError('Preserving modified natural payload: '+dst.name)
         pins[str(p.relative_to(ROOT))]=h
-        if dst.name not in assets:assets.append(dst.name)
-        return assets.index(dst.name)
+        if dst.name not in table:table.append(dst.name)
+        return table.index(dst.name)
     def metadata(path):
         p=(ROOT/path).resolve();p.relative_to(ROOT)
         raw=p.read_bytes();pins[str(p.relative_to(ROOT))]=hashlib.sha256(raw).hexdigest()
@@ -215,6 +215,26 @@ def build_pack(output=PACK, terrain_pack=None):
                         flags,float(placement['width']),float(placement['low_end_reduction'])))
     if len(trees)!=32 or len(recipes)!=35 or sum(r[3] for r in recipes[25:])!=121:
         raise ValueError('Jungle source recipe count changed')
+    # Civ III draws a flagged pine forest with its own sheet. The source
+    # forest set is all conifers (pines, pine clumps, shrubs) over the same
+    # meshes as the broadleaf recipe's pines; its snow set uses those meshes
+    # with snow-covered materials. Tundra pine forests use the snow set.
+    def variety(feature,family):
+        rows=[]
+        for placement in vegetation_manifest['features'][feature]['placements']:
+            asset_id=placement['asset'];shape='feature/forest/'+asset_id.split('/')[-1]
+            body=next((i for i in trees if objs[i][0]==shape),None)
+            mesh=metadata(vegetation+vegetation_manifest['assets'][asset_id]['mesh'])
+            if body is None or objs[body][3]!=len(mesh['topology']['indices']):
+                raise ValueError('Pine forest body differs from the forest body: '+asset_id)
+            flags=(1 if placement['allow_overlap'] else 0)|(2 if placement['show_decal'] else 0)
+            rows.append(((family,body),float(placement['scale']),float(placement['scale_variation']),
+                         int(placement['count']),int(placement['min_count']),int(placement['priority']),
+                         flags,float(placement['width']),float(placement['low_end_reduction'])))
+        return rows
+    varieties=[variety('forest','forest'),variety('forest_snow','forest_snow')]
+    if [len(v) for v in varieties]!=[10,8] or [sum(r[3] for r in v) for v in varieties]!=[60,53]:
+        raise ValueError('Pine forest source recipe count changed')
     materials=sorted({objs[i][2] for i in trees})
     def source(path):return asset((terrain_pack/path).relative_to(ROOT).as_posix())
     decal_pack=ROOT/'Renderer/packs/DecalsNormalized'
@@ -311,9 +331,40 @@ def build_pack(output=PACK, terrain_pack=None):
     for r in surface:out+=struct.pack('<IffIffII',*r)
     for vertex in surface_vertices:out+=struct.pack('<4f',*vertex)
     (output/'natural.bin').write_bytes(out)
+    # Optional forest varieties: a separate file keeps natural.bin, and every
+    # runtime that reads only natural.bin, unchanged. Snow bodies reuse the
+    # matching pine body's vertices with the snow material of the same pack.
+    extra_assets,extra_bindings,extra_bodies=[],[],[]
+    snow_pack='Renderer/packs/Civ5EnvironmentVegetation/'
+    def body_index(key):
+        family,body=key
+        if family=='forest':return trees.index(body)
+        if key not in extra_bodies:
+            name=objs[body][0].split('/')[-1]
+            material=metadata(snow_pack+'materials/features/forest_snow_'+name+'.json')
+            channels=[material['base_color']['texture'],material['lean_normal']['texture_0'],
+                      material['lean_normal']['texture_1'],'',material['gloss']['texture'],'',
+                      material['opacity']['texture'] if 'opacity' in material else '']
+            extra_bindings.append([len(assets)+asset(snow_pack+path,extra_assets) if path else 0xffffffff for path in channels])
+            extra_bodies.append(key)
+        return len(trees)+extra_bodies.index(key)
+    sets=[[(body_index(r[0]),*r[1:]) for r in rows] for rows in varieties]
+    extra=bytearray(b'C3XFVAR1')+struct.pack('<4I',len(extra_assets),len(extra_bindings),len(extra_bodies),len(sets))
+    for path in extra_assets:
+        b=path.encode();extra+=struct.pack('<I',len(b))+b
+    for channels in extra_bindings:extra+=struct.pack('<9I',*channels,0,0)
+    for index,(_,body) in enumerate(extra_bodies):extra+=struct.pack('<2I',trees.index(body),len(bindings)+index)
+    for rows in sets:
+        extra+=struct.pack('<I',len(rows))
+        for r in rows:extra+=struct.pack('<IffIIIIff',*r)
+    (output/'forest-varieties.bin').write_bytes(extra)
     record={'schema':1,'authority':'source-fidelity-r13/inland','source_sha256':pins,
         'hill_height_source':'normalized-baseline',
         'trees':32,'recipes':35,'count_weight':301,'tree_height_scale':TREE_HEIGHT_SCALE,
+        'forest_varieties':{'sets':['pine','snow_pine'],'recipes':[len(r) for r in sets],
+            'weights':[sum(r[3] for r in rows) for rows in sets],'bodies':len(extra_bodies),
+            'textures':len(extra_assets),'new_textures':len(set(extra_assets)-set(assets)),
+            'sha256':hashlib.sha256(extra).hexdigest()},
         'jungle_bodies':10,'jungle_height_scale':JUNGLE_HEIGHT_SCALE,
         'surface_recipes':len(surface),
         'surface_weight':sum(r[3] for r in surface),'surface_triangles':len(surface_vertices)//3,

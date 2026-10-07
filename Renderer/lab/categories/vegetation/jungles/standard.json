@@ -18,7 +18,11 @@
     "Renderer/tools/asset_compiler/decal_sets.json",
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/city_fidelity/objects.hlsl",
-    "Renderer/native/terrain_scene_runtime.cpp"
+    "Renderer/native/terrain_scene_runtime.cpp",
+    "Renderer/lab/studies/vegetation/cases.py",
+    "Renderer/lab/shared/natural/mesh.h",
+    "Renderer/lab/shared/natural/canopy_clearing.h",
+    "Renderer/native/source_fidelity/terrain_compiler.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -32,7 +36,10 @@
     ],
     "cases": [
       "detail",
-      "gameplay"
+      "gameplay",
+      "roads",
+      "resources",
+      "rivers-sites"
     ]
   },
   "tests": [

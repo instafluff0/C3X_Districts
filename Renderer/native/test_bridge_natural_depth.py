@@ -31,8 +31,9 @@ def between(text, start, end):
 class BridgeNaturalDepthTests(unittest.TestCase):
     def test_bridge_depth_follows_natural_surfaces_at_any_ground_height(self):
         native = ROOT / 'Renderer/native/render_core'
+        # Through farm_kit_material, which the rigid shader also calls.
         projection = between((native / 'world_projection.hlsl').read_text(),
-                             'float3 project_world_content(', '\n// Resource bodies')
+                             'float3 project_world_content(', '\nfloat resource_natural_depth(')
         geometry = (native / 'rigid_instance_geometry.hlsl').read_text()
         point = between(geometry, 'struct RigidPoint', '\n// b1') if '\n// b1' in geometry else \
             geometry[geometry.index('struct RigidPoint'):]
@@ -50,7 +51,8 @@ class BridgeNaturalDepthTests(unittest.TestCase):
 #include <cstdio>
 #include <initializer_list>
 #define precise
-using std::floor;using std::sqrt;
+using std::floor;using std::sqrt;using std::abs;
+inline float frac(float v){return v-std::floor(v);}
 struct float2 {float x,y;};
 struct float3 {float x,y,z;float3(float a=0,float b=0,float c=0):x(a),y(b),z(c){}
  float3(float2 v,float c):x(v.x),y(v.y),z(c){}float2 xy()const{return {x,y};}};

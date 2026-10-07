@@ -17,6 +17,9 @@ class NaturalInputs(unittest.TestCase):
     def test_mesh_emission_and_exclusion_queries(self):
         self.shared_probe("mesh", "248 scopes")
 
+    def test_canopy_clears_routes_resources_and_selects_varieties(self):
+        self.shared_probe("canopy", "uncleared crowns hiding a road")
+
     def test_source_surface_composition(self):
         self.shared_probe("surface", "grass omitted, 3 active biomes")
 
@@ -66,7 +69,9 @@ class NaturalInputs(unittest.TestCase):
             record = natural.build_pack(output)
             current = json.loads((natural.HERE / "provenance.json").read_text())
             self.assertEqual(record, current)
-            self.assertEqual(len(list(output.iterdir())), record["texture_count"] + 1)
+            # natural.bin and forest-varieties.bin beside every distinct texture.
+            self.assertEqual(len(list(output.iterdir())),
+                             record["texture_count"] + 2 + record["forest_varieties"]["new_textures"])
             for path in output.iterdir():
                 self.assertEqual(digest(path), digest(natural.PACK / path.name), path.name)
                 self.assertEqual(path.stat().st_nlink, 1)

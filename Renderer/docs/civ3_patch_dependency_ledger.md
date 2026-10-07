@@ -1962,6 +1962,21 @@ camp tribe identity is not a civilization tint selector. These data sources do
 not themselves approve art or expand suppression. See the corresponding current
 infrastructure/source findings before extending a category.
 
+## Pine forests
+
+`required_user_action: []`.
+
+- **Existing symbol relied on:** `Tile::m12_Check_Forest_Pines`, the native
+  check `Map_Renderer` uses to draw a forest with its pine sheet. It is an
+  existing vtable call that returns its flag in AL only, so the capture masks
+  the result to 8 bits.
+- **What changes:** both forest capture paths (`read_custom_renderer_tile` and
+  the fogged branch of `read_custom_renderer_world_record`) add
+  `C3X_RENDERER_FEATURE_PINE`. The renderer then draws pine forest, or
+  snow-covered pine forest on tundra.
+- **Not added:** no patch-table entry, injected-state field or new address.
+- **Config-off:** these capture functions run only for custom rendering.
+
 ## Goody huts and barbarian camps
 
 The existing `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture/insertion hook

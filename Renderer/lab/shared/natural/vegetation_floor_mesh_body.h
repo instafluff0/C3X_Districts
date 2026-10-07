@@ -100,6 +100,13 @@
             float scale=decal.scale*scene_scale*(1+decal.variation*(c3x_renderer::stable_random(floor_seed+variant*211u+instance*37u)*2-1));
             float yaw=c3x_renderer::stable_random(floor_seed+variant*307u+instance*53u)*6.283185307f;
             float co=std::cos(yaw),si=std::sin(yaw);
+            {
+                // The patch's opaque core stays off kept-clear routes, resources
+                // and sites, river channels and the shore; its soft rim may meet them.
+                float core=.6f*(std::abs(co)+std::abs(si))*std::max(decal.x1-decal.x0,decal.y1-decal.y0)*.5f*scale;
+                if(clearing.covers(center_x-core,center_y-core,center_x+core,center_y+core) ||
+                   river_at(center_x,center_y)<9+core*64 || shore_sample_at(center_x,center_y).distance<core)continue;
+            }
             auto point=[&](unsigned x,unsigned y){
                 float sx=decal.x0+(decal.x1-decal.x0)*x/8.f;
                 float sy=decal.y0+(decal.y1-decal.y0)*y/8.f;

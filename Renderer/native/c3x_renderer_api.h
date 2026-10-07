@@ -74,7 +74,9 @@ enum c3x_renderer_feature_flags {
     C3X_RENDERER_FEATURE_FOREST = 1u,
     C3X_RENDERER_FEATURE_JUNGLE = 2u,
     C3X_RENDERER_FEATURE_MARSH = 4u,
-    C3X_RENDERER_FEATURE_VOLCANO = 8u
+    C3X_RENDERER_FEATURE_VOLCANO = 8u,
+    /* Civ III's per-tile pine forest flag (native Tile m12). */
+    C3X_RENDERER_FEATURE_PINE = 16u
 };
 
 enum c3x_renderer_improvement_flags {

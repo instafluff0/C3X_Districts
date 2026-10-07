@@ -1,4 +1,5 @@
 import math
+import struct
 import sys
 import unittest
 from pathlib import Path
@@ -72,7 +73,7 @@ class ResourceCompositionTests(unittest.TestCase):
         decals = [placement("d1", "decal", scale=1.0), placement("d2", "decal", scale=1.0)]
         layout = compositions.bake_variant("m", setting, [placement("m1")] * 10, decals,
                                            model=lambda _: {"radius": .03, "height": .1},
-                                           decal_cell_ids=lambda _: [("t", 0)])
+                                           decal_cell_ids=lambda _: [[("t", 0)]])
         under = [item for item in layout if "decal" in item]
         rocks = [item for item in layout if "model" in item]
         centres = compositions.cluster_centres(setting, __import__("random").Random(0))
@@ -112,7 +113,72 @@ class ResourceCompositionTests(unittest.TestCase):
         for item in layout:
             self.assertLessEqual(abs(item["rotation"]), .5)
             self.assertAlmostEqual(item["ground_fit"], .06 * item["scale"] * .6)
+        # Facing outward: each member's forward (+u) is turned toward its offset from the centre.
+        outward = compositions.bake_variant("herd", {**setting, "facing": "outward", "yaw_jitter": 0.0}, [], [],
+                                            model=lambda asset: {"radius": 0, "height": 0}, decal_cell_ids=None)
+        for item in outward:
+            heading = math.atan2(item["v"] - .5, item["u"] - .5)
+            self.assertAlmostEqual(math.remainder(item["rotation"] - heading, 2 * math.pi), 0.0, places=6)
             self.assertAlmostEqual(math.hypot(item["u"] - .5, item["v"] - .5), .06 * 1.3, delta=1e-9)
+
+    def test_compound_decal_layers_share_one_placement(self):
+        layout = compositions.bake_variant("oil", {**SETTING, "spread": 0.0}, [], [placement("seep", "decal")],
+                                           model=None, decal_cell_ids=lambda _: [[("stain", 0), ("sheen", 0)]])
+        # One seep per cluster (two clusters), each drawn as its stain and sheen layers.
+        self.assertEqual(len(layout), 4)
+        for stain, sheen in (layout[0:2], layout[2:4]):
+            self.assertEqual((stain["decal"], sheen["decal"]), (("stain", 0), ("sheen", 0)))
+            for key in ("u", "v", "rotation", "scale"):
+                self.assertEqual(stain[key], sheen[key])
+        # A profile may keep only some layers (oil keeps its pool, not its brown stain).
+        pools = compositions.bake_variant("oil", {**SETTING, "spread": 0.0, "decal_layers": [1]}, [],
+                                          [placement("seep", "decal")], model=None,
+                                          decal_cell_ids=lambda _: [[("stain", 0), ("sheen", 0)]])
+        self.assertEqual([item["decal"] for item in pools], [("sheen", 0)] * 2)
+
+
+    def test_set_piece_entries_are_imported(self):
+        profiles = {"resources": {"oasis": {"set_piece": {"entries": ["Oasis_Rocks", "Oasis_Plants"]},
+                                            "extra_pieces": [{"entry": "Palm", "count": 1}]}}}
+        self.assertEqual(sources.requested_entries(profiles), ["Oasis_Plants", "Oasis_Rocks", "Palm"])
+
+    def test_generated_pond_is_open_water_fading_into_the_ground(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            path = compositions.generated_decal("pond", Path(folder))
+            width, height, mips, dxgi, payload = compositions.dds(path)
+            self.assertEqual((width, height, mips, dxgi), (256, 256, 7, 78))   # an atlas-ready BC3 chain
+            blocks = width // 4
+            corner = payload[:16]
+            centre = payload[((blocks // 2) * blocks + blocks // 2) * 16:][:16]
+            self.assertEqual(corner[:2], bytes((0, 0)))          # transparent outside the margin
+            self.assertEqual(centre[:2], bytes((255, 255)))      # opaque water in the middle
+            colour = struct.unpack_from("<H", centre, 8)[0]
+            self.assertGreater(colour & 31, colour >> 11)        # blue over red
+            with self.assertRaises(ValueError):
+                compositions.generated_decal("lava", Path(folder))
+
+    def test_bc3_block_round_trips_flat_texels(self):
+        block = compositions.bc3_block([(255, 0, 0, 128)] * 16)
+        self.assertEqual(block[:2], bytes((128, 128)))
+        self.assertEqual(struct.unpack_from("<HH", block, 8), (0xF800, 0xF800))
+
+
+    def test_bright_strands_key_into_a_cutout_over_their_own_colour_blocks(self):
+        import tempfile
+        white, grey = struct.pack("<HHI", 0xFFFF, 0xFFFF, 0), struct.pack("<HHI", 0x8410, 0x8410, 0)
+        with tempfile.TemporaryDirectory() as folder:
+            source = compositions.write_dds(Path(folder) / "strands.dds", 8, 2, 72, 8,
+                                            [white + grey + grey + white, white])
+            _, _, mips, dxgi, payload = compositions.dds(compositions.luma_keyed(source, Path(folder)))
+            self.assertEqual((mips, dxgi), (2, 78))
+            top = [payload[i * 16:(i + 1) * 16] for i in range(4)]
+            self.assertEqual([block[:2] for block in top], [bytes((255, 255)), bytes((0, 0)),
+                                                            bytes((0, 0)), bytes((255, 255))])
+            self.assertEqual([block[8:] for block in top], [white, grey, grey, white])   # colour untouched
+            # The next mip keeps the keyed coverage (opaque and clear quadrants) instead of
+            # re-keying its own colour block, which here is all white.
+            self.assertEqual(payload[64:66], bytes((255, 0)))
 
 
 if __name__ == "__main__":

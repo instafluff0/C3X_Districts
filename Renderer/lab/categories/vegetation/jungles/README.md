@@ -18,6 +18,12 @@ uses the forest's varied deterministic spiral and terrain grounding. All sixteen
 ArtDef floor decals follow selected jungle centers. Both bodies and shadows use
 the existing source geometry path.
 
+Jungle shares the forest's canopy clearing: routes, resources, mines and
+sites of its tile and its neighbours stay visible, and a resource tile keeps a
+thinner stand around the resource; floor decals keep clear too (see the
+forest notes). Cases `roads`,
+`resources` and `rivers-sites` exercise it.
+
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.
 Reference captures reproduce production using small synthetic diagnostic scenes;

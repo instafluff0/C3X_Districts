@@ -316,7 +316,7 @@ int main(){
   assert(std::abs(v.world_z-(v.world_x*4.f+2.5f+.002f*150.f/.82f)/112.f)<1e-5f);
  }
 }
-''')
+''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
 
     def test_farm_decal_leaves_an_interior_river_channel_open(self):
         run_cpp(r'''

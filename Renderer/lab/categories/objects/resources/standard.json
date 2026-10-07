@@ -28,7 +28,8 @@
       "relief",
       "native-minerals",
       "native-plants",
-      "native-animals"
+      "native-animals",
+      "native-specials"
     ]
   },
   "tests": [
@@ -41,7 +42,11 @@
     "Renderer.native.test_animated_compositions",
     "Renderer.native.test_resource_body_depth",
     "Renderer.native.test_resource_instances",
-    "Renderer.native.test_scene_depth"
+    "Renderer.native.test_scene_depth",
+    "Renderer.native.test_resource_production_pack",
+    "Renderer.tools.test_overlay_resource_shading",
+    "Renderer.tools.asset_compiler.test_school_orientation",
+    "Renderer.tools.asset_compiler.test_herd_spacing"
   ],
   "references": {
     "d3d11": [

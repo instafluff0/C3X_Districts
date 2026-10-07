@@ -62,7 +62,11 @@ PixelInput VSResourceShadow(ResourceVertex vertex) {
     precise float sx=resource_anchor.x+(local.x-local.y)*resource_projection.x+(cast.x+cast.y)*resource_projection.x;
     precise float sy=resource_anchor.y+(local.x+local.y)*resource_projection.y+(cast.x-cast.y)*resource_projection.y;
     IntegratedVertexInput input=(IntegratedVertexInput)0;
-    input.position=float3(sx,sy,sy+resource_offset.w*(resource_projection.z*.82)*1.75);
+    // The shadow lies on the ground with the natural terrain's depth there (the
+    // basis VSResourceBody uses), lifted two height units so it is not under the
+    // terrain; the old 1.75*relief basis put it beneath any raised ground.
+    input.position=float3(sx,sy,sy+resource_offset.w*resource_projection.z*.82+
+        (resource_offset.w+2.0)*.0016*resource_projection.w);
     input.uv=vertex.uv;input.panel=1;input.geometry_normal.z=1;input.shape_visibility=1;input.surface_kind=15;
     return VSIntegrated(input);
 }

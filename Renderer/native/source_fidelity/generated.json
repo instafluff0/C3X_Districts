@@ -76,7 +76,7 @@
     },
     {
       "path": "generated/shaders/objects/resource_skinning.hlsl",
-      "sha256": "3cc52355e30b80c3bf43aa4f3420f19e7f4b4d7d680306b88678bd190ded8dec"
+      "sha256": "3dab1def872acbb07acbf075b99d6e79b98fe8430bd59e8586313778fdd4793c"
     },
     {
       "path": "generated/shaders/objects/settlement_ground.hlsl",

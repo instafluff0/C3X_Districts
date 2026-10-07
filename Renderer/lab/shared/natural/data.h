@@ -31,6 +31,13 @@ struct Recipe {unsigned object;float scale,variation;unsigned count,min_count,pr
 struct SurfaceRecipe {unsigned biome;float scale,variation;unsigned weight;float width,height;unsigned first,vertex_count;};
 struct SurfaceVertex {float x,y,u,v;};
 struct Frame {float sun[4],color[4],ambient[4],view[4],detail[4],quality[4];};
+// Forest recipe sets, as ranges of recipes: broadleaf, pine and snow-covered
+// pine. The two pine sets come from an optional pack file; without it every
+// forest keeps the broadleaf recipe.
+enum ForestVariety : unsigned {broadleaf_forest,pine_forest,snow_pine_forest,forest_variety_count};
+struct RecipeSet {unsigned first=0,end=0,weight=0;};
+// Tree bodies, including the optional varieties' extra materials.
+constexpr unsigned max_natural_bodies=40;
 struct NaturalData {
     LowRelief low_relief;
     std::vector<HeightField> fields;
@@ -40,7 +47,56 @@ struct NaturalData {
     std::vector<SurfaceRecipe> surface_recipes;
     std::vector<SurfaceVertex> surface_vertices;
     unsigned terrain[31]={},floodplain[3]={},mountain[13]={},macro[5][2]={};
+    // The broadleaf contract: the pack's first 25 recipes, weighing 180.
+    std::array<RecipeSet,forest_variety_count> forest_sets{{{0,25,180},{},{}}};
     std::string failure;
+    RecipeSet const& forest_set(unsigned variety)const{
+        return forest_sets[variety<forest_variety_count && forest_sets[variety].weight?variety:broadleaf_forest];
+    }
+    // Optional pine and snow-pine forests: their extra textures, materials and
+    // bodies (an existing body's vertices with another material) and recipes.
+    // Any invalid entry leaves the broadleaf-only data unchanged.
+    template<class Texture,class Read,class Upload>
+    bool load_forest_varieties(std::vector<std::uint8_t> const&d,std::vector<Texture>&textures,Read read,Upload upload,char const*natural_pack){
+        std::size_t pos=8;unsigned count[4]={};
+        auto take=[&](void*out,std::size_t n){if(n>d.size()-pos)return false;std::memcpy(out,d.data()+pos,n);pos+=n;return true;};
+        if(d.size()<24||std::memcmp(d.data(),"C3XFVAR1",8)||!take(count,16)||count[0]>16||count[1]>16||
+           count[3]!=forest_variety_count-1||bodies.size()+count[2]>max_natural_bodies)return false;
+        std::vector<std::string> paths(count[0]);
+        for(auto&path:paths){unsigned n=0;if(!take(&n,4)||n>128||n>d.size()-pos)return false;
+            path.assign(reinterpret_cast<char const*>(d.data()+pos),n);pos+=n;
+            if(path.find_first_not_of("0123456789abcdef.ds")!=std::string::npos)return false;}
+        std::size_t texture_total=textures.size()+count[0],material_total=materials.size()+count[1];
+        std::vector<Material> extra_materials(count[1]);
+        for(auto&m:extra_materials){if(!take(&m,sizeof(m))||m.tint>1||m.repeat>1)return false;
+            for(auto i:m.channels)if(i!=0xffffffffu && i>=texture_total)return false;}
+        std::vector<Body> extra_bodies(count[2]);
+        for(auto&b:extra_bodies){unsigned source=0;
+            if(!take(&source,4)||!take(&b.material,4)||source>=bodies.size()||b.material>=material_total)return false;
+            b.vertices=bodies[source].vertices;}
+        std::vector<Recipe> extra_recipes;std::array<RecipeSet,forest_variety_count> sets=forest_sets;
+        for(unsigned set=1;set<forest_variety_count;set++){unsigned n=0;
+            if(!take(&n,4)||!n||n>32)return false;
+            sets[set].first=unsigned(recipes.size()+extra_recipes.size());sets[set].weight=0;
+            for(unsigned i=0;i<n;i++){Recipe r{};
+                if(!take(&r,sizeof(r))||r.object>=bodies.size()+count[2]||!std::isfinite(r.scale)||r.scale<=0||
+                   !std::isfinite(r.variation)||r.variation<0||r.variation>2||r.flags>7||r.count>64)return false;
+                sets[set].weight+=r.count;extra_recipes.push_back(r);}
+            sets[set].end=unsigned(recipes.size()+extra_recipes.size());
+            if(!sets[set].weight)return false;
+        }
+        if(pos!=d.size())return false;
+        // Uploaded views join the owner's table, which releases them on reset
+        // even if a later upload fails.
+        std::size_t first=textures.size();textures.resize(texture_total);fields.resize(texture_total);
+        for(unsigned i=0;i<count[0];i++){std::vector<std::uint8_t>bytes;
+            if(!read(std::string(natural_pack)+paths[i],bytes)||bytes.size()<148||!upload(bytes,textures[first+i]))return false;}
+        materials.insert(materials.end(),extra_materials.begin(),extra_materials.end());
+        bodies.insert(bodies.end(),extra_bodies.begin(),extra_bodies.end());
+        recipes.insert(recipes.end(),extra_recipes.begin(),extra_recipes.end());
+        forest_sets=sets;
+        return true;
+    }
     template<class Texture,class Read,class Upload>
     bool load_data(std::vector<Texture>&textures,Read read,Upload upload){
         failure="catalog";
@@ -89,6 +145,8 @@ struct NaturalData {
         recipes.resize(count[3]);unsigned weight=0;
         for(auto&r:recipes){if(!take(&r,sizeof(r))||r.object>=bodies.size()||!std::isfinite(r.scale)||r.scale<=0||!std::isfinite(r.variation)||r.variation<0||r.variation>2||r.flags>7)return false;weight+=r.count;}
         if(weight!=301u)return false;
+        forest_sets={{{0,25,0},{},{}}};
+        for(unsigned i=0;i<25;i++)forest_sets[broadleaf_forest].weight+=recipes[i].count;
         surface_recipes.resize(count[4]);unsigned surface_weight[4]={};
         for(auto&r:surface_recipes){if(!take(&r,sizeof(r))||r.biome>3||!std::isfinite(r.scale)||r.scale<=0||r.scale>16||
                 !std::isfinite(r.variation)||r.variation<0||r.variation>2||!r.weight||r.weight>64||
@@ -102,6 +160,9 @@ struct NaturalData {
         // Older/simple texture-only packs remain valid and exactly flat.
         d.clear();read(std::string(natural_pack)+"low-relief.bin",d);
         failure="low relief";if(!low_relief.load(d))return false;
+        d.clear();
+        if(read(std::string(natural_pack)+"forest-varieties.bin",d))
+            load_forest_varieties(d,textures,read,upload,natural_pack);
         return true;
     }
     std::array<Frame,3> frame_settings(EnvironmentState const&e,float const*light)const{

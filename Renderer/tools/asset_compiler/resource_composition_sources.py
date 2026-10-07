@@ -17,6 +17,7 @@ import hashlib
 import json
 import re
 import shutil
+import struct
 import sys
 import xml.etree.ElementTree as ET
 from functools import lru_cache
@@ -38,6 +39,9 @@ FEATURES = {"FEATURE_FOREST": "forest", "FEATURE_JUNGLE": "jungle", "FEATURE_MAR
 # Generic rocks and bushes that Civ VI composes with resources; trees and jungle
 # clumps belong to the forest/jungle features and stay ancillary.
 ACCESSORIES = ("Boulder", "Shrub")
+# Named entries come from the clutter package, else from the terrain asset set
+# (the oasis's rock ring and plants).
+PACKAGES = ("environment/clutter.blp", "terrain/TerrainAssetSet_Base.blp")
 
 
 def _text(element: ET.Element | None) -> str:
@@ -116,6 +120,81 @@ def requested_sources(profiles: dict) -> list[str]:
     return sorted(names)
 
 
+def build_terrain_asset(package: IndexedStaticPackage, shared: Path, output: Path, entry: str,
+                        asset_id: str) -> tuple[dict, dict]:
+    """A Civ VI terrain asset (an oasis's rock ring or its plants): one named
+    vertex/index buffer drawn as one batch. The authored origin is kept, so the
+    pieces of one set line up when they share a placement."""
+    cbe = clutter_blp_extractor
+
+    def named(type_name: str, vertex: bool) -> dict:
+        array = package.unique_allocation(type_name)
+        for index in range(package.allocations[array - 1]["element_count"]):
+            item = cbe.decode_buffer_entry(package, array, index, vertex)
+            if item["name"] == entry:
+                return item
+        raise ValueError(f"{entry}: no {type_name}")
+    vertex, index = named(cbe.TYPE_VERTEX_BUFFER, True), named(cbe.TYPE_INDEX_BUFFER, False)
+    primitive = {"first_index": 0, "index_count": index["count"], "base_vertex": 0, "vertex_count": vertex["count"]}
+    mesh, evidence = cbe.normalize_mesh(
+        package.big_data(vertex["offset"], vertex["bytes"]), package.big_data(index["offset"], index["bytes"]),
+        vertex, index, primitive, asset_id, allow_wrapping_uvs=True, drop_degenerate_triangles=True,
+        preserve_vertical_origin=True)
+    centre = [value / cbe.SOURCE_UNITS_PER_TILE for value in evidence["normalization"]["horizontal_center"]]
+    for item in mesh["vertices"]:
+        item["position"] = [round(item["position"][0] + centre[0], 8), round(item["position"][1] + centre[1], 8),
+                            item["position"][2]]
+    for bound in mesh["bounds"].values():
+        bound[0], bound[1] = round(bound[0] + centre[0], 8), round(bound[1] + centre[1], 8)
+    # The batch whose name hash matches names a material: base colour, then opacity.
+    batches = package.unique_allocation("FOWMeshVisSystem::PackageBatch")
+    raw = package.bytes_for(batches)
+    step = len(raw) // package.allocations[batches - 1]["element_count"]
+    material_index = next(struct.unpack_from("<I", raw, at + 52)[0] for at in range(0, len(raw), step)
+                          if struct.unpack_from("<I", raw, at + 60)[0] == vertex["name_hash"])
+    raw = package.bytes_for(package.unique_allocation("FOWMeshVisSystem::PackageMaterial"))
+    base, opacity = struct.unpack_from("<II", raw, material_index * 24)
+    textures = package.unique_allocation(cbe.TYPE_TEXTURE)
+    stem = _slug(entry)
+    material = {"schema": "c3x.material.v0", "name": stem, "alpha_mode": "opaque",
+                "status": "normalized_local_import"}
+    for role, texture in (("base_color", base), ("opacity", opacity)):
+        if texture == 0xFFFFFFFF:
+            continue
+        name = cbe.decode_texture_entry(package, textures, texture)["name"]
+        relative = f"textures/features/{stem}_{role}.dds"
+        cbe.extract_civbig_texture(shared / name, output / relative)
+        material[role] = {"texture": relative, "uv_channel": "uv0"}
+        evidence[role] = name
+    if "opacity" in material:
+        material["alpha_mode"], material["alpha_cutoff"] = "mask", 0.5
+    cbe.write_json(output / f"meshes/features/{stem}.json", mesh)
+    cbe.write_json(output / f"materials/features/{stem}.json", material)
+    return {"type": "feature", "mesh": f"meshes/features/{stem}.json",
+            "material": f"materials/features/{stem}.json"}, evidence
+
+
+def requested_entries(profiles: dict) -> list[str]:
+    """Named Civ VI models a profile places directly ("extra_pieces", "set_piece")."""
+    entries = set()
+
+    def visit(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == "extra_pieces":
+                    entries.update(extra["entry"] for extra in item)
+                elif key == "set_piece":
+                    entries.update(item["entries"])
+                else:
+                    visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+    visit(profiles.get("resources", {}))
+    visit(profiles.get("alternates", {}))
+    return sorted(entries)
+
+
 def build(output: Path = OUTPUT, assets: Path = DEFAULT_ASSETS_ROOT, profiles_path: Path = PROFILES) -> dict:
     requested = requested_sources(json.loads(profiles_path.read_text()))
     sources, entries = {}, {}       # entry -> (origin, kind) for extraction
@@ -153,35 +232,39 @@ def build(output: Path = OUTPUT, assets: Path = DEFAULT_ASSETS_ROOT, profiles_pa
         record["variants"] = [{"when": condition, "set": set_name} for set_name, condition in variants]
         sources[name] = record
 
+    for entry in requested_entries(json.loads(profiles_path.read_text())):
+        entries.setdefault(entry, "Base")
     if output.exists():
         shutil.rmtree(output)
     output.mkdir(parents=True)
-    packages: dict[str, IndexedStaticPackage] = {}
+    packages: dict[tuple[str, str], IndexedStaticPackage] = {}
     manifest_assets, evidence, texture_cache = {}, {}, {}
     # Resource entries anchor each package's string table; generic boulders cannot.
     for entry, origin in sorted(entries.items(), key=lambda item: (not item[0].startswith("RES_"), item[0])):
         found = None
-        for candidate in dict.fromkeys([origin, "Base"]):
+        for candidate, blp in ((c, b) for c in dict.fromkeys([origin, "Base"]) for b in PACKAGES):
             blps = assets / ("Base" if candidate == "Base" else candidate) / "Platforms"
             blps = next((p for p in (blps / "Windows/BLPs", blps / "windows/BLPs") if p.is_dir()), None)
             if blps is None:
                 continue
             try:
-                package = packages.get(candidate)
+                package = packages.get((candidate, blp))
                 if package is None:
-                    package = packages[candidate] = IndexedStaticPackage(blps / "environment/clutter.blp", entry)
+                    package = packages[(candidate, blp)] = IndexedStaticPackage(blps / blp, entry)
                 package.select_direct_string(entry)
             except (OSError, KeyError, ValueError):
                 continue
-            found = (package, blps / "SHARED_DATA")
+            found = (package, blps / "SHARED_DATA", blp)
             break
         if found is None:
             evidence[entry] = {"status": "missing"}
             continue
-        package, shared = found
+        package, shared, blp = found
         asset_id = "source/" + _slug(entry)
         try:
-            if "decal" in entry.lower():
+            if blp != PACKAGES[0]:
+                asset, report = build_terrain_asset(package, shared, output, entry, asset_id)
+            elif "decal" in entry.lower():
                 asset, report = build_decal(package, shared, output, entry, asset_id,
                                             clutter_blp_extractor.SOURCE_UNITS_PER_TILE, texture_cache)
             else:
@@ -195,7 +278,8 @@ def build(output: Path = OUTPUT, assets: Path = DEFAULT_ASSETS_ROOT, profiles_pa
         except (OSError, ValueError, KeyError) as error:
             evidence[entry] = {"status": "unsupported", "reason": str(error)[:240]}
     manifest = {"schema": SCHEMA, "importer": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                "requested": requested, "assets": manifest_assets, "sources": sources}
+                "requested": requested + requested_entries(json.loads(profiles_path.read_text())),
+                "assets": manifest_assets, "sources": sources}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
     report = {"schema": SCHEMA + ".report", "assets_root": str(assets), "entries": evidence,
               "summary": {"sources": len(sources), "entries": len(evidence),
@@ -208,8 +292,9 @@ def ensure(output: Path = OUTPUT, profiles_path: Path = PROFILES) -> dict:
     """Rebuild only when the requested sources or this importer changed."""
     try:
         manifest = json.loads((output / "manifest.json").read_text())
+        profiles = json.loads(profiles_path.read_text())
         if manifest.get("schema") == SCHEMA and \
-                manifest.get("requested") == requested_sources(json.loads(profiles_path.read_text())) and \
+                manifest.get("requested") == requested_sources(profiles) + requested_entries(profiles) and \
                 manifest.get("importer") == hashlib.sha256(Path(__file__).read_bytes()).hexdigest():
             return manifest
     except (OSError, ValueError):

@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import colorsys
 import json
+import math
+import struct
 import sys
+from collections import deque
 from collections import defaultdict
 from pathlib import Path
 
@@ -20,48 +24,212 @@ from Renderer.tools.asset_compiler.build_mine_runtime import (
 )
 
 
-def terrain_samples(mesh: dict, steps: int = 12) -> dict:
-    """Add barycentric samples to flat source decals without changing their UVs."""
-    vertices = mesh["vertices"]
-    if not vertices or any(vertex["position"][2] != vertices[0]["position"][2]
-                           for vertex in vertices):
-        return mesh
-    sampled = []
-    indices = []
-    source = mesh["topology"]["indices"]
-    for start in range(0, len(source), 3):
-        triangle = [vertices[source[start + corner]] for corner in range(3)]
-        lookup = {}
-        for i in range(steps + 1):
-            for j in range(steps + 1 - i):
-                weights = (1 - (i + j) / steps, i / steps, j / steps)
-                lookup[i, j] = len(sampled)
-                sampled.append({key: [sum(weights[corner] * triangle[corner][key][axis]
-                                          for corner in range(3))
-                                      for axis in range(len(triangle[0][key]))]
-                                for key in ("position", "normal", "uv0")})
-        for i in range(steps):
-            for j in range(steps - i):
-                indices.extend((lookup[i, j], lookup[i + 1, j], lookup[i, j + 1]))
-                if i + j + 1 < steps:
-                    indices.extend((lookup[i + 1, j], lookup[i + 1, j + 1], lookup[i, j + 1]))
-    return {**mesh, "vertices": sampled,
-            "topology": {**mesh["topology"], "indices": indices}}
+def convex_hull(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Counter-clockwise hull (y down: clockwise on screen)."""
+    points = sorted(set(points))
+    if len(points) < 3:
+        return points
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lower, upper = [], []
+    for point in points:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], point) <= 0:
+            lower.pop()
+        lower.append(point)
+    for point in reversed(points):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], point) <= 0:
+            upper.pop()
+        upper.append(point)
+    return lower[:-1] + upper[:-1]
 
 
-def planted_rows(mesh: dict) -> dict:
-    """Select one authored planted field from the source crop atlas."""
-    # The normalized decal describes the complete atlas. Repeating that atlas
-    # over a small field makes its many farms look like a checkerboard. This
-    # source region has visible crop rows and a narrow soil border.
-    u0, v0, u1, v1 = .248, .515, .465, .748
-    return {**mesh, "vertices": [
-        {**vertex, "uv0": [u0 + vertex["uv0"][0] * (u1 - u0),
-                            v0 + vertex["uv0"][1] * (v1 - v0)]}
-        for vertex in mesh["vertices"]]}
+def clip_convex(polygon: list[tuple[float, float]], hull: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Sutherland-Hodgman: the part of polygon inside a counter-clockwise hull."""
+    for index in range(len(hull)):
+        a, b = hull[index], hull[(index + 1) % len(hull)]
+
+        def inside(point):
+            return (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (point[0] - a[0]) >= 0
+        result = []
+        for k in range(len(polygon)):
+            p, q = polygon[k], polygon[(k + 1) % len(polygon)]
+            if inside(p):
+                result.append(p)
+            if inside(p) != inside(q):
+                dp = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+                dq = (b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0])
+                t = dp / (dp - dq)
+                result.append((p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t))
+        polygon = result
+        if len(polygon) < 3:
+            return []
+    return polygon
 
 
-def build(pack: Path) -> Path:
+def patchwork(pack: Path, atlas: str, size: float, smallest: int = 40) -> list[dict]:
+    """The planted crop atlas as one patchwork of separate field pieces.
+
+    The atlas is Civ VI's complete farm patchwork: about thirty green fields
+    of mixed shapes and row directions with soil fringes, and transparent
+    paths between them. Each field (its opaque blocks, grown 2.5 blocks to
+    keep the fringe) becomes one flat convex piece, gridded finer than a road
+    verge so it clips cleanly and drapes closely. The pieces share one
+    placement; the side of the whole atlas is `size` tiles. Separate pieces
+    let the runtime drop a field that clipping cuts down to a sliver.
+    """
+    labels = field_labels((pack / atlas).read_bytes())
+    blocks = len(labels)
+    cells: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    for y in range(blocks):
+        for x in range(blocks):
+            if labels[y][x]:
+                cells[labels[y][x]].append((x, y))
+    grow, step = 2.5, .078 / size * blocks
+    pieces = []
+    for label in sorted(cells):
+        if len(cells[label]) < smallest:
+            continue
+        hull = convex_hull([(min(blocks, max(0, x + dx)), min(blocks, max(0, y + dy)))
+                            for x, y in cells[label] for dx in (-grow, 1 + grow) for dy in (-grow, 1 + grow)])
+        x0, x1 = min(p[0] for p in hull), max(p[0] for p in hull)
+        y0, y1 = min(p[1] for p in hull), max(p[1] for p in hull)
+        lookup, vertices, indices = {}, [], []
+
+        def vertex(point):
+            key = (round(point[0], 4), round(point[1], 4))
+            if key not in lookup:
+                lookup[key] = len(vertices)
+                u, v = point[0] / blocks, point[1] / blocks
+                # Same orientation as the source decal: u follows +x, v follows +y.
+                vertices.append({"position": [(u - .5) * size, (v - .5) * size, .002],
+                                 "normal": [0.0, 0.0, 1.0], "uv0": [u, v]})
+            return lookup[key]
+        columns, rows = max(1, math.ceil((x1 - x0) / step)), max(1, math.ceil((y1 - y0) / step))
+        for row in range(rows):
+            for column in range(columns):
+                cx0, cy0 = x0 + (x1 - x0) * column / columns, y0 + (y1 - y0) * row / rows
+                cx1, cy1 = x0 + (x1 - x0) * (column + 1) / columns, y0 + (y1 - y0) * (row + 1) / rows
+                polygon = clip_convex([(cx0, cy0), (cx1, cy0), (cx1, cy1), (cx0, cy1)], hull)
+                ring = [vertex(point) for point in polygon]
+                for k in range(1, len(ring) - 1):
+                    indices.extend((ring[0], ring[k], ring[k + 1]))
+        pieces.append({"vertices": vertices, "topology": {"indices": indices}})
+    return pieces
+
+
+def solid_texture(pack: Path, source: str) -> str:
+    """An opaque copy of a BC3 atlas: only its alpha blocks change (no colour
+    recompression), so the colour filled under the source's transparent paths
+    shows as grassy lanes between the fields on every terrain."""
+    data = bytearray((pack / source).read_bytes())
+    if data[:4] != b"DDS " or data[84:88] != b"DX10" or struct.unpack_from("<I", data, 128)[0] not in (77, 78):
+        raise ValueError(f"Solid patchwork needs a BC3 DX10 atlas: {source}")
+    for at in range(148, len(data) - 15, 16):
+        data[at:at + 8] = b"\xff\xff\x00\x00\x00\x00\x00\x00"
+    target = "textures/farm/patchwork_solid.dds"
+    (pack / target).parent.mkdir(parents=True, exist_ok=True)
+    (pack / target).write_bytes(data)
+    return target
+
+
+def field_labels(data: bytes) -> list[list[int]]:
+    """Each planted field of a BC3 atlas (its opaque alpha) as a numbered
+    region on the top mip's 4x4 block grid; 0 is a path between fields."""
+    blocks = struct.unpack_from("<I", data, 16)[0] // 4
+    solid = []
+    for index in range(blocks * blocks):
+        at = 148 + index * 16
+        a0, a1 = data[at], data[at + 1]
+        palette = [a0, a1] + ([((7 - k) * a0 + k * a1) // 7 for k in range(1, 7)] if a0 > a1 else
+                              [((5 - k) * a0 + k * a1) // 5 for k in range(1, 5)] + [0, 255])
+        bits = int.from_bytes(data[at + 2:at + 8], "little")
+        solid.append(sum(palette[(bits >> (3 * t)) & 7] for t in range(16)) > 16 * 128)
+    labels = [[0] * blocks for _ in range(blocks)]
+    count = 0
+    for start in range(blocks * blocks):
+        if not solid[start] or labels[start // blocks][start % blocks]:
+            continue
+        count += 1
+        queue = deque([start])
+        labels[start // blocks][start % blocks] = count
+        while queue:
+            at = queue.popleft()
+            y, x = divmod(at, blocks)
+            for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                if 0 <= ny < blocks and 0 <= nx < blocks and solid[ny * blocks + nx] and not labels[ny][nx]:
+                    labels[ny][nx] = count
+                    queue.append(ny * blocks + nx)
+    # Soil flecks inside a field are small transparent holes, not paths: they
+    # join the field around them.
+    seen = [[False] * blocks for _ in range(blocks)]
+    for start in range(blocks * blocks):
+        y0, x0 = divmod(start, blocks)
+        if labels[y0][x0] or seen[y0][x0]:
+            continue
+        hole, around, queue = [], set(), deque([(y0, x0)])
+        seen[y0][x0] = True
+        while queue:
+            y, x = queue.popleft()
+            hole.append((y, x))
+            for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                if not (0 <= ny < blocks and 0 <= nx < blocks):
+                    around.add(0)
+                elif labels[ny][nx]:
+                    around.add(labels[ny][nx])
+                elif not seen[ny][nx]:
+                    seen[ny][nx] = True
+                    queue.append((ny, nx))
+        if len(hole) < 64 and len(around) == 1 and 0 not in around:
+            for y, x in hole:
+                labels[y][x] = next(iter(around))
+    return labels
+
+
+def ripe_rgb(r: int, g: int, b: int) -> tuple[int, int, int]:
+    """Green crop to pale ripe straw; soil fringes keep their colour."""
+    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    degrees = h * 360
+    if s < .05 or degrees < 48 or degrees > 190:
+        return r, g, b
+    weight = min(1.0, (degrees - 48) / 14)
+    target = 48 - 4 * min(1.0, (degrees - 60) / 60)
+    degrees += (target - degrees) * weight
+    s = min(1.0, s * (1 + .10 * weight))
+    v = min(1.0, v * (1 + .70 * weight))
+    r, g, b = colorsys.hsv_to_rgb(degrees / 360, s, v)
+    return round(r * 255), round(g * 255), round(b * 255)
+
+
+def ripe_texture(pack: Path, source: str, fields: str, share: float = .8) -> str:
+    """A copy of the patchwork texture with about `share` of its fields ripe.
+    Only BC1 colour endpoints change (alpha and indices are kept), and whole
+    fields of the planted atlas `fields` turn together."""
+    data = bytearray((pack / source).read_bytes())
+    labels = field_labels((pack / fields).read_bytes())
+    width = struct.unpack_from("<I", data, 16)[0]
+    mips = max(1, struct.unpack_from("<I", data, 28)[0])
+    at = 148
+    for level in range(mips):
+        blocks = max(1, (width >> level) // 4)
+        for by in range(blocks):
+            for bx in range(blocks):
+                label = labels[min(len(labels) - 1, by << level)][min(len(labels) - 1, bx << level)]
+                if label and (label * 2654435761) % 1000 < share * 1000:
+                    for k in (8, 10):
+                        c = struct.unpack_from("<H", data, at + k)[0]
+                        r, g, b = ripe_rgb((c >> 11) * 255 // 31, (c >> 5 & 63) * 255 // 63, (c & 31) * 255 // 31)
+                        struct.pack_into("<H", data, at + k,
+                                         (r * 31 + 127) // 255 << 11 | (g * 63 + 127) // 255 << 5 | (b * 31 + 127) // 255)
+                at += 16
+    target = "textures/farm/patchwork_ripe.dds"
+    (pack / target).parent.mkdir(parents=True, exist_ok=True)
+    (pack / target).write_bytes(data)
+    return target
+
+
+def build(pack: Path, runtime_name: str = "farm_runtime.bin", solid: bool = False,
+          field_size: float = 3.3, ripe: tuple[str, ...] = ("Wheat",)) -> Path:
     manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
     catalog = json.loads(
         (pack / manifest["improvement_catalog"]).read_text(encoding="utf-8")
@@ -114,6 +282,15 @@ def build(pack: Path) -> Path:
     if len(emissive_textures) != 2:
         raise ValueError("Compact farm bundle expects two confirmed emissive channels")
     textures = base_textures + emissive_textures
+    # The kit no longer uses the tan and muddy palettes; slot 2 can carry the
+    # opaque patchwork instead.
+    patchwork_slot = 0
+    if solid:
+        textures[2], patchwork_slot = solid_texture(pack, textures[0]), 2
+    if ripe:
+        # Slot 1 (the tan palette) carries the ripe copy for resource kits.
+        textures[1] = ripe_texture(pack, textures[patchwork_slot], textures[0])
+    fields = patchwork(pack, textures[0], field_size)
     assets: list[bytes] = []
     grouped: dict[int, list[tuple[int, float]]] = defaultdict(list)
     for role, _asset_id in roots:
@@ -161,45 +338,27 @@ def build(pack: Path) -> Path:
             assets.append(merged_asset(f"{role}:source", 5, 0, [centered]))
             grouped[era].append((asset_index, .08))
             continue
-        merged: dict[tuple[int, int], list[dict]] = defaultdict(list)
-        used_crop_materials: set[tuple[int, int]] = set()
-        for mesh, base, emissive in all_parts[role]:
-            if base not in base_textures:
-                continue
-            emissive_code = 0 if emissive is None else emissive_textures.index(emissive) + 1
-            key = (base_textures.index(base), emissive_code)
-            if role.endswith(":crop"):
-                if key in used_crop_materials:
-                    continue  # These are alternate decals at the same footprint.
-                used_crop_materials.add(key)
-                if key[0] < 3:
-                    mesh = planted_rows(mesh)
-            merged[key].append(
-                terrain_samples(mesh))
-        ranked = []
-        for (texture_index, emissive_code), meshes in merged.items():
-            radius = max(
-                (vertex["position"][0] ** 2 + vertex["position"][1] ** 2) ** 0.5
-                for mesh in meshes
-                for vertex in mesh["vertices"]
-            )
-            ranked.append((radius, texture_index, emissive_code, meshes))
-        role_name = role.split(":", 1)[1]
-        for radius, texture_index, emissive_code, meshes in sorted(ranked, reverse=True):
-            asset_index = len(assets)
-            assets.append(
-                merged_asset(
-                    f"{role}:{role_name}_{texture_index}",
-                    texture_index,
-                    emissive_code,
-                    meshes,
-                )
-            )
-            grouped[era].append((asset_index, radius))
+        # The kit's patchwork pieces, on the planted (first) crop texture or
+        # its opaque copy, shared by every era.
+        if era == 0:
+            first_field = len(assets)
+            for index, mesh in enumerate(fields):
+                assets.append(merged_asset(f"farm_kit:crop:field{index}", patchwork_slot, 0, [mesh]))
+        grouped[era].extend((first_field + index, .71) for index in range(len(fields)))
     groups = [group_payload(f"farm_{era}", grouped[era]) for era in range(3)]
+    # Marks this pack as a farm kit: the runtime lays its patchwork out alike
+    # on every terrain and keeps routes, resources and water open.
+    groups.append(group_payload("farm_kit", grouped[0][:1]))
+    if ripe:
+        # A resource's own kit: its farm grows ripe fields ("NAME"), or is the
+        # resource's own planting and keeps no yard around it ("NAME:crop").
+        first_ripe = len(assets)
+        for index, mesh in enumerate(fields):
+            assets.append(merged_asset(f"farm_kit:crop:ripe{index}", 1, 0, [mesh]))
+        for name in ripe:
+            groups.append(group_payload(f"farm_kit:{name.lower()}",
+                                        [(first_ripe + index, .71) for index in range(len(fields))]))
     output = bytearray(MAGIC)
-    import struct
-
     output.extend(struct.pack("<IIII", 1, len(textures), len(assets), len(groups)))
     for texture in textures:
         output.extend(bundle_string(texture))
@@ -207,7 +366,7 @@ def build(pack: Path) -> Path:
         output.extend(asset)
     for group in groups:
         output.extend(group)
-    target = pack / "farm_runtime.bin"
+    target = pack / runtime_name
     target.write_bytes(output)
     return target
 
@@ -217,8 +376,18 @@ def main() -> int:
     parser.add_argument(
         "--pack", type=Path, default=Path("Renderer/packs/ImprovementsNormalized")
     )
+    parser.add_argument("--output", default="farm_runtime.bin",
+                        help="runtime file name in the pack; Lab candidates use e.g. farm_runtime~kit.bin")
+    parser.add_argument("--field-size", type=float, default=3.3,
+                        help="patchwork side in tiles (larger means fewer, bigger fields per tile)")
+    parser.add_argument("--ripe", nargs="*", default=["Wheat"],
+                        help="resources whose farms grow ripe fields, e.g. Wheat (yard kept) or Wheat:crop (no yard)")
+    parser.add_argument("--solid", action="store_true",
+                        help="grassy lanes between fields on every terrain instead of the ground showing through")
     args = parser.parse_args()
-    target = build(args.pack.resolve())
+    if "/" in args.output or "\\" in args.output or not args.output.endswith(".bin"):
+        parser.error("--output is a .bin file name inside the pack")
+    target = build(args.pack.resolve(), args.output, args.solid, args.field_size, tuple(args.ripe))
     print(f"wrote {target} ({target.stat().st_size} bytes)")
     return 0
 

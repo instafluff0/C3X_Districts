@@ -23,6 +23,34 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
     bool shadows=std::strcmp(category,"shadows")==0;
     bool huts=std::strcmp(category,"goody-huts")==0, camps=std::strcmp(category,"barbarian-camps")==0;
     bool sites=std::strcmp(category,"huts-camps")==0 || huts || camps;
+    // Forest/jungle cases: C3C BIQ bonus/overlay bits carried in the scene CSV
+    // and a "dx,dy,Name;..." resource list, both supplied by the dispatcher.
+    char overlays[4]={},listed[1024]={};
+    if(GetEnvironmentVariableA("C3X_LAB_TILE_OVERLAYS",overlays,sizeof(overlays)) && overlays[0]) {
+        GetEnvironmentVariableA("C3X_LAB_TILE_RESOURCES",listed,sizeof(listed));
+        for(auto& tile:tiles) {
+            unsigned bits=tile.terrain_overlays;
+            if(bits&3u){tile.road_mask=1;tile.railroad_mask=(bits&2u)?1u:0u;}
+            if(bits&4u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_MINE;
+            if(bits&8u){tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_IRRIGATION;tile.irrigation_mask=15;}
+            if(bits&0x20u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
+            if(bits&0x80u){tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;tile.barbarian_tribe_id=7;}
+            if((tile.square_parts&0x20u) && tile.real_terrain_type==7)tile.feature_flags|=C3X_RENDERER_FEATURE_PINE;
+            int x=((tile.tile_x%map_width)+map_width)%map_width-center_x, y=tile.tile_y-center_y, index=0;
+            for(char const* entry=listed;entry && *entry;++index) {
+                int dx=0,dy=0,used=0;
+                if(sscanf_s(entry,"%d,%d,%n",&dx,&dy,&used)==2 && dx==x && dy==y) {
+                    char const* end=std::strchr(entry+used,';');
+                    std::size_t length=std::min<std::size_t>(end?std::size_t(end-entry-used):std::strlen(entry+used),
+                        sizeof(tile.resource_name)-1);
+                    tile.resource_id=100+index;tile.resource_class=0;
+                    std::memcpy(tile.resource_name,entry+used,length);tile.resource_name[length]='\0';
+                }
+                entry=std::strchr(entry,';');if(entry)++entry;
+            }
+        }
+        return;
+    }
     if(!resources && !infrastructure && !shadows && !sites)return;
     char road_case[32]={};
     GetEnvironmentVariableA("C3X_LAB_ROAD_CASE",road_case,sizeof(road_case));
@@ -150,8 +178,17 @@ bool lab_verify_objects(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_
         ok=ok && (ownership&expected)==expected;
     }
     if(infrastructure){
-        unsigned expected=C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED|C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED|
-            C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED|C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
+        // Every route and improvement kind in the rendered frame must be owned.
+        unsigned expected=0;
+        for(unsigned i=0;i<frame.tile_count;++i) {
+            auto const& tile=frame.tiles[i];
+            if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER) || tile.city_id>=0)continue;
+            if(tile.road_mask)expected|=C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED;
+            if(tile.railroad_mask)expected|=C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED;
+            if(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE)expected|=C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED;
+            if(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)expected|=C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
+        }
+        ok=ok && expected!=0;
         ok=ok && (ownership&expected)==expected;
     }
     std::printf("%s category object study: %s resources=%u ownership=%u\n",ok?"PASS":"FAIL",category,count,ownership);

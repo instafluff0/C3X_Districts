@@ -386,7 +386,7 @@ enum GeometryLayer : std::size_t {
     geometry_cliff4, geometry_cliff5, geometry_cliff6, geometry_cliff7,
     geometry_natural_terrain, geometry_natural_decal, geometry_natural_mountain,
     geometry_natural_forest0,
-    geometry_layer_count = geometry_natural_forest0 + 32
+    geometry_layer_count = geometry_natural_forest0 + c3x_renderer::fidelity::max_natural_bodies
 };
 
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
@@ -2636,11 +2636,11 @@ public:
             else *patterns = {};
         }
 
-        // A Lab study may select a candidate resource pack; production uses the default.
-        char resource_pack[128]="ResourceNormalized",resource_path[4*MAX_PATH];
+        // Production resources are the baked compositions; a Lab study may select a candidate pack.
+        char resource_pack[128]="ResourceCompositions",resource_path[4*MAX_PATH];
         if(GetEnvironmentVariableA("C3X_RENDERER_RESOURCE_PACK",resource_pack,sizeof(resource_pack))>=sizeof(resource_pack) ||
            !resource_pack[0] || !pack_path(packs_root.c_str(),resource_pack,resource_path,std::size(resource_path)))
-            strcpy_s(resource_pack,"ResourceNormalized");
+            strcpy_s(resource_pack,"ResourceCompositions");
         std::string resource_root = packs_root + "\\" + resource_pack;
         resource_assets_ready = load_runtime_bundle(
             resource_root, "resource_runtime.bin", resource_bundle, resource_texture_dds, true);
@@ -2754,8 +2754,15 @@ public:
         };
         mine_assets_ready = load_improvement(
             "mine_runtime.bin", mine_bundle, mine_base_dds, mine_emissive_dds, 1801u);
+        // Production farms use farm_runtime.bin; a Lab study may select a
+        // candidate kit beside it (a plain file name in the same folder).
+        char farm_runtime[64] = "farm_runtime.bin";
+        DWORD farm_override = GetEnvironmentVariableA("C3X_RENDERER_FARM_RUNTIME", farm_runtime, sizeof(farm_runtime));
+        if (farm_override == 0 || farm_override >= sizeof(farm_runtime) || !farm_runtime[0] ||
+            std::strpbrk(farm_runtime, "\\/:") != nullptr)
+            strcpy_s(farm_runtime, "farm_runtime.bin");
         farm_assets_ready = load_improvement(
-            "farm_runtime.bin", farm_bundle, farm_base_dds, farm_emissive_dds, 1831u);
+            farm_runtime, farm_bundle, farm_base_dds, farm_emissive_dds, 1831u);
     }
 
     bool configure_asset(int terrain_type, char const * root, char const * logical_asset_id) {
@@ -4194,6 +4201,182 @@ public:
         return -1;
     }
 
+    // A tile's resource parts as world boxes (x0,y0,x1,y1,animated), with the
+    // tile at natural lattice (c, r). Follows the tile compiler's placement
+    // paths so vegetation can keep them clear.
+    template<class Part> void resource_footprint(c3x_renderer_tile_v1 const & tile, int c, int r, Part part) const {
+        if (tile.city_id >= 0 || tile.resource_id < 0) return;
+        float base_x = float(c), base_y = float(r) + 1;
+        auto subject = [&](ResourceAnimation const & animation, float u, float v, float scale) {
+            float extent = 0;
+            for (auto const & box : animation.source_bounds.bones) if (box.valid)
+                for (unsigned a = 0; a < 2; ++a) extent = std::max({extent, std::abs(box.low[a]), std::abs(box.high[a])});
+            extent *= animation.scale * scale;
+            part(base_x + u - extent, base_y - v - extent, base_x + u + extent, base_y - v + extent, true);
+        };
+        auto body = [&](c3x_renderer::FeatureAsset const & asset, float u, float v, float rotation, float scale, float core) {
+            float co = std::cos(rotation), si = std::sin(rotation), x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+            for (auto const & p : asset.vertices) {
+                float x = base_x + u + (p.position[0]*co - p.position[1]*si)*scale;
+                float y = base_y - v - (p.position[0]*si + p.position[1]*co)*scale;
+                x0 = std::min(x0, x); x1 = std::max(x1, x); y0 = std::min(y0, y); y1 = std::max(y1, y);
+            }
+            if (x0 > x1) return;
+            float cx = (x0 + x1)*.5f, cy = (y0 + y1)*.5f, hx = (x1 - x0)*.5f*core, hy = (y1 - y0)*.5f*core;
+            part(cx - hx, cy - hy, cx + hx, cy + hy, false);
+        };
+        int animated = resource_animation_for(tile);
+        if (animated >= 0) {
+            auto const & animation = resource_animations[animated];
+            for (unsigned index = 0; index < animation.count; ++index) {
+                float angle = 6.28318530718f*float(index)/float(animation.count);
+                float ring = animation.count == 1 ? 0.f : (index == 0 ? .045f : .10f + .055f*float((index - 1)%3));
+                subject(animation, .5f + std::cos(angle)*ring, .5f + std::sin(angle)*ring*.78f, 1);
+            }
+            return;
+        }
+        if (!resource_assets_ready) return;
+        if (auto const * composition = c3x_renderer::find_feature_composition(resource_bundle, tile.resource_name)) {
+            auto const & variant = c3x_renderer::select_composition_variant(*composition,
+                tile.real_terrain_type, tile.variant_seed * 131u + 17u);
+            for (auto const & item : variant.instances) {
+                if (item.asset >= resource_bundle.assets.size()) continue;
+                auto const & id = resource_bundle.assets[item.asset].id;
+                if (id.rfind("animated/", 0) == 0) {
+                    auto found = std::find_if(resource_animations.begin(), resource_animations.end(),
+                        [&](auto const & animation) { return id.compare(9, std::string::npos, animation.name) == 0; });
+                    if (found != resource_animations.end()) subject(*found, item.u, item.v, item.scale);
+                    continue;
+                }
+                // A ground decal fades toward its edge: keep its core clear.
+                body(resource_bundle.assets[item.asset], item.u, item.v, item.rotation, item.scale,
+                     id.rfind("decal/", 0) == 0 ? .6f : 1.f);
+            }
+            return;
+        }
+        std::string name = tile.resource_name;
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char value) { return char(std::tolower(value)); });
+        for (char const * candidate : {"horses", "iron", "uranium", "gold", "dye", "wheat", "cattle", "fish"}) {
+            if (name.find(candidate) == std::string::npos) continue;
+            auto const * group = c3x_renderer::find_feature_group(resource_bundle, candidate);
+            if (group == nullptr || group->placements.empty() ||
+                group->placements.front().asset_index >= resource_bundle.assets.size()) return;
+            auto const & placement = group->placements.front();
+            unsigned count = std::max(1u, placement.count);
+            for (unsigned index = 0; index < count; ++index) {
+                float angle = 6.28318530718f*(float(index)/float(count) +
+                    c3x_renderer::stable_random(tile.variant_seed*101u + index*37u)*0.11f);
+                float ring = count == 1u ? 0.f : (index == 0u ? .045f : .10f + .055f*float((index - 1u)%3u));
+                float variation = (c3x_renderer::stable_random(tile.variant_seed*59u + index*71u + 13u)*2 - 1)*placement.scale_variation;
+                float rotation = c3x_renderer::stable_random(tile.variant_seed*83u + index*97u + 29u)*6.28318530718f;
+                body(resource_bundle.assets[placement.asset_index], .5f + std::cos(angle)*ring,
+                     .5f + std::sin(angle)*ring*.78f, rotation, placement.scale*(1 + variation)*.72f, 1);
+            }
+            return;
+        }
+    }
+
+    // An irrigated tile's resource parts as tile-local (u0,v0,u1,v1) boxes:
+    // its farm keeps that ground open. Animated animals turn and shift as
+    // they graze, so their boxes keep a wider yard.
+    std::vector<std::array<float,4>> farm_resource_boxes(c3x_renderer_tile_v1 const & tile) const {
+        std::vector<std::array<float,4>> boxes;
+        int c=(tile.tile_x+tile.tile_y)/2,r=(tile.tile_x-tile.tile_y)/2;
+        resource_footprint(tile,c,r,[&](float x0,float y0,float x1,float y1,bool animated){
+            float grow=animated?.04f:0.f;
+            boxes.push_back({x0-float(c)-grow,float(r)+1-y1-grow,x1-float(c)+grow,float(r)+1-y0+grow});});
+        return boxes;
+    }
+
+    // The ground a vegetation tile keeps clear (fidelity::CanopyClearing):
+    // routes, resources, mines and sites of it and its eight neighbors, its
+    // forest variety and a resource tile's opening. Lookup(x,y) returns the
+    // observation at raw coordinates. Tiles without vegetation keep nothing.
+    template<class Lookup> c3x_renderer::fidelity::CanopyClearing canopy_clearing(
+            c3x_renderer_tile_v1 const& tile, Lookup lookup) const {
+        namespace forest_kinds=c3x_renderer::fidelity;
+        forest_kinds::CanopyClearing clearing;
+        int canopy=tile.real_terrain_type==7 || tile.real_terrain_type==8 ? tile.real_terrain_type :
+            c3x_renderer::native_hill_vegetation(tile.real_terrain_type,[&](int dx,int dy){
+                auto n=lookup(tile.tile_x+dx,tile.tile_y+dy);return n?n->occurrence.real_terrain_type:-1;},
+                c3x_renderer::native_hill_seed(tile.tile_x,tile.tile_y));
+        if(canopy!=7 && canopy!=8)return clearing;
+        bool hill_forest=tile.real_terrain_type!=7 && canopy==7;
+        int nc=(tile.tile_x+tile.tile_y)/2,nr=(tile.tile_x-tile.tile_y)/2;
+        c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle},
+            road_patterns.lines.empty()?nullptr:&road_patterns,rail_patterns.lines.empty()?nullptr:&rail_patterns};
+        auto variety_of=[](c3x_renderer_tile_v1 const&t){
+            return !(t.feature_flags&C3X_RENDERER_FEATURE_PINE)?unsigned(forest_kinds::broadleaf_forest):
+                t.terrain_type==3?unsigned(forest_kinds::snow_pine_forest):unsigned(forest_kinds::pine_forest);};
+        if(tile.real_terrain_type==7)clearing.variety=variety_of(tile);
+        else if(hill_forest){
+            // Raised canopy follows the variety of the forests around it.
+            unsigned votes[forest_kinds::forest_variety_count]={};
+            for(int dy:{-1,1})for(int dx:{-1,1})if(auto n=lookup(tile.tile_x+dx,tile.tile_y+dy))
+                if(n->occurrence.real_terrain_type==7)++votes[variety_of(n->occurrence)];
+            clearing.variety=unsigned(std::max_element(votes,votes+forest_kinds::forest_variety_count)-votes);
+        }
+        forest_kinds::BuildingBounds own{1e9f,1e9f,-1e9f,-1e9f};bool own_animated=false;
+        for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++){
+            int c=nc+dc,r=nr+dr;
+            c3x_renderer_tile_v1 near_tile=tile;
+            if(dc||dr){auto it=lookup(c+r,c-r);if(!it)continue;near_tile=it->occurrence;}
+            auto keep=[&](float x0,float y0,float x1,float y1,bool stationary=false){
+                // Only ground this tile's canopy can stand on or hide.
+                if(x1<float(nc)-.8f||x0>float(nc)+1.8f||y1<float(nr)-.8f||y0>float(nr)+1.8f)return;
+                (stationary?clearing.near_boxes:clearing.boxes).push_back({x0,y0,x1,y1});
+            };
+            if(route_assets_ready && (near_tile.road_mask||near_tile.railroad_mask)){
+                c3x_renderer::objects::Plan plan;
+                c3x_renderer::objects::select_routes(near_tile,object_assets,route_assets_ready,true,lookup,plan);
+                // The drawn stroke and its worn shoulders, as boxes along the path.
+                auto path=[&](float u0,float v0,float u1,float v1,bool railroad){
+                    float half=railroad?.06f:.045f,length=std::hypot(u1-u0,v1-v0);
+                    unsigned steps=std::max(1u,unsigned(std::ceil(length/.04f)));
+                    for(unsigned i=0;i<=steps;i++){float t=float(i)/float(steps);
+                        float x=float(c)+u0+(u1-u0)*t,y=float(r)+1-(v0+(v1-v0)*t);
+                        keep(x-half,y-half,x+half,y+half);}
+                };
+                for(auto const&route:plan.patterns){
+                    auto const*set=object_assets.patterns_for(route.style);
+                    if(!set || route.line>=set->lines.size())continue;
+                    auto const&line=set->lines[route.line];
+                    auto point=[&](unsigned i){return route.points.size()==line.count?route.points[i]:set->points[line.first+i];};
+                    for(unsigned i=1;i<line.count;i++){auto a=point(i-1),b=point(i);path(a[0],a[1],b[0],b[1],route.style>=4u);}
+                }
+                for(auto const&route:plan.routes)path(route.u0,route.v0,route.u1,route.v1,route.railroad);
+            }
+            unsigned sites=site_assets_ready?near_tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP):0u;
+            if(sites || (mine_assets_ready && (near_tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE))){
+                c3x_renderer::objects::Plan plan;
+                if(c3x_renderer::objects::select_improvements(near_tile,object_assets,ground_type(near_tile),sites,mine_assets_ready,false,plan))
+                    for(auto const&instance:plan.instances){
+                        auto const&assets=object_assets[instance.family].assets;
+                        if(instance.asset>=assets.size())continue;
+                        float co=std::cos(instance.rotation),si=std::sin(instance.rotation),x0=1e9f,y0=1e9f,x1=-1e9f,y1=-1e9f;
+                        for(auto const&p:assets[instance.asset].vertices){
+                            float x=float(c)+instance.u+(p.position[0]*co-p.position[1]*si)*instance.scale;
+                            float y=float(r)+1-instance.v-(p.position[0]*si+p.position[1]*co)*instance.scale;
+                            x0=std::min(x0,x);x1=std::max(x1,x);y0=std::min(y0,y);y1=std::max(y1,y);}
+                        if(x0<=x1)keep(x0,y0,x1,y1);
+                    }
+            }
+            resource_footprint(near_tile,c,r,[&](float x0,float y0,float x1,float y1,bool animated){
+                keep(x0,y0,x1,y1,!animated);
+                if(!dc && !dr){own.x0=std::min(own.x0,x0);own.y0=std::min(own.y0,y0);own.x1=std::max(own.x1,x1);own.y1=std::max(own.y1,y1);
+                    own_animated=own_animated || animated;}
+            });
+        }
+        // The resource tile's thinner stand stays outside its parts.
+        if(own.x0<=own.x1 && (tile.real_terrain_type==7 || tile.real_terrain_type==8)){
+            clearing.open_x=(own.x0+own.x1)*.5f;clearing.open_y=(own.y0+own.y1)*.5f;
+            clearing.open_radius=std::max(own.x1-own.x0,own.y1-own.y0)*.5f;
+            // Stationary plants, rocks and decals let the stand close in.
+            clearing.open_scale=own_animated?1.f:.7f;
+        }
+        return clearing;
+    }
+
     bool frame_has_resource_animation(c3x_renderer_frame_v1 const & frame) const {
         if(water_scene_active||wave_ready)for(unsigned i=0;i<frame.tile_count;++i)
             if(c3x_renderer::render_core::water_scene_tile(frame.tiles[i],frame,visibility_pass))return true;
@@ -4638,7 +4821,8 @@ public:
                 float shadow_y=center_y+(lx+ly)*half_h+(shadow_u-shadow_v)*half_h;
                 Vertex projected={};
                 projected.x=shadow_x;projected.y=shadow_y;
-                projected.z=shadow_y+anchor.ground*relief*1.75f;
+                // Natural terrain depth on the ground, lifted two height units (as VSResourceShadow).
+                projected.z=shadow_y+anchor.ground*relief+(anchor.ground+2.f)*.0016f*content_view_height;
                 projected.u=source.uv[0];projected.v=source.uv[1];projected.panel=1.f;
                 projected.normal_z=1.f;projected.shadow_visibility=1.f;
                 projected.ambient_visibility=1.f;projected.surface_kind=15.f;
@@ -6210,8 +6394,9 @@ public:
         topology_cache.attach(record,tile.binding);
     }
 
-    c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(c3x_renderer_tile_v1 const& tile,
-            c3x_renderer_frame_v1 const& frame,int ground,bool skip_shore,bool separate,bool indexed,bool heights,bool world_content=false) const {
+    template<class Lookup> c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(c3x_renderer_tile_v1 const& tile,
+            c3x_renderer_frame_v1 const& frame,int ground,bool skip_shore,bool separate,bool indexed,bool heights,bool world_content,
+            Lookup lookup) const {
         c3x_renderer::fidelity::TerrainCompileInput input;
         input.tile_x=tile.tile_x;input.tile_y=tile.tile_y;input.real_terrain_type=tile.real_terrain_type;input.ground=ground;
         input.tile_width=frame.tile_width;input.tile_height=frame.tile_height;input.target_height=content_view_height;
@@ -6225,6 +6410,8 @@ public:
             std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
             std::uint64_t(frame.world_wrap_x)*2+unsigned(frame.world_wrap_y),std::uint64_t(patch_detail.identity()),
             std::uint64_t(skip_shore)*16+unsigned(separate)*8+unsigned(indexed)*4+unsigned(heights)*2+unsigned(river_assets_ready)};
+        // The vegetation floor keeps the canopy's clearing.
+        input.clearing=canopy_clearing(tile,lookup);input.key[12]=input.clearing.hash();
         return input;
     }
     bool terrain_result_valid(c3x_renderer::fidelity::TerrainSurfaces const& result) {
@@ -8888,7 +9075,7 @@ public:
         std::vector<Vertex> farm_vertices;
         std::vector<Vertex> site_vertices;
         std::array<std::vector<Vertex>,8> cliff_vertices;
-        std::array<std::vector<Vertex>,35> natural_vertices;
+        std::array<std::vector<Vertex>,3+c3x_renderer::fidelity::max_natural_bodies> natural_vertices;
         std::array<std::vector<UINT>,2> natural_grid_indices;
         std::array<std::vector<Vertex> *, geometry_layer_count> tile_layers = {
             &underlay_vertices, &land_vertices, &bed_vertices, &water_vertices,
@@ -8896,7 +9083,7 @@ public:
             &city_vertices, &wall_vertices, &mine_vertices, &farm_vertices, &site_vertices,
             &cliff_vertices[0], &cliff_vertices[1], &cliff_vertices[2], &cliff_vertices[3],
             &cliff_vertices[4], &cliff_vertices[5], &cliff_vertices[6], &cliff_vertices[7]};
-        for(unsigned i=0;i<35;i++)tile_layers[geometry_natural_terrain+i]=&natural_vertices[i];
+        for(unsigned i=0;i<natural_vertices.size();i++)tile_layers[geometry_natural_terrain+i]=&natural_vertices[i];
         float half_w = static_cast<float>(frame.tile_width) * 0.5f;
         float half_h = static_cast<float>(frame.tile_height) * 0.5f;
         auto ndc_x = [](float x) { return x; };
@@ -9313,6 +9500,8 @@ public:
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
             input.routes_enabled=diagnostic_routes!=2;
 #endif
+            if(farm_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION))
+                input.farm_resource=farm_resource_boxes(tile);
             return input;
         };
         auto compile_objects=[&](auto const& input,auto& scratch,auto stop,bool bounded=false){
@@ -9360,7 +9549,8 @@ public:
                 auto cached=instance?resident_content.resolve(instance->compiled):nullptr;
                 auto nodes=select_river_nodes(tile);auto expected=compile_context_for(tile,river_context_for(nodes));
                 if(cached && cached->compile_context==expected && tile_content_valid(*cached,tile))continue;
-                auto input=terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
+                auto input=terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects,
+                    [&](int x,int y){return ground_observations.current(ground_observations.key(x,y));});
                 if(tile.tile_flags&C3X_RENDERER_TILE_RENDER)needed.push_back(input.key);
                 if(keys.insert(input.key).second && !terrain_preparation.contains(input.key,
                     [&](auto const& result){return terrain_result_valid(result);}))jobs.push_back({input.key,input});
@@ -9406,7 +9596,8 @@ public:
         auto make_world_job=[&](auto const& occurrence,auto const& nodes){
             auto tile=content_tile_for(occurrence);
             return c3x_renderer::WorldPreparationInput{make_ground_job(tile,nodes),
-                terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects),
+                terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects,
+                    [&](int x,int y){return ground_observations.current(ground_observations.key(x,y));}),
                 make_object_job(tile),c3x_renderer::world_preparation_key(compile_context_for(tile,river_context_for(nodes)),content_source,canonical_world_content),backing_only,
                 {},c3x_renderer::WorldPreparationKind::combined,batch_preparing || loading_preparation};
         };
@@ -9603,7 +9794,8 @@ public:
             bool draw_dunes = dune_assets_ready &&
                 tile.real_terrain_type == 0 && tile.terrain_type == 0;
             if(!world_batch_enabled && cpu_terrain_enabled && retained_world && !prewarming && preparation_slot<frame.tile_count){
-                auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
+                auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects,
+                    [&](int x,int y){return ground_observations.current(ground_observations.key(x,y));});
                 if(terrain_preparation.compiling(input.key)){compiling_tiles.push_back(index);continue;}
             }
             ++textured_tile_count;
@@ -10602,12 +10794,15 @@ public:
                     std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
                     std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(world_ground),std::uint64_t(patch_detail.identity()),std::uint64_t(tile_ground_grid),std::uint64_t(flat_grid),std::uint64_t(shadow_grid),std::uint64_t(canonical_world_content),world_ground?river_context:std::uint64_t(0)})
                 natural_key=(natural_key^value)*1099511628211ull;
-            // Forest exclusions consume neighboring city composition, while
-            // the ordinary topology dependency map intentionally omits it.
+            // Forest exclusions consume neighboring city composition and the
+            // routes, resources and sites the canopy clears, while the ordinary
+            // topology dependency map intentionally omits them.
             if(canopy_city_dependencies)for(int dr=-2;dr<=2;++dr)for(int dc=-2;dc<=2;++dc){
                 int c=(tile.tile_x+tile.tile_y)/2+dc,r=(tile.tile_x-tile.tile_y)/2+dr;
                 auto neighbor=ground_observations.current(coordinate_key(c+r,c-r));
-                auto value=neighbor!=nullptr && neighbor->occurrence.city_id>=0?
+                auto cleared=[](c3x_renderer_tile_v1 const& n){return n.city_id>=0 || n.resource_id>=0 || n.road_mask || n.railroad_mask ||
+                    (n.improvement_flags&(C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP));};
+                auto value=neighbor!=nullptr && cleared(neighbor->occurrence)?
                     tile_content_signature(neighbor->occurrence):0;
                 natural_key=(natural_key^value)*1099511628211ull;
             }
@@ -11157,9 +11352,11 @@ public:
                         float world_u = anchor.world_u+item.u, world_v = anchor.world_v+1-item.v;
                         // The visible surface: the higher of the pickup relief (flat ground) and the
                         // natural height with mountains (hills), as static objects are seated.
+                        // Water tiles keep the relief level the marine bodies are calibrated to.
                         auto surface = [&](float u, float v) {
                             float relief = relief_at_world(u, v)[0];
-                            return pickup_profile ? std::max(relief, resource_height_at(u, v)-2.5f) : relief;
+                            return pickup_profile && tile.terrain_type < 11 ?
+                                std::max(relief, resource_height_at(u, v)-2.5f) : relief;
                         };
                         anchor.ground = surface(world_u, world_v);
                         if (pickup_profile && item.ground_fit > 0) {
@@ -11228,6 +11425,10 @@ public:
                 if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags,
                         mine_assets_ready,farm_assets_ready,plan))return false;
                 if(farm_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
+                    c3x_renderer::objects::Plan routes;
+                    if(plan.farm_kit)c3x_renderer::objects::select_routes(tile,object_assets,route_assets_ready,true,
+                        [&](int x,int y){return ground_observations.current(observed_coordinate_key(x,y));},routes);
+                    c3x_renderer::objects::clear_farm(plan,routes,object_assets,farm_resource_boxes(tile));
                     c3x_renderer::objects::settle_farm_fields(plan,tile,object_assets,relief_at_world);
                     c3x_renderer::objects::settle_farm_props(plan,tile,object_assets,relief_at_world);
                 }
@@ -11333,9 +11534,10 @@ public:
             } // immutable routes and objects already resident on a world hit
             QueryPerformanceCounter(&phase_end);cliff_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
             std::unique_ptr<c3x_renderer::fidelity::TerrainSurfaces> prepared_terrain;
-            std::array<std::vector<c3x_renderer::fidelity::MeshInstance>,32> forest_instances;
-            std::array<c3x_renderer::render_core::SourceShadow::Bounds,32> forest_bounds;
-            std::array<c3x_renderer::render_core::ProjectedMeshBounds,32> forest_projected;
+            constexpr auto tree_bodies=c3x_renderer::fidelity::max_natural_bodies;
+            std::array<std::vector<c3x_renderer::fidelity::MeshInstance>,tree_bodies> forest_instances;
+            std::array<c3x_renderer::render_core::SourceShadow::Bounds,tree_bodies> forest_bounds;
+            std::array<c3x_renderer::render_core::ProjectedMeshBounds,tree_bodies> forest_projected;
             auto natural_found=component_preparation?natural_mesh_cache.end():natural_mesh_cache.find(natural_key);
             bool natural_hit=!component_preparation && fidelity_profile && natural_found!=natural_mesh_cache.end();
             if(natural_hit && !natural.valid(natural_found->second.river_dependencies))natural_hit=false;

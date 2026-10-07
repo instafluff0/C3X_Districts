@@ -47,5 +47,35 @@ int main() {
 ''')
 
 
+    def test_shadow_lies_on_the_terrain_at_any_height(self):
+        # The projected shadow used 1.75 * relief per unit of ground height, far
+        # below the terrain's 0.0016 * view height, so on any raised ground it lay
+        # beneath the terrain and animated animals had no visible shadow.
+        shader = (ROOT / "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl").read_text()
+        entry = shader[shader.index("VSResourceShadow"):]
+        start = entry.index("input.position=float3(sx,sy,") + len("input.position=float3(sx,sy,")
+        key = entry[start:entry.index(");", start)]
+        run_cpp(r"""
+#include <cassert>
+#include <initializer_list>
+struct float4 { float x, y, z, w; };
+float shadow_key(float ground, float sy) {
+    float4 resource_offset{0, 0, 0, ground};
+    float4 resource_projection{64.f, 32.f, 1.14f, 1500.f};
+    return """ + key + r""";
+}
+int main() {
+    for (float ground : {0.f, 5.f, 20.f, 60.f}) {
+        float base = 412.f;                                   // the shadowed ground point's unraised screen y
+        float sy = base - ground * 1.14f * .82f;              // drawn on the raised ground
+        float terrain = base + ground * .0016f * 1500.f;      // natural terrain depth there
+        float key = shadow_key(ground, sy);
+        assert(key > terrain);                                // on top of the ground, not beneath it
+        assert(key < terrain + .02f * 150.f / .82f * .0016f * 1500.f);   // behind a hoof .02 tile up
+    }
+}
+""")
+
+
 if __name__ == "__main__":
     unittest.main()

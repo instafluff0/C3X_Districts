@@ -2790,12 +2790,18 @@ float3 project_world_content(float3 position, float3 world, float4 projection, f
     float base=(dx-dy+1)*width*.25;
     return float3((dx+dy)*width*.5,base-h*(width/224*.82),base+h*.0016*projection.w);
 }
-// Resource bodies (integer slots 21-28) and baked resource ground decals
-// (fraction .325-.385) take the natural terrain's height-depth basis, so the
-// part of a body standing on raised natural ground is not hidden beneath it.
+// Resource bodies (integer slots 21-28), baked resource ground decals
+// (fraction .325-.385) and farm kit pieces (fraction .0135/.0235/.0335) take
+// the natural terrain's height-depth basis, so the part of a body standing on
+// raised natural ground is not hidden beneath it.
+bool farm_kit_material(float material) {
+    float f=frac(material);
+    return material>20.5 && material<28.5 && f<.05 && abs(frac(f*100)-.35)<.05;
+}
 float resource_natural_depth(float3 projected, float world_z, float4 projection, float kind, float material) {
     float f=frac(material);
-    if(projection.z==0 || kind<1.5 || kind>2.5 || material<20.5 || material>28.5 || !(f<.005 || abs(f-.355)<.03))
+    if(projection.z==0 || kind<1.5 || kind>2.5 || material<20.5 || material>28.5 ||
+       !(f<.005 || abs(f-.355)<.03 || farm_kit_material(material)))
         return projected.z;
     float h=world_z*112-2.5;
     return projected.y+h*(projection.z/224*.82)+h*.0016*projection.w;
@@ -3276,7 +3282,9 @@ FeaturePixelInput VSSharedFeature(RigidInput i){
  // basis of the terrain and water beneath them, as resource_natural_depth does
  // for resource bodies; the feature basis weights ground height far less.
  bool bridge=i.projection.z!=0 && i.placement_view.w>12.5 && i.placement_view.w<20.5;
- if(bridge){float h=p.world.z*112-2.5;
+ // Farm kit trees and farmhouses stand on low relief and hills in the same way.
+ bool farm=i.projection.z!=0 && farm_kit_material(i.placement_view.w);
+ if(bridge || farm){float h=p.world.z*112-2.5;
   position.z=position.y+h*(i.projection.z/224*.82)+h*.0016*i.projection.w;}
  o.position.z=clamp(.5-(floor(position.z*256+.5)/256+i.placement_view.z)/16384.,.001,.999);
  // The river surface (kind 9) sorts over its bed and banks 0.025*reserved.x

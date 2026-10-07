@@ -19,6 +19,16 @@ ROOT = Path(__file__).resolve().parent.parent
 LAB = ROOT / "Renderer/lab"
 sys.path.insert(0, str(ROOT))
 from Renderer.lab.studies.resources import roster as resource_roster
+from Renderer.lab.studies.vegetation import cases as vegetation_cases
+from Renderer.lab.studies.farms import cases as farm_cases
+
+
+def lab_tile_cases(category, case):
+    """The Lab case module that supplies BIQ object bits for this case, if any."""
+    for module in (vegetation_cases, farm_cases):
+        if module.applies(category, case):
+            return module
+    return None
 
 
 def read(path):
@@ -337,7 +347,7 @@ def scene(category, case, destination, *, world_size=32):
     for y in range(world_size):
         for x in range(y % 2, world_size, 2):
             base, real = recipe["terrain"], recipe["feature"]
-            river = 0
+            river = bonus = overlays = 0
             if recipe["feature"] in (5, 6, 7, 8):
                 base, real = 2, 2
                 # Mountain review must exercise true edge adjacency.  The raw
@@ -506,11 +516,13 @@ def scene(category, case, destination, *, world_size=32):
                     base, real = 2, 7
                 if (x, y) in ((12, 18), (22, 16)):
                     base, real = 2, 5
-            rows.append(f"{x},{y},{base},{real},0,0,{river}")
+            if lab_tile_cases(category, case):
+                base, real, river, bonus, overlays = lab_tile_cases(category, case).terrain(category, case, x - 16, y - 16, base, real)
+            rows.append(f"{x},{y},{base},{real},{bonus},{overlays},{river}")
     destination.write_text(f"C3X_BIQ_TERRAIN_V3,{world_size},{world_size},{len(rows)}\n" + "\n".join(rows) + "\n")
 
 
-def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None, shared_surface=None, resource_pack=""):
+def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None, shared_surface=None, resource_pack="", farm_runtime="", extra_env=None):
     from Renderer.lab.platform import run_native_fixture
     if shared_surface is None:
         shared_surface = category in ("seas-oceans", "rivers")
@@ -518,6 +530,8 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         raise ValueError("Unknown native behavior check")
     if resource_pack and not re.fullmatch(r"[A-Za-z0-9_]+", resource_pack):
         raise ValueError("Resource pack must be a simple pack folder name")
+    if farm_runtime and not re.fullmatch(r"farm_runtime[A-Za-z0-9_~-]*\.bin", farm_runtime):
+        raise ValueError("Farm runtime must be a farm_runtime*.bin file name in ImprovementsNormalized")
     if category == "rivers" and center == (16, 16):
         # The paired views inspect opposite ends of the same watershed instead
         # of wasting both captures on its middle reach.
@@ -560,6 +574,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_PREVIEW_EDITS": "", "C3X_RENDERER_PREVIEW_ANIMATION": "",
         "C3X_RENDERER_PREVIEW_UNITS": "", "C3X_RENDERER_PREVIEW_VISIBILITY": "", "C3X_RENDERER_PREVIEW_SEASON": "0",
         "C3X_RENDERER_UNIT_CASES": "", "C3X_RENDERER_UNIT_PACK": "", "C3X_RENDERER_RESOURCE_PACK": resource_pack,
+        "C3X_RENDERER_FARM_RUNTIME": farm_runtime,
         "C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO": "1" if category == "volcanoes" and case == "active" else "",
         "C3X_RENDERER_FIDELITY_SHADOW_CONTROL": "", "C3X_RENDERER_REFLECTION_CONTROL": "",
         "C3X_RENDERER_CITY_LIGHT_CONTROL": "", "C3X_RENDERER_CITY_GLOW_CONTROL": "",
@@ -576,9 +591,17 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         # Optional era override for road/bridge review in the infrastructure fixture.
         "C3X_LAB_ROAD_ERA": os.environ.get("C3X_LAB_ROAD_ERA", "") if category == "infrastructure" else "",
         "C3X_LAB_RESOURCE_ROSTER": resource_roster.spec(case) if category == "resources" and case in resource_roster.CASES else "",
+        # Forest/jungle and farm cases carry BIQ object bits in the scene CSV.
+        "C3X_LAB_TILE_OVERLAYS": "1" if lab_tile_cases(category, case) else "",
+        "C3X_LAB_TILE_RESOURCES": lab_tile_cases(category, case).resources(category, case) if lab_tile_cases(category, case) else "",
         "C3X_RENDERER_BORDER_MESH_PREFIX": "",
         "C3X_RENDERER_BORDER_MESH_SITE": "",
     }
+    # A study may set further renderer/Lab switches (simple values only).
+    for key, value in (extra_env or {}).items():
+        if not re.fullmatch(r"C3X_[A-Z0-9_]+", key) or not re.fullmatch(r"[A-Za-z0-9_.~,; -]*", value):
+            raise ValueError("Extra environment must be C3X_* keys with simple values")
+        env[key] = value
     # The same shoreline lifecycle must cover both native compatibility and
     # resident scene composition; no alternate wave material or timing model.
     env["C3X_RENDERER_SHARED_SCENE_SURFACE"] = "1" if shared_surface else "0"
@@ -626,6 +649,8 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         width, height = 1200, 880
     if category == "resources" and case in resource_roster.CASES:
         width, height = resource_roster.viewport(case, zoom)
+    if lab_tile_cases(category, case):
+        width, height = lab_tile_cases(category, case).viewport(zoom)
     command += (f' && {executable} "{windows(dll)}" ..\\.. '
                 f'..\\default.custom_rendering.txt "{windows(csv)}" "{windows(image)}" '
                 f'{width} {height} {center[0]} {center[1]} {zoom} {hour}')

@@ -472,6 +472,7 @@ int main(){
   bool skip_flat_shore=true,separate_natural_relief=true,index_natural_grids=true,retain_height_samples=true,world_objects=true;
   unsigned world_terrain_compiles=0;
   auto terrain_compile_input=[](auto const&,auto const&,auto...){return fidelity::TerrainCompileInput{};};
+  auto topology_lookup=[](int,int){return nullptr;};
   struct Queue {unsigned* joins;std::unique_ptr<fidelity::TerrainSurfaces> take(fidelity::TerrainCompileInput::Key const&,bool){++*joins;return {};}} terrain_preparation{&joins};
   std::unique_ptr<PreparedWorld> prepared_world;
   auto terrain_result_valid=[](auto const&){return true;};

@@ -28,12 +28,14 @@ struct PreparedRigid {
 };
 template<class Relief,class Height>
 PreparedRigid prepare_rigid(Instance const& source,Projection const& input,Assets const& assets,
-        Relief relief,Height height){
+        Relief relief,Height height,bool drape=false){
     PreparedRigid result;result.family=source.family;result.asset=source.asset;result.layer=source.layer;
     auto const& asset=assets[source.family].assets[source.asset];
     float u=float(input.tile.tile_x+input.tile.tile_y)*.5f,v=float(input.tile.tile_x-input.tile.tile_y)*.5f;
     float ground=relief(u+source.u,v+1-source.v)[0];
     if(source.family==site_family)ground=height(u+source.u,v+1-source.v)-2.5f;
+    // A farm kit's props stand on the rendered ground its fields drape on.
+    if(drape)ground=std::max(ground,height(u+source.u,v+1-source.v)-2.5f);
     seat_route_bridge(input,asset,source.scale,source.rotation,u+source.u,v+1-source.v,relief,height,ground);
     float values[]={u,v,source.u,source.v,std::cos(source.rotation),std::sin(source.rotation),source.scale,ground};
     std::copy(values,values+8,result.instance.place);
@@ -43,7 +45,8 @@ PreparedRigid prepare_rigid(Instance const& source,Projection const& input,Asset
     FeaturePlacement placement{};placement.asset_index=source.asset;
     std::vector<Vertex> vertices,shadows;std::vector<unsigned> indices;
     append_instance(input,assets[source.family],placement,source.u,source.v,source.rotation,source.scale,
-        source.material,source.owner,false,source.family==site_family,relief,height,vertices,shadows,&indices);
+        source.material,source.owner,false,source.family==site_family,relief,height,vertices,shadows,&indices,
+        0.f,0.f,drape);
     result.bounds={std::numeric_limits<int>::max(),std::numeric_limits<int>::max(),
         std::numeric_limits<int>::min(),std::numeric_limits<int>::min()};
     result.low.fill(1e9f);result.high.fill(-1e9f);

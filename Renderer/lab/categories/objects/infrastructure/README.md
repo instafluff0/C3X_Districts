@@ -78,14 +78,8 @@ Reference captures reproduce production using small synthetic diagnostic scenes;
 they are not claimed to be live Civ III captures. References are optional review
 aids. See `Renderer/docs/visual_fidelity_playbook.md`.
 
-The farm study under `Renderer/lab/studies/farms/` renders deterministic irrigation
-placements over the unchanged `test.biq` terrain. Its current candidate uses
-source crop-atlas rows instead of shrinking the full atlas into each field,
-samples field vertices against terrain relief, clips them at the shore and river
-bank, and
-varies palette, placement, and source tree/building composition by tile seed.
-The atlas subregion choice and field layout are visual reconstruction decisions;
-the source decal metadata confirms the materials and footprints, not this exact
-Civ III tile arrangement. The compact runtime still omits the source crop height,
-specular, and foliage opacity response. These examples have not been visually
-accepted or staged for game use.
+Farms: production still draws the earlier quadrant fields with terrain
+palettes. A Lab farm kit (one green patchwork per tile that drapes on the
+rendered ground and keeps its routes, resource and water open) is under
+review in `Renderer/lab/studies/farms/`; it switches on only for a farm pack
+with a `farm_kit` group and is not accepted or staged for game use.

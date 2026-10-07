@@ -12,7 +12,11 @@
     "Renderer/native/rigid_object_instance.h",
     "Renderer/native/world_preparation.h",
     "Renderer/lab/shared/shaders/lighting/generated/scene_linear_v1.hlsl",
-    "Renderer/tools/asset_compiler/build_route_pattern_runtime.py"
+    "Renderer/tools/asset_compiler/build_route_pattern_runtime.py",
+    "Renderer/native/object_preparation.h",
+    "Renderer/native/render_core/world_projection.hlsl",
+    "Renderer/native/render_core/rigid_feature.hlsl",
+    "Renderer/tools/asset_compiler/build_farm_runtime.py"
   ],
   "recipe": {
     "terrain": 2,
@@ -34,7 +38,8 @@
     "Renderer.native.source_fidelity.test_contract",
     "Renderer.native.test_render_core",
     "Renderer.native.test_scene_depth",
-    "Renderer.native.test_object_compiler"
+    "Renderer.native.test_object_compiler",
+    "Renderer.native.test_farm_kit"
   ],
   "references": {
     "d3d11": [

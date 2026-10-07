@@ -29,7 +29,18 @@ decal choice and terrain layout comes from
 baked instances, matches resource names by data aliases and picks a variant for
 the tile's terrain. Ground decals are flat `decal/` meshes with soft alpha;
 model and decal textures are block-copied into atlases for the eight resource
-texture slots. Production keeps `ResourceNormalized` until a batch is approved.
+texture slots.
+
+Production resources are these compositions: the `resources` preparation job bakes
+`Renderer/packs/ResourceCompositions` without Lab alternates, and the runtime
+loads it by default (`--resource-pack` still selects a candidate for review).
+`ResourceNormalized` remains a source pack for the animation runtime. Animated
+subjects in a composition (`animated/<binding>`, including derived schools such
+as `fish.few` from `school_orientation.thin_school`) come from
+`ResourceAnimationRuntime`. The game compiles its shaders from the pinned
+`Renderer64ResidentRuntime` pack; `Renderer/tools/overlay_resource_shading.py`
+carries the current resource shading into it (review with `--dry-run`; `--match TEXT`
+keeps other features' unaccepted shader edits that mention resources out of the game).
 
 The fixed references preserve the earlier black-backdrop defect around animated
 resources. Current code fixes guarded scene-linear backdrop accumulation.
@@ -43,8 +54,9 @@ Reference captures reproduce production using small synthetic diagnostic scenes;
 they are not claimed to be live Civ III captures. References are optional review
 aids. See `Renderer/docs/visual_fidelity_playbook.md`.
 
-Category commands prepare the static bundle and animation pack when their source
-inputs or compilers change. Current inputs are `ResourceNormalized` and
+Category commands prepare the composition pack and animation pack when their
+inputs or compilers change. Composition inputs are the profiles and
+`ResourceCompositionSources`; animation inputs are `ResourceNormalized` and
 `ResourceAnimatedLab`, with clip units in `Renderer/lab/shared/resources/clip_units.json`.
 Builders use disposable output and preserve source bytes, animated root deltas,
 marine school facing and the accepted fish surface offset. Historical runtime

@@ -19,6 +19,7 @@ bool lab_vegetation(NaturalData const&natural,Tile owner,GroundProjection projec
     auto hash=patterns::feature_hash;
     auto random=patterns::stable_random;
     auto triangle=[](auto&out,auto const&a,auto const&b,auto const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
+    CanopyClearing clearing;
     #include "../../shared/natural/vegetation_floor_mesh_body.h"
     int inherited=native_hill_vegetation(owner.real,[&](int dx,int dy){return lookup_natural(nc+(dx+dy)/2,nr+(dx-dy)/2).real;},native_hill_seed(owner.source_x,owner.source_y));
     bool hill_forest=owner.real==5 && inherited==7,hill_jungle=owner.real==5 && inherited==8;

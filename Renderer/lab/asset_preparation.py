@@ -105,11 +105,23 @@ def jobs():
             "Renderer/packs/ResourceAnimatedLab/manifest.json": None}
         return dict(sources, **resource_helpers())
 
+    def composition_inputs():
+        # Art direction, the imported Civ VI source pack (its manifest records the
+        # importer and every requested source) and the packs the bake borrows from.
+        paths = ["Renderer/inventory/resource_composition_profiles.json",
+                 "Renderer/packs/ResourceCompositionSources/manifest.json",
+                 "Renderer/packs/CompoundLandmarksNormalized/manifest.json",
+                 "Renderer/packs/ResourceNormalized/manifest.json"]
+        paths.extend("Renderer/tools/asset_compiler/" + name + ".py" for name in (
+            "build_resource_compositions", "resource_composition_sources", "clutter_blp_extractor",
+            "generic_decal_compiler", "indexed_static_package"))
+        return {path: digest(ROOT / path) for path in paths}
+
     def build_resources(stage):
-        from Renderer.tools.asset_compiler import build_resource_runtime as resources
-        consumed = {}
-        resources.build(ROOT / "Renderer/packs/ResourceNormalized",
-                        stage / "Renderer/packs/ResourceNormalized/resource_runtime.bin", consumed=consumed)
+        # Production resources are the approved baked compositions (no Lab alternates).
+        from Renderer.tools.asset_compiler import build_resource_compositions as compositions
+        compositions.build(stage / "Renderer/packs/ResourceCompositions", alternates=False)
+        consumed = composition_inputs()
         consumed.update(resource_helpers())
         return consumed
 
@@ -148,7 +160,7 @@ def jobs():
         ("cities", city_sources, build_cities, "Renderer/tools/prepare_city_recipes.py"),
         ("units", unit_sources, build_units, "Renderer/native/environment_refresh/prepare_units.py"),
         ("resources", lambda: resource_sources("resources"), build_resources,
-         "Renderer/tools/asset_compiler/build_resource_runtime.py"),
+         "Renderer/tools/asset_compiler/build_resource_compositions.py"),
         ("resource-animation", lambda: resource_sources("resource-animation"), build_resource_animation,
          "Renderer/tools/asset_compiler/build_resource_animation_runtime.py"),
     )

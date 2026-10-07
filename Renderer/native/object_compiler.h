@@ -84,7 +84,31 @@ struct PatternRoute {unsigned line,style,bridges=0;std::vector<std::array<float,
     std::array<float,2> crossing{}; // start/end: bridged river's center past the join, along its axis
     std::vector<float> fade;        // per point: fades out as a mountain rises under the path
 };
-struct Plan {std::vector<Instance> instances;std::vector<Route> routes;std::vector<PatternRoute> patterns;};
+// Ground a farm keeps open on its own tile, in tile-local (u,v): its routes
+// as capsules around their drawn centerlines and its resource's parts as
+// rounded boxes. at() is the signed distance from that ground (negative inside).
+struct FarmClearing {
+    std::vector<std::array<float,5>> paths; // u0,v0,u1,v1,half width
+    std::vector<std::array<float,5>> boxes; // u0,v0,u1,v1,margin
+    bool yard=true; // false when the farm plants its resource itself
+    float at(float u,float v)const{
+        float distance=1.f;
+        for(auto const& p:paths){
+            float du=p[2]-p[0],dv=p[3]-p[1],length=du*du+dv*dv;
+            float t=length>0?std::clamp(((u-p[0])*du+(v-p[1])*dv)/length,0.f,1.f):0.f;
+            distance=std::min(distance,std::hypot(u-p[0]-du*t,v-p[1]-dv*t)-p[4]);
+        }
+        for(auto const& b:boxes){
+            float du=std::max({b[0]-u,0.f,u-b[2]}),dv=std::max({b[1]-v,0.f,v-b[3]});
+            distance=std::min(distance,(du>0 || dv>0?std::hypot(du,dv):
+                -std::min({u-b[0],b[2]-u,v-b[1],b[3]-v}))-b[4]);
+        }
+        return distance;
+    }
+};
+// farm_kit: the farm pack's kit (a "farm_kit" group) lays out this tile's farm.
+struct Plan {std::vector<Instance> instances;std::vector<Route> routes;std::vector<PatternRoute> patterns;
+    bool farm_kit=false;FarmClearing farm_clearing;};
 struct Surfaces {
     std::array<std::vector<Vertex>,layer_count> layers;
     std::array<std::vector<unsigned>,layer_count> indices;
@@ -185,7 +209,8 @@ bool seat_route_bridge(Projection const& input,FeatureAsset const& asset,float s
 template<class Relief,class Height>
 void append_instance(Projection const& input,FeatureBundle const& bundle,FeaturePlacement const& placement,
         float local_u,float local_v,float rotation,float scale,float material_offset,float owner_code,bool cast_shadow,
-        bool site,Relief relief_at_world,Height natural_height_at,std::vector<Vertex>& target,std::vector<Vertex>& shadows,std::vector<unsigned>* topology=nullptr,float lift=0.f,float ground_fit=0.f){
+        bool site,Relief relief_at_world,Height natural_height_at,std::vector<Vertex>& target,std::vector<Vertex>& shadows,std::vector<unsigned>* topology=nullptr,float lift=0.f,float ground_fit=0.f,
+        bool drape=false){
     auto const& tile=input.tile;
     float left=input.left,top=input.top,half_w=input.half_w,half_h=input.half_h;
     float relief_projection_scale=input.relief_projection_scale,feature_projection_scale=input.feature_projection_scale;
@@ -211,6 +236,9 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
         ground_sample[0]=natural_height_at(tile_world_u+local_u,
             tile_world_v+1.f-local_v)-2.5f-wall_source_floor*(150.f/.82f)+.02f;
     }
+    // A draped farm stands on the rendered ground: low relief cannot bury it.
+    if(drape && farm_asset)ground_sample[0]=std::max(ground_sample[0],natural_height_at(
+        tile_world_u+local_u,tile_world_v+1.f-local_v)-2.5f);
     if (farm_asset && asset.id.find(":base:")!=std::string::npos && ground_sample[2]<.55f)
         return;
     if (farm_asset && asset.id.find(":building:")!=std::string::npos && ground_sample[2]<.14f)
@@ -250,13 +278,24 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
         c3x_renderer::FeatureSourceVertex const & source = asset.vertices[vertex_index];
         float local_x = (source.position[0] * cosine - source.position[1] * sine) * scale;
         float local_y = (source.position[0] * sine + source.position[1] * cosine) * scale;
-        float local_z = source.position[2] * scale + lift; // baked sink/raise, tile units
-        auto vertex_ground = farm_decal
+        // baked sink/raise, tile units; a draped field sits a hair above the
+        // ground (still below route strips) so it never z-fights the terrain
+        float local_z = source.position[2] * scale + lift + (farm_decal && drape ? .016f : 0.f);
+        // A draped patchwork reaches past its tile; vertices far enough out
+        // that every triangle using them lies outside skip the terrain queries.
+        bool outside = farm_decal && drape && std::max(std::abs(local_u + local_x - .5f),
+            std::abs(local_v + local_y - .5f)) > .65f;
+        auto vertex_ground = farm_decal && !outside
             ? relief_at_world(tile_world_u + local_u + local_x,
                               tile_world_v + 1.0f - local_v - local_y)
             : ground_sample;
+        if (outside) vertex_ground[2] = -1.f;
         if(farm_decal && ground_decal && pickup_profile && site)vertex_ground[0]=natural_height_at(
             tile_world_u+local_u+local_x,tile_world_v+1.f-local_v-local_y)-2.5f;
+        // Draped fields lie on the rendered ground, as routes do, so low
+        // relief on grassland, plains and hills cannot bury them.
+        if(farm_decal && drape && !outside)vertex_ground[0]=std::max(vertex_ground[0],natural_height_at(
+            tile_world_u+local_u+local_x,tile_world_v+1.f-local_v-local_y)-2.5f);
         if(terrain_wall)vertex_ground[0]=natural_height_at(
             tile_world_u+local_u+local_x,tile_world_v+1.f-local_v-local_y)-
             2.5f-wall_source_floor*(150.f/.82f)+.02f;
@@ -307,7 +346,7 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
         }
     }
     if (farm_decal) {
-        if(asset.id.find(":crop:")!=std::string::npos){
+        if(asset.id.find(":crop:")!=std::string::npos && !drape){
             float min_u=1e6f,max_u=-1e6f,min_v=1e6f,max_v=-1e6f;
             for(auto const& point:farm_world){
                 min_u=std::min(min_u,point[0]);max_u=std::max(max_u,point[0]);
@@ -366,6 +405,10 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
                 output[i]=from[i]+(to[i]-from[i])*t;
             return result;
         };
+        std::size_t first_vertex=target.size(),first_index=topology?topology->size():0;
+        float full_area=0,kept_area=0,low_u=1e6f,high_u=-1e6f,low_v=1e6f,high_v=-1e6f;
+        auto area=[](float ax,float ay,float bx,float by,float cx,float cy){
+            return std::abs((bx-ax)*(cy-ay)-(by-ay)*(cx-ax))*.5f;};
         for(std::size_t triangle=0;triangle+2<asset.indices.size();triangle+=3){
             std::array<ShoreVertex,4> polygon{};
             unsigned count=3;
@@ -373,6 +416,10 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
                 auto index=asset.indices[triangle+corner];
                 polygon[corner]={transformed[index],farm_shore[index]};
             }
+            if(drape){auto const& a=asset.vertices[asset.indices[triangle]].position;
+                auto const& b=asset.vertices[asset.indices[triangle+1]].position;
+                auto const& c=asset.vertices[asset.indices[triangle+2]].position;
+                full_area+=area(a[0],a[1],b[0],b[1],c[0],c[1])*scale*scale;}
             std::array<ShoreVertex,4> clipped{};
             unsigned kept=0;
             for(unsigned corner=0;corner<count;++corner){
@@ -382,12 +429,24 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
                 if(a_land!=b_land)clipped[kept++]=intersect(a,b);
             }
             for(unsigned corner=1;corner+1<kept;++corner){
+                if(drape){auto const& a=clipped[0].vertex;auto const& b=clipped[corner].vertex;auto const& c=clipped[corner+1].vertex;
+                    kept_area+=area(a.world_x,a.world_y,b.world_x,b.world_y,c.world_x,c.world_y);
+                    for(auto const* point:{&a,&b,&c}){low_u=std::min(low_u,point->world_x);high_u=std::max(high_u,point->world_x);
+                        low_v=std::min(low_v,point->world_y);high_v=std::max(high_v,point->world_y);}}
                 for(unsigned index:{0u,corner,corner+1}){
                     if(topology){topology->push_back(unsigned(target.size()));
                         target.push_back(clipped[index].vertex);}
                     else target.push_back(clipped[index].vertex);
                 }
             }
+        }
+        // A kit field that clipping cuts to a narrow sliver or a scrap is
+        // dropped whole: its kept width (area over the kept extent, fringe
+        // included) or area is too small for a field.
+        if(drape && pickup_profile && kept_area>0 && kept_area<full_area*.5f &&
+           (kept_area/std::hypot(high_u-low_u,high_v-low_v)<.07f || kept_area<.006f)){
+            target.resize(first_vertex);
+            if(topology)topology->resize(first_index);
         }
         return;
     }
@@ -1422,6 +1481,68 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
             (c3x_renderer::stable_random(seed+29u)-.5f)*.08f;
         constexpr unsigned palettes[5][2]={{1,2},{1,0},{0,1},{2,1},{0,2}};
         unsigned terrain=unsigned(std::clamp(ground,0,4));
+        // A farm kit draws the same green patchwork on every terrain, instead
+        // of terrain palettes: its field pieces, at any angle, at their
+        // authored size (in tiles) or up to a fifth larger, and shifted so a
+        // different part covers each tile. The tile, its routes, resource and
+        // water then clip them (farm_relief), and a field cut to a sliver goes.
+        plan.farm_kit=c3x_renderer::find_feature_group(farm_bundle,"farm_kit")!=nullptr;
+        // Kit pieces add .0035 to their material fraction (emissive codes
+        // unchanged): the shaders then give them the natural terrain's
+        // height-depth basis, so raised low relief and hills cannot hide them.
+        float kit_code=plan.farm_kit?.0035f:0.f;
+        if(plan.farm_kit){
+            // A resource with its own kit ("farm_kit:<name>", e.g. ripe wheat)
+            // swaps the patchwork; a "farm_kit:<name>:crop" kit plants the
+            // resource itself, so the farm keeps no yard around it.
+            c3x_renderer::FeatureGroup const* fields=group;
+            if(tile.resource_id>=0 && tile.city_id<0){
+                std::string name="farm_kit:";
+                for(char letter:tile.resource_name){if(!letter)break;name+=letter>='A' && letter<='Z'?char(letter+32):letter;}
+                if(auto const* own=c3x_renderer::find_feature_group(farm_bundle,name.c_str()))fields=own;
+                else if(auto const* crop=c3x_renderer::find_feature_group(farm_bundle,(name+":crop").c_str())){
+                    fields=crop;plan.farm_clearing.yard=false;}
+            }
+            // The crop pieces of the group (the fields of one patchwork) share
+            // one placement; pieces that miss the tile are skipped.
+            std::vector<unsigned> pieces;
+            float low_x=1e6f,high_x=-1e6f,low_y=1e6f,high_y=-1e6f;
+            for(auto const& placement:fields->placements){
+                if(placement.asset_index>=farm_bundle.assets.size())continue;
+                auto const& asset=farm_bundle.assets[placement.asset_index];
+                if(asset.id.find(":crop:")==std::string::npos)continue;
+                pieces.push_back(placement.asset_index);
+                for(auto const& vertex:asset.vertices){
+                    low_x=std::min(low_x,vertex.position[0]);high_x=std::max(high_x,vertex.position[0]);
+                    low_y=std::min(low_y,vertex.position[1]);high_y=std::max(high_y,vertex.position[1]);
+                }
+            }
+            float side=std::min(high_x-low_x,high_y-low_y);
+            if(!pieces.empty() && side>0){
+                float size=std::max(1.5f,side*(1.f+.2f*c3x_renderer::stable_random(seed+11u)));
+                float rotation=6.28318530718f*c3x_renderer::stable_random(seed+13u);
+                // Any shift keeps the whole tile (half-diagonal .71) covered.
+                float angle=6.28318530718f*c3x_renderer::stable_random(seed+17u);
+                float shift=(size*.5f-.73f)*c3x_renderer::stable_random(seed+19u);
+                float scale=size/side,cosine=std::cos(rotation),sine=std::sin(rotation);
+                float center_x=(low_x+high_x)*.5f*scale,center_y=(low_y+high_y)*.5f*scale;
+                float u=.5f+std::cos(angle)*shift-(center_x*cosine-center_y*sine);
+                float v=.5f+std::sin(angle)*shift-(center_x*sine+center_y*cosine);
+                for(unsigned piece:pieces){
+                    float piece_low_u=1e6f,piece_high_u=-1e6f,piece_low_v=1e6f,piece_high_v=-1e6f;
+                    for(auto const& vertex:farm_bundle.assets[piece].vertices){
+                        float x=u+(vertex.position[0]*cosine-vertex.position[1]*sine)*scale;
+                        float y=v+(vertex.position[0]*sine+vertex.position[1]*cosine)*scale;
+                        piece_low_u=std::min(piece_low_u,x);piece_high_u=std::max(piece_high_u,x);
+                        piece_low_v=std::min(piece_low_v,y);piece_high_v=std::max(piece_high_v,y);
+                    }
+                    if(piece_high_u<0 || piece_low_u>1 || piece_high_v<0 || piece_low_v>1)continue;
+                    c3x_renderer::FeaturePlacement placement{};placement.asset_index=piece;
+                    append_feature_instance(farm_bundle,placement,u,v,rotation,scale,21.0f,
+                        .01f+kit_code,false,farm_vertices);
+                }
+            }
+        }
         for (c3x_renderer::FeaturePlacement const & placement : group->placements) {
             if (placement.asset_index >= farm_bundle.assets.size())
                 return false;
@@ -1436,6 +1557,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 emissive_code = static_cast<unsigned>(std::strtoul(
                     asset.id.c_str() + marker + 2u, nullptr, 10));
             if (crop_part) {
+                if(plan.farm_kit)continue;
                 for(unsigned patch=0;patch<4u;++patch){
                     unsigned palette=palettes[terrain][(color_mask>>patch)&1u];
                     if(asset.texture_index!=palette)continue;
@@ -1472,13 +1594,13 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                     float scale=1.35f+.45f*c3x_renderer::stable_random(tree_seed+47u);
                     append_feature_instance(farm_bundle,placement,u,v,
                         float(tree_seed&3u)*1.57079632679f,scale,21.0f,
-                        .01f*float(emissive_code+1u),true,farm_vertices);
+                        .01f*float(emissive_code+1u)+kit_code,true,farm_vertices);
                 }
             } else if (building_part) {
                 append_feature_instance(farm_bundle,placement,
                     .37f+float(seed&1u)*.20f,.38f+float((seed>>1)&1u)*.19f,
                     float((seed>>2)&3u)*1.57079632679f,1.45f,21.0f,
-                    .01f*float(emissive_code+1u),true,farm_vertices);
+                    .01f*float(emissive_code+1u)+kit_code,true,farm_vertices);
             }
         }
     }
@@ -1486,8 +1608,48 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
     // Never substitute the retired procedural city or wall meshes.
     return true;
 }
+// The ground a farm kit keeps open on its tile: its drawn routes with a
+// verge, and its resource's parts (tile-local boxes from the caller). Each
+// tile draws its own routes up to its edges, so its own route plan suffices.
+inline void clear_farm(Plan& plan,Plan const& routes,Assets const& assets,
+        std::vector<std::array<float,4>> const& resource){
+    if(!plan.farm_kit)return;
+    constexpr float road=.095f,rail=.12f,yard=.05f;
+    auto& clearing=plan.farm_clearing;
+    for(auto const& route:routes.patterns){
+        auto const* set=assets.patterns_for(route.style);
+        if(!set || route.line>=set->lines.size())continue;
+        auto const& line=set->lines[route.line];
+        auto point=[&](unsigned index){
+            return route.points.size()==line.count?route.points[index]:set->points[line.first+index];};
+        for(unsigned index=1;index<line.count;++index){
+            auto a=point(index-1),b=point(index);
+            clearing.paths.push_back({a[0],a[1],b[0],b[1],route.style>=4u?rail:road});
+        }
+    }
+    for(auto const& route:routes.routes)
+        clearing.paths.push_back({route.u0,route.v0,route.u1,route.v1,route.railroad?rail:road});
+    if(clearing.yard)for(auto const& box:resource)clearing.boxes.push_back({box[0],box[1],box[2],box[3],yard});
+}
+// A farm's relief: the clearance channel (dry land) also keeps out of the
+// kit's open ground, so fields and props go around routes and resources.
 template<class Relief>
-void settle_farm_fields(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Relief relief){
+auto farm_relief(Plan const& plan,c3x_renderer_tile_v1 const& tile,Relief relief){
+    float world_u=float(tile.tile_x+tile.tile_y)*.5f,world_v=float(tile.tile_x-tile.tile_y)*.5f;
+    return [&clearing=plan.farm_clearing,kit=plan.farm_kit,relief,world_u,world_v](float x,float y){
+        auto sample=relief(x,y);
+        float u=x-world_u,v=world_v+1.f-y;
+        // A kit's patchwork stops a narrow verge inside its own tile.
+        if(kit)sample[2]=std::min(sample[2],std::min(std::min(u,1.f-u),std::min(v,1.f-v))-.02f);
+        if(!clearing.paths.empty() || !clearing.boxes.empty())
+            sample[2]=std::min(sample[2],clearing.at(u,v));
+        return sample;
+    };
+}
+template<class Source>
+void settle_farm_fields(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Source source){
+    if(plan.farm_kit)return; // the kit's patchwork is clipped, not moved
+    auto relief=farm_relief(plan,tile,source);
     constexpr std::array<float,7> scales{{1.f,.94f,.88f,.82f,.75f,.68f,.6f}};
     float world_u=float(tile.tile_x+tile.tile_y)*.5f;
     float world_v=float(tile.tile_x-tile.tile_y)*.5f;
@@ -1527,8 +1689,9 @@ void settle_farm_fields(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const
         }
     }
 }
-template<class Relief>
-void settle_farm_props(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Relief relief){
+template<class Source>
+void settle_farm_props(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Source source){
+    auto relief=farm_relief(plan,tile,source);
     constexpr std::array<std::array<float,2>,16> anchors{{
         {{.22f,.22f}},{{.50f,.22f}},{{.78f,.22f}},{{.22f,.50f}},
         {{.78f,.50f}},{{.22f,.78f}},{{.50f,.78f}},{{.78f,.78f}},
@@ -1575,10 +1738,15 @@ void compile(Plan const& plan,Projection const& input,Assets const& assets,Relie
     for(auto const& route:plan.routes)append_route(input,route,relief,height,output.layers[route_layer]);
     for(auto const& route:plan.patterns)if(auto const* patterns=assets.patterns_for(route.style))
         append_pattern_route(input,*patterns,route,relief,height,output.layers[route_layer]);
+    auto farm=farm_relief(plan,input.tile,relief);
     for(auto const& instance:plan.instances){
         auto before=indexed?output.indices[instance.layer].size():output.layers[instance.layer].size();
         FeaturePlacement placement{};placement.asset_index=instance.asset;
-        append_instance(input,assets[instance.family],placement,instance.u,instance.v,instance.rotation,
+        if(instance.family==farm_family)append_instance(input,assets[instance.family],placement,instance.u,instance.v,
+            instance.rotation,instance.scale,instance.material,instance.owner,instance.shadow,false,
+            farm,height,output.layers[instance.layer],output.shadows,indexed?&output.indices[instance.layer]:nullptr,
+            0.f,0.f,plan.farm_kit);
+        else append_instance(input,assets[instance.family],placement,instance.u,instance.v,instance.rotation,
             instance.scale,instance.material,instance.owner,instance.shadow,instance.family==site_family,
             relief,height,output.layers[instance.layer],output.shadows,indexed?&output.indices[instance.layer]:nullptr);
         if(instance_counts)instance_counts->push_back(unsigned(

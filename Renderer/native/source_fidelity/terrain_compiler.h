@@ -6,13 +6,17 @@
 #include "../../lab/shared/natural/relief.h"
 #include "../../lab/shared/natural/ground.h"
 #include "../../lab/shared/natural/hill_decals.h"
+#include "../../lab/shared/natural/canopy_clearing.h"
 #include "../render_core/content_preparation.h"
 #include "../render_core/prepared_mesh.h"
 #include "../../lab/studies/borders/mesh_export.h"
 namespace c3x_renderer { namespace fidelity {
 struct TerrainCompileInput {
-    using Key=std::array<std::uint64_t,12>;
+    using Key=std::array<std::uint64_t,13>;
     Key key{};
+    // Routes, resources and sites the vegetation floor keeps clear; its
+    // hash is the last key word.
+    CanopyClearing clearing;
     int tile_x=0,tile_y=0,real_terrain_type=0,ground=0,tile_width=0,tile_height=0,target_height=0;
     std::int64_t world_revision=0;
     PatchDetail detail;
@@ -149,6 +153,7 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     bool index_natural_grids=input.indexed;
     auto record_natural_phase=[](unsigned){}; // Worker CPU time is recorded by its queue.
     auto hidden_taper_at=[&](float x,float y){return queries.hidden_taper(x,y);};
+    auto const& clearing=input.clearing;
     #include "terrain_mesh_body.h"
     if(cancelled())return false;
     hill_decals.release_scratch();

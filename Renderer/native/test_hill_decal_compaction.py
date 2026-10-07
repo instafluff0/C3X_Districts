@@ -180,6 +180,9 @@ bool legacy_geometry(NaturalData const& data,std::array<ReliefFields,14> const& 
  bool fidelity_profile=true,river_assets_ready=input.river_ready,index_natural_grids=input.indexed;
  auto cancelled=[]{return false;};auto begin_natural_phase=[]{};auto record_natural_phase=[](unsigned){};
  auto patch_detail=input.detail;PatchLayouts patch_layouts;
+ // Legacy foreground: no retained ground and an empty canopy clearing.
+ bool retained_ground_terrain=false;auto topology_lookup=[](int,int){return nullptr;};
+ auto canopy_clearing=[](auto const&,auto const&){return CanopyClearing{};};
 ''' + prefix + r'''
  }
  if(!export_border_ground_mesh(input.tile_x,input.tile_y,natural_vertices,natural_grid_indices))return false;

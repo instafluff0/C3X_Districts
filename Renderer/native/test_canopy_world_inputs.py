@@ -103,4 +103,44 @@ int main(){
 }
 ''')
 
+    def test_legacy_canopy_key_follows_neighbor_routes_resources_and_sites(self):
+        # The canopy clears neighbors' routes, resources, mines and sites, so
+        # the legacy shared-natural key must change with them.
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        start=source.index('            if(canopy_city_dependencies)for')
+        end=source.index('            }\n',start)+len('            }\n')
+        key=source[start:end]
+        run_cpp(r'''
+#include "Renderer/native/render_core/captured_scene.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+int main(){
+ auto coordinate_key=[](int x,int y){return (std::uint64_t(std::uint32_t(x))<<32)|std::uint32_t(y);};
+ c3x_renderer_tile_v1 tile{};tile.tile_x=16;tile.tile_y=8;bool canopy_city_dependencies=true;
+ struct Observations {CapturedScene::Observation value{};
+  CapturedScene::Observation const* current(std::uint64_t){return &value;}} ground_observations;
+ auto tile_content_signature=[](c3x_renderer_tile_v1 const& t){
+  return std::uint64_t(t.road_mask*3+t.railroad_mask*5+std::uint64_t(t.resource_id+1)*7+t.improvement_flags*11+
+   std::uint64_t(t.city_id+1)*13+t.territory_color_rgb*17);};
+ auto run=[&]{std::uint64_t natural_key=1469598103934665603ull;
+'''+key+r'''
+  return natural_key;};
+ auto& n=ground_observations.value.occurrence;
+ auto reset=[&]{n=c3x_renderer_tile_v1{};n.city_id=n.resource_id=-1;};
+ reset();auto bare=run();
+ for(int edit=0;edit<6;++edit){reset();
+  if(edit==0)n.road_mask=1;
+  if(edit==1)n.railroad_mask=1;
+  if(edit==2)n.resource_id=3;
+  if(edit==3)n.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
+  if(edit==4)n.improvement_flags=C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
+  if(edit==5)n.improvement_flags=C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;
+  assert(run()!=bare);
+ }
+ // Facts the canopy never reads keep the key.
+ reset();n.territory_color_rgb=0x123456;assert(run()==bare);
+ reset();n.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;assert(run()==bare);
+}
+''')
+
 if __name__=='__main__':unittest.main()

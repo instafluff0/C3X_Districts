@@ -29026,6 +29026,9 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 				}
 			}
 			if (record->real_terrain_type == SQ_Forest) record->feature_flags |= C3X_RENDERER_FEATURE_FOREST;
+			// Civ III's pine forest flag; native m12 answers in AL only.
+			if ((record->real_terrain_type == SQ_Forest) && ((tile->vtable->m12_Check_Forest_Pines (tile) & 0xFF) != 0))
+				record->feature_flags |= C3X_RENDERER_FEATURE_PINE;
 			if (record->real_terrain_type == SQ_Jungle) record->feature_flags |= C3X_RENDERER_FEATURE_JUNGLE;
 			if (record->real_terrain_type == SQ_Swamp) record->feature_flags |= C3X_RENDERER_FEATURE_MARSH;
 			if (record->real_terrain_type == SQ_Volcano) record->feature_flags |= C3X_RENDERER_FEATURE_VOLCANO;
@@ -29149,6 +29152,8 @@ read_custom_renderer_world_record (struct c3x_renderer_tile_v1 * record, int vie
 		// Match the foreground terrain recipe without reading hidden object facts.
 		record->variant_seed = (unsigned int)p_bic_data->Map.Seed ^ ((unsigned int)x * 73856093u) ^ ((unsigned int)y * 19349663u);
 		if (record->real_terrain_type == SQ_Forest) record->feature_flags |= C3X_RENDERER_FEATURE_FOREST;
+		if ((record->real_terrain_type == SQ_Forest) && ((tile->vtable->m12_Check_Forest_Pines (tile) & 0xFF) != 0))
+			record->feature_flags |= C3X_RENDERER_FEATURE_PINE;
 		if (record->real_terrain_type == SQ_Jungle) record->feature_flags |= C3X_RENDERER_FEATURE_JUNGLE;
 		if (record->real_terrain_type == SQ_Swamp) record->feature_flags |= C3X_RENDERER_FEATURE_MARSH;
 		if (record->real_terrain_type == SQ_Volcano) record->feature_flags |= C3X_RENDERER_FEATURE_VOLCANO;

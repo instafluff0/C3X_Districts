@@ -1,41 +1,45 @@
-# Farms over test.biq
+# Farms
 
-Run `python3 Renderer/tools/asset_compiler/build_farm_runtime.py`, then
-`python3 -m Renderer.lab.studies.farms.test_biq` from the repository root with
-the configured Windows VM. The study builds an isolated candidate DLL and
-renders a control, noon and sunset coast views, a close coast view, inland
-grassland, and a tundra coast. Its contact sheet and source hashes are written
-under `Renderer/lab/out/farms/`.
+Lab-only until the user accepts it; production `farm_runtime.bin` is unchanged
+until then. The new behaviour switches on only for a farm pack with a
+`farm_kit` group, so game builds from this checkout draw farms as before.
 
-`test.biq` supplies terrain and rivers. Irrigation is added only to the preview
-scene by a deterministic Lab fixture; the BIQ itself is unchanged. This is a
-visual study, not a fixed reference replacement or a staged game build.
+## Farm kit
 
-The source crop texture contains several planted fields in one atlas. Mapping
-the entire atlas to each small decal produced a miniature checkerboard. The
-runtime farm pack selects an authored row region, preserves the source UV
-orientation, and samples the decal against terrain relief. The chosen region,
-tile palette mapping, and field placement are inferred for Civ III composition.
-Each irrigated tile selects four row decals in a 2×2 layout. Independent,
-seeded size, position, and palette choices vary the fields while a shared tile
-orientation keeps their crop rows nearly parallel. Narrow gaps remain between
-their transformed bounds. The fields clip against the sea shoreline and the
-renderer river corridor, leaving a bank beside visible river water. Each plot
-first tries modest size and position adjustments within its own quadrant so
-crop rows end at a clean edge. A water-facing side is trimmed along one straight
-bank line when possible; the source decal has twelve terrain samples per edge
-for finer clipping where a river crosses the plot interior. Each farm
-tile proposes four to six centered source trees and one centered source building.
-The source's large prearranged tile cluster is omitted so inland farms do not
-gain a disproportionate number of props. Raised pieces use the shared scene
-lighting and shadow path. Buildings choose dry ground before trees fill the
-gaps; both use shore and river clearance, and a prop is omitted only if no dry
-site fits its footprint.
-Building style is still shared across cultures. The current era comes from
-`route_style` (the viewer's era); `territory_owner_id` is available on land
-tiles, but owner culture, civilization, and era are only captured on city
-tiles. A culture-aware farm kit needs explicit owner metadata and suitable
-style-by-era building assets, with a neutral fallback for unowned land.
-The current renderer uses base color and source geometry but does not yet shade
-the source crop height/specular channels or foliage opacity. See
-`Renderer/docs/visual_fidelity_playbook.md` for those fidelity requirements.
+- **One green patchwork everywhere.** The planted crop atlas is Civ VI's whole
+  farm patchwork (about thirty fields of mixed shapes and row directions, soil
+  fringes, filled colour under its transparent paths). The kit draws it once
+  per farm tile at any angle, at its authored size in tiles (`--field-size`,
+  up to a fifth larger at runtime) and shifted so each tile shows a different
+  part. The tan and muddy palettes are no longer used.
+- **Open ground.** The patchwork is clipped to its tile (a .02 verge), its
+  drawn road and railroad centerlines (.075 / .10 half widths), its resource's
+  parts (`resource_footprint`, .05 rounded margin) and water (shore and river
+  bank). Trees and the farmhouse keep the same clearance.
+- **Draped and sorted on the ground.** Fields drape on the rendered natural
+  ground (low relief, hills), a hair below route strips. Object meshes sort on
+  a feature depth basis that hid farms on raised ground; kit pieces carry
+  material fraction +.0035 (.0135/.0235/.0335), which `world_projection.hlsl`
+  and `rigid_feature.hlsl` give the natural basis, as for resources and bridges.
+- **Resource kits.** `farm_kit:<name>` swaps the patchwork for a resource
+  (e.g. ripe wheat, about 80% of its fields recoloured to straw from BC1
+  endpoints only); `farm_kit:<name>:crop` also drops the yard, so the farm is
+  the resource's own planting.
+- Irrigated tiles keep their resource facts in object identity
+  (`CapturedScene::object_inputs`), so a farm rebuilds when its resource changes.
+
+## Lab
+
+```sh
+python3 Renderer/tools/asset_compiler/build_farm_runtime.py --output "farm_runtime~kit.bin"
+python3 Renderer/lab/studies/farms/study.py render before
+python3 Renderer/lab/studies/farms/study.py render after --farm-runtime "farm_runtime~kit.bin"
+$C3X_RENDERER_PYTHON Renderer/lab/studies/farms/study.py sheet before after
+```
+
+Builder options: `--field-size`, `--solid` (grassy lanes instead of the
+ground between fields), `--ripe Wheat` or `--ripe Wheat:crop`. Lab files sit
+beside the production file (`C3X_RENDERER_FARM_RUNTIME` selects one). Cases
+live in `cases.py`: terrain patches, routes, resources and water.
+Regression tests: `Renderer/native/test_farm_kit.py`. `test_biq.py` still renders
+the production farms over the unchanged `test.biq` terrain.

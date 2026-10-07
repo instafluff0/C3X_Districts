@@ -1,11 +1,15 @@
 // Shared statement body: retain the native x86 calling context and float rounding.
 // Included by the native tile compiler and the portable typed adapter in mesh.h.
         std::uint32_t seed=std::uint32_t(owner.source_x*0x193u)^std::uint32_t(owner.source_y*0x217u);
-        unsigned density=raised_canopy?4u:hill_forest?16u:31+hash(seed^0xa53du)%11u;
+        auto const&set=natural.forest_set(clearing.variety);
+        // A resource tile keeps a thinner stand around it, as the source
+        // resource clutter sets replace the full forest with a few trees.
+        bool opening=clearing.open_radius>0 && !raised_canopy && !hill_forest;
+        unsigned density=raised_canopy?4u:hill_forest?16u:opening?9u+hash(seed^0x5c1du)%4u:31+hash(seed^0xa53du)%11u;
         for(unsigned i=0;i<density;i++){
             if(cancelled())return false;
-            unsigned selected=hash(seed+i*31u)%180;Recipe const*recipe=nullptr;
-            for(unsigned j=0;j<25;j++){auto const&r=natural.recipes[j];if(selected<r.count){recipe=&r;break;}selected-=r.count;}
+            unsigned selected=hash(seed+i*31u)%set.weight;Recipe const*recipe=nullptr;
+            for(unsigned j=set.first;j<set.end;j++){auto const&r=natural.recipes[j];if(selected<r.count){recipe=&r;break;}selected-=r.count;}
             if(!recipe)return false;
             float ring=std::sqrt((float(i)+.5f)/float(density));
             float angle=2.39996323f*float(i)+random(seed^0x71b3u)*6.283185307f;
@@ -18,13 +22,17 @@
             float yaw=random(seed+i*97u+47u)*6.283185307f;
             float co=std::cos(yaw),si=std::sin(yaw);auto const&body=natural.bodies[recipe->object];
             auto const&mat=natural.materials[body.material];
+            if(opening){
+                float reach=0;for(auto const&p:body.vertices)reach=std::max(reach,std::hypot(p.position[0],p.position[1])*scale);
+                if(!clearing.open_place(nc,nr,angle,ring,reach,u,v))continue;
+            }
             // Clip flags are authoritative source metadata. Test the body hull,
             // not just its center, against captured building and water geometry.
-            float x0=1e9f,y0=1e9f,x1=-1e9f,y1=-1e9f;
+            float x0=1e9f,y0=1e9f,x1=-1e9f,y1=-1e9f,z1=0;
             for(auto const&p:body.vertices){float x=float(nc)+u+(p.position[0]*co-p.position[1]*si)*scale;
                 float y=float(nr)+1-v-(p.position[0]*si+p.position[1]*co)*scale;
-                x0=std::min(x0,x);x1=std::max(x1,x);y0=std::min(y0,y);y1=std::max(y1,y);}
-            bool clipped=false;
+                x0=std::min(x0,x);x1=std::max(x1,x);y0=std::min(y0,y);y1=std::max(y1,y);z1=std::max(z1,p.position[2]);}
+            bool clipped=clearing.blocks(x0,y0,x1,y1,z1*scale);
             for(auto const&b:buildings)if(x0<b.x1 && x1>b.x0 && y0<b.y1 && y1>b.y0)clipped=true;
             // Conservative footprint bounds against the authoritative fields:
             // a center-only or sparse point test can miss a channel between

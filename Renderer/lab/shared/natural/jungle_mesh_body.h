@@ -1,7 +1,8 @@
 // Source jungle's ten weighted desktop bodies share the forest material and
 // shadow pipeline. Match the forest's varied spiral placement across tiles.
         std::uint32_t seed=std::uint32_t(owner.source_x*0x193u)^std::uint32_t(owner.source_y*0x217u);
-        unsigned density=raised_canopy?4u:hill_jungle?16u:31u+hash(seed^0xa53du)%11u;
+        bool opening=clearing.open_radius>0 && !raised_canopy && !hill_jungle;
+        unsigned density=raised_canopy?4u:hill_jungle?16u:opening?9u+hash(seed^0x5c1du)%4u:31u+hash(seed^0xa53du)%11u;
         for(unsigned i=0;i<density;i++){
             if(cancelled())return false;
             unsigned selected=hash(seed+i*31u)%121u;Recipe const*recipe=nullptr;
@@ -19,11 +20,15 @@
             float yaw=random(seed+i*97u+47u)*6.283185307f;
             float co=std::cos(yaw),si=std::sin(yaw);auto const&body=natural.bodies[recipe->object];
             auto const&mat=natural.materials[body.material];
-            float x0=1e9f,y0=1e9f,x1=-1e9f,y1=-1e9f;
+            if(opening){
+                float reach=0;for(auto const&p:body.vertices)reach=std::max(reach,std::hypot(p.position[0],p.position[1])*scale);
+                if(!clearing.open_place(nc,nr,angle,ring,reach,u,v))continue;
+            }
+            float x0=1e9f,y0=1e9f,x1=-1e9f,y1=-1e9f,z1=0;
             for(auto const&p:body.vertices){float x=float(nc)+u+(p.position[0]*co-p.position[1]*si)*scale;
                 float y=float(nr)+1-v-(p.position[0]*si+p.position[1]*co)*scale;
-                x0=std::min(x0,x);x1=std::max(x1,x);y0=std::min(y0,y);y1=std::max(y1,y);}
-            bool clipped=false;
+                x0=std::min(x0,x);x1=std::max(x1,x);y0=std::min(y0,y);y1=std::max(y1,y);z1=std::max(z1,p.position[2]);}
+            bool clipped=clearing.blocks(x0,y0,x1,y1,z1*scale);
             for(auto const&b:buildings)if(x0<b.x1 && x1>b.x0 && y0<b.y1 && y1>b.y0)clipped=true;
             float cx=(x0+x1)*.5f,cy=(y0+y1)*.5f,rx=(x1-x0)*.5f,ry=(y1-y0)*.5f;
             float radius=std::hypot(rx,ry);

@@ -167,7 +167,7 @@ private:
             // The minimal native producer supplies real terrain and the map
             // seed before returning its halo. Derive the same terrain features
             // without reading omitted resources, effects or unit fields.
-            next.occurrence.feature_flags=tile.real_terrain_type==7?C3X_RENDERER_FEATURE_FOREST:
+            next.occurrence.feature_flags=tile.real_terrain_type==7?C3X_RENDERER_FEATURE_FOREST|(tile.feature_flags&C3X_RENDERER_FEATURE_PINE):
                 tile.real_terrain_type==8?C3X_RENDERER_FEATURE_JUNGLE:
                 tile.real_terrain_type==9?C3X_RENDERER_FEATURE_MARSH:
                 tile.real_terrain_type==10?C3X_RENDERER_FEATURE_VOLCANO:0u;
@@ -371,7 +371,9 @@ public:
         // It still belongs to full appearance/raster identity, never object mesh.
         tile.territory_edge_mask=tile.territory_color_rgb=0;
         // Resources have a separate draw/animation owner. The CPU object compiler
-        // consumes routes, improvements and cities, never these resource facts.
+        // consumes routes, improvements and cities, and only an irrigated tile's
+        // resource facts: its farm keeps the resource's ground open.
+        if(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)return tile;
         tile.resource_id=tile.resource_class=0;
         std::memset(tile.resource_name,0,sizeof(tile.resource_name));
         return tile;

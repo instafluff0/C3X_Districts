@@ -6,6 +6,7 @@ The DLL still consumes only ordinary generic skin palettes.
 """
 from __future__ import annotations
 
+import itertools
 import math
 import struct
 
@@ -138,3 +139,61 @@ def align_school_payload(payload: bytes, mesh: dict, skeleton: dict,
             result.extend(struct.pack("<16f", *normalized_skin._multiply(originals[joint], transforms[body])))
     return bytes(result), {"policy": "whole_body_per_sample_centroid", "forward": "+X/SE",
                            "bodies": records, "palette_count": len(palettes)}
+
+
+def thin_school(payload: bytes, keep: int, body_scale: float) -> tuple[bytes, list[int]]:
+    """Fewer, larger members of a school on their authored swim paths.
+
+    Keeps the `keep` bodies whose closest approach over the clip is largest and
+    scales each about its rest centroid: bodies grow while their paths, and so
+    the school's footprint on the tile, stay unchanged. Palettes that no kept
+    vertex uses are dropped. Returns the payload and the kept body indices.
+    """
+    magic, version, count, index_count, bone_count, frames, duration = struct.unpack_from("<8s5If", payload)
+    if magic != b"C3XANM1\0" or version != 1:
+        raise ValueError("not a school payload")
+    vertices = [list(struct.unpack_from("<8f4I4f", payload, 32 + i*64)) for i in range(count)]
+    indices = struct.unpack_from(f"<{index_count}I", payload, 32 + count*64)
+    palette_offset = 32 + count*64 + index_count*4
+    palette = lambda frame, joint: struct.unpack_from("<16f", payload, palette_offset + (frame*bone_count + joint)*64)
+    bodies = body_components({"vertices": [{"position": v[:3]} for v in vertices], "topology": {"indices": indices}})
+    if keep < 1 or keep > len(bodies):
+        raise ValueError("school has fewer bodies than requested")
+    # Posed body centroids per frame from weighted homogeneous sums (as aligned).
+    paths = []
+    for body in bodies:
+        sums = {}
+        for i in body:
+            for joint, weight in zip(vertices[i][8:12], vertices[i][12:16]):
+                if weight > 0:
+                    row = sums.setdefault(joint, [0., 0., 0., 0.])
+                    for axis, value in enumerate([*vertices[i][:3], 1.]):
+                        row[axis] += weight*value/len(body)
+        paths.append([tuple(sum(sum(row[b]*palette(frame, joint)[b*4 + a] for b in range(4))
+                                for joint, row in sums.items()) for a in range(2)) for frame in range(frames)])
+    closest = {(a, b): min(math.dist(p, q) for p, q in zip(paths[a], paths[b]))
+               for a in range(len(bodies)) for b in range(a + 1, len(bodies))}
+    chosen = max(itertools.combinations(range(len(bodies)), keep),
+                 key=lambda group: min((closest[pair] for pair in itertools.combinations(group, 2)), default=0))
+    kept = sorted(i for body in chosen for i in bodies[body])
+    remap = {old: new for new, old in enumerate(kept)}
+    joints = sorted({j for i in kept for j, w in zip(vertices[i][8:12], vertices[i][12:16]) if w > 0})
+    slot = {joint: index for index, joint in enumerate(joints)}
+    out_vertices = bytearray()
+    for body in chosen:
+        pivot = [sum(vertices[i][a] for i in bodies[body])/len(bodies[body]) for a in range(3)]
+        for i in bodies[body]:
+            vertices[i][:3] = [pivot[a] + (vertices[i][a] - pivot[a])*body_scale for a in range(3)]
+    for i in kept:
+        v = vertices[i]
+        v[8:12] = [slot[j] if w > 0 else 0 for j, w in zip(v[8:12], v[12:16])]
+        out_vertices.extend(struct.pack("<8f4I4f", *v))
+    triangles = [indices[t:t + 3] for t in range(0, index_count, 3)]
+    out_indices = [remap[i] for tri in triangles if all(i in remap for i in tri) for i in tri]
+    result = bytearray(struct.pack("<8s5If", magic, version, len(kept), len(out_indices), len(joints), frames, duration))
+    result.extend(out_vertices)
+    result.extend(struct.pack(f"<{len(out_indices)}I", *out_indices))
+    for frame in range(frames):
+        for joint in joints:
+            result.extend(payload[palette_offset + (frame*bone_count + joint)*64:][:64])
+    return bytes(result), list(chosen)

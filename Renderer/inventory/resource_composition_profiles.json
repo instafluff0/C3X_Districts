@@ -109,10 +109,67 @@
       "subject_scale": 0.3,
       "subject_radius": 0.08,
       "herd_spread": 1.3,
-      "yaw_jitter": 0.5,
-      "subject_fit": 0.6,
+      "yaw_jitter": 0.3,
+      "subject_fit": 0.0,
       "ancillary_policy": "omit; forest/jungle crowding is a separate later pass",
-      "note": "subject_fit > 0 makes the posed body follow the ground plane under its footprint (a vertical shear: the body stays upright, heights follow the slope); 0 stands it at its centre height only."
+      "note": "Animals stand upright at the ground height under their centre (subject_fit 0) and face outward from the herd's centre. Each herd's ring (subject_radius, herd_spread 1) keeps members at least 0.02 tile apart through the whole clip; sizes are 20% under the first approved set (user choice 2026-10-06).",
+      "facing": "outward"
+    },
+    "seep_patch": {
+      "description": "Ground-only resources: Civ VI ground decals (here, layered oil seeps) with no bodies.",
+      "decal_world_scale": 0.14,
+      "accent_scale": 0.0,
+      "ancillary_policy": "omit"
+    },
+    "marine_group": {
+      "description": "A small group of the resource's animated Civ VI marine subject, sized to a Civ III tile, on water.",
+      "accent_scale": 0.0,
+      "herd": 1,
+      "subject_scale": 1.0,
+      "subject_radius": 0.08,
+      "herd_spread": 1.3,
+      "facing": "outward",
+      "yaw_jitter": 0.4,
+      "subject_fit": 0.0,
+      "static_pieces": false,
+      "terrain_layouts": {
+        "water": {
+          "terrains": [
+            "Coast",
+            "Sea",
+            "Ocean"
+          ],
+          "centre": [
+            0.5,
+            0.5
+          ],
+          "spread": 0.04,
+          "keep_inside": 0.25,
+          "arrangement": "random"
+        },
+        "marsh": {
+          "terrains": [
+            "Marsh"
+          ],
+          "centre": [
+            0.5,
+            0.5
+          ],
+          "spread": 0.04,
+          "keep_inside": 0.3,
+          "arrangement": "random"
+        }
+      }
+    },
+    "oasis_pond": {
+      "description": "Civ VI's own oasis: its authored rock ring and plants (a terrain asset set) placed whole at the tile centre, over a generated C3X pond decal; Civ VI's water is the engine's surface in a carved basin.",
+      "world_scale": 0.18,
+      "count_scale": 1.0,
+      "clusters": 1,
+      "decal_world_scale": 0.16,
+      "accent_scale": 1.0,
+      "ancillary_policy": "omit",
+      "ground_fit": 0.0
     }
   },
   "resources": {
@@ -233,8 +290,9 @@
         "horses.1",
         "horses.2"
       ],
-      "subject_scale": 0.5,
-      "subject_radius": 0.075
+      "subject_scale": 0.4,
+      "subject_radius": 0.14,
+      "herd_spread": 1.0
     },
     "cattle": {
       "source": "RESOURCE_CATTLE",
@@ -249,11 +307,12 @@
       "subjects": [
         "cattle",
         "cattle.3",
-        "cattle.0"
+        "cattle"
       ],
-      "note": "Two grazing Civ VI cows and a bull.",
-      "subject_scale": 0.55,
-      "subject_radius": 0.07
+      "note": "Three grazing black-and-white Civ VI cows.",
+      "subject_scale": 0.44,
+      "subject_radius": 0.13,
+      "herd_spread": 1.0
     },
     "game": {
       "source": "RESOURCE_DEER",
@@ -268,14 +327,15 @@
         "game"
       ],
       "note": "A small group of Civ VI deer (the other deer subjects need clip calibration first).",
-      "subject_scale": 0.4,
-      "subject_radius": 0.07
+      "subject_scale": 0.32,
+      "subject_radius": 0.15,
+      "herd_spread": 1.0
     },
     "furs": {
       "source": "RESOURCE_FURS",
       "family": "animal_herd",
       "herd": 2,
-      "subject_radius": 0.05,
+      "subject_radius": 0.11,
       "piece_counts": {
         "res_furs_fox_01": 0,
         "res_furs_fox_02": 0,
@@ -286,13 +346,14 @@
         "furs.2"
       ],
       "note": "A standing fox and a curled one, echoing Civ III's lying fur.",
-      "subject_scale": 0.35
+      "subject_scale": 0.28,
+      "herd_spread": 1.0
     },
     "ivory": {
       "source": "RESOURCE_IVORY",
       "family": "animal_herd",
       "herd": 2,
-      "subject_radius": 0.1,
+      "subject_radius": 0.13,
       "count_scale": 0.5,
       "piece_counts": {
         "res_elephant_01": 0,
@@ -302,7 +363,103 @@
       "subjects": [
         "ivory"
       ],
-      "subject_scale": 0.45
+      "subject_scale": 0.36,
+      "herd_spread": 1.0
+    },
+    "oil": {
+      "source": "RESOURCE_OIL",
+      "family": "seep_patch",
+      "decal_count_scale": 0.12,
+      "note": "Civ VI marks oil on land only with seeps. Only the black pool layer is kept: Civ VI's brown soil stain under each seep read as a leopard-skin pattern at Civ III scale.",
+      "decal_layers": [
+        0
+      ]
+    },
+    "rubber": {
+      "source": "RESOURCE_COCOA",
+      "family": "plant_patch",
+      "world_scale": 0.17,
+      "count_scale": 0.5,
+      "layout_overrides": {
+        "*": {
+          "planting": "rows",
+          "rows": 3,
+          "row_spacing": 0.13,
+          "row_length": 0.4
+        }
+      },
+      "note": "Civ VI has no rubber; its cocoa trees planted in rows stand in for a rubber plantation."
+    },
+    "fish": {
+      "source": "RESOURCE_WHEAT",
+      "family": "marine_group",
+      "subject": "fish.few",
+      "herd": 1,
+      "subject_scale": 0.9,
+      "note": "One school of four Civ VI fish, each three times its authored size about its own centre (fish.few): bigger fish on the authored swim paths, which stay inside the tile. (source only satisfies the builder; marine groups place no static pieces.)"
+    },
+    "whales": {
+      "source": "RESOURCE_WHEAT",
+      "family": "marine_group",
+      "subject": "whales",
+      "herd": 1,
+      "subject_scale": 0.6,
+      "note": "One Civ VI whale, sized to a Civ III tile."
+    },
+    "oasis": {
+      "family": "oasis_pond",
+      "set_piece": {
+        "entries": [
+          "Oasis_Rocks01",
+          "Oasis_JunglePlants01"
+        ],
+        "ground": 0.3,
+        "note": "Authored on Civ VI's raised pond rim: palm bases sit 0.3 tile up, so the set drops by that much."
+      },
+      "pack_decals": [
+        {
+          "asset": "pond",
+          "pack": "generated",
+          "count": 1,
+          "scale": 2.8,
+          "scale_variation": 0.0
+        }
+      ],
+      "note": "Civ VI's oasis rock ring and plants around a generated pond."
+    },
+    "silks": {
+      "family": "plant_patch",
+      "world_scale": 0.2,
+      "compound_pieces": [
+        {
+          "landmark": "resource/silk/variant_02",
+          "parts": [
+            0,
+            1,
+            2
+          ],
+          "keyed_parts": [
+            2
+          ],
+          "count": 2,
+          "scale": 1.0,
+          "scale_variation": 0.1
+        },
+        {
+          "landmark": "resource/silk/variant_03",
+          "parts": [
+            0,
+            1
+          ],
+          "keyed_parts": [
+            1
+          ],
+          "count": 1,
+          "scale": 1.0,
+          "scale_variation": 0.1
+        }
+      ],
+      "note": "Civ VI silk: mulberry bushes and their ground cover under white silk webbing. Civ VI draws the webbing with a translucent shader; here its bright strands are keyed into a cutout."
     }
   },
   "bindings": {
@@ -373,39 +530,54 @@
     ],
     "ivory": [
       "Ivory"
+    ],
+    "oil": [
+      "Oil"
+    ],
+    "rubber": [
+      "Rubber"
+    ],
+    "fish": [
+      "Fish"
+    ],
+    "whales": [
+      "Whales"
+    ],
+    "oasis": [
+      "Oasis"
+    ],
+    "silks": [
+      "Silks",
+      "Silk"
     ]
   },
   "sources": "Each source is a Civ VI Resources.artdef entry, imported by tools/asset_compiler/resource_composition_sources.py. decal_source borrows another entry's ground decals; accent_source adds that entry's centre model. accent_scale places the source's centre model (Civ VI's authored pile), or accent_source's, at the first cluster's centre; 0 disables it.",
   "alternates": {
     "description": "Lab-only candidates baked beside the recommended composition as '<name>~<label>' (alias '<Binding>~<label>') for side-by-side review; promotion never includes them.",
-    "horses": {
-      "upright": {
-        "subject_fit": 0.0,
-        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
-      }
-    },
-    "cattle": {
-      "upright": {
-        "subject_fit": 0.0,
-        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
-      }
-    },
-    "game": {
-      "upright": {
-        "subject_fit": 0.0,
-        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
-      }
-    },
-    "furs": {
-      "upright": {
-        "subject_fit": 0.0,
-        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
-      }
-    },
-    "ivory": {
-      "upright": {
-        "subject_fit": 0.0,
-        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
+    "silks": {
+      "bare": {
+        "compound_pieces": [
+          {
+            "landmark": "resource/silk/variant_02",
+            "parts": [
+              0,
+              1
+            ],
+            "count": 2,
+            "scale": 1.0,
+            "scale_variation": 0.1
+          },
+          {
+            "landmark": "resource/silk/variant_03",
+            "parts": [
+              0
+            ],
+            "count": 1,
+            "scale": 1.0,
+            "scale_variation": 0.1
+          }
+        ],
+        "note": "Mulberry bushes without the webbing."
       }
     }
   },

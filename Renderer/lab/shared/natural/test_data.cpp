@@ -52,8 +52,12 @@ struct Fixture {
 };
 
 void valid_data(NaturalData const&data,unsigned surface_count=4){
-    check(data.bodies.size()==32 && data.recipes.size()==35 &&
+    // Optional pine and snow-pine forests add five snow bodies and 18 recipes.
+    bool varieties=data.forest_sets[pine_forest].weight!=0;
+    check(data.bodies.size()==(varieties?37u:32u) && data.recipes.size()==(varieties?53u:35u) &&
            data.surface_recipes.size()==surface_count,"body/recipe count");
+    check(!varieties || (data.forest_sets[pine_forest].weight==60 && data.forest_sets[snow_pine_forest].weight==53 &&
+           data.forest_sets[snow_pine_forest].end==53),"forest varieties");
     check(data.surface_vertices.size()>=18 && data.surface_vertices.size()%3==0,"surface triangle count");
     check(data.fields[data.terrain[30]].sample(.25f,.25f)>0,"surface detail field");
     auto flat=[](int c,int r){return Tile{c+r,c-r,c,r,2};};
@@ -128,6 +132,7 @@ int main(int argc,char**argv){try{
             if(!stream)return false;out.assign(std::istreambuf_iterator<char>(stream),{});return true;
         },[](std::vector<std::uint8_t>const&bytes,std::size_t&texture){texture=bytes.size();return true;}),"production payload rejected");
         valid_data(real,39);
+        check(real.forest_sets[snow_pine_forest].weight!=0,"production forest varieties absent");
         std::cout<<"PASS production natural payload: textures="<<textures.size()<<" materials="<<real.materials.size()<<" bodies="<<real.bodies.size()<<" recipes="<<real.recipes.size()<<" surface="<<real.surface_recipes.size()<<"\n";
     }
     return 0;

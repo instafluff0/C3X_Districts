@@ -36,6 +36,10 @@ if(fidelity_profile) {
             std::vector<Vertex>& output){
         emit_hill_decals(source,column,row,receiver,indices,output);return true;
     };
+    // Routes, resources, mines and sites of this tile and its neighbors stay
+    // visible: canopy and vegetation floor keep their ground clear. The
+    // retained proof records this 3x3 window and the routes' 5x5 lookups.
+    auto const clearing=canopy_clearing(tile,topology_lookup);
     if(!retained_ground_terrain && !cpu_terrain_enabled) {
         #include "terrain_mesh_body.h"
     }
@@ -105,7 +109,7 @@ if(fidelity_profile) {
     record_natural_phase(5);
     if(!retained_ground_terrain && cpu_terrain_enabled) {
         // Join only after independent city/forest assembly has used this read lease.
-        auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
+        auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects,topology_lookup);
         auto prepared=prepared_world?std::move(prepared_world->terrain):terrain_preparation.take(input.key,true);
         if(prepared && !terrain_result_valid(*prepared))prepared.reset();
         if(!prepared){

@@ -4,6 +4,7 @@
 #include "data.h"
 #include "ground.h"
 #include "hill_decals.h"
+#include "canopy_clearing.h"
 #include "../../../native/hill_vegetation.h"
 namespace c3x_renderer { namespace fidelity {
 template<class Lookup,class Height,class Shore,class Weights,class Cancelled>
@@ -50,11 +51,11 @@ bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProj
     }
     return true;
 }
-struct BuildingBounds {float x0,y0,x1,y1;};
 template<class Height,class Shore,class River,class Hash,class Random,class Cancelled,class Layers>
 bool emit_forest(NaturalData const&natural,Tile owner,GroundProjection project_natural,
                  std::vector<BuildingBounds> const&buildings,Height height_natural,Shore shore_sample_at,
-                 River river_at,Hash hash,Random random,Cancelled cancelled,Layers&natural_vertices) {
+                 River river_at,Hash hash,Random random,Cancelled cancelled,Layers&natural_vertices,
+                 CanopyClearing const&clearing=CanopyClearing{}) {
     int nc=project_natural.column,nr=project_natural.row;
     bool hill_forest=false,raised_canopy=false;
     auto emit_forest_instance=[](auto...){return false;};

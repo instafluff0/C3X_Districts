@@ -12,6 +12,8 @@ struct PreparationInput {
     bool river_ready=false,skip_flat_shore=true,separate_relief=true,retain_height=true;
     bool route_ready=false,routes_enabled=true,mine_ready=false,farm_ready=false,city_ready=false,composition_ready=false;
     bool shared_rigid=false;
+    // A farm's resource parts as tile-local (u0,v0,u1,v1) boxes it keeps open.
+    std::vector<std::array<float,4>> farm_resource;
 };
 struct PreparedPart {
     render_core::PreparedMesh mesh;
@@ -194,6 +196,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
     if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,plan))return {};
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
+        clear_farm(plan,plan,assets,input.farm_resource);
         settle_farm_fields(plan,tile,assets,relief);
         settle_farm_props(plan,tile,assets,relief);
     }
@@ -240,7 +243,8 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             }
             if(shared_rigid_mesh(asset)){
                 result->draws.push_back({unsigned(instance.layer),0,0,unsigned(result->rigid.size())});
-                result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,height_natural));
+                result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,height_natural,
+                    plan.farm_kit && instance.family==farm_family));
             }else{
                 unsigned count=unsigned(asset.indices.size());
                 if(!result->draws.empty() && result->draws.back().layer==unsigned(instance.layer) && result->draws.back().rigid==~0u)
