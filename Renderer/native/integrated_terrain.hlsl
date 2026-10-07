@@ -40,7 +40,22 @@ struct IntegratedVertexInput
 // and depth-write rules remain explicit; stored depth carries its basis.
 float translated_depth(IntegratedVertexInput input, bool feature)
 {
-    float pixel_depth = floor(input.position.z * 256.0 + 0.5) / 256.0 + c3x_viewport_depth_translation;
+    float position_depth = input.position.z;
+    float river_bias = 0.025;
+#ifdef C3X_RIVER_NATURAL_DEPTH
+    if (!feature && input.surface_kind > 8.5 && input.surface_kind < 9.5)
+    {
+        // Ground meshes store y = G - lift and z = G + 0.75 * lift, where G is
+        // the flat-ground row. Natural terrain sorts by G + 0.0016 * H per
+        // unit of relief. Give the river that same basis, so a small layer
+        // bias wins over the coplanar ground beneath it without passing over
+        // trees, farms or bridges standing beside the bank.
+        position_depth = (input.position.z + 0.75 * input.position.y) / 1.75 +
+            (input.q6_world.z * 112.0 - 2.5) * 0.0016 * c3x_viewport_reserved.x;
+        river_bias = 0.004;
+    }
+#endif
+    float pixel_depth = floor(position_depth * 256.0 + 0.5) / 256.0 + c3x_viewport_depth_translation;
     float depth = clamp(0.5 - pixel_depth / 16384.0, 0.001, 0.999);
     if (feature) return depth;
     // Preserve the existing layer separation in physical pixels at each size.
@@ -48,7 +63,7 @@ float translated_depth(IntegratedVertexInput input, bool feature)
     float kind = input.surface_kind;
     if (kind > 10.5) return max(0.003, depth - 0.010 * bias_scale);
     if (kind > 9.5) return max(0.001, depth - 0.003 * bias_scale);
-    if (kind > 8.5) return max(0.001, depth - 0.025 * bias_scale);
+    if (kind > 8.5) return max(0.001, depth - river_bias * bias_scale);
     if (kind > 6.5 && kind < 7.5) return max(0.001, depth - 0.004 * bias_scale);
     if (kind < 0.75) return min(0.999, depth + 0.000006 * bias_scale);
     if (kind < 1.25) return min(0.999, depth + 0.000004 * bias_scale);

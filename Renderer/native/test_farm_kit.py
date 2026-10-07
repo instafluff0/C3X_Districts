@@ -87,12 +87,12 @@ int main(){
   assert(patchworks==1);
   objects::settle_farm_fields(plan,tile,kit.assets,dry);
   objects::Surfaces out;objects::compile(plan,p,kit.assets,dry,height,out);
-  // Inside its tile, behind a narrow verge, and reaching all four corners.
+  // Inside its tile (feathering into its edges) and reaching all four corners.
   float corner[4]={9,9,9,9};
   for(auto const& vertex:out.layers[objects::farm_layer]){
    if(!field(vertex))continue;
    float u=vertex.world_x,v=local_v(vertex.world_y);
-   assert(u>=.02f-cut && u<=.98f+cut && v>=.02f-cut && v<=.98f+cut);
+   assert(u>=-cut && u<=1+cut && v>=-cut && v<=1+cut);
    for(unsigned c=0;c<4;++c)corner[c]=std::min(corner[c],std::hypot(u-float(c&1),v-float(c>>1)));
   }
   // Interpolating the edge distance chamfers each corner slightly.
@@ -250,6 +250,222 @@ int main(){
    }
   }
  }
+}
+''')
+
+    def test_kit_drops_fields_cut_to_slivers(self):
+        run_cpp(KIT + r'''
+FeatureAsset square(float half){
+ FeatureAsset asset;asset.id="farm_kit:crop:field0:e0";
+ for(unsigned y=0;y<=8;++y)for(unsigned x=0;x<=8;++x)
+  asset.vertices.push_back({{(float(x)/8-.5f)*2*half,(float(y)/8-.5f)*2*half,.002f},{0,0,1},{float(x)/8,float(y)/8}});
+ for(unsigned y=0;y<8;++y)for(unsigned x=0;x<8;++x){
+  unsigned a=y*9+x,b=a+1,c=a+9,d=c+1;asset.indices.insert(asset.indices.end(),{a,b,d,a,d,c});}
+ return asset;
+}
+int main(){
+ FeatureBundle bundle;bundle.assets.push_back(square(.1f));FeaturePlacement placement{};
+ auto p=projection();
+ // The tile edge at u=.98: a field centred at .5 stays whole, one at .93
+ // keeps three quarters, one at 1.05 keeps a .03 strip and goes.
+ auto relief=[](float x,float){return std::array<float,3>{0,0,.98f-x};};
+ auto height=[](float,float){return 2.5f;};
+ for(float centre:{.5f,.93f,1.05f}){
+  std::vector<objects::Vertex> vertices,shadows;std::vector<unsigned> indices;
+  objects::append_instance(p,bundle,placement,centre,.5f,0,1,21,.0135f,false,false,
+                           relief,height,vertices,shadows,&indices,0.f,0.f,true);
+  assert((centre<1)==!vertices.empty());
+  assert(vertices.size()==indices.size());
+  // Without the kit the strip stays, as before.
+  vertices.clear();indices.clear();
+  objects::append_instance(p,bundle,placement,centre,.5f,0,1,21,.01f,false,false,
+                           relief,height,vertices,shadows,&indices);
+  assert(!vertices.empty());
+ }
+}
+''')
+
+    def test_fields_split_by_routes_stay_and_dense_junctions_narrow_their_verges(self):
+        # In a late-game map almost every farm has roads to all its neighbours
+        # (and railroad loops): wide verges plus sliver dropping left only
+        # scraps of farmland. Route cuts leave fields; verges narrow when dense.
+        run_cpp(KIT + r'''
+FeatureAsset square(float half){
+ FeatureAsset asset;asset.id="farm_kit:crop:field0:e0";
+ for(unsigned y=0;y<=8;++y)for(unsigned x=0;x<=8;++x)
+  asset.vertices.push_back({{(float(x)/8-.5f)*2*half,(float(y)/8-.5f)*2*half,.002f},{0,0,1},{float(x)/8,float(y)/8}});
+ for(unsigned y=0;y<8;++y)for(unsigned x=0;x<8;++x){
+  unsigned a=y*9+x,b=a+1,c=a+9,d=c+1;asset.indices.insert(asset.indices.end(),{a,b,d,a,d,c});}
+ return asset;
+}
+int main(){
+ FeatureBundle bundle;bundle.assets.push_back(square(.15f));FeaturePlacement placement{};
+ auto p=projection();auto height=[](float,float){return 2.5f;};
+ // A road verge through the middle of a .3 field leaves two thin halves.
+ auto road=[](float x,float){return std::array<float,3>{0,0,std::abs(x-.5f)-.12f};};
+ std::vector<objects::Vertex> vertices,shadows;std::vector<unsigned> indices;
+ objects::append_instance(p,bundle,placement,.5f,.5f,0,1,21,.0135f,false,false,
+                          road,height,vertices,shadows,&indices,0.f,0.f,true);
+ bool left=false,right=false;
+ for(auto const& vertex:vertices){left|=vertex.world_x<.38f;right|=vertex.world_x>.62f;}
+ assert(left && right);
+ // Verges: a lone road is wide, a dense junction about its stroke.
+ Kit kit;c3x_renderer_tile_v1 tile=p.tile;tile.variant_seed=1;
+ objects::Plan lone,dense,one,many;
+ assert(objects::select_improvements(tile,kit.assets,2,0,false,true,lone));
+ assert(objects::select_improvements(tile,kit.assets,2,0,false,true,dense));
+ one.routes.push_back({0,.5f,1,.5f,0,false,false,false});
+ for(unsigned k=0;k<12;++k){float a=float(k)*.5236f;
+  many.routes.push_back({.5f,.5f,.5f+.5f*std::cos(a),.5f+.5f*std::sin(a),k%3?0u:4u,k%3==0,false,false});}
+ objects::clear_farm(lone,one,kit.assets,{});objects::clear_farm(dense,many,kit.assets,{});
+ assert(std::abs(lone.farm_clearing.paths[0][4]-.095f)<1e-5f);
+ for(auto const& path:dense.farm_clearing.paths)assert(path[4]<=.0601f);
+}
+''')
+
+    def test_dense_route_networks_take_the_gap_free_patchwork(self):
+        run_cpp(KIT + r'''
+#include <cstring>
+int main(){
+ Kit kit;
+ auto add=[&](char const* group,char const* id,unsigned texture){
+  kit.farm.assets.push_back(flat(id,texture));
+  FeatureGroup g;g.name=group;FeaturePlacement placement{};placement.asset_index=unsigned(kit.farm.assets.size()-1);
+  g.placements.push_back(placement);kit.farm.groups.push_back(g);};
+ add("farm_kit:dense","farm_kit:crop:dense0:e0",2);
+ add("farm_kit:wheat","farm_kit:crop:ripe0:e0",1);
+ add("farm_kit:wheat:dense","farm_kit:crop:ripedense0:e0",3);
+ auto texture=[&](char const* resource,unsigned lines){
+  c3x_renderer_tile_v1 tile{};tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;tile.variant_seed=4;
+  tile.city_id=-1;tile.resource_id=resource?3:-1;if(resource)std::strcpy(tile.resource_name,resource);
+  objects::Plan plan;plan.farm_route_lines=lines;
+  assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+  unsigned found=9;
+  for(auto const& instance:plan.instances)
+   if(kit.farm.assets[instance.asset].id.find(":crop:")!=std::string::npos)found=kit.farm.assets[instance.asset].texture_index;
+  return found;};
+ // Up to two route lines keep the patchwork with ground between fields;
+ // three or more (a junction, a railroad) fill the ground between routes.
+ assert(texture(nullptr,0)==0 && texture(nullptr,2)==0 && texture(nullptr,3)==2 && texture(nullptr,12)==2);
+ assert(texture("Wheat",1)==1 && texture("Wheat",5)==3 && texture("Cattle",5)==2);
+ // Route lines held by the plan itself count too.
+ c3x_renderer_tile_v1 tile{};tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+ objects::Plan plan;for(unsigned k=0;k<3;++k)plan.routes.push_back({0,.5f,1,.5f,0,false,false,false});
+ assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+ bool dense=false;
+ for(auto const& instance:plan.instances)dense|=kit.farm.assets[instance.asset].texture_index==2;
+ assert(dense);
+}
+''')
+
+    def test_kit_pieces_share_one_placement(self):
+        run_cpp(KIT + r'''
+int main(){
+ Kit kit;
+ // A second field piece of the same patchwork, in its upper half.
+ FeatureAsset upper=kit.farm.assets[0];upper.id="farm_kit:crop:field1:e0";
+ for(auto& vertex:upper.vertices)vertex.position[1]=vertex.position[1]*.5f+.25f;
+ kit.farm.assets.push_back(upper);
+ FeaturePlacement second{};second.asset_index=unsigned(kit.farm.assets.size()-1);
+ kit.farm.groups[0].placements.push_back(second);
+ for(unsigned seed=0;seed<32;++seed){
+  c3x_renderer_tile_v1 tile{};tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;tile.variant_seed=seed;
+  objects::Plan plan;assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+  std::vector<objects::Instance> pieces;
+  for(auto const& instance:plan.instances)
+   if(kit.farm.assets[instance.asset].id.find(":crop:")!=std::string::npos)pieces.push_back(instance);
+  assert(!pieces.empty() && pieces.size()<=2);
+  for(auto const& piece:pieces)assert(piece.u==pieces[0].u && piece.v==pieces[0].v &&
+   piece.rotation==pieces[0].rotation && piece.scale==pieces[0].scale);
+ }
+}
+''')
+
+    def test_routes_paint_over_farms_in_both_pipelines(self):
+        # Route strips write no depth, so a farm drawn after them painted over
+        # the roads it overlapped. Farms now draw before the routes.
+        fresh = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
+        scene = between(fresh, 'bool draw_scene(', 'bool ensure_glow(')
+        self.assertLess(scene.index('draw(geometry_farm)'), scene.index('draw(geometry_route)'))
+        self.assertIn('(layer!=geometry_farm || mirrored) && !draw(layer)', scene)
+        lab = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
+        self.assertEqual(lab.count('draw(geometry_farm)'), 1)
+        self.assertLess(lab.index('draw(geometry_farm)'), lab.index('bool routes_drawn=draw(geometry_route)'))
+
+    def test_kit_fields_feather_at_their_cuts(self):
+        # Fields carry their distance to a cut in the material's spare digits;
+        # the shader turns it, with the source fringe, into a narrow soft edge.
+        run_cpp(KIT + r'''
+int main(){
+ FeatureBundle bundle;bundle.assets.push_back(flat("farm_kit:crop:field0:e0",0));
+ for(auto& vertex:bundle.assets[0].vertices){vertex.position[0]*=.3f;vertex.position[1]*=.3f;}
+ FeaturePlacement placement{};auto p=projection();auto height=[](float,float){return 2.5f;};
+ auto road=[](float x,float){return std::array<float,3>{0,0,std::abs(x-.5f)-.05f};};
+ std::vector<objects::Vertex> vertices,shadows;std::vector<unsigned> indices;
+ objects::append_instance(p,bundle,placement,.5f,.5f,0,1,21,.0135f,false,false,
+                          road,height,vertices,shadows,&indices,0.f,0.f,true);
+ bool cut=false,inside=false;
+ for(auto const& vertex:vertices){
+  float digits=(vertex.base_terrain-21.f)*100.f-1.f,distance=std::abs(vertex.world_x-.5f)-.05f;
+  assert(digits>.309f && digits<.341f);
+  if(distance<1e-4f){cut=true;assert(digits<.3105f);}
+  if(distance>.06f){inside=true;assert(digits>.3395f);}
+ }
+ assert(cut && inside);
+}
+''')
+        shader = (ROOT / 'Renderer/native/render_core/terrain_scene.hlsl').read_text()
+        weights = between(shader, '    float material_fraction = frac(input.material_index);', '    float mine_slot')
+        alpha = between(shader, '    float farm_kit_alpha =', '    ground_alpha = lerp(ground_alpha, farm_kit_alpha')
+        run_cpp(r'''
+#include <cassert>
+#include <cmath>
+struct Input {float material_index;};
+static bool clipped;
+float step(float edge,float x){return x>=edge?1.f:0.f;}
+float lerp(float a,float b,float t){return a+(b-a)*t;}
+float saturate(float x){return x<0?0:x>1?1:x;}
+float frac(float x){return x-std::floor(x);}
+float smoothstep(float a,float b,float x){float t=saturate((x-a)/(b-a));return t*t*(3-2*t);}
+void clip(float x){clipped=x<0;}
+struct Sample {float a;};
+float alpha(float material,float source,float& field){
+ Input input{material};Sample mine_sample{source};clipped=false;
+''' + weights + alpha + r'''
+ field=farm_kit_field_weight;return clipped?-1.f:farm_kit_alpha;}
+int main(){
+ float field=0;
+ assert(alpha(21.0134f,1,field)>.99f && field==1);       // inside a field
+ assert(alpha(21.0131f,1,field)<0 && field==1);          // at a cut: discarded
+ assert(alpha(21.01325f,1,field)>.99f);                  // .03 tile in: opaque
+ float half=alpha(21.013175f,1,field);assert(half>.3f && half<.7f); // .015 in
+ assert(alpha(21.0134f,.2f,field)<.4f);                  // its soft source fringe
+ alpha(25.0135f,1,field);assert(field==0);               // kit props stay opaque
+ alpha(21.01f,1,field);assert(field==0);                 // mines and old farms too
+ alpha(26.0235f,1,field);assert(field==0);               // emissive kit props
+}
+''')
+
+    def test_kit_fields_cast_no_shadow(self):
+        # Lifted, soft-edged field decals cast a thin dark rim beside every
+        # field; like resource ground decals they are not shadow casters.
+        caster = (ROOT / 'Renderer/native/render_core/source_caster.hlsl').read_text()
+        cutout = between(caster, ' float part=frac(i.material);', ' if(abs(i.material-.48)')
+        run_cpp(r'''
+#include <cassert>
+#include <cmath>
+struct Input {float material;};
+float frac(float x){return x-std::floor(x);}
+bool casts(float material){Input i{material};
+#define discard return false
+''' + cutout + r'''
+#undef discard
+ return true;}
+int main(){
+ assert(!casts(21.0131f) && !casts(21.0134f) && !casts(24.01325f)); // kit fields
+ assert(casts(25.0135f) && casts(26.0235f));                        // kit trees, farmhouses
+ assert(casts(21.f) && casts(21.01f) && casts(22.02f));              // resources, mines
+ assert(!casts(21.355f));                                            // resource ground decals
 }
 ''')
 

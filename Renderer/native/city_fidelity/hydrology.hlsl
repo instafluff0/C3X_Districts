@@ -19,6 +19,7 @@
 #define Q4_COMBINED_ROCK_PROJECTION 1
 #define Q3_STATIC_OPTICS_V2 1
 #define Q6_WORLD_SHADOWS 1
+#define C3X_RIVER_NATURAL_DEPTH 1
 #define Q2_MATERIAL_RESPONSE 1
 #define Q3_WATER_MATERIAL 1
 #define Q3_SHORE_MATERIAL 1
@@ -3488,20 +3489,27 @@ float4 q3_water_material(PixelInput input) {
    world*float2(q3_source_repeat(.43),q3_source_repeat(.61))+float2(.61,.11)).r;
   float gravel_noise=river_bank_noise_texture.Sample(material_sampler,
    world*float2(q3_source_repeat(6.71),q3_source_repeat(8.93))+float2(.07,.73)).r;
+  // About four pixels at gameplay zoom. Distance is interpolated linearly
+  // across the ground grid, so an unbroken contour shows the mesh facets;
+  // this field bends the waterline and bank edge between those samples.
+  float shore_noise=river_bank_noise_texture.Sample(material_sampler,
+   world*float2(q3_source_repeat(.67),q3_source_repeat(.59))+float2(.83,.21)).r-.5;
   float4 river_material=river_base_texture.Sample(material_sampler,uv);
   float grain=river_height_texture.Sample(material_sampler,uv).r;
   float material_grain=q3_surface_grain(river_material.a,
    river_base_texture.SampleBias(material_sampler,uv,3).a);
+  // Keep each transition at least about one display pixel wide when zoomed out.
+  float aa=max(fwidth(distance_pixels),.35);
   float water_width=5.8+noise*1.1;
-  float water=1-smoothstep(water_width-1.0,water_width+.25,
-   distance_pixels+(gravel_noise-.5)*.5);
+  float shoreline=distance_pixels+shore_noise*1.5+(gravel_noise-.5)*.5;
+  float water=1-smoothstep(water_width-1.0-aa,water_width+.6+aa,shoreline);
   // Keep the authored channel path, but let land reach close to the water.
   // The outer deposit is a broken, translucent margin rather than a solid
   // sand-colored ribbon on both sides of every bend.
   float bank_width=water_width+2.5+noise*1.4+(sediment_noise-.5)*1.3;
   float bank_feather=1.8+sediment_noise*.7;
-  float bank_edge_distance=distance_pixels+(gravel_noise-.5)*.7;
-  float bank=1-smoothstep(bank_width-bank_feather,bank_width+.6,bank_edge_distance);
+  float bank_edge_distance=distance_pixels+(gravel_noise-.5)*.7+shore_noise*1.1;
+  float bank=1-smoothstep(bank_width-bank_feather,bank_width+.6+aa,bank_edge_distance);
   bank=saturate(bank+material_grain*2.0*bank*(1-bank));
   // Fade the complete river surface into the sea across the optical shore.
   // The final alpha must keep this fade after the water/shore mix below.
@@ -3546,21 +3554,38 @@ float4 q3_water_material(PixelInput input) {
   float shore_grit=shore_cracks.a
    *grit_seed*smoothstep(water_width+.3,water_width+1.5,distance_pixels)
    *(1-smoothstep(bank_width,bank_width+1.0,distance_pixels));
-  // The land remains visible almost to the water. Variable coverage and
-  // isolated deposits replace the former continuous dark cut-face stripe.
   float bank_patch=smoothstep(.38,.66,sediment_noise*.57
    +(noise+.5)*.28+gravel_noise*.15);
-  float bank_opacity=(bank_patch*.20+gravel*.08+shore_grit*.10)
+  // The waterline: damp soil hugs the moving shoreline for a varying width,
+  // and authored river gravel collects along it in broken runs. Both fade
+  // into the land instead of ending on the old hard, faceted water edge.
+  float wet_reach=1.1+sediment_noise*1.5+(shore_noise+.5)*.8;
+  float wet=(1-smoothstep(water_width+.2,water_width+wet_reach+aa,shoreline))*land_bank;
+  float waterline_gravel=clutter.a*land_bank
+   *smoothstep(.40,.66,sediment_noise*.55+(shore_noise+.5)*.45)
+   *smoothstep(water_width-1.2,water_width+.2,shoreline)
+   *(1-smoothstep(water_width+1.4,water_width+2.8,shoreline));
+  float deposit=(bank_patch*.22+gravel*.12+shore_grit*.14)
    *(1-smoothstep(water_width+.6,bank_width+.7,distance_pixels));
-  bank=max(water,max(bank*bank_opacity,grit_spill*.43));
-  float wet=(1-smoothstep(water_width+.1,water_width+1.7,distance_pixels))
-   *bank_patch;
-  float3 shore=lerp(dry,dry*.84,wet);
   float3 grit_color=lerp(clutter.rgb*.90,shore_cracks.rgb*.90,
    shore_cracks.a/max(.001,shore_cracks.a+clutter.a));
-  shore=lerp(shore,grit_color,max(shore_grit*.45,grit_spill*.55));
-  float optical_depth=.10+.32*(1-smoothstep(0,5.5,max(0,distance_pixels)));
-  float3 transmitted=bed*exp(-optical_depth*float3(8,4,2));
+  float3 shore=lerp(dry,grit_color,max(shore_grit*.45,grit_spill*.55));
+  // Damp ground is the land beneath, darkened: a translucent dark layer
+  // keeps the grass or plains texture instead of painting a soil ribbon.
+  float damp=wet*lerp(.28,.48,bank_patch);
+  float stones=waterline_gravel*.72;
+  float covered=1-(1-deposit)*(1-damp)*(1-stones);
+  shore=(shore*deposit*(1-damp)*(1-stones)+float3(.030,.028,.018)*damp*(1-stones)
+   +clutter.rgb*lerp(.80,.58,wet)*stones)/max(covered,.001);
+  // Spilled grit beyond the bank edge keeps its own coverage and color.
+  float spill=grit_spill*.43*(1-bank);
+  shore=lerp(shore,grit_color,spill/max(spill+bank*covered,.001));
+  bank=max(water,max(bank*covered,grit_spill*.43));
+  // Shallows stay close to the channel color, so no pale rim outlines the
+  // water; depth absorbs toward the middle.
+  float channel=1-smoothstep(0,water_width,max(0,distance_pixels));
+  float optical_depth=.16+.26*smoothstep(.10,.90,channel);
+  float3 transmitted=bed*lerp(.62,1,channel)*exp(-optical_depth*float3(8,4,2));
   float3 river=lerp(transmitted,float3(.018,.074,.090),1-exp(-optical_depth*4));
   float submerged=smoothstep(water_width-3.0,water_width-1.0,distance_pixels)
    *(1-smoothstep(water_width-.15,water_width+.45,distance_pixels));
@@ -3570,7 +3595,9 @@ float4 q3_water_material(PixelInput input) {
   river*=1-bank_shadow*.18;
   float2 river_uv=world*float2(q3_source_repeat(.92),q3_source_repeat(1.27));
   float2 lean=river_lean0_texture.Sample(material_sampler,river_uv).rg*2-1;
+  float water_time=0;
 #if defined(Q3_WATER_TIME)
+  water_time=Q3_WATER_TIME;
   // Bounded two-phase advection hides resets while following the retained
   // channel tangent. Spatial phase variation avoids synchronized pulsing.
   if(Q3_WATER_TIME>0 && dot(input.relief_material.xy,input.relief_material.xy)>.01){
@@ -3582,24 +3609,97 @@ float4 q3_water_material(PixelInput input) {
    lean=lerp(b,a,weight);
   }
 #endif
-  float3 river_normal=normalize(float3(-lean*.24,1));
+  // Stream lines, as Civ VI draws them: thin pale lines parallel to the
+  // banks, broken into dashes that drift downstream along the drainage
+  // tangent. A broad world field picks occasional livelier reaches where the
+  // lines gather and brighten. Unknown drainage has no direction and is calm.
+  float2 downstream=input.relief_material.xy;
+  float flowing=saturate(dot(downstream,downstream)*4)*land_bank;
+  float reach=river_bank_noise_texture.Sample(material_sampler,
+   world*float2(q3_source_repeat(.025),q3_source_repeat(.021))+float2(.37,.83)).r;
+  float rapids=smoothstep(.62,.76,reach)*flowing;
+  float stream_lines=0;
+  if(flowing>.001){
+   const float cycle=.32;
+   float frequency=q3_source_repeat(1.10);
+   float phase=frac(water_time*.30+sediment_noise);
+   float other=frac(phase+.5),weight=1-abs(phase*2-1);
+   float a=0,b=0;
+   [unroll] for(int tap=0;tap<5;++tap){
+    a+=river_bank_noise_texture.Sample(material_sampler,
+     (world-downstream*(cycle*phase+tap*.012))*frequency).r;
+    b+=river_bank_noise_texture.Sample(material_sampler,
+     (world-downstream*(cycle*other+tap*.012))*frequency+float2(.29,.61)).r;
+   }
+   float dash=smoothstep(.50,.70,lerp(b,a,weight)*.2+rapids*.05);
+   // Lines follow the channel distance, gently bent so they wander.
+   float across=distance_pixels+noise*1.3+shore_noise*.9;
+   float spacing=lerp(2.5,1.8,rapids);
+   float offset=abs(frac(across/spacing)-.5)*spacing;
+   float lane=smoothstep(spacing*.5-.30-aa*.5,spacing*.5-.05,offset);
+   stream_lines=lane*dash*flowing*lerp(.22,.45,rapids)
+    *(1-smoothstep(water_width-2.0,water_width-.4,distance_pixels));
+  }
+  float3 river_normal=normalize(float3(-lean*(.24+.16*rapids),1));
   float3 water_light=q6_receiver_illumination(input,river_normal,1,1);
-  float3 river_view=normalize(float3(0,-.52,.86));
-  float3 river_glint=(environment_sun_color*environment_sun_intensity*
-    pow(saturate(dot(river_normal,normalize(river_view+environment_sun_direction))),48)
-    +environment_moon_color*environment_moon_intensity*
-    pow(saturate(dot(river_normal,normalize(river_view+environment_moon_direction))),48))
-    *.022*environment_water_specular*q6_receiver_visibility(input,river_normal,1);
+  float river_visibility=q6_receiver_visibility(input,river_normal,1);
+  // The same optics as shallow sea water: Fresnel-weighted sky and mirrored
+  // scene over the transmitted body, plus a moving sun and moon glint.
+  float3 eye=normalize(float3(.43,-.43,1));
+#ifdef Q3_WATER_CAMERA
+  {
+   float2 delta=world-Q3_WATER_CAMERA.xy;
+   float2 raw=float2(delta.x+delta.y,delta.x-delta.y);
+   raw-=round(raw/max(Q3_WATER_CAMERA.zw,1))*Q3_WATER_CAMERA.zw;
+   delta=float2(raw.x+raw.y,raw.x-raw.y)*.5;
+   eye=normalize(float3(float2(.43,-.43)*2.5-delta,2.5));
+  }
+#endif
+  float fresnel=clamp(pow(1.1-saturate(dot(river_normal,eye)),2)*1.5,.1,.75);
+  float3 ray=reflect(-eye,river_normal);
+  float3 sky_light=environment_ambient_color*.6+environment_sun_color*environment_sun_intensity*.6
+   +environment_moon_color*environment_moon_intensity*.6;
+  float3 reflected=sky_light*lerp(float3(.16,.25,.36),float3(.42,.55,.68),smoothstep(.30,.90,ray.y));
+  float mirrored_alpha=0;
+#ifdef Q3_OBJECT_REFLECTION
+  // The mirror target reflects about the sea plane. Rivers keep the flat
+  // datum, so the lookup moves by the river's own height above that plane;
+  // a raised reach (unusual) would also mirror its own banks, so fade it.
+  float lift=max(0,input.q6_world.z-NativeReflection.z);
+  float2 mirror_uv=(input.position.xy+NativeReflectionTarget.zw+
+   float2(0,2*lift*NativeReflection.x))/Q3_REFLECTION_SIZE;
+  float2 mirror_sample=mirror_uv-river_normal.xy*float2(3,1.5)/
+   (Q3_REFLECTION_SIZE*clamp(eye.z*2,.05,1));
+  float4 mirrored=q3_object_reflection_texture.Sample(decal_sampler,mirror_sample);
+  float inside=step(0,mirror_uv.x)*step(mirror_uv.x,1)*step(0,mirror_uv.y)*step(mirror_uv.y,1)
+   *NativeReflection.w;
+  mirrored_alpha=saturate(mirrored.a)*inside*(1-smoothstep(1.5,3.5,lift*112));
+  reflected=lerp(reflected,mirrored.rgb,mirrored_alpha);
+#endif
+  float reflection=fresnel*max(mirrored_alpha,.4)*.68*land_bank;
+  // Open-sea glare strength, so a river shares the sea's sun path. The calm
+  // surface keeps the glare a smooth sheen; ripple normals only break it up.
+  float3 glint_normal=normalize(float3(-lean*(.08+.10*rapids),1));
+  float facing=max(dot(reflect(-environment_sun_direction,glint_normal),eye),0);
+  // The sea's broad twilight sheen is open-ocean only; it would wash a
+  // whole river pale at dusk.
+  float glint=smoothstep(.82,.995,facing)*.9;
+  float moon_glint=smoothstep(.82,.995,max(dot(reflect(-environment_moon_direction,glint_normal),eye),0))
+   *smoothstep(.18,.28,environment_moon_intensity)*.65;
+  float3 specular=(environment_sun_color*environment_sun_intensity*glint
+   +environment_moon_color*environment_moon_intensity*moon_glint)*river_visibility;
+  float3 surface=lerp(river*water_light,reflected,reflection)+specular;
+  surface=lerp(surface,float3(.70,.78,.80)*water_light,stream_lines);
   // Shade the existing bank grain and authored gravel, not the river surface.
   float bank_height=grain*.25+material_grain*.30+(gravel_height-.5)*gravel*.30
-   +shore_grit*.25+grit_spill*.28;
+   +shore_grit*.25+grit_spill*.28+(gravel_height-.5)*waterline_gravel*.30;
   float mean_grain=river_height_texture.SampleBias(material_sampler,uv,2).r;
   float cavity=q3_margin_visibility(grain,mean_grain)*
-   lerp(1,gravel_cavity,gravel);
+   lerp(1,gravel_cavity,max(gravel,waterline_gravel));
   shore*=lerp(1,cavity,.65);
   float3 bank_normal=q3_margin_normal(input,bank_height,.070);
   float3 bank_light=q6_receiver_illumination(input,bank_normal,1,1);
-  return float4(lerp(shore*bank_light,river*water_light+river_glint,water),bank*outlet);
+  return float4(lerp(shore*bank_light,surface,water),bank*outlet);
 #elif defined(Q3_STATIC_OPTICS_V2)
   // Keep the captured curve and navigable width. The source river bed remains
   // visible through shallow edges; narrow damp banks replace the sandy outline.
@@ -3716,7 +3816,22 @@ struct IntegratedVertexInput
 // and depth-write rules remain explicit; stored depth carries its basis.
 float translated_depth(IntegratedVertexInput input, bool feature)
 {
-    float pixel_depth = floor(input.position.z * 256.0 + 0.5) / 256.0 + c3x_viewport_depth_translation;
+    float position_depth = input.position.z;
+    float river_bias = 0.025;
+#ifdef C3X_RIVER_NATURAL_DEPTH
+    if (!feature && input.surface_kind > 8.5 && input.surface_kind < 9.5)
+    {
+        // Ground meshes store y = G - lift and z = G + 0.75 * lift, where G is
+        // the flat-ground row. Natural terrain sorts by G + 0.0016 * H per
+        // unit of relief. Give the river that same basis, so a small layer
+        // bias wins over the coplanar ground beneath it without passing over
+        // trees, farms or bridges standing beside the bank.
+        position_depth = (input.position.z + 0.75 * input.position.y) / 1.75 +
+            (input.q6_world.z * 112.0 - 2.5) * 0.0016 * c3x_viewport_reserved.x;
+        river_bias = 0.004;
+    }
+#endif
+    float pixel_depth = floor(position_depth * 256.0 + 0.5) / 256.0 + c3x_viewport_depth_translation;
     float depth = clamp(0.5 - pixel_depth / 16384.0, 0.001, 0.999);
     if (feature) return depth;
     // Preserve the existing layer separation in physical pixels at each size.
@@ -3724,7 +3839,7 @@ float translated_depth(IntegratedVertexInput input, bool feature)
     float kind = input.surface_kind;
     if (kind > 10.5) return max(0.003, depth - 0.010 * bias_scale);
     if (kind > 9.5) return max(0.001, depth - 0.003 * bias_scale);
-    if (kind > 8.5) return max(0.001, depth - 0.025 * bias_scale);
+    if (kind > 8.5) return max(0.001, depth - river_bias * bias_scale);
     if (kind > 6.5 && kind < 7.5) return max(0.001, depth - 0.004 * bias_scale);
     if (kind < 0.75) return min(0.999, depth + 0.000006 * bias_scale);
     if (kind < 1.25) return min(0.999, depth + 0.000004 * bias_scale);

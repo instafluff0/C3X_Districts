@@ -137,6 +137,7 @@ float q3_source_repeat(float requested) {
 #define Q4_COMBINED_ROCK_PROJECTION 1
 #define Q3_STATIC_OPTICS_V2 1
 #define Q6_WORLD_SHADOWS 1
+#define C3X_RIVER_NATURAL_DEPTH 1
 #include "generated/shaders/hydrology/scene_linear.hlsl"''')
     if complete_rock_channels:
         adapter = adapter.replace('#define Q6_TEXEL_RECEIVER_OFFSET 1',

@@ -21,6 +21,7 @@ struct Renderer {
  bool water_scene_active=false,wave_ready=true,visibility_pass=true;
  std::vector<int> resource_animations;
  int resource_animation_for(c3x_renderer_tile_v1 const&)const{return -1;}
+ bool animated_composition_for(c3x_renderer_tile_v1 const&)const{return false;}
 ''' + eligibility + clock + r'''
 };
 int main(){

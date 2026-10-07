@@ -15,11 +15,13 @@ Cases (category "infrastructure"):
 - farms-routes: farmland crossed by a corner (E-W) road, an edge (NW-SE) road,
   a corner (N-S) road, an edge (NE-SW) railroad, junctions and a spur;
 - farms-resources: farmed resource tiles inside farmland, one beside a road;
-- farms-water: farmland along a straight river and a coast, with a bridged road.
+- farms-water: farmland along a straight river and a coast, with a bridged road;
+- farms-network: late-game farmland where every tile has a road to all its
+  neighbours and three railroad corridors cross it (as on the 1498 AD save).
 """
 from __future__ import annotations
 
-CASES = ("farms-terrain", "farms-routes", "farms-resources", "farms-water")
+CASES = ("farms-terrain", "farms-routes", "farms-resources", "farms-water", "farms-network")
 ROAD, RAIL, MINE, IRRIGATION = 0x1, 0x2, 0x4, 0x8
 DESERT, PLAINS, GRASSLAND, TUNDRA, FLOODPLAIN, HILLS, COAST = 0, 1, 2, 3, 4, 5, 11
 # Raw view extent: 8 x 6 tiles at the gameplay zoom.
@@ -38,6 +40,9 @@ RESOURCE_CELLS = (
     ((-4, 0), "Wines", GRASSLAND), ((0, 0), "Sugar", FLOODPLAIN), ((4, 0), "Tobacco", GRASSLAND),
     ((-4, 6), "Incense", PLAINS), ((0, 6), "Oasis", DESERT), ((4, 6), "Wheat", PLAINS),
 )
+
+
+NETWORK_RESOURCES = (((-3, -3), "Wheat"), ((3, -1), "Cattle"))
 
 
 def applies(category: str, case: str) -> bool:
@@ -89,6 +94,13 @@ def terrain(category: str, case: str, dx: int, dy: int, base: int, real: int) ->
             overlays = ROAD | RAIL
         if (dx, dy) == (-7, -9):
             real, overlays = HILLS, MINE
+    elif case == "farms-network":
+        if (dx * 5 + dy * 3) % 11 < 4:
+            base = real = PLAINS
+        rail = dy == 2 or dx - dy == 6 or dx + dy == -6
+        overlays = ROAD | (RAIL if rail else 0) | (IRRIGATION if inside else 0)
+        if (dx, dy) == (5, 9):
+            real, overlays = HILLS, ROAD | MINE
     elif case == "farms-water":
         if dx + dy >= 12:
             return COAST, COAST, 0, 0, 0
@@ -104,9 +116,8 @@ def terrain(category: str, case: str, dx: int, dy: int, base: int, real: int) ->
 def resources(category: str, case: str, centre: tuple[int, int] = (0, 0)) -> str:
     """'dx,dy,Name;...' for the Lab preview, relative to the view centre
     (the preview places resources around it; the terrain CSV is fixed)."""
-    if case != "farms-resources":
-        return ""
-    return ";".join(f"{dx - centre[0]},{dy - centre[1]},{name}" for (dx, dy), name, _ground in RESOURCE_CELLS)
+    cells = RESOURCE_CELLS if case == "farms-resources" else NETWORK_RESOURCES if case == "farms-network" else ()
+    return ";".join(f"{dx - centre[0]},{dy - centre[1]},{name}" for (dx, dy), name, *_ground in cells)
 
 
 def viewport(zoom: int) -> tuple[int, int]:
@@ -119,4 +130,5 @@ CLOSE_UPS = {
     "farms-routes": ((-4, -6), (0, 2), (2, 2), (-4, 4)),
     "farms-resources": tuple(cell for cell, _name, _ground in RESOURCE_CELLS),
     "farms-water": ((-2, -2), (4, 4)),
+    "farms-network": ((0, 0), (-3, -3), (2, 2)),
 }

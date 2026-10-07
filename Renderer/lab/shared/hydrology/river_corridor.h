@@ -7,7 +7,7 @@ namespace river {
 using hydro::P;
 struct Edge { uint64_t id; P a,b; std::vector<P> points; double cost=0,original_cost=0; int flow=0; };
 struct Terminal { P p; bool mouth; unsigned profile=0; double yaw=0; };
-struct Segment { P a,b,flow; };
+struct Segment { P a,b,flow; double narrow=0; };
 struct Sample { double distance=1000, source=1000, mouth=1000; P flow; };
 inline P screen(P p) { return {64*(p.x+p.y),32*(p.x-p.y)}; }
 inline P from_screen(P p) { return {p.x/128+p.y/64,p.x/128-p.y/64}; }
@@ -49,11 +49,13 @@ struct Corridor {
         return .22*(radii[i%radii.size()]*(1-fraction)+radii[(i+1)%radii.size()]*fraction);
     }
 
-    void insert(P a,P b,int direction=0) {
+    // narrow (screen pixels) is added to the distance, so a distributary
+    // reads as a smaller channel with a smaller bank.
+    void insert(P a,P b,int direction=0,double narrow=0) {
         P tangent=(b-a)*(direction/std::max(1e-12,hydro::length(b-a)));
         for(int y=int(std::floor(std::min(a.y,b.y)-.65));y<=int(std::floor(std::max(a.y,b.y)+.65));++y)
         for(int x=int(std::floor(std::min(a.x,b.x)-.65));x<=int(std::floor(std::max(a.x,b.x)+.65));++x)
-            buckets[{x,y}].push_back({screen(a),screen(b),tangent});
+            buckets[{x,y}].push_back({screen(a),screen(b),tangent,narrow});
     }
     bool affects(int c,int r) const { return buckets.count({c,r}) || terminal_buckets.count({c,r}); }
     bool bank_point(P near,double margin,double side,P& result) const {
@@ -75,7 +77,7 @@ struct Corridor {
         auto key=std::make_pair(int(std::floor(p.x)),int(std::floor(p.y)));
         auto found=buckets.find(key);
         if(found!=buckets.end())for(auto const& s:found->second){
-            double d=distance(screen(p),s.a,s.b);
+            double d=distance(screen(p),s.a,s.b)+s.narrow;
             if(d<result.distance){result.distance=d;result.flow=s.flow;}
         }
         auto nodes=terminal_buckets.find(key);
@@ -170,11 +172,36 @@ struct Corridor {
             bool mouth=!water.empty();
             if(mouth) {
                 auto const& e=edges[item.second.front()];
-                P away=p-(hydro::length(e.a-p)<1e-9?e.points[1]:e.points[e.points.size()-2]);
+                bool from_a=hydro::length(e.a-p)<1e-9;
+                P away=p-(from_a?e.points[1]:e.points[e.points.size()-2]);
                 auto chosen=std::max_element(water.begin(),water.end(),[&](P a,P b){return hydro::dot(a-p,away)<hydro::dot(b-p,away);});
                 // The water-tile center lies beyond the optical shore, allowing
                 // the same corridor to cut through the beach and enter the sea.
                 insert(p,*chosen,e.flow?1:0);
+                // A small delta: two narrower distributaries leave the last
+                // reach upstream and fan out to the sea on either side of the
+                // main outlet, each with its own deterministic branch point,
+                // angle and length.
+                P outlet=*chosen-p;outlet=outlet*(1/std::max(1e-12,hydro::length(outlet)));
+                uint32_t branch_seed=hydro::hash(uint32_t(e.id)^uint32_t(e.id>>32)^0x64656c74u);
+                for(int side:{-1,1}) {
+                    branch_seed=hydro::hash(branch_seed);
+                    double upstream=.40+.25*double(branch_seed&1023)/1023.;
+                    double angle=side*(.55+.30*double((branch_seed>>10)&1023)/1023.);
+                    double length=.60+.30*double((branch_seed>>20)&1023)/1023.;
+                    auto step=std::size_t(std::lround(upstream*double(e.points.size()-1)));
+                    P from=from_a?e.points[step]:e.points[e.points.size()-1-step];
+                    P direction{outlet.x*std::cos(angle)-outlet.y*std::sin(angle),
+                                outlet.x*std::sin(angle)+outlet.y*std::cos(angle)};
+                    // Leave along the channel, then fan out across the beach,
+                    // so each branch reaches the sea as a separate channel.
+                    P control=from+(p-from)*.55,to=p+direction*length,last=from;
+                    for(int j=1;j<=10;++j) {
+                        double u=j/10.,v=1-u;
+                        P next=from*(v*v)+control*(2*u*v)+to*(u*u);
+                        insert(last,next,e.flow?1:0,1.8);last=next;
+                    }
+                }
             }
             auto id=edges[item.second.front()].id;
             auto const& edge=edges[item.second.front()];

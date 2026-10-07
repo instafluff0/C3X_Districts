@@ -67,7 +67,7 @@ def clip_convex(polygon: list[tuple[float, float]], hull: list[tuple[float, floa
     return polygon
 
 
-def patchwork(pack: Path, atlas: str, size: float, smallest: int = 40) -> list[dict]:
+def patchwork(pack: Path, atlas: str, size: float, smallest: int = 40, cover: bool = False) -> list[dict]:
     """The planted crop atlas as one patchwork of separate field pieces.
 
     The atlas is Civ VI's complete farm patchwork: about thirty green fields
@@ -77,15 +77,33 @@ def patchwork(pack: Path, atlas: str, size: float, smallest: int = 40) -> list[d
     verge so it clips cleanly and drapes closely. The pieces share one
     placement; the side of the whole atlas is `size` tiles. Separate pieces
     let the runtime drop a field that clipping cuts down to a sliver.
+
+    With `cover`, every path block joins its nearest field, so the pieces
+    tile the whole atlas (for its opaque copy): the gap-free patchwork that
+    dense route networks bound instead of the atlas paths.
     """
     labels = field_labels((pack / atlas).read_bytes())
     blocks = len(labels)
+    sizes: dict[int, int] = defaultdict(int)
+    for row in labels:
+        for label in row:
+            sizes[label] += 1
+    if cover:
+        owner = [[label if label and sizes[label] >= smallest else 0 for label in row] for row in labels]
+        queue = deque((x, y) for y in range(blocks) for x in range(blocks) if owner[y][x])
+        while queue:
+            x, y = queue.popleft()
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if 0 <= nx < blocks and 0 <= ny < blocks and not owner[ny][nx]:
+                    owner[ny][nx] = owner[y][x]
+                    queue.append((nx, ny))
+        labels = owner
     cells: dict[int, list[tuple[int, int]]] = defaultdict(list)
     for y in range(blocks):
         for x in range(blocks):
             if labels[y][x]:
                 cells[labels[y][x]].append((x, y))
-    grow, step = 2.5, .078 / size * blocks
+    grow, step = (1.0 if cover else 2.5), .078 / size * blocks
     pieces = []
     for label in sorted(cells):
         if len(cells[label]) < smallest:
@@ -201,7 +219,8 @@ def ripe_rgb(r: int, g: int, b: int) -> tuple[int, int, int]:
     return round(r * 255), round(g * 255), round(b * 255)
 
 
-def ripe_texture(pack: Path, source: str, fields: str, share: float = .8) -> str:
+def ripe_texture(pack: Path, source: str, fields: str, target: str = "textures/farm/patchwork_ripe.dds",
+                 share: float = .8) -> str:
     """A copy of the patchwork texture with about `share` of its fields ripe.
     Only BC1 colour endpoints change (alpha and indices are kept), and whole
     fields of the planted atlas `fields` turn together."""
@@ -222,13 +241,12 @@ def ripe_texture(pack: Path, source: str, fields: str, share: float = .8) -> str
                         struct.pack_into("<H", data, at + k,
                                          (r * 31 + 127) // 255 << 11 | (g * 63 + 127) // 255 << 5 | (b * 31 + 127) // 255)
                 at += 16
-    target = "textures/farm/patchwork_ripe.dds"
     (pack / target).parent.mkdir(parents=True, exist_ok=True)
     (pack / target).write_bytes(data)
     return target
 
 
-def build(pack: Path, runtime_name: str = "farm_runtime.bin", solid: bool = False,
+def build(pack: Path, runtime_name: str = "farm_runtime.bin",
           field_size: float = 3.3, ripe: tuple[str, ...] = ("Wheat",)) -> Path:
     manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
     catalog = json.loads(
@@ -282,15 +300,16 @@ def build(pack: Path, runtime_name: str = "farm_runtime.bin", solid: bool = Fals
     if len(emissive_textures) != 2:
         raise ValueError("Compact farm bundle expects two confirmed emissive channels")
     textures = base_textures + emissive_textures
-    # The kit no longer uses the tan and muddy palettes; slot 2 can carry the
-    # opaque patchwork instead.
-    patchwork_slot = 0
-    if solid:
-        textures[2], patchwork_slot = solid_texture(pack, textures[0]), 2
+    # The kit uses no tan, muddy or soil palettes. Slot 2 carries the opaque
+    # patchwork for dense route networks; slots 1 and 3 the ripe copies of
+    # both patchworks for resource kits.
+    planted = textures[0]
+    textures[2] = solid_texture(pack, planted)
     if ripe:
-        # Slot 1 (the tan palette) carries the ripe copy for resource kits.
-        textures[1] = ripe_texture(pack, textures[patchwork_slot], textures[0])
-    fields = patchwork(pack, textures[0], field_size)
+        textures[1] = ripe_texture(pack, planted, planted)
+        textures[3] = ripe_texture(pack, textures[2], planted, "textures/farm/patchwork_ripe_solid.dds")
+    fields = patchwork(pack, planted, field_size)
+    dense_fields = patchwork(pack, planted, field_size, cover=True)
     assets: list[bytes] = []
     grouped: dict[int, list[tuple[int, float]]] = defaultdict(list)
     for role, _asset_id in roots:
@@ -338,26 +357,38 @@ def build(pack: Path, runtime_name: str = "farm_runtime.bin", solid: bool = Fals
             assets.append(merged_asset(f"{role}:source", 5, 0, [centered]))
             grouped[era].append((asset_index, .08))
             continue
-        # The kit's patchwork pieces, on the planted (first) crop texture or
-        # its opaque copy, shared by every era.
+        # The kit's patchwork pieces, on the planted (first) crop texture,
+        # shared by every era.
         if era == 0:
             first_field = len(assets)
             for index, mesh in enumerate(fields):
-                assets.append(merged_asset(f"farm_kit:crop:field{index}", patchwork_slot, 0, [mesh]))
+                assets.append(merged_asset(f"farm_kit:crop:field{index}", 0, 0, [mesh]))
         grouped[era].extend((first_field + index, .71) for index in range(len(fields)))
     groups = [group_payload(f"farm_{era}", grouped[era]) for era in range(3)]
     # Marks this pack as a farm kit: the runtime lays its patchwork out alike
     # on every terrain and keeps routes, resources and water open.
     groups.append(group_payload("farm_kit", grouped[0][:1]))
+
+    # Dense route networks bound the gap-free patchwork instead.
+    first_dense = len(assets)
+    for index, mesh in enumerate(dense_fields):
+        assets.append(merged_asset(f"farm_kit:crop:dense{index}", 2, 0, [mesh]))
+    groups.append(group_payload("farm_kit:dense", [(first_dense + index, .71) for index in range(len(dense_fields))]))
     if ripe:
         # A resource's own kit: its farm grows ripe fields ("NAME"), or is the
         # resource's own planting and keeps no yard around it ("NAME:crop").
         first_ripe = len(assets)
         for index, mesh in enumerate(fields):
             assets.append(merged_asset(f"farm_kit:crop:ripe{index}", 1, 0, [mesh]))
+        first_ripe_dense = len(assets)
+        for index, mesh in enumerate(dense_fields):
+            assets.append(merged_asset(f"farm_kit:crop:ripedense{index}", 3, 0, [mesh]))
         for name in ripe:
+            base, crop = name.lower().split(":")[0], name.lower().endswith(":crop")
             groups.append(group_payload(f"farm_kit:{name.lower()}",
                                         [(first_ripe + index, .71) for index in range(len(fields))]))
+            groups.append(group_payload(f"farm_kit:{base}:dense" + (":crop" if crop else ""),
+                                        [(first_ripe_dense + index, .71) for index in range(len(dense_fields))]))
     output = bytearray(MAGIC)
     output.extend(struct.pack("<IIII", 1, len(textures), len(assets), len(groups)))
     for texture in textures:
@@ -382,12 +413,10 @@ def main() -> int:
                         help="patchwork side in tiles (larger means fewer, bigger fields per tile)")
     parser.add_argument("--ripe", nargs="*", default=["Wheat"],
                         help="resources whose farms grow ripe fields, e.g. Wheat (yard kept) or Wheat:crop (no yard)")
-    parser.add_argument("--solid", action="store_true",
-                        help="grassy lanes between fields on every terrain instead of the ground showing through")
     args = parser.parse_args()
     if "/" in args.output or "\\" in args.output or not args.output.endswith(".bin"):
         parser.error("--output is a .bin file name inside the pack")
-    target = build(args.pack.resolve(), args.output, args.solid, args.field_size, tuple(args.ripe))
+    target = build(args.pack.resolve(), args.output, args.field_size, tuple(args.ripe))
     print(f"wrote {target} ({target.stat().st_size} bytes)")
     return 0
 

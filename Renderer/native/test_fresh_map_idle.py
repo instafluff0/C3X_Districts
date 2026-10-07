@@ -130,7 +130,9 @@ struct RendererState {
  bool water_scene_active=true,wave_ready=true,visibility_pass=true;
  std::vector<int> resource_animations;
  int resource_animation_for(c3x_renderer_tile_v1 const& tile)const{return tile.resource_id==101?0:-1;}
+ bool animated_composition_for(c3x_renderer_tile_v1 const&)const{return false;}
  bool assets_pending=false,reject_selection=false;unsigned selections=0;
+ bool borrowed_scene_frame=false,borrowed_scene_stale=false; // camera-job snapshot frames (review 4v)
  // Contributor selection has separate executable geometry fixtures. This
  // adapter fixture supplies their visible-tile result to test ownership/idle.
  bool select_frame_units(c3x_renderer_frame_v1 const& frame,
@@ -154,6 +156,7 @@ struct Worker {
  using View=RetainedSceneView<decltype(RendererState::cached_signature),std::uint64_t>;
  std::optional<View> completed_scene;
  bool completed_scene_usable()const{return bool(completed_scene);}
+ bool completed_scene_borrowable()const{return (camera_active||!camera_scene_complete)&&completed_scene_usable();}
  auto borrow_completed_scene(){return View::Borrow(
   (camera_active||!camera_scene_complete)&&completed_scene?&*completed_scene:nullptr,
   std::tie(renderer_state.cached_signature,renderer_state.tile_geometry_epoch));}

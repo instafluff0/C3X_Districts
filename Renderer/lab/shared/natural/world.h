@@ -60,6 +60,7 @@ struct NaturalWorld : NaturalData {
         values.push_back(segments==field.buckets.end()?0:segments->second.size());
         if(segments!=field.buckets.end())for(auto const& segment:segments->second){
             real(segment.a.x);real(segment.a.y);real(segment.b.x);real(segment.b.y);real(segment.flow.x);real(segment.flow.y);
+            real(segment.narrow);
         }
         // A separator carries the segment count; no ambiguous concatenations.
         auto nodes=field.terminal_buckets.find(key);

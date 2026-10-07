@@ -181,5 +181,29 @@ class ResourceCompositionTests(unittest.TestCase):
             self.assertEqual(payload[64:66], bytes((255, 0)))
 
 
+    def test_tiling_triangles_are_clipped_into_one_texture_not_clamped(self):
+        # Civ VI rocks repeat their texture (UV past 1); an atlas cell cannot, and
+        # clamping smeared the edge texels into streaks down the rock.
+        triangle = [((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.8, 0.1)), ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (1.3, 0.1)),
+                    ((0.0, 1.0, 0.0), (0.0, 0.0, 1.0), (0.8, 0.9))]
+        vertices, indices = compositions.within_texture(triangle, [0, 1, 2])
+        self.assertGreater(len(indices), 3)                         # split at u = 1
+        for position, _, uv in vertices:
+            self.assertTrue(0.0 <= uv[0] <= 1.0 and 0.0 <= uv[1] <= 1.0)
+        # Each piece keeps the source mapping (u = 0.8 + 0.5 x) shifted by one whole texture.
+        for k in range(0, len(indices), 3):
+            shifts = {round(0.8 + 0.5 * vertices[i][0][0] - vertices[i][2][0], 6) for i in indices[k:k + 3]}
+            self.assertEqual(len(shifts), 1)
+            self.assertIn(shifts.pop(), (0.0, 1.0))
+
+        def area(points):
+            return sum(abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) / 2
+                       for a, b, c in points)
+        pieces = [tuple(vertices[i][0] for i in indices[k:k + 3]) for k in range(0, len(indices), 3)]
+        self.assertAlmostEqual(area(pieces), 0.5, places=6)          # the whole triangle, once
+        untouched = [((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.2, 0.1))] * 3
+        self.assertEqual(compositions.within_texture(untouched, [0, 1, 2])[1], [0, 1, 2])
+
+
 if __name__ == "__main__":
     unittest.main()

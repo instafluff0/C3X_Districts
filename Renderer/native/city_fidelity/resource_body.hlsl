@@ -1135,6 +1135,11 @@ float4 q6_raw_feature(FeaturePixelInput input)
     float mine_weight = source_decal_weight *
         (1.0 - tile_object_weight) * (1.0 - infrastructure_weight) *
         (1.0 - unit_weight) * (1.0 - resource_decal_weight);
+    // Farm kit field decals (fraction .0131-.0134; kit props keep .0135)
+    // carry their cut fade in the spare digits and feather into the ground.
+    float farm_kit_digits = frac(material_fraction * 100.0);
+    float farm_kit_field_weight = source_decal_weight * (1.0 - step(0.05, material_fraction)) *
+        step(0.30, farm_kit_digits) * (1.0 - step(0.345, farm_kit_digits));
     float raised_infrastructure_weight = infrastructure_weight *
         (1.0 - step(0.25, material_fraction));
     float pollution_weight = step(0.295, material_fraction) *
@@ -1208,7 +1213,7 @@ float4 q6_raw_feature(FeaturePixelInput input)
     float4 mine_sample = sample_reused_resource_slot(mine_slot, input.uv);
     // Resource models cut out by their slot alpha too (masked plant cards);
     // opaque BC1 slots sample alpha 1, so solid bodies are unaffected.
-    clip(lerp(1.0, mine_sample.a - lerp(0.08, 0.004, resource_decal_weight),
+    clip(lerp(1.0, mine_sample.a - lerp(0.08, 0.004, saturate(resource_decal_weight + farm_kit_field_weight)),
               saturate(source_decal_weight * (1.0 - unit_weight) + resource_weight)));
     float mine_emissive_code = floor(material_fraction * 100.0 + 0.5);
     if (mine_weight > 0.5 && mine_emissive_code > 1.5)
@@ -1357,6 +1362,13 @@ float4 q6_raw_feature(FeaturePixelInput input)
         lerp(crater_alpha, pollution_alpha, pollution_weight),
         ground_state_weight);
     ground_alpha = lerp(ground_alpha, mine_sample.a, resource_decal_weight);
+    // A farm kit field fades in over its soft source fringe and the first
+    // .03 tile from a tile, route, yard or water cut (its digits carry the
+    // distance to the cut over .06 tile), so its edges stay organic.
+    float farm_kit_alpha = smoothstep(0.004, 0.5, mine_sample.a) *
+        smoothstep(0.0, 0.5, saturate((farm_kit_digits - 0.31) / 0.03));
+    clip(lerp(1.0, farm_kit_alpha - 0.01, farm_kit_field_weight));
+    ground_alpha = lerp(ground_alpha, farm_kit_alpha, farm_kit_field_weight);
     return float4(display_color, ground_alpha);
 }
 

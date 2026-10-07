@@ -7974,11 +7974,35 @@ public:
                 ID3D11ShaderResourceView*view=active_reflection.enabled?(scene_surface_pass?scene_reflection_view:active_reflection.linear.view):nullptr;
                 context->PSSetShaderResources(121,1,&view);
             }
-            if (!draw(geometry_bed) ||
-                !draw(geometry_water) ||
-                !draw(geometry_river) ||
-                !draw(geometry_shadow)) {
-                return false;
+            if (!draw(geometry_bed) || !draw(geometry_water))return false;
+            // The river is a translucent ground decal. It tests against the
+            // ground but writes no depth, so its bank band cannot reject the
+            // bridges, farms, routes and shadows drawn after it.
+            ID3D11DepthStencilState* river_previous=nullptr;UINT river_reference=0;
+            context->OMGetDepthStencilState(&river_previous,&river_reference);
+            if(natural.decal_depth)context->OMSetDepthStencilState(natural.decal_depth,0);
+            bool river_drawn=draw(geometry_river);
+            context->OMSetDepthStencilState(river_previous,river_reference);
+            release(river_previous);
+            if(!river_drawn || !draw(geometry_shadow))return false;
+            // Farm fields are ground: they draw before the route strips, which
+            // write no depth, so a road or railroad always paints over them.
+            if (!buffers[geometry_farm].empty()) {
+                ID3D11SamplerState* route_samplers[2]={};context->PSGetSamplers(0,2,route_samplers);
+                ID3D11ShaderResourceView* shadow_slot=nullptr;context->PSGetShaderResources(17,1,&shadow_slot);
+                if(fidelity_profile){ID3D11SamplerState*retained[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,retained);}
+                if(pickup_profile)context->PSSetShaderResources(17,1,&source_shadow.sampled_view());
+                context->VSSetShader(feature_vertex_shader,nullptr,0);
+                context->PSSetShader(feature_pixel_shader,nullptr,0);
+                context->PSSetShaderResources(116,6,farm_base_views.data());
+                context->PSSetShaderResources(124,2,farm_emissive_views.data());
+                bool farms_drawn=draw(geometry_farm);
+                context->PSSetSamplers(0,2,route_samplers);context->PSSetShaderResources(17,1,&shadow_slot);
+                release(route_samplers[0]);release(route_samplers[1]);release(shadow_slot);
+                context->PSSetShaderResources(116,6,views.data()+116);
+                context->PSSetShaderResources(124,2,views.data()+124);
+                context->VSSetShader(vertex_shader,nullptr,0);context->PSSetShader(pixel_shader,nullptr,0);
+                if(!farms_drawn)return false;
             }
             // Routes are a surface decal: a translucent fringe must not write
             // depth and reject another path's core where strips overlap.
@@ -8033,14 +8057,6 @@ public:
                 context->PSSetShaderResources(116, 6, mine_base_views.data());
                 context->PSSetShaderResources(124, 2, mine_emissive_views.data());
                 if (!draw(geometry_mine))
-                    return false;
-            }
-            if (!buffers[geometry_farm].empty()) {
-                context->VSSetShader(feature_vertex_shader, nullptr, 0);
-                context->PSSetShader(feature_pixel_shader, nullptr, 0);
-                context->PSSetShaderResources(116, 6, farm_base_views.data());
-                context->PSSetShaderResources(124, 2, farm_emissive_views.data());
-                if (!draw(geometry_farm))
                     return false;
             }
             if (!buffers[geometry_city].empty()) {
@@ -11422,12 +11438,16 @@ public:
                         (tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,world_lookup,shore_sample_at,
                         [&](float x,float y){return natural.river_sample({x,y}).distance;},natural_height_at);
                 if(tile_city_composition && city_assets_ready && ground<11)++city_fallbacks_omitted;
+                bool farmed=farm_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION);
+                c3x_renderer::objects::Plan routes;
+                if(farmed){
+                    c3x_renderer::objects::select_routes(tile,object_assets,route_assets_ready,true,
+                        [&](int x,int y){return ground_observations.current(observed_coordinate_key(x,y));},routes);
+                    plan.farm_route_lines=unsigned(routes.patterns.size()+routes.routes.size());
+                }
                 if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags,
                         mine_assets_ready,farm_assets_ready,plan))return false;
-                if(farm_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
-                    c3x_renderer::objects::Plan routes;
-                    if(plan.farm_kit)c3x_renderer::objects::select_routes(tile,object_assets,route_assets_ready,true,
-                        [&](int x,int y){return ground_observations.current(observed_coordinate_key(x,y));},routes);
+                if(farmed){
                     c3x_renderer::objects::clear_farm(plan,routes,object_assets,farm_resource_boxes(tile));
                     c3x_renderer::objects::settle_farm_fields(plan,tile,object_assets,relief_at_world);
                     c3x_renderer::objects::settle_farm_props(plan,tile,object_assets,relief_at_world);

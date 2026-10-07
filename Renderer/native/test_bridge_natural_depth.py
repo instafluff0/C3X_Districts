@@ -41,8 +41,10 @@ class BridgeNaturalDepthTests(unittest.TestCase):
         depth = between(shader, ' float3 position=project_world_content(p.position,p.world,i.projection,2);',
                         ' return o;')
         depth = '\n'.join(line for line in depth.splitlines() if 'o.position.xy=' not in line)
-        bias = re.search(r'if \(kind > 8\.5\) return max\(0\.001, depth - ([0-9.]+) \* bias_scale\);',
-                         (ROOT / 'Renderer/native/integrated_terrain.hlsl').read_text())[1]
+        # The generated hydrology shaders sort the river on the natural basis
+        # (C3X_RIVER_NATURAL_DEPTH) with this layer bias.
+        adapter = (ROOT / 'Renderer/native/integrated_terrain.hlsl').read_text()
+        bias = re.search(r'#ifdef C3X_RIVER_NATURAL_DEPTH.*?river_bias = ([0-9.]+);', adapter, re.S)[1]
         self.assertIn('append_ground_layer(destination.river_vertices, 9.0f,',
                       (ROOT / 'Renderer/native/source_fidelity/ground_compiler.h').read_text())
         program = '#define RIVER_BIAS ' + bias + 'f\n' + r'''

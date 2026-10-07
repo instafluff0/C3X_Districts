@@ -78,8 +78,7 @@ Reference captures reproduce production using small synthetic diagnostic scenes;
 they are not claimed to be live Civ III captures. References are optional review
 aids. See `Renderer/docs/visual_fidelity_playbook.md`.
 
-Farms: production still draws the earlier quadrant fields with terrain
-palettes. A Lab farm kit (one green patchwork per tile that drapes on the
-rendered ground and keeps its routes, resource and water open) is under
-review in `Renderer/lab/studies/farms/`; it switches on only for a farm pack
-with a `farm_kit` group and is not accepted or staged for game use.
+Farms (accepted 2026-10-06): a farm kit draws one green patchwork per tile
+that drapes on the rendered ground and keeps its routes, resource and water
+open. See `Renderer/lab/studies/farms/README.md`; packs without a `farm_kit`
+group keep the earlier quadrant fields.

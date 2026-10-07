@@ -211,6 +211,14 @@
       "Oasis",
       "Fish",
       "Whales"
+    ],
+    "mountain-minerals": [
+      "Iron",
+      "Gold",
+      "Coal",
+      "Gems",
+      "Uranium",
+      "Saltpeter"
     ]
   },
   "batch_terrains": {
@@ -237,7 +245,8 @@
     "catalog-animal-scales": [
       "Grassland"
     ],
-    "specials": []
+    "specials": [],
+    "mountain-minerals": []
   },
   "alternates": "A 'Name~label' entry is a Lab-only alternate composition of Name, placed on Name's terrains after the batch's extra terrains.",
   "catalog": "catalog-* batches show the profile's Lab reference catalog and render with the ResourceCatalogLab pack."

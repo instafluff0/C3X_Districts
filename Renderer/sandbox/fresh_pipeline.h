@@ -3050,9 +3050,11 @@ struct SandboxFreshPipeline {
             context->PSSetShaderResources(0,3,renderer.wave_views.data());
             context->PSSetConstantBuffers(7,1,&renderer.wave_frame);
             context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
-        } else if (layer==geometry_route && renderer.natural.decal_depth) {
+        } else if ((layer==geometry_route || layer==geometry_river) && renderer.natural.decal_depth) {
             // Routes are a surface decal: a translucent fringe must not write
             // depth and reject another path's core where strips overlap.
+            // The river is one too: its bank band tests against the ground
+            // but must not reject the bridges, farms and routes drawn after it.
             context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
         }
         if(mirrored) {
@@ -3133,8 +3135,10 @@ struct SandboxFreshPipeline {
         if(!mirrored) {
             if(!draw(geometry_bed))return false;
             if(!draw(geometry_water))return false;
+            // Farm fields are ground: they draw before the route strips, which
+            // write no depth, so a road or railroad always paints over them.
             if(!draw(geometry_river) || !draw(geometry_shadow) ||
-                    !draw(geometry_route))return false;
+                    !draw(geometry_farm) || !draw(geometry_route))return false;
         }
         for(unsigned i=0;i<renderer.cliff_bundle.assets.size();++i)
             if(!draw(static_cast<GeometryLayer>(geometry_cliff0+i)))return false;
@@ -3143,7 +3147,7 @@ struct SandboxFreshPipeline {
             renderer.trace.write("fresh-layer-draw-failed",detail,true);return false;
         }
         for(auto layer:{geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})
-            if(!draw(layer))return false;
+            if((layer!=geometry_farm || mirrored) && !draw(layer))return false;
         char wave_diagnostic[8]{};
         bool skip_wave=c3x_renderer::render_core::cached_environment("C3X_SANDBOX_SKIP_WAVE",
             wave_diagnostic,sizeof(wave_diagnostic)) &&
@@ -3588,9 +3592,10 @@ struct SandboxFreshPipeline {
             ensure_linear_target(overlay_slots[index].layer,region_width_px,region_height_px,1,false);
     }
     // Draws one static strip's water-dependent records into the slot's layer:
-    // static depth and a transparent color first, then water/river depth
-    // without color (submerged parts stay hidden exactly as before), then the
-    // overlays in their ordinary order. Animated content refuses the layer.
+    // static depth and a transparent color first, then water depth without
+    // color (submerged parts stay hidden exactly as before), then the
+    // overlays in their ordinary order. The river writes no depth, so it has
+    // no part here. Animated content refuses the layer.
     bool write_overlay_strip(unsigned index,StaticState const& slot,ViewportShaderSettings const& view,D3D11_RECT rect,
             GeometryDrawView::Records& records,float scale){
         for(unsigned layer=0;layer<geometry_layer_count;++layer){
@@ -3609,8 +3614,7 @@ struct SandboxFreshPipeline {
         GeometryDrawView::Records water{};
         for(auto layer:{geometry_water,geometry_river}){water[layer].swap(records[layer]);}
         auto* blend=renderer.blend_state;renderer.blend_state=overlay_depth_only;
-        bool drawn=draw_layer(water,geometry_water,view,rect,target.target,target.depth,false,scale) &&
-            draw_layer(water,geometry_river,view,rect,target.target,target.depth,false,scale);
+        bool drawn=draw_layer(water,geometry_water,view,rect,target.target,target.depth,false,scale);
         renderer.blend_state=blend;
         if(!drawn || !draw_scene(records,view,rect,target.target,target.depth,false,scale))return false;
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);

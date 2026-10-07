@@ -29,7 +29,8 @@
       "native-minerals",
       "native-plants",
       "native-animals",
-      "native-specials"
+      "native-specials",
+      "native-mountain-minerals"
     ]
   },
   "tests": [
@@ -46,7 +47,8 @@
     "Renderer.native.test_resource_production_pack",
     "Renderer.tools.test_overlay_resource_shading",
     "Renderer.tools.asset_compiler.test_school_orientation",
-    "Renderer.tools.asset_compiler.test_herd_spacing"
+    "Renderer.tools.asset_compiler.test_herd_spacing",
+    "Renderer.native.test_resource_decal_slope"
   ],
   "references": {
     "d3d11": [

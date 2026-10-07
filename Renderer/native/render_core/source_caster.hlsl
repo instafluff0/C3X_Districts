@@ -94,6 +94,10 @@ float PSCutout(Pixel i):SV_TARGET {
  }
  float part=frac(i.material);
  if(i.material>20.5 && i.material<28.5 && part>=.25 && part<.4)discard;
+ // Farm kit field decals (fraction .0131-.0134) lie on the ground and cast
+ // no shadow; the kit's trees and farmhouses (.0135) still do.
+ float farm_kit_digits=frac(part*100);
+ if(i.material>20.5 && i.material<28.5 && part<.05 && farm_kit_digits>=.30 && farm_kit_digits<.345)discard;
  if(abs(i.material-.48)>.001)clip(alpha(clamp(int(floor(i.material+.001)),0,32),i.uv)-.5);
  return i.depth;
 }

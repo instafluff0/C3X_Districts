@@ -77,10 +77,10 @@
           0.8
         ],
         "sink": 0.0,
-        "ground_fit": 0.0,
+        "ground_fit": 0.3,
         "decal_scale": 0.7,
         "scale": 0.9,
-        "note": "Civ VI has no mountain resources. Three clusters, each on its own decal, spread side by side a little way up the mountain's lower front slope, just above the foot; the middle one is largest and carries the centre pile. The spread stays modest so the outer clusters stay in front of steeper mountains' flanks, and decals stay small because a round decal's upper half stretches tall on a steep face. Rocks rest on their centre height (a footprint minimum would bury them on the steep face)."
+        "note": "Civ VI has no mountain resources. Three clusters, each on its own decal, spread side by side a little way up the mountain's lower front slope, just above the foot; the middle one is largest and carries the centre pile. Each piece seats on the lowest ground within 30% of its footprint, so on a steep tile it sinks into the slope instead of hanging off it (exposing a nugget's buried columns) or climbing it; decals do not climb steep faces and are left out where centred on one (object_compiler decal_ground, steep_decal)."
       }
     },
     "accent_scale": 0.6,
@@ -284,11 +284,11 @@
       "source": "RESOURCE_HORSES",
       "family": "animal_herd",
       "herd": 3,
-      "note": "Civ VI scatters 17 horses over a hex; three read as a herd at Civ III's tile size.",
+      "note": "Three horses in Civ VI's dark-brown coat (HorseA1, the model Civ VI uses for 13 of its 17 horses; user choice 2026-10-06), at 80% of the first approved size on a ring that keeps them apart.",
       "subjects": [
         "horses",
-        "horses.1",
-        "horses.2"
+        "horses",
+        "horses"
       ],
       "subject_scale": 0.4,
       "subject_radius": 0.14,

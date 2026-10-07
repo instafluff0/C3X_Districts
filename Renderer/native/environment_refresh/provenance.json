@@ -3,9 +3,9 @@
   "reflection": "water-reflection-r5",
   "source_sha256": {
     "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl": "1a8b69cffe50bcaaa103ef006008e7d7c3fbb11cdf1c825fa8418a5fb8e70394",
-    "Renderer/native/source_fidelity/hydrology.hlsl": "3e0b663bf767732e5a13ca71a95e44ba36e9fc668cb894e10622380d462779de",
+    "Renderer/native/source_fidelity/hydrology.hlsl": "baaaa670e4beb4b8e43025c449dc788b13ad45acc47b84a7473b02bb01e7b499",
     "Renderer/lab/shared/shaders/hydrology/coastal_waves.hlsl": "7dff9e6e6720024555e7ea9e9497178f4974de56fdb6638fb8de0df9457e27db",
-    "Renderer/native/render_core/terrain_scene.hlsl": "6992e76c83bc463a5dd71fcb7b8b53398931203239fbec4294d99032787db53f",
+    "Renderer/native/render_core/terrain_scene.hlsl": "e73a13c8a7b6e1fb810a61f884627fbffebb6018dfbb32ab7efe44824e61f8f5",
     "Renderer/lab/shared/shaders/lighting/shadow_policy.hlsl": "4be97debb20a78e7b7c8735365d51472b00bc05a63a992f0ae73604d42a60c1a",
     "Renderer/native/render_core/shadow_receiver.hlsl": "927b58bc3a77f8d947b54a279b1b2183ef52b01caddaf8e7d60d2484e37d9436",
     "Renderer/lab/shared/shaders/lighting/paged_shadow_v1.hlsl": "0314e3cadc09dab8d6098f6158e97e4da269afde783d8477722a7f3be70c495f",
@@ -13,6 +13,6 @@
     "Renderer/native/source_fidelity/terrain.hlsl": "c341b5a2bce9865255f2914b5b64fb1438a3ed93b91f27a073cfc12e14758a93",
     "Renderer/native/source_fidelity/mountain.hlsl": "efca0b8254c551c884efdeed60b5d638b3b13cf0ffd161e346821151b092eb48",
     "Renderer/native/source_fidelity/objects.hlsl": "443939acba0aa485541f2b854d811336457abcab93aef303cbc2b09a4accf65c",
-    "Renderer/native/render_core/source_caster.hlsl": "00ebc017793b7674d30c92ec7bd57ce9541d90e7b8a412134ba80da305cb1bee"
+    "Renderer/native/render_core/source_caster.hlsl": "56e397b379e198180ef3d9eff2650e51a245fcfab0a90e2ba6a1a61a9c0acf61"
   }
 }

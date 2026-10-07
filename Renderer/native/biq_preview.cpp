@@ -814,14 +814,18 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         };
         auto initial=pixels(),previous=initial;unsigned changed=0;
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);double total=0;
-        for(int sample=0;sample<48 && ok;++sample){
+        // Visual studies may ask for all 48 frames even when the stricter
+        // playback witness below fails; the witness still reports FAIL.
+        char frames_only[4]={};GetEnvironmentVariableA("C3X_LAB_WATER_FRAMES",frames_only,sizeof(frames_only));
+        for(int sample=0;sample<48 && (ok || frames_only[0]);++sample){
             frame.presentation_time_ticks=frame.presentation_frequency+sample*frame.presentation_frequency/15;
-            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);ok=draw();QueryPerformanceCounter(&end);
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);ok=draw() && ok;QueryPerformanceCounter(&end);
             total+=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
             ok=ok && output.visible_animation_count && !output.geometry_tiles_built && !output.geometry_upload_bytes;
             auto current=pixels();changed+=current!=previous;previous=current;
-            char suffix[64];sprintf_s(suffix,".water-%03d.bmp",sample);ok=ok && save(suffix);
+            char suffix[64];sprintf_s(suffix,".water-%03d.bmp",sample);ok=save(suffix) && ok;
         }
+        if(frames_only[0])std::printf("WATER frames: saved=48 changed=%u\n",changed);
         ok=ok && changed>=40;
         frame.presentation_time_ticks=frame.presentation_frequency;
         ok=ok && draw() && pixels()==initial;

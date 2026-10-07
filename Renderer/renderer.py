@@ -21,11 +21,12 @@ sys.path.insert(0, str(ROOT))
 from Renderer.lab.studies.resources import roster as resource_roster
 from Renderer.lab.studies.vegetation import cases as vegetation_cases
 from Renderer.lab.studies.farms import cases as farm_cases
+from Renderer.lab.studies.rivers import cases as river_cases
 
 
 def lab_tile_cases(category, case):
     """The Lab case module that supplies BIQ object bits for this case, if any."""
-    for module in (vegetation_cases, farm_cases):
+    for module in (vegetation_cases, farm_cases, river_cases):
         if module.applies(category, case):
             return module
     return None
@@ -599,7 +600,8 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
     }
     # A study may set further renderer/Lab switches (simple values only).
     for key, value in (extra_env or {}).items():
-        if not re.fullmatch(r"C3X_[A-Z0-9_]+", key) or not re.fullmatch(r"[A-Za-z0-9_.~,; -]*", value):
+        # Values may be relative Windows paths (for example a private shader root).
+        if not re.fullmatch(r"C3X_[A-Z0-9_]+", key) or not re.fullmatch(r"[A-Za-z0-9_.~,; \\-]*", value):
             raise ValueError("Extra environment must be C3X_* keys with simple values")
         env[key] = value
     # The same shoreline lifecycle must cover both native compatibility and

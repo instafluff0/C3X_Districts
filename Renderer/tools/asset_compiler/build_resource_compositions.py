@@ -236,6 +236,44 @@ def generated_decal(name: str, cache: Path) -> Path:
     return write_dds(cache / f"generated_{name}.dds", size, len(levels), 78, 16, levels)
 
 
+def within_texture(vertices: list, indices: list) -> tuple[list, list]:
+    """A tiling mesh (UVs past 0..1, drawn with a repeating texture) clipped at
+    whole-texture boundaries, each piece shifted into 0..1. An atlas cell cannot
+    repeat its texture; clamping instead smears the edge texels into streaks."""
+    out_vertices, out_indices = [], []
+
+    def clip(polygon, axis, bound, keep_above):
+        result = []
+        for index, current in enumerate(polygon):
+            previous = polygon[index - 1]
+            inside = (current[2][axis] >= bound) if keep_above else (current[2][axis] <= bound)
+            was_inside = (previous[2][axis] >= bound) if keep_above else (previous[2][axis] <= bound)
+            if inside != was_inside:
+                t = (bound - previous[2][axis]) / (current[2][axis] - previous[2][axis])
+                result.append(tuple([a + (b - a) * t for a, b in zip(previous[k], current[k])] for k in range(3)))
+            if inside:
+                result.append(current)
+        return result
+    for start in range(0, len(indices), 3):
+        triangle = [vertices[index] for index in indices[start:start + 3]]
+        cells = [range(math.floor(min(v[2][axis] for v in triangle) + 1e-6),
+                       math.floor(max(v[2][axis] for v in triangle) - 1e-6) + 1) for axis in range(2)]
+        for cu in cells[0]:
+            for cv in cells[1]:
+                polygon = triangle
+                for axis, low in ((0, cu), (1, cv)):
+                    polygon = clip(clip(polygon, axis, low, True), axis, low + 1, False) if polygon else polygon
+                if len(polygon) < 3:
+                    continue
+                first = len(out_vertices)
+                for position, normal, uv in polygon:
+                    length = math.sqrt(sum(c * c for c in normal)) or 1.0
+                    out_vertices.append((list(position), [c / length for c in normal], [uv[0] - cu, uv[1] - cv]))
+                for k in range(1, len(polygon) - 1):
+                    out_indices += [first, first + k, first + k + 1]
+    return out_vertices, out_indices
+
+
 def pack_atlases(textures: list[Path], kind: tuple, first: int = 0):
     """Block-copy compressed textures (no recompression) into atlases of 512
     cells; returns atlas DDS bytes and, per texture, (slot, u0, v0, uv extent)."""
@@ -566,8 +604,11 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
             if opacity and fully_opaque(pack / opacity):
                 opacity = None   # an all-opaque mask stays a BC1 body
             texture = masked(colour, pack / opacity, cache) if opacity else fitted(colour, cache)
+            indices = mesh["topology"]["indices"]
+            if mesh["coordinate_system"].get("uv0_address_mode") == "wrap":
+                vertices, indices = within_texture(vertices, indices)
             models[asset_id] = {"texture": texture, "masked": bool(opacity),
-                                "vertices": vertices, "indices": mesh["topology"]["indices"],
+                                "vertices": vertices, "indices": indices,
                                 "radius": max(high[0] - low[0], high[1] - low[1]) * .5, "height": high[2] - low[2]}
         return models[asset_id]
 
