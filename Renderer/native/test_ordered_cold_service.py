@@ -175,7 +175,7 @@ struct c3x_renderer_output_v1 {};
 struct Owner {
  enum class Command {none,gpu_images,tactical,reset};
  std::atomic<long long> camera_obsolete_through{0};std::atomic<bool> camera_cancelled{false},foreground_pending{false};
- long long job_camera_ticket=7;std::mutex state_mutex;bool has_job=false;Command job_command=Command::none;
+ long long job_camera_ticket=7,job_submitted_qpc=0;std::mutex state_mutex;bool has_job=false;Command job_command=Command::none;
  unsigned long long latest_job_sequence=0,completed_job_sequence=0,camera_service_turns=0;
  int last_job_result=0;std::condition_variable completed,wake;
  struct {unsigned frame_tiles_built=0,frame_tiles_reused=0;struct {double milliseconds(long long){return 0;}void write(char const*,char const*,bool){}}trace;}renderer_state;

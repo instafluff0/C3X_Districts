@@ -345,8 +345,13 @@ struct Core {
                 completion_registered=false;
                 InterlockedExchange(reinterpret_cast<volatile LONG*>(&wire.camera_completion_available),0);
             }
+            // While an image batch executes, only its receipt poll may follow,
+            // except a camera begin: the bridge sends one during that wait
+            // (async_scene_client.h). Camera requests may run ahead of image
+            // work, whose displayed ticket only a later ordered adoption retires.
             require(!image_batches->status().bytes||
-                (wire.kind==unsigned(Kind::image_commands)&&wire.subtype==2),
+                (wire.kind==unsigned(Kind::image_commands)&&wire.subtype==2)||
+                (wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1),
                 "reliable prefix requires image execution receipt");
             require(wire.magic==wire_magic&&wire.version==wire_version&&wire.size<=wire_capacity&&
                 wire.live<=1&&wire.replay_clock<=1,"invalid scene wire header");

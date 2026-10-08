@@ -11,6 +11,7 @@
 #include <utility>
 #include <string>
 #include <chrono>
+#include <cstring>
 #include <type_traits>
 
 namespace c3x_async {
@@ -33,10 +34,17 @@ class Publication {
     std::atomic<bool> fault{false};
     std::atomic<unsigned> submitted{0},consumed{0},superseded{0},abandoned{0},rejected{0};
     bool stopping=false;std::function<void(char const*)> report;Observer observer;std::thread thread;
+    std::function<void(char const*)> passing_posted;
     void run(){for(;;){Entry next;Observer observe;
         {std::unique_lock<std::mutex> lock(mutex);wake.wait(lock,[&]{return stopping||!entries.empty();});
             if(stopping&&entries.empty())return;
             next=std::move(entries.front());entries.pop_front();observe=observer;active_posted=next.posted;}
+        execute(next,observe);
+        {std::lock_guard<std::mutex> lock(mutex);active_posted={};}
+        wake.notify_all();
+        if(next.finished)next.finished();
+    }}
+    void execute(Entry& next,Observer const& observe){
         auto started=Clock::now();
         try{if(healthy()||next.reconciliation){
             next.work();consumed.fetch_add(unsigned(next.records),std::memory_order_release);
@@ -49,15 +57,13 @@ class Publication {
             std::chrono::duration<double,std::milli>(Clock::now()-started).count());
         // Capacity becomes reusable only after the executed owned payload dies.
         next.work={};next.group.reset();
-        {std::lock_guard<std::mutex> lock(mutex);bytes-=next.bytes;units-=next.units;records-=next.records;active_posted={};}
-        wake.notify_all();
-        if(next.finished)next.finished();
-    }}
+        {std::lock_guard<std::mutex> lock(mutex);bytes-=next.bytes;units-=next.units;records-=next.records;}
+    }
     bool admit(Entry next,std::function<void(std::shared_ptr<void> const&,std::shared_ptr<void> const&)> append={},
                std::size_t join_bytes=0,std::size_t join_units=0,std::size_t join_records=0,
                std::function<void(Entry&)> prepare={},bool wait_capacity=false){
         bool accepted=false;std::string pressure;
-        auto size=next.bytes,semantic=next.units;
+        auto size=next.bytes,semantic=next.units;auto label=next.label;bool passing=next.passes!=nullptr;
         {std::unique_lock<std::mutex> lock(mutex);
             if(next.replace_key)for(auto at=entries.begin();at!=entries.end();){
                 if(at->replace_key==next.replace_key){bytes-=at->bytes;units-=at->units;records-=at->records;
@@ -96,7 +102,11 @@ class Publication {
                     " superseded="+std::to_string(superseded.load())+"; explicit native/resource/scene reset required";
             }
         }
-        if(accepted)wake.notify_all();else fail(pressure.c_str());return accepted;
+        if(accepted)wake.notify_all();else fail(pressure.c_str());
+        if(accepted&&passing){std::function<void(char const*)> notify;
+            {std::lock_guard<std::mutex> lock(mutex);notify=passing_posted;}
+            if(notify)notify(label);}
+        return accepted;
     }
 public:
     struct Status {unsigned accepted,executed,superseded,abandoned,rejected;
@@ -119,6 +129,28 @@ public:
             active_posted!=Clock::time_point{}?std::chrono::duration<double,std::milli>(Clock::now()-active_posted).count():
                 entries.empty()?0:std::chrono::duration<double,std::milli>(Clock::now()-entries.front().posted).count()};}
     void observe(Observer value){std::lock_guard<std::mutex> lock(mutex);observer=std::move(value);}
+    // Told the label of each admitted entry that may pass queued work, so a
+    // consumer wait inside the work in flight can wake (see run_passing).
+    void on_passing_post(std::function<void(char const*)> value){std::lock_guard<std::mutex> lock(mutex);passing_posted=std::move(value);}
+    // Called by the work in flight, on this publication thread, while it waits
+    // for its consumer. Runs the first queued entry labelled `label` if that
+    // entry may pass `in_flight` and every entry queued before it: the same
+    // order as if it had been inserted ahead of them. Returns whether it ran.
+    bool run_passing(char const* in_flight,char const* label){
+        Entry next;Observer observe;
+        {std::lock_guard<std::mutex> lock(mutex);
+            if(stopping||!label)return false;
+            auto at=entries.begin();
+            while(at!=entries.end()&&!(at->label&&!std::strcmp(at->label,label)))++at;
+            if(at==entries.end()||!at->passes||at->reconciliation||!at->passes(in_flight))return false;
+            for(auto before=entries.begin();before!=at;++before)
+                if(before->reconciliation||!at->passes(before->label))return false;
+            next=std::move(*at);entries.erase(at);observe=observer;
+        }
+        execute(next,observe);wake.notify_all();
+        if(next.finished)next.finished();
+        return true;
+    }
     void fail(char const* reason){bool first;
         {std::lock_guard<std::mutex> lock(mutex);first=!fault.exchange(true,std::memory_order_acq_rel);}
         wake.notify_all();if(first&&report)report(reason);

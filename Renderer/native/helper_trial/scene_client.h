@@ -17,6 +17,7 @@ namespace c3x_helper_trial {
 // pointers; the helper owns the renderer DLL and all of its scene allocations.
 class SceneClient {
     HANDLE mapping=nullptr,request=nullptr,response=nullptr,control=nullptr,image_completed=nullptr,camera_mutex=nullptr,process=nullptr;
+    HANDLE image_interrupt=nullptr; // local: a camera request was posted during an image wait
     Wire* wire=nullptr;
     unsigned sequence=0;
     std::atomic<std::int64_t> admitted_camera{0};
@@ -34,6 +35,7 @@ class SceneClient {
         if(wire){UnmapViewOfFile(wire);wire=nullptr;}
         if(response){CloseHandle(response);response=nullptr;}
         if(image_completed){CloseHandle(image_completed);image_completed=nullptr;}
+        if(image_interrupt){CloseHandle(image_interrupt);image_interrupt=nullptr;}
         if(camera_mutex){CloseHandle(camera_mutex);camera_mutex=nullptr;}
         if(control){CloseHandle(control);control=nullptr;}
         if(request){CloseHandle(request);request=nullptr;}
@@ -65,6 +67,17 @@ public:
         if(WaitForMultipleObjects(2,ready,FALSE,120000)!=WAIT_OBJECT_0)
             throw std::runtime_error("image execution receipt unavailable");
     }
+    // As wait_image_receipt, but returns false early when interrupt_image_wait
+    // was called (from any thread) so the waiting thread can send other work.
+    bool wait_image_receipt_or_interrupt(){
+        if(!image_interrupt){wait_image_receipt();return true;}
+        HANDLE ready[3]={image_completed,process,image_interrupt};
+        auto result=WaitForMultipleObjects(3,ready,FALSE,120000);
+        if(result==WAIT_OBJECT_0)return true;
+        if(result==WAIT_OBJECT_0+2)return false;
+        throw std::runtime_error("image execution receipt unavailable");
+    }
+    void interrupt_image_wait(){if(image_interrupt)SetEvent(image_interrupt);}
     unsigned presented_zoom()const{
         auto value=wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->presented_zoom_q16),0,0)):0;
         return value>=c3x_renderer::SceneProjection::minimum_q16&&value<=c3x_renderer::SceneProjection::maximum_q16?
@@ -82,6 +95,7 @@ public:
             response=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_response").c_str());
             control=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_control").c_str());
             image_completed=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_images_complete").c_str());
+            image_interrupt=CreateEventW(nullptr,FALSE,FALSE,nullptr);
             camera_mutex=CreateMutexW(nullptr,FALSE,name(base,L"_camera_complete_mutex").c_str());
             if(!mapping||!request||!response||!control||!image_completed||!camera_mutex)throw std::runtime_error("x64 scene IPC creation failed");
             wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));

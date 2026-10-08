@@ -7,6 +7,7 @@
 #include "input_recording/runtime.h"
 #include "remote_scene_output.h"
 #include "ordered_image_batch.h"
+#include <functional>
 #include <memory>
 
 namespace c3x_remote_scene {
@@ -17,6 +18,7 @@ struct SharedFrame {std::uint64_t handle=0;unsigned width=0,height=0;};
 // arrays remain valid until the next successful scene or camera adoption.
 class Client {
     c3x_helper_trial::SceneClient transport;
+    std::function<void()> image_wait_idle;
     bool direct_surface_bound=false;
     Output scene_result;
     CameraOutput camera_result;
@@ -265,6 +267,9 @@ public:
         }
         return C3X_RENDERER_RESULT_OK;
     }
+    // Runs on the publication thread when an image wait is interrupted.
+    void on_image_wait(std::function<void()> idle){image_wait_idle=std::move(idle);}
+    void interrupt_image_wait(){transport.interrupt_image_wait();}
     int images_batch(std::vector<ImageBatch::Operation> const& operations,std::vector<ImageBatch::Reply>& replies){
         c3x_inputs::Writer input;ImageBatch::encode(input,operations);
         transport.begin_image_receipt();
@@ -276,7 +281,12 @@ public:
             auto const& executed=invoke(unsigned(c3x_inputs::Kind::image_commands),2,query.bytes.data(),unsigned(query.bytes.size()));
             if(executed.code==C3X_RENDERER_RESULT_PENDING){
                 c3x_inputs::require(std::chrono::steady_clock::now()<deadline,"image batch execution deadline");
-                transport.wait_image_receipt();continue;
+                // The helper executes the batch on its own worker; the wire is
+                // idle meanwhile. A camera request may run ahead of image work
+                // (async_scene_client.h), so send one posted during the wait
+                // instead of holding it until the batch completes.
+                if(!transport.wait_image_receipt_or_interrupt()&&image_wait_idle)image_wait_idle();
+                continue;
             }
             if(executed.code!=C3X_RENDERER_RESULT_OK)return int(executed.code);
             auto bytes=reply(executed);c3x_inputs::Reader reader{bytes};unsigned count=0;reader(count);

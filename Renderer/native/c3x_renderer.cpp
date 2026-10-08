@@ -13354,7 +13354,11 @@ public:
             double(presented_zoom_q16.load(std::memory_order_acquire)))>1.;
         bool retained=renderer_state.completed_scene_retained.load(std::memory_order_relaxed);
         bool new_front=retained&&trial_front_pending.load(std::memory_order_acquire);
-        long long job_hz=retained?30:8;
+        // A/B measurement: C3X_RENDERER_JOB_FRAME_HZ sets the retained-view cap.
+        static long long const retained_job_hz=[]{char value[8]={};
+            return GetEnvironmentVariableA("C3X_RENDERER_JOB_FRAME_HZ",value,sizeof(value))&&std::atoi(value)>0?
+                static_cast<long long>(std::atoi(value)):30LL;}();
+        long long job_hz=retained?retained_job_hz:8;
         if(!consumer_pid&&camera_active&&!zooming&&!new_front&&
            trial_job_presented&&ticks-trial_job_presented<frequency/job_hz)
             return C3X_RENDERER_RESULT_BUSY;

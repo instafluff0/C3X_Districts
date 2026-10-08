@@ -2,6 +2,7 @@
 #include "async_publication.h"
 #include "../native/remote_scene_output.h"
 #include "../native/ordered_image_batch.h"
+#include <cstdlib>
 #include <map>
 #include <memory>
 
@@ -129,6 +130,14 @@ template<class Transport>class AsyncSceneClient {
             }
         }else (void)group;
     }
+    // A busy step's camera request waited 121 ms (p50) for the image batch in
+    // flight, which the helper serves at camera-job checkpoints (performance
+    // review 15). It may pass image work, so it is sent during that wait.
+    template<class T>static auto bind_image_wait(T& value,c3x_async::Publication& queue,int)->decltype(value.on_image_wait({}),void()){
+        value.on_image_wait([&queue]{queue.run_passing("images","camera-begin");});
+        queue.on_passing_post([&value](char const* label){if(label&&!std::strcmp(label,"camera-begin"))value.interrupt_image_wait();});
+    }
+    template<class T>static void bind_image_wait(T&,c3x_async::Publication&,long){}
     static bool independent_canvas(char const* label){
         return label&&(!std::strcmp(label,"images")||!std::strcmp(label,"tactical")||!std::strcmp(label,"present"));
     }
@@ -208,6 +217,15 @@ public:
     template<class... Args>AsyncSceneClient(bool asynchronous,std::function<void(char const*)> report,Args&&... args):
         transport(std::forward<Args>(args)...),enabled(asynchronous),publication(std::move(report)){
         observe_publication({});
+        // A/B measurement only: C3X_RENDERER_CAMERA_IMAGE_WAIT=0 keeps camera
+        // requests behind the image batch in flight.
+        char option[4]={};
+#ifdef _MSC_VER
+        std::size_t length=0;getenv_s(&length,option,sizeof(option),"C3X_RENDERER_CAMERA_IMAGE_WAIT");
+#else
+        if(auto* value=std::getenv("C3X_RENDERER_CAMERA_IMAGE_WAIT"))std::strncpy(option,value,sizeof(option)-1);
+#endif
+        if(enabled&&option[0]!='0')bind_image_wait(transport,publication,0);
     }
     ~AsyncSceneClient(){publication.stop();}
     bool asynchronous()const{return enabled;}

@@ -366,6 +366,7 @@ int main(){using namespace std::chrono;
 using DWORD=unsigned;
 struct LARGE_INTEGER{long long QuadPart=0;};long long counter=10000;
 bool QueryPerformanceCounter(LARGE_INTEGER* p){p->QuadPart=counter;return true;}
+unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
 bool QueryPerformanceFrequency(LARGE_INTEGER* p){p->QuadPart=1000;return true;}
 namespace c3x_inputs {
  struct Clock{std::vector<std::pair<long long,long long>> values;void sample(long long&,long long&){};};

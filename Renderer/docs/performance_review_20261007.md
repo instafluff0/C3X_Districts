@@ -770,8 +770,12 @@ has really not finished: the VM's GPU and translation work is behind.
 (`C3X_RENDERER_DIAG_ZOOM_SCENE_HOLD=1`, wrong picture) was meant to
 re-render the scene at most every 120 ms during zoom. Transitions stayed at
 21–48 fps (control 19–48). However, unit screen poses change with zoom, and a
-pose change vetoed the hold, so it probably never applied. A rerun without
-that veto is pending.
+pose change vetoed the hold, so it probably never applied. Rerun without that
+veto (l47, l48): transitions 25–40 fps with the hold, 21–42 fps without;
+scroll, idle and jumps unchanged. Holding the scene does not raise zoom fps,
+so the limit is elsewhere in each zoom frame (composition, presentation or
+native traffic). These runs carry no per-frame trace to show how often the
+hold applied.
 
 **Jump timing fix.** Civ III can move the camera on the minimap button press,
 before the release. `near_report.py` timed jumps from the release, so it
@@ -788,3 +792,66 @@ four 36×30 groups, five text labels and the large panels (510×236, 470×224,
 440×64, 300×300, 294×286). Recipe reuse matched only 425 of 5,353 probed
 recipes (8%), so each native redraw rebuilds the interface even when it looks
 the same. These frames are not specific to zoom.
+
+## 15. Busy-save camera steps before camera decoupling (b46, October 8)
+
+Trace level 2 with route witness, `near` scenario on the 1498 AD save.
+`step_report.py` medians per scroll-step job: request to job start 28.6 ms,
+camera-begin record queued behind other publications 121 ms, its delivery
+21 ms, the job 94 ms (shadow 16, scene preparation 22, static 12, mesh 6),
+then Civ III's next native map pass 37 ms. Request to adoption: 190 ms p50,
+115–900 ms overall. Scroll: 1× x 193 px/s at 8.5 fps, 1× y 382 px/s at
+15 fps, 2× 231 px/s, 3× 168 px/s; idle 32–44 fps; jumps 1.6 and 2.4 s.
+Most of each step is waiting in queues and on the job, which camera
+decoupling (G1) removes from the camera's path.
+
+## 16. Camera decoupling, stage 1: camera requests during image waits (October 8)
+
+**Change.** The bridge's single transport thread sends every publication to
+the helper synchronously. A camera request may run ahead of queued UI work,
+but it still waited for the entry in flight. While an image batch executes in
+the helper, the transport thread now sends a camera request posted meanwhile
+(`Publication::run_passing`, woken by `SceneClient::interrupt_image_wait`),
+and the helper accepts a camera begin while a batch is outstanding.
+`C3X_RENDERER_CAMERA_IMAGE_WAIT=0` turns it off for A/B runs. Tests:
+`test_async_publication.py` (`run_passing` order, the helper rule).
+
+The first build broke the busy save: the helper's reliable-prefix rule
+rejected the camera request ("reliable prefix requires image execution
+receipt") and the publication faulted, so no map was drawn (b50, b52). Every
+capture is now checked for adoptions, zoom targets and publication or
+operation failures before its numbers are used.
+
+**Result (busy save).** Camera-request queue wait p50 121 → 70 ms, p90 169 ms
+(b46 → b58, both trace level 2). The rest of the wait is the previous step's
+synchronous adoption call (38%), image batches the lane could not pass (40%)
+and synchronous presents (21%). Request to adoption p50 190 → 175 ms. Steps
+still land every 3–4 ticks (232–312 ms, b54, b55), so scroll speed is
+unchanged.
+
+**What gates a busy step.** A step is adopted on the first tick after its
+camera job finishes. The job (82 ms p50) is mostly per-camera preparation,
+not drawing: on a frame at a new camera, scene preparation takes 20.7 ms
+(1.0 ms at an unchanged camera), static strips 11 ms (0.06), reflections
+5.3 ms (1.2). The shadow-page build for the new strip is 14 ms p50 (35 ms p90:
+refresh 2.4, proofs 5.5, casters 2.1, draw 3.1; 8 pages, 2,640 draws).
+Next: prepare the next step's strip ahead of the request (no visible change),
+then decide on stand-ins.
+
+**Separate issue.** Since about 13:50, scripted wheel input on the busy save
+registers no zoom target (no `zoom-target` trace), with this build and
+without it (b53, base build). Scroll and jumps are unaffected. Not yet
+explained.
+
+**In-job frame cap (b59–b62).** Lowering the retained-view in-job frame cap
+from 30 to 8 Hz (`C3X_RENDERER_JOB_FRAME_HZ`, for A/B only) did not speed up
+busy steps: 1× x 391–868 ms at 8 Hz against 316–407 ms at 30 Hz, other
+segments equal within noise. The default stays at 30 Hz.
+
+**Static layer on camera steps (b58).** On busy step frames the static
+layer's 11 ms is mostly recentering, not missing strips: only 14 of 72 step
+frames had missing area, but 39 recentered (copying the raster to a slot
+around the new camera and recomputing its dependencies) and only 33 fit the
+existing slot. The slot margin is 320 × 192 px, so a 128 px step overruns it
+every two or three steps. A scrolling (wrap-around) raster would remove
+recentering.

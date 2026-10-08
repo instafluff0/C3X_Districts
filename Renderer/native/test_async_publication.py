@@ -315,6 +315,59 @@ int main(){
 }
 ''')
 
+    def test_camera_request_runs_during_the_in_flight_image_wait(self):
+        # A busy step's camera request waited 121 ms (p50) behind the image
+        # batch in flight (performance review 15). The image wait now sends a
+        # posted camera request, but only one allowed to pass every entry
+        # queued before it, and it is told when such a request is posted.
+        run_cpp(r'''
+#include "Renderer/sandbox/async_publication.h"
+#include <atomic>
+#include <cassert>
+#include <cstring>
+#include <string>
+#include <vector>
+int main(){
+ std::vector<std::string> seen;std::vector<std::string> notified;
+ c3x_async::Publication queue({},1<<20,64);
+ auto ui=[](char const* label){return label&&(!std::strcmp(label,"images")||!std::strcmp(label,"present"));};
+ std::promise<void> entered,posted,blocked;auto camera_posted=posted.get_future(),fact_posted=blocked.get_future();
+ queue.on_passing_post([&](char const* label){notified.push_back(label);});
+ std::atomic<int> first{-1},second{-1};
+ assert(queue.post(32,[&]{seen.push_back("images-start");entered.set_value();camera_posted.wait();
+   first=queue.run_passing("images","camera-begin");    // camera1 runs inside this wait
+   fact_posted.wait();
+   second=queue.run_passing("images","camera-begin");   // camera2 is behind a fact: no
+   seen.push_back("images-end");},0,"images"));
+ entered.get_future().get();
+ assert(queue.post(32,[&]{seen.push_back("ui");},0,"images"));
+ assert(queue.post(32,[&]{seen.push_back("camera1");},1,"camera-begin",1,ui));posted.set_value();
+ while(first<0)std::this_thread::yield();
+ assert(queue.post(32,[&]{seen.push_back("fact");},0,"state"));
+ assert(queue.post(32,[&]{seen.push_back("camera2");},1,"camera-begin",1,ui));blocked.set_value();
+ queue.stop();assert(queue.healthy());
+ assert(first==1&&second==0);
+ assert((seen==std::vector<std::string>{"images-start","camera1","images-end","ui","fact","camera2"}));
+ assert((notified==std::vector<std::string>{"camera-begin","camera-begin"}));
+ assert(queue.status().executed==5&&queue.status().records==0);
+}
+''')
+
+    def test_helper_accepts_only_a_camera_begin_during_an_image_wait(self):
+        # The first camera-lane build sent a camera request during an image
+        # wait; the helper's reliable-prefix rule faulted the whole UI session
+        # (October 8, b50). The helper must accept a camera begin there, and the
+        # bridge may send only that during the wait.
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[2]
+        helper=(root/'Renderer/native/helper_trial/scene_workload.cpp').read_text()
+        rule=helper[helper.index('require(!image_batches->status().bytes||'):helper.index('"reliable prefix requires image execution receipt");')]
+        self.assertIn('(wire.kind==unsigned(Kind::image_commands)&&wire.subtype==2)',rule)
+        self.assertIn('(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1)',rule)
+        self.assertEqual(rule.count('wire.kind=='),2)
+        client=(root/'Renderer/sandbox/async_scene_client.h').read_text()
+        self.assertIn('queue.run_passing("images","camera-begin")',client)
+
     def test_scene_facts_and_reveal_pass_canvas_backlog_without_losing_reliable_work(self):
         run_cpp(r'''
 #include "Renderer/sandbox/async_publication.h"
