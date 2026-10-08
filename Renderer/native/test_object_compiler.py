@@ -1064,55 +1064,6 @@ int main(){
   objects::promote_river_crossings(tile,[&](float,float v){return std::abs(v-(tile_v+1.f))*64.f;},centered,&with);
   assert(std::abs(centered.instances[0].v)<1e-4f && std::abs(centered.patterns[0].crossing[1])<1e-4f);
  }
- // A railroad runs through a mountain in a tunnel at ground level: hidden
- // in rock (at least the foot, 4 here, over the land with true rock close
- // by) and from an edge two mountain tiles share until it reaches rock. A
- // portal entrance stands at the foot where hidden rail meets shown
- // rail, turned toward the shown side: a climb gets one, a ridge one on each
- // side, a rail past a mountain's foot none, a range's saddle none (it got
- // two, the rail surfacing between peaks), and a range's tunnel reaching an
- // open edge one at that edge. Portals once stood up the mountain where the
- // rail rose 35.
- {
-  objects::RoutePatterns through;
-  through.lines.push_back({0u,5u,std::int8_t(4),std::int8_t(0)});
-  through.points={{.5f,1.f},{.5f,.75f},{.5f,.5f},{.5f,.25f},{.5f,0.f}};
-  FeatureGroup tunnel;tunnel.name="tunnel_railroad";
-  {FeaturePlacement p{};p.asset_index=0;p.scale=2;tunnel.placements.push_back(p);}
-  objects::PatternRoute rail;std::vector<float> fade;
-  auto run=[&](std::vector<float> rise,std::vector<std::uint8_t> rock,std::array<bool,2> inside){
-   objects::Plan plan;rail=objects::PatternRoute{0u,4u,0u,{},{},{},0u};fade.assign(5,.5f);
-   objects::tunnel_route(rail,through,rise,rock,4.f,inside,tunnel,plan,fade);return plan;};
-  // A climb from the start edge (v=1) toward the end edge.
-  auto plan=run({0.f,15.f,30.f,45.f,60.f},{0,1,1,1,1},{false,false});
-  assert(plan.instances.size()==1);
-  float face=1.f-.25f*4.f/15.f;
-  for(auto const& instance:plan.instances){
-   assert(instance.family==objects::bridge_family && std::abs(instance.u-.5f)<1e-4f && std::abs(instance.v-face)<1e-4f);
-   assert(std::abs(std::abs(instance.rotation)-3.1415927f)<1e-4f && std::abs(instance.scale-1.4f)<1e-4f);
-  }
-  assert(std::abs(rail.points[1][1]-face)<1e-4f);   // the rail ends at the face
-  assert(fade==std::vector<float>({0.f,1.f,1.f,1.f,1.f}));
-  // Past a mountain's foot, with no rock close by: shown.
-  plan=run({0.f,10.f,20.f,10.f,0.f},{0,0,0,0,0},{false,false});
-  assert(plan.instances.empty() && fade==std::vector<float>(5,0.f));
-  // Over a ridge, a portal on each side.
-  plan=run({0.f,30.f,60.f,30.f,0.f},{0,1,1,1,0},{false,false});
-  assert(plan.instances.size()==2);
-  assert(std::abs(plan.instances[0].v-(1.f-.25f*4.f/30.f))<1e-4f && std::abs(plan.instances[1].v-.25f*4.f/30.f)<1e-4f);
-  assert(fade==std::vector<float>({0.f,1.f,1.f,1.f,0.f}));
-  // Between two range neighbors through a low saddle: hidden, no portal.
-  plan=run({20.f,40.f,2.f,40.f,20.f},{1,1,0,1,1},{true,true});
-  assert(plan.instances.empty() && fade==std::vector<float>(5,1.f));
-  // From a range neighbor over a peak and down to an open edge.
-  plan=run({20.f,30.f,60.f,30.f,0.f},{1,1,1,1,0},{true,false});
-  assert(plan.instances.size()==1 && std::abs(plan.instances[0].v-.25f*4.f/30.f)<1e-4f);
-  assert(std::abs(plan.instances[0].rotation)<1e-4f); // turned toward the end edge (v=0)
-  assert(fade==std::vector<float>({1.f,1.f,1.f,1.f,0.f}));
-  // A low tile at a range's end: the tunnel reaches the open edge.
-  plan=run({2.f,2.f,2.f,2.f,2.f},{0,0,0,0,0},{true,false});
-  assert(plan.instances.size()==1 && std::abs(plan.instances[0].v)<1e-4f && fade==std::vector<float>(5,1.f));
- }
  // Without a pattern pack the existing segment roads remain unchanged.
  objects::Assets legacy=assets;legacy.road_patterns=nullptr;
  objects::Plan old;objects::select_routes(tile,legacy,true,true,neighbors(3u,0u),old);
@@ -1299,7 +1250,7 @@ class RouteRegressionContractTests(unittest.TestCase):
         self.assertIsNotNone(fade)
         self.assertTrue(20.0 <= float(fade.group(1)) < float(fade.group(2)) <= 90.0)
         self.assertNotIn("pattern_route_mountain_cap", source)
-        self.assertRegex(source, r"rise\[index\]=route_height\(x,y\)-height_natural\(x,y\);")
+        self.assertRegex(source, r"float rise=route_height\(x,y\)-height_natural\(x,y\);")
         self.assertRegex(source, r"if\(input\.projection\.tile\.road_mask \|\| input\.projection\.tile\.railroad_mask\)\n")
 
     def test_route_strips_never_write_depth(self):

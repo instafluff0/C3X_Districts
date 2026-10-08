@@ -814,6 +814,90 @@ int main(){
         uses = feature.count('input.geometry_normal')
         self.assertEqual(uses, feature.count('normalize(input.geometry_normal)') + 1)  # + the decode
 
+    def test_ground_kit_farms_keep_their_trees_and_farmhouses(self):
+        # The plots' wider fade was applied to every farm relief sample, so
+        # trees and farmhouses (which need .11/.14 clearance) failed most of
+        # their spots and about 70% of them were dropped. Props keep their
+        # clearance tests; only plots fade wider.
+        run_cpp(KIT + r'''
+int main(){
+ Kit kit;
+ auto add=[&](char const* id,char const* name){kit.farm.assets.push_back(flat(id,0));FeatureGroup group;group.name=name;
+  FeaturePlacement placement{};placement.asset_index=unsigned(kit.farm.assets.size()-1);
+  group.placements.push_back(placement);kit.farm.groups.push_back(group);};
+ add("farm_kit:crop:plot0:e0","farm_kit:plots");add("farm_kit:crop:ground:e0","farm_kit:ground");
+ auto dry=[](float,float){return std::array<float,3>{0,0,1};};
+ unsigned planned=0,kept=0;
+ for(unsigned seed=0;seed<200;++seed){
+  c3x_renderer_tile_v1 tile{};tile.tile_x=10;tile.tile_y=10;tile.city_id=-1;tile.terrain_type=2;tile.variant_seed=seed*2654435761u;
+  tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+  objects::Plan plan,routes;routes.routes.push_back({0,.5f,1,.5f,0,false,false,false});
+  assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+  auto props=[&]{unsigned count=0;for(auto const& i:plan.instances){auto const& id=kit.farm.assets[i.asset].id;
+   count+=id.find(":tree:")!=std::string::npos || id.find(":building:")!=std::string::npos;}return count;};
+  planned+=props();
+  objects::clear_farm(plan,routes,kit.assets,{});
+  objects::settle_farm_fields(plan,tile,kit.assets,dry);
+  objects::settle_farm_props(plan,tile,kit.assets,dry);
+  kept+=props();
+ }
+ assert(kept*10>=planned*7); // the patchwork kit keeps about 75% beside one road
+}
+''')
+
+    def test_farms_stop_at_the_foot_of_mountains_and_neighbouring_hills(self):
+        # Farm decals drape on the rendered ground, so a neighbouring mountain
+        # or hill rising over the farm tile's edge carried the farm ground and
+        # plots up its slope. The farm clearance now ends where a mountain
+        # lifts the ground or (for a farm not on a hill) a neighbour's hill
+        # footprint begins; a hill farm keeps draping over its own hill.
+        run_cpp(KIT + r'''
+int main(){
+ using objects::farm_slope_clearance;
+ assert(farm_slope_clearance(0,0,false)==1.f);                 // open land
+ assert(farm_slope_clearance(2,0,false)>.16f);                  // a mountain's foot: still whole
+ assert(farm_slope_clearance(10,0,false)<=0.f);                 // up its slope: cut
+ assert(farm_slope_clearance(0,.05f,false)>.1f && farm_slope_clearance(0,.2f,false)<0.f); // a neighbour's hill
+ assert(farm_slope_clearance(0,.9f,true)==1.f);                 // a hill farm on its own hill
+ assert(farm_slope_clearance(12,.9f,true)<0.f);                 // ...but not up a mountain
+}
+''')
+        source = (ROOT / 'Renderer/native/object_preparation.h').read_text()
+        relief = source[source.index('auto relief=[&](float u,float v)'):]
+        relief = relief[:relief.index('return std::array<float,3>{s.height,s.authored_height,farm_clearance};')]
+        self.assertIn('farm_slope_clearance(', relief)
+        self.assertIn('route_height(u,v)-flat_ground', relief)
+
+    def test_sparse_farms_keep_about_two_trees_and_most_farmhouses(self):
+        # The user's chosen density (2026-10-07): between the earlier kit's 4-6
+        # trees and a farmhouse on every farm, and 0-2 trees on half of them.
+        run_cpp(KIT + r'''
+int main(){
+ Kit kit;
+ auto add=[&](char const* id,char const* name){kit.farm.assets.push_back(flat(id,0));FeatureGroup group;group.name=name;
+  FeaturePlacement placement{};placement.asset_index=unsigned(kit.farm.assets.size()-1);
+  group.placements.push_back(placement);kit.farm.groups.push_back(group);};
+ add("farm_kit:crop:plot0:e0","farm_kit:plots");add("farm_kit:crop:ground:e0","farm_kit:ground");
+ add("farm_kit:crop:x:e0","farm_kit:sparse");
+ auto dry=[](float,float){return std::array<float,3>{0,0,1};};
+ unsigned trees=0,houses=0,farms=0;
+ for(unsigned seed=0;seed<400;++seed){
+  c3x_renderer_tile_v1 tile{};tile.tile_x=10;tile.tile_y=10;tile.city_id=-1;tile.terrain_type=2;tile.variant_seed=seed*2654435761u;
+  tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+  objects::Plan plan,routes;routes.routes.push_back({0,.5f,1,.5f,0,false,false,false});
+  assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+  objects::clear_farm(plan,routes,kit.assets,{});
+  objects::settle_farm_fields(plan,tile,kit.assets,dry);
+  objects::settle_farm_props(plan,tile,kit.assets,dry);
+  for(auto const& i:plan.instances){auto const& id=kit.farm.assets[i.asset].id;
+   trees+=id.find(":tree:")!=std::string::npos;houses+=id.find(":building:")!=std::string::npos;}
+  ++farms;
+ }
+ double per_tree=double(trees)/farms,per_house=double(houses)/farms;
+ assert(per_tree>1.6 && per_tree<2.7 && per_house>.6 && per_house<.9);
+}
+''')
+
     def test_farm_without_kit_keeps_its_previous_layout(self):
         run_cpp(KIT + r'''
 int main(){

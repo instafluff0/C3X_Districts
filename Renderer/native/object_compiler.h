@@ -1259,58 +1259,6 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
         previous=next;previous_pair=next_pair;
     }
 }
-// A railroad runs through a mountain in a tunnel at ground level. It is
-// hidden where it lies in rock (rock: per point of the route's line, the
-// rail at least `foot` over the land with true rock close by) and, on a
-// mountain tile, from an edge it shares with a mountain neighbor (inside:
-// the line's start and end) until it reaches rock, so it never surfaces in
-// a saddle of a range; a line inside a range at both ends stays hidden.
-// Rock is a world-surface test, so neighboring tiles agree at their edges.
-// Where hidden rail meets shown rail, a portal (the group's placements: Civ
-// VI's portal entrance) stands at the mountain's foot, where the
-// rail rises `foot` over the land, turned toward the shown side, or at an
-// open tile edge where a range's tunnel ends. The shown rail ends there,
-// inside the arch.
-inline void tunnel_route(PatternRoute& route,RoutePatterns const& patterns,std::vector<float> const& rise,
-        std::vector<std::uint8_t> const& rock,float foot,std::array<bool,2> inside,FeatureGroup const& tunnel,
-        Plan& plan,std::vector<float>& fade){
-    constexpr float tunnel_scale=.7f; // as pattern bridges, 70% of the pack's calibrated scale
-    if(route.line>=patterns.lines.size() || tunnel.placements.empty())return;
-    auto const& line=patterns.lines[route.line];
-    unsigned count=line.count;
-    if(count<2 || rise.size()!=count || rock.size()!=count || fade.size()!=count)return;
-    if(route.points.size()!=count)
-        route.points.assign(patterns.points.begin()+line.first,patterns.points.begin()+line.first+count);
-    std::vector<std::uint8_t> hidden=rock,moved(count,0u);
-    bool through=inside[0] && inside[1];
-    for(unsigned side=0;side<2;++side)if(inside[side] && (side?line.end:line.start)>=0)
-        for(unsigned k=0;k<count;++k){unsigned index=side?count-1u-k:k;if(rock[index] && !through)break;hidden[index]=1u;}
-    auto const source=route.points;
-    // The meshes' facade stands just before their origin, their open end
-    // facing -y: (du,dv) points toward the shown side.
-    auto portal=[&](std::array<float,2> face,float du,float dv){
-        float rotation=std::atan2(du,-dv);
-        for(auto const& placement:tunnel.placements)
-            plan.instances.push_back({bridge_family,placement.asset_index,feature_layer,
-                face[0],face[1],rotation,placement.scale*tunnel_scale,13.f,0.f,true});
-    };
-    for(unsigned index=0;index+1<count;++index)if(hidden[index]!=hidden[index+1]){
-        unsigned shown=hidden[index]?index+1:index,covered=hidden[index]?index:index+1;
-        float t=std::clamp((foot-rise[shown])/std::max(rise[covered]-rise[shown],1e-3f),0.f,1.f);
-        auto const& a=source[shown];auto const& b=source[covered];
-        std::array<float,2> face{a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t};
-        portal(face,a[0]-b[0],a[1]-b[1]);
-        // Where two portals cross the same stretch, it keeps its own point.
-        if(!moved[covered])route.points[covered]=face;
-        moved[covered]=1u;
-    }
-    for(unsigned side=0;side<2;++side){
-        unsigned edge=side?count-1u:0u,next=side?count-2u:1u;
-        if((side?line.end:line.start)>=0 && !inside[side] && hidden[edge] && !rock[edge])
-            portal(source[edge],source[edge][0]-source[next][0],source[edge][1]-source[next][1]);
-    }
-    for(unsigned index=0;index<count;++index)fade[index]=hidden[index]?1.f:0.f;
-}
 template<class Lookup>
 void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool route_assets_ready,
         bool routes_enabled,Lookup lookup,Plan& plan){
@@ -1908,7 +1856,8 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 }
             }
         }
-        // A kit marked "farm_kit:sparse" plants fewer trees and farmhouses.
+        // A kit marked "farm_kit:sparse" plants fewer trees (2-3) and a
+        // farmhouse on about three farms in four.
         bool sparse=plan.farm_kit && c3x_renderer::find_feature_group(farm_bundle,"farm_kit:sparse");
         for (c3x_renderer::FeaturePlacement const & placement : group->placements) {
             if (placement.asset_index >= farm_bundle.assets.size())
@@ -1951,7 +1900,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                         scale,21.0f,.01f*float(emissive_code+1u),false,farm_vertices);
                 }
             } else if (tree_part) {
-                unsigned count=(sparse?0u:4u)+((seed>>5)%3u);
+                unsigned count=sparse?2u+((seed>>5)&1u):4u+((seed>>5)%3u);
                 for(unsigned slot=0;slot<count;++slot){
                     unsigned tree_seed=c3x_renderer::stable_hash(seed ^ ((slot+5u)*0x85ebca6bu));
                     float u=slot<4u?((slot&1u)?.81f:.19f):.5f;
@@ -1963,7 +1912,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                         float(tree_seed&3u)*1.57079632679f,scale,21.0f,
                         .01f*float(emissive_code+1u)+kit_code,true,farm_vertices);
                 }
-            } else if (building_part && !(sparse && ((seed>>9)&1u))) {
+            } else if (building_part && !(sparse && ((seed>>9)&3u)==0u)) {
                 append_feature_instance(farm_bundle,placement,
                     .37f+float(seed&1u)*.20f,.38f+float((seed>>1)&1u)*.19f,
                     float((seed>>2)&3u)*1.57079632679f,1.45f,21.0f,
@@ -1978,6 +1927,17 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
 // The ground a farm kit keeps open on its tile: its drawn routes with a
 // verge, and its resource's parts (tile-local boxes from the caller). Each
 // tile draws its own routes up to its edges, so its own route plan suffices.
+// A farm's clearance where the land rises out of it: a mountain lifting the
+// rendered ground `rise` (source pixels) above the natural ground, or, unless
+// the farm is on a hill itself, a neighbouring hill whose footprint support
+// reaches the point. Fields, ground and props stop at the slope's foot
+// instead of climbing it (1 = no limit).
+inline float farm_slope_clearance(float rise,float hill_support,bool hill_farm){
+    float clearance=1.f;
+    if(rise>1.f)clearance=std::min(clearance,(10.f-rise)/48.f);
+    if(!hill_farm && hill_support>0.f)clearance=std::min(clearance,(.15f-hill_support)*1.1f);
+    return clearance;
+}
 inline void clear_farm(Plan& plan,Plan const& routes,Assets const& assets,
         std::vector<std::array<float,4>> const& resource){
     if(!plan.farm_kit)return;
@@ -2027,8 +1987,9 @@ auto farm_relief(Plan const& plan,c3x_renderer_tile_v1 const& tile,Relief relief
             float edges[4]={u,1.f-u,v,1.f-v};
             for(unsigned k=0;k<4;++k)if(!((shared>>k)&1u))
                 sample[2]=std::min(sample[2],edges[k]-((clearing.shared>>k)&1u?0.f:inset));
-            // ...and fade into other land and water over a wider band.
-            if(clearing.soft && !(region&0x400u))sample[2]*=.4f;
+            // ...and their plots fade into other land and water over a wider
+            // band (props, region 0, keep their clearance tests as they are).
+            if(clearing.soft && (region&255u))sample[2]*=.4f;
         }
         if(!(region&0x200u) && (!clearing.paths.empty() || !clearing.boxes.empty()))
             sample[2]=std::min(sample[2],clearing.at(u,v,region&255u));

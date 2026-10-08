@@ -108,9 +108,11 @@ pack group or texture a pack without them lacks). Production builds with
   between strips and beside routes (`farm_kit:ditch`). Dropped from
   production 2026-10-07: the user found the blue lines out of place;
 - `--narrow`: narrower route verges in farmland (`farm_kit:narrow`);
-- `--sparse`: 0-2 trees and a farmhouse on about half the farms
-  (`farm_kit:sparse`).
-Terrain identity (user-accepted 2026-10-07; production builds with
+- `--sparse`: 2-3 trees (about 2 kept) and a farmhouse on about three farms
+  in four (`farm_kit:sparse`; the user's in-between density, 2026-10-07).
+Terrain identity (user-accepted and promoted 2026-10-07, staged 16:40, with
+the game shader overlay `farm-overlay.json`; 1498 AD required GPU bytes about
+unchanged; production builds with
 `--plots --underlay --green --narrow --sparse`; rollback copies in
 `rollback-before-terrain-20261007/`):
 - The farm ground's strength follows its tile's terrain: grassland and flood

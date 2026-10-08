@@ -33,8 +33,7 @@ PreparedRigid prepare_rigid(Instance const& source,Projection const& input,Asset
     auto const& asset=assets[source.family].assets[source.asset];
     float u=float(input.tile.tile_x+input.tile.tile_y)*.5f,v=float(input.tile.tile_x-input.tile.tile_y)*.5f;
     float ground=relief(u+source.u,v+1-source.v)[0];
-    bool seated=source.family==site_family || source.family==mine_family ||
-        asset.id.rfind("route/tunnel/",0)==0;
+    bool seated=source.family==site_family || source.family==mine_family;
     if(seated)ground=height(u+source.u,v+1-source.v)-2.5f;
     // A farm kit's props stand on the rendered ground its fields drape on.
     if(drape)ground=std::max(ground,height(u+source.u,v+1-source.v)-2.5f);

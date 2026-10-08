@@ -54,6 +54,29 @@ def hull(path, length, height, width, rows=8, z0=0.0):
     path.write_bytes(blob)
 
 
+def mesh(path, points, triangles, joints=None, frames=((np.eye(4),),), uv=None):
+    """A skinned payload: points (x, y, z), one joint per vertex, one 4x4
+    palette per bone and frame (row-major, translation in the last row)."""
+    joints = joints or [0] * len(points)
+    uv = uv or [(0.5, 0.5)] * len(points)
+    bones = len(frames[0])
+    blob = b"C3XANM1\0" + struct.pack("<6I", 1, len(points), len(triangles), bones, len(frames), 0)
+    for (x, y, z), j, (u, v) in zip(points, joints, uv):
+        blob += struct.pack("<8f4I4f", x, y, z, 0, 0, 1, u, v, j, 0, 0, 0, 1, 0, 0, 0)
+    blob += struct.pack(f"<{len(triangles)}I", *triangles)
+    for frame in frames:
+        for matrix in frame:
+            blob += struct.pack("<16f", *np.asarray(matrix, float).reshape(-1))
+    path.write_bytes(blob)
+
+
+def turn(degrees):
+    a = np.radians(degrees)
+    m = np.eye(4)
+    m[0, 0], m[0, 1], m[1, 0], m[1, 1] = np.cos(a), np.sin(a), -np.sin(a), np.cos(a)
+    return m
+
+
 class OwnerCoverageTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -191,6 +214,87 @@ class OwnerCoverageTests(unittest.TestCase):
         self.assertGreater((coverage.dds_alpha(self.pack / hull_part["texture"]) < .5).mean(), .05)
         # The barrel keeps its own texture and no owner colour.
         self.assertEqual((barrel_part["texture"], barrel_part["owner_mask"]), ("textures/barrel.dds", 0))
+
+    def white(self, *names):
+        block = struct.pack("<HHI", 0xFFFF, 0x0000, 0)
+        for name in names:
+            dds(self.pack / f"textures/{name}.dds", 32, 32, 72, block * 64)
+
+    def test_hull_band_starts_at_the_waterline_below_long_yards(self):
+        # A short hull under a yard twice its length (a lateen rig): the yard is
+        # the only slice spanning the body's length, but the hull is below it.
+        hull(self.pack / "clips/hull.bin", 1.0, .2, .4)
+        hull(self.pack / "clips/yard.bin", 2.0, .1, .05, rows=2, z0=.6)
+        binding = {"scale": 1.0, "offset_z": 0.0, "idle": {"part_count": 2,
+                   "part0": {"mesh": "clips/hull.bin"}, "part1": {"mesh": "clips/yard.bin"}}}
+        side, low, high, centre, half_width = coverage.hull_band(self.pack, binding, {0, 1}, 1.0, 0.0)
+        self.assertAlmostEqual(low, 0.0, delta=.01)
+        self.assertLessEqual(high, .62)
+
+    def test_symmetry_axis_follows_the_fuselage(self):
+        # A plane seen from above: fuselage along x, wings and tailplane along y.
+        fuselage = [(x, y) for x in np.linspace(-1, 1, 41) for y in (-.08, .08)]
+        wings = [(x, y) for x in (-.1, .1) for y in np.linspace(-1.2, 1.2, 49)]
+        tail = [(x, y) for x in (-.95, -.85) for y in np.linspace(-.4, .4, 17)]
+        axis = coverage.symmetry_axis(np.array(fuselage + wings + tail))
+        self.assertGreater(abs(axis[0]), .99)
+
+    def test_idle_motion_marks_a_rotor_not_a_banking_body(self):
+        body = [(x, y, 0) for x in (-1, 1) for y in (-.2, .2)]
+        rotor = [(x, y, .5) for x in (-.8, .8) for y in (-.05, .05)]
+        triangles = [0, 1, 3, 0, 3, 2, 4, 5, 7, 4, 7, 6]
+        joints = [0] * 4 + [1] * 4
+        spinning = [(np.eye(4), np.eye(4))] + [(np.eye(4), turn(30 * k)) for k in range(1, 4)]
+        mesh(self.pack / "clips/heli.bin", body + rotor, triangles, joints, spinning)
+        binding = {"idle": {"part_count": 1, "part0": {"mesh": "clips/heli.bin"}}}
+        moving = coverage.idle_motion(self.pack, binding, [0])[0]
+        self.assertEqual(list(moving), [False] * 4 + [True] * 4)
+        banking = [(turn(10 * k), turn(10 * k)) for k in range(4)]
+        mesh(self.pack / "clips/heli.bin", body + rotor, triangles, joints, banking)
+        self.assertFalse(coverage.idle_motion(self.pack, binding, [0])[0].any())
+
+    def test_hull_marks_stripe_the_hull_and_cap_the_mast_but_clear_the_sail(self):
+        self.white("hull", "mast", "sail")
+        hull(self.pack / "clips/hull.bin", 2.0, .4, .6)
+        hull(self.pack / "clips/mast.bin", .06, 1.6, .06, rows=16, z0=.4)
+        quad(self.pack / "clips/sail.bin", -.6, .6, 1.0, normal=(1, 0, 0))
+        def part(name):
+            return {"mesh": f"clips/{name}.bin", "texture": f"textures/{name}.dds", "owner_mask": 1, "owner_strength": .82}
+        action = {"part_count": 3, "part0": part("hull"), "part1": part("mast"), "part2": part("sail")}
+        bindings = {"unit0": {"key_count": 1, "key0": "PRTO_Ship", "scale": 1.0, "offset_z": 0.0, "idle": action}, "unit_count": 1}
+        components = {"unit0": {"idle": ["c/ship"] * 3}}
+        targets = {"stripe": .12, "accents": .02, "accent_floor": .1, "tips": .05, "tail": .02}
+        report = coverage.paint_marks(bindings, self.pack, components, {"PRTO_Ship": "hull"}, targets, .9)
+        self.assertEqual(report["PRTO_Ship"]["style"], "hull")
+        hull_part, mast_part, sail_part = (action[f"part{i}"] for i in range(3))
+        rows = 1 - coverage.dds_alpha(self.pack / hull_part["texture"]).mean(1)
+        self.assertLess(rows[0], .05)               # not the deck edge
+        self.assertGreater(rows.max(), .5)          # a band along the side
+        mast = 1 - coverage.dds_alpha(self.pack / mast_part["texture"]).mean(1)
+        self.assertGreater(mast[:3].mean(), .3)     # the mast's top (texture V=0)
+        self.assertLess(mast[8:].mean(), .02)       # not its lower length
+        # The sail sits below the accent floor: no mark, and no broad tint left.
+        self.assertEqual((sail_part["texture"], sail_part["owner_mask"]), ("textures/sail.dds", 0))
+
+    def test_extremity_marks_wing_tips_not_the_wing_root(self):
+        self.white("wing", "body")
+        # Wing along y (texture U runs tip to tip), fuselage along x.
+        span = np.linspace(-1.2, 1.2, 25)
+        wing = [(x, y, .1) for y in span for x in (-.15, .15)]
+        uv = [(float((y + 1.2) / 2.4), v) for y in span for v in (0.0, 1.0)]
+        triangles = [i for k in range(24) for i in (2 * k, 2 * k + 1, 2 * k + 3, 2 * k, 2 * k + 3, 2 * k + 2)]
+        mesh(self.pack / "clips/wing.bin", wing, triangles, uv=uv)
+        hull(self.pack / "clips/body.bin", 2.0, .2, .2)
+        def part(name):
+            return {"mesh": f"clips/{name}.bin", "texture": f"textures/{name}.dds", "owner_mask": 1, "owner_strength": .82}
+        action = {"part_count": 2, "part0": part("wing"), "part1": part("body")}
+        bindings = {"unit0": {"key_count": 1, "key0": "PRTO_Plane", "scale": 1.0, "offset_z": 0.0, "idle": action}, "unit_count": 1}
+        components = {"unit0": {"idle": ["c/plane"] * 2}}
+        targets = {"stripe": .12, "accents": .02, "accent_floor": .1, "tips": .05, "tail": .02}
+        coverage.paint_marks(bindings, self.pack, components, {"PRTO_Plane": "extremities"}, targets, .9)
+        columns = 1 - coverage.dds_alpha(self.pack / action["part0"]["texture"]).mean(0)
+        self.assertGreater(min(columns[0], columns[-1]), .5)   # both wing tips
+        self.assertLess(columns[12:20].mean(), .02)            # not the wing root
 
 
 if __name__ == "__main__":

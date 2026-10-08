@@ -46,24 +46,27 @@ contour, and each route point fades out between 35 and 65 height units of
 mountain rise: routes show on a mountain's feet and lower flanks and dissolve
 before its upper slopes, as Civ III draws routes on a mountain tile's lower art
 but never over its peak. A railroad running into a mountain goes through
-a tunnel at ground level instead (Lab, in review; `tunnel_route`). The user
-asked for the portal at ground level, not up the mountain, with only the
-entrance showing (2026-10-07). The rail is hidden where it lies in rock: at
-least 4 units over the land with rock (35 units) within 0.2 tile. Between two
+a tunnel instead (Lab, in review; `tunnel_route`). The user asked for the
+portal near ground level, not up the mountain, with its block kept but
+mostly inside the mountain, and chose a smaller portal so a gentle foot can
+hold it (2026-10-07). The rail is hidden in rock: at least 4 units over the
+land with the rock 0.16 tile along the line 20 units over the rail (three
+quarters of the block's height), or 30 units over the land. Between two
 mountain tiles it is also hidden from their shared edge until it reaches
 rock, so it never surfaces in a range's saddle. Where hidden rail meets
-shown rail, Civ VI's tunnel portal entrance stands at the mountain's foot,
-seated on the land and turned toward the shown rail. At an open tile edge
-where a range's tunnel ends, it stands at that edge. The shown rail ends
-inside the arch. The portal is 70% of the railroad bridge's calibrated scale,
-as pattern bridges are. It comes from Gathering Storm's `IMP_Mountain_Tunnel`
+shown rail, Civ VI's tunnel portal (the facade, its cutting and the block
+behind) and its rock cap stand, seated on the rail and turned toward the
+shown rail. At an open tile edge where a range's tunnel ends, they stand at
+that edge. The shown rail ends inside the arch. They are half the railroad
+bridge's calibrated scale. Their bridge material is marked .0035, so
+`rigid_feature.hlsl` sorts them on the bridges' natural basis without the
+river's bias, and the mountain's rock hides the block.
+They come from Gathering Storm's `IMP_Mountain_Tunnel`
 (`route_tunnel_sets.json`, compound importer with
 `--terrain-edits preserve_unresolved`, into `RouteTunnelsNormalized`).
-Civ VI hides the block behind the facade, and the rock cap on it, under a
-terrain edit; the mountain's foot cannot. So `build_route_bridge_runtime.py`
-keeps only the entrance (facade, wing walls, floor and bore). It goes in the
-unused medieval pillaged bridge's texture slot (1), so no shader change is
-needed. The Lab `network` case runs a railroad through its small range (raw
+`build_route_bridge_runtime.py` adds them to the bridge bundle in the unused
+medieval and industrial pillaged bridge texture slots (1 and 3), so no shader
+change is needed. The Lab `network` case runs a railroad through its small range (raw
 row 16, fixed to the range whatever the view center). Neighboring tiles share one axis at every
 join (a variant's neighbors compute its variant too), and route strips are a
 depth-tested decal without depth writes. Renderer64 compiles its shaders from

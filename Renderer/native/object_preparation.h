@@ -100,10 +100,6 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     // never cuts them along a ragged contour), and a pattern route fades out
     // between these heights above the natural ground as the mountain rises.
     constexpr float pattern_route_fade_start=35.f,pattern_route_fade_end=65.f;
-    // A railroad tunnel's entrance stands where the mountain's rock face
-    // begins: the rail risen this far over the land with rock (the fade's
-    // start) within reach (tiles), so the rock covers its bore.
-    constexpr float tunnel_foot=15.f,tunnel_reach=.2f;
     // The rendered mesh's own shape (lab/shared/natural/mountain_shape.h),
     // built only for route tiles, so routes lie on its rock.
     MountainShape mountain_shape;
@@ -129,6 +125,10 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             // Leave a narrow bank before placing a field or raised farm piece.
             if(input.river_ready)farm_clearance=std::min(farm_clearance,
                 (float(scratch.rivers.river_sample({u,v}).distance)-8.5f)/64.0f);
+            // ...and stops at the foot of a mountain or a neighbouring hill.
+            float hill_support=0,flat_ground=height_natural(u,v,&hill_support);
+            farm_clearance=std::min(farm_clearance,farm_slope_clearance(
+                mountain_count?route_height(u,v)-flat_ground:0.f,hill_support,input.projection.tile.real_terrain_type==5));
         }
         return std::array<float,3>{s.height,s.authored_height,farm_clearance};};
     auto const& tile=input.projection.tile;
@@ -144,42 +144,20 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         promote_river_crossings(tile,[&](float x,float y){
             return float(scratch.rivers.river_sample({x,y}).distance);
         },plan,&assets);
-    // A railroad running into a mountain enters a tunnel (tunnel_route);
-    // roads fade out as they climb. A rail line's end on an edge shared by
-    // two mountain tiles lies inside their range.
-    FeatureGroup const* tunnel=find_feature_group(assets[bridge_family],"tunnel_railroad");
-    constexpr int natural_offsets[8][2]={{0,1},{1,1},{1,0},{1,-1},{0,-1},{-1,-1},{-1,0},{-1,1}};
     if(mountain_count)for(auto& route:plan.patterns){
         auto const* set=assets.patterns_for(route.style);
         if(!set || route.line>=set->lines.size())continue;
         auto const& line=set->lines[route.line];
         float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
-        std::vector<float> fade(line.count,0.f),rise(line.count,0.f);bool any=false;
-        bool rail_tunnel=route.style>=4u && tunnel;
-        std::vector<std::uint8_t> rock(line.count,0u);
+        std::vector<float> fade(line.count,0.f);bool any=false;
         for(unsigned index=0;index<line.count;++index){
-            auto const point=route.points.size()==line.count?route.points[index]:set->points[line.first+index];
+            auto const& point=route.points.size()==line.count?route.points[index]:set->points[line.first+index];
             float x=tile_u+point[0],y=tile_v+1.f-point[1];
-            rise[index]=route_height(x,y)-height_natural(x,y);
-            fade[index]=smooth01((rise[index]-pattern_route_fade_start)/(pattern_route_fade_end-pattern_route_fade_start));
+            float rise=route_height(x,y)-height_natural(x,y);
+            fade[index]=smooth01((rise-pattern_route_fade_start)/(pattern_route_fade_end-pattern_route_fade_start));
             any=any || fade[index]>0.f;
-            if(rail_tunnel && rise[index]>=tunnel_foot){
-                bool reached=rise[index]>=pattern_route_fade_start;
-                for(unsigned k=0;k<8u && !reached;++k){
-                    float a=float(k)*.7853982f,sx=x+tunnel_reach*std::cos(a),sy=y+tunnel_reach*std::sin(a);
-                    reached=route_height(sx,sy)-height_natural(sx,sy)>=pattern_route_fade_start;
-                }
-                rock[index]=reached;any=any || reached;
-            }
         }
-        std::array<bool,2> inside{};
-        if(rail_tunnel && tile.real_terrain_type==6)for(unsigned side=0;side<2;++side){
-            int k=side?line.end:line.start;
-            if(k>=0 && k<8)inside[side]=lookup_natural(nc+natural_offsets[k][0],nr+natural_offsets[k][1]).real==6;
-        }
-        bool tunnelled=rail_tunnel && (any || inside[0] || inside[1]);
-        if(tunnelled)tunnel_route(route,*set,rise,rock,tunnel_foot,inside,*tunnel,plan,fade);
-        if(any || tunnelled)route.fade=std::move(fade);
+        if(any)route.fade=std::move(fade);
     }
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
     if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,plan))return {};
@@ -235,10 +213,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             }
             if(shared_rigid_mesh(asset)){
                 result->draws.push_back({unsigned(instance.layer),0,0,unsigned(result->rigid.size())});
-                // A tunnel entrance stands on its rail.
-                bool tunnel_part=asset.id.rfind("route/tunnel/",0)==0;
-                result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,
-                    [&](float x,float y){return tunnel_part?route_height(x,y):height_natural(x,y);},
+                result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,height_natural,
                     plan.farm_kit && instance.family==farm_family));
             }else{
                 unsigned count=unsigned(asset.indices.size());

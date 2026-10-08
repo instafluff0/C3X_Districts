@@ -11,7 +11,8 @@ witness requires all four custom route/improvement flags.
 
 Cases (category "infrastructure"):
 - farms-terrain: 3x3 farm blocks on desert, plains, grassland, tundra, flood
-  plain and grassland hills, with a road and railroad between the rows;
+  plain and grassland hills, with a road and railroad between the rows, and a
+  mountain ridge and a hill beside the plains block;
 - farms-routes: farmland crossed by a corner (E-W) road, an edge (NW-SE) road,
   a corner (N-S) road, an edge (NE-SW) railroad, junctions and a spur;
 - farms-resources: farmed resource tiles inside farmland, one beside a road;
@@ -23,7 +24,7 @@ from __future__ import annotations
 
 CASES = ("farms-terrain", "farms-routes", "farms-resources", "farms-water", "farms-network")
 ROAD, RAIL, MINE, IRRIGATION = 0x1, 0x2, 0x4, 0x8
-DESERT, PLAINS, GRASSLAND, TUNDRA, FLOODPLAIN, HILLS, COAST = 0, 1, 2, 3, 4, 5, 11
+DESERT, PLAINS, GRASSLAND, TUNDRA, FLOODPLAIN, HILLS, MOUNTAIN, COAST = 0, 1, 2, 3, 4, 5, 6, 11
 # Raw view extent: 8 x 6 tiles at the gameplay zoom.
 VIEW = (8, 12)
 # farms-terrain patches: centre -> (base, real, label).
@@ -79,6 +80,12 @@ def terrain(category: str, case: str, dx: int, dy: int, base: int, real: int) ->
             overlays = ROAD | (RAIL if dx >= 2 else 0)
         if (dx, dy) == (4, 10):
             overlays = MINE
+        # A mountain ridge and a hill beside the plains block: farms stop at
+        # their foot.
+        if (dx, dy) in ((2, -4), (3, -5), (3, -7), (2, -8)):
+            real, overlays = MOUNTAIN, 0
+        if (dx, dy) == (-2, -4):
+            real, overlays = HILLS, 0
     elif case == "farms-routes":
         overlays = _routes(dx, dy) | (IRRIGATION if inside else 0)
         if (dx, dy) == (6, 10):

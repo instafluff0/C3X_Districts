@@ -261,7 +261,10 @@ def hull_band(pack: Path, binding: dict, indices, scale: float, offset: float):
     The hull is the lowest run of height slices whose vertices span at least
     80% of the body's length along its ground footprint's long axis: below a
     turret, deck house, conning tower, masts or sails. Sparse slices (small
-    fittings) are ignored and one short slice inside the run is tolerated."""
+    fittings) are ignored and one short slice inside the run is tolerated.
+    A hull starts at the ground or water: a run first found above the lowest
+    fifth of the body is rigging (lateen yards longer than a short hull), and
+    the hull is the body below it."""
     points = np.concatenate([p for i, _, p, *_ in idle_parts(pack, binding) if i in indices])
     xy = points[:, :2] - points[:, :2].mean(0)
     values, vectors = np.linalg.eigh(np.cov(xy.T))
@@ -288,6 +291,8 @@ def hull_band(pack: Path, binding: dict, indices, scale: float, offset: float):
             last, short = k, 0
     side = np.array([-major[1], major[0], 0.0])
     low, high = float(edges[first]), float(edges[last + 1])
+    if first >= 4:
+        low, high = float(edges[0]), low
     centre = points[:, :2].mean(0)
     hull = (z >= low) & (z <= high)
     across = np.abs((points[:, 0] - centre[0]) * side[0] + (points[:, 1] - centre[1]) * side[1])

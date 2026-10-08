@@ -1,7 +1,7 @@
 {
   "authority": "Renderer/lab/shared/shaders/objects/beauty_objects.hlsl",
   "source_sha256": "2d4e1dcf6d0f88457a21b7cb35ca4dad277f2fafa19f7afb670b49c2d6b7c0a3",
-  "generated_sha256": "d07676312f329006bd0290f427262ccbc520f388cbaa6d1f8051d08470747d39",
+  "generated_sha256": "d6c25811d0060887da0a32ef2eead4610178f8eb2bc316b532de055a6186c418",
   "ported": [
     "GGX",
     "sky-weighted ambient",

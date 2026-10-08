@@ -585,9 +585,10 @@ class Composer:
             items.append(Item(model, scale, 0.0, best[1], [], 0, "accent", rp.ACCENT))
         return removed_total
 
-    def site(self, items, model, scale, yaw, limit, rng, index=0, smoky=False):
+    def site(self, items, model, scale, yaw, limit, rng, index=0, smoky=False, inflate=None):
         """The cheapest ring position for a new body: it may replace a few
-        ordinary buildings but never a palace, civic, wall or accent."""
+        ordinary buildings but never a palace, civic, wall or accent. `inflate`
+        gives other bodies the size they will grow to."""
         hull = self.hull(model)
         width = max(box(hull)[2] - box(hull)[0], box(hull)[3] - box(hull)[1])
         palace = any(o.kind == "palace" for o in items)
@@ -602,7 +603,8 @@ class Composer:
                 blocked = False
                 covered = []
                 for other in items:
-                    if not overlap(poly, self.poly(other), self.gap):
+                    other_poly = self.poly(other, other.scale * inflate(other)) if inflate else self.poly(other)
+                    if not overlap(poly, other_poly, self.gap):
                         continue
                     if other.kind in ("palace", "civic", "wall", "accent"):
                         blocked = True
@@ -639,17 +641,26 @@ class Composer:
         def width(i):
             m = self.library["models"][i["model"]]
             return max(m["high"][0] - m["low"][0], m["high"][1] - m["low"][1]) * i["scale"]
-        towers = sorted((i for i in sibling if not i["capital"] and height(i) >= 1.4 * width(i)),
+        towers = sorted((i for i in sibling if not i["capital"] and height(i) >= 1.25 * width(i)),
                         key=height, reverse=True)[:count]
+        # Towers stand at the size their peers grow to, clear of the palace's
+        # grown footprint, and then keep that size (like accents).
+        growth = self.style["growth"][ERAS[template["era"]]]
+        inflate = lambda other: growth if other.kind == "palace" else 1.0
         rng = stable_rng("towers", seed)
         for index, tower in enumerate(towers):
-            best = self.site(items, tower["model"], tower["scale"], tower["rotation"], limit, rng, index)
+            # A smaller capital may only have room for a smaller tower.
+            for factor in (growth, (growth + 1) / 2, 1.0):
+                scale = tower["scale"] * factor
+                best = self.site(items, tower["model"], scale, tower["rotation"], limit, rng, index, inflate=inflate)
+                if best is not None:
+                    break
             if best is None:
                 continue
             for other in best[2]:
                 items.remove(other)
-            items.append(Item(tower["model"], tower["scale"], tower["rotation"], best[1],
-                              [list(l) for l in tower["lights"]], 0, "civic", rp.SITE_OPTIONAL))
+            items.append(Item(tower["model"], scale, tower["rotation"], best[1],
+                              scaled_lights(tower["lights"], factor), 0, "accent", rp.SITE_OPTIONAL))
 
     def grow(self, items, factor, limit):
         movable = [i for i in items if i.kind in ("building", "civic", "palace", "accent")]

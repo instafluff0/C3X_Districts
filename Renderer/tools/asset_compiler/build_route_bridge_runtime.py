@@ -43,36 +43,14 @@ def _group(name: str, placements: list[tuple[int, float]]) -> bytes:
 DEFAULT_TUNNEL_PACK = Path("Renderer/packs/RouteTunnelsNormalized")
 
 
-def tunnel_entrance(mesh: dict) -> dict:
-    """The portal mesh's entrance alone: its facade, wing walls, floor and the
-    bore behind the arch. Civ VI buries the block behind it (and the rock cap
-    on top) under a terrain edit; a C3X tunnel stands at a mountain's foot
-    where the rock cannot hide them, so they are dropped (the block reaches
-    past the bore, the rubble lies behind the facade above the arch)."""
-    vertices = mesh["vertices"]
-    indices = mesh["topology"]["indices"]
-    kept: list[int] = []
-    for start in range(0, len(indices), 3):
-        triangle = indices[start:start + 3]
-        y = [vertices[i]["position"][1] for i in triangle]
-        z = [vertices[i]["position"][2] for i in triangle]
-        if max(y) > 0.034 or (min(y) > -0.02 and min(z) > 0.065):
-            continue
-        kept.extend(triangle)
-    used = sorted(set(kept))
-    remap = {old: new for new, old in enumerate(used)}
-    return {**mesh, "vertices": [vertices[i] for i in used],
-            "topology": {**mesh["topology"], "indices": [remap[i] for i in kept]}}
-
-
 def build(pack: Path, tunnel_pack: Path | None = None) -> Path:
     """Write bridge_runtime.bin. The feature shader has eight bridge texture
     slots (materials 13-20), one per texture here. Bridges keep slots 0, 2, 4
     and 6 (medieval, industrial, modern, railroad) and 5 and 7 (the modern and
     railroad pillaged bridges). Civ III never shows the medieval and industrial
     pillaged bridges, so with the railroad tunnel's normalized pack (see
-    route_tunnel_sets.json) slot 1 carries its portal's entrance; without it
-    that slot keeps the medieval pillaged bridge."""
+    route_tunnel_sets.json) slots 1 and 3 carry its portal and rock cap; without
+    it they keep those pillaged bridges."""
     if tunnel_pack is None:
         tunnel_pack = DEFAULT_TUNNEL_PACK
     tunnel = tunnel_pack if (tunnel_pack / "meshes" / "compound" / "route_tunnel_railroad_00.json").is_file() else None
@@ -85,7 +63,7 @@ def build(pack: Path, tunnel_pack: Path | None = None) -> Path:
     scales = {"medieval": 4.20, "industrial": 3.70, "modern": 4.25, "railroad": 3.85}
     for style_index, style in enumerate(("medieval", "industrial", "modern", "railroad")):
         for state_index, state in enumerate(("normal", "pillaged")):
-            if tunnel and state == "pillaged" and style == "medieval":
+            if tunnel and state == "pillaged" and style in ("medieval", "industrial"):
                 continue
             stem = f"route_bridge_{style}_{state_index:02d}"
             mesh = json.loads((pack / "meshes" / "compound" / f"{stem}.json").read_text())
@@ -97,20 +75,24 @@ def build(pack: Path, tunnel_pack: Path | None = None) -> Path:
             assets.append(_asset_payload(f"route/bridge/{style}/{state}", texture_index, mesh))
             groups.append(_group(f"bridge_{style}_{state}", [(len(assets) - 1, scales[style])]))
     if tunnel:
-        # The portal's entrance, its texture copied into this pack. It shares
-        # the bridges' Civ VI source units, so it takes the railroad bridge's
+        # The portal (with its cutting and the block behind it) and its rock
+        # cap, each with its own texture, copied into this pack. They share the
+        # bridges' Civ VI source units, so they take the railroad bridge's
         # calibrated scale.
-        mesh = tunnel_entrance(json.loads((tunnel / "meshes" / "compound" / "route_tunnel_railroad_00.json").read_text()))
-        material = json.loads((tunnel / "materials" / "compound" / "route_tunnel_railroad_00.json").read_text())
-        source = tunnel / material["channels"]["base_color"]["texture"]
-        target = Path("textures") / "tunnel" / source.name
-        (pack / target).parent.mkdir(parents=True, exist_ok=True)
-        data = source.read_bytes()
-        if not (pack / target).is_file() or (pack / target).read_bytes() != data:
-            (pack / target).write_bytes(data)
-        textures[1] = target.as_posix()
-        assets.append(_asset_payload("route/tunnel/railroad/portal", 1, mesh))
-        groups.append(_group("tunnel_railroad", [(len(assets) - 1, scales["railroad"])]))
+        placements = []
+        for part, (mesh_index, material_index, slot) in {"portal": (0, 0, 1), "cap": (1, 2, 3)}.items():
+            mesh = json.loads((tunnel / "meshes" / "compound" / f"route_tunnel_railroad_{mesh_index:02d}.json").read_text())
+            material = json.loads((tunnel / "materials" / "compound" / f"route_tunnel_railroad_{material_index:02d}.json").read_text())
+            source = tunnel / material["channels"]["base_color"]["texture"]
+            target = Path("textures") / "tunnel" / source.name
+            (pack / target).parent.mkdir(parents=True, exist_ok=True)
+            data = source.read_bytes()
+            if not (pack / target).is_file() or (pack / target).read_bytes() != data:
+                (pack / target).write_bytes(data)
+            textures[slot] = target.as_posix()
+            assets.append(_asset_payload(f"route/tunnel/railroad/{part}", slot, mesh))
+            placements.append((len(assets) - 1, scales["railroad"]))
+        groups.append(_group("tunnel_railroad", placements))
     if any(texture is None for texture in textures):
         raise ValueError("bridge runtime texture slots are incomplete")
 

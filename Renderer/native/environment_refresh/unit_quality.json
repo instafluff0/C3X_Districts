@@ -47,5 +47,36 @@
     "gain": 0.5,
     "saturation": 0.25,
     "owner": 1.0
+  },
+  "waterline": {
+    "domains": [
+      "sea"
+    ],
+    "draft": 0.15
+  },
+  "hover": {
+    "factor": 0.5,
+    "minimum": 8,
+    "sprites": "Renderer/inventory/civ3_unit_sprite_sizes.json"
+  },
+  "owner_marks": {
+    "styles": {
+      "sea": "hull",
+      "air": "extremities"
+    },
+    "targets": {
+      "stripe": 0.12,
+      "accents": 0.02,
+      "accent_floor": 0.1,
+      "tips": 0.05,
+      "tail": 0.02
+    },
+    "strength": 0.9
+  },
+  "owner_garments": {
+    "minimum": 0.1,
+    "garment_share": 0.15,
+    "target": 0.25,
+    "strength": 0.9
   }
 }

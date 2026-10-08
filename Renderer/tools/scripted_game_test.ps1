@@ -1,7 +1,7 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,360)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','city-builds','navigation','camera','forest-shadow')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','city-builds','navigation','camera','forest-shadow')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1,
@@ -9,7 +9,7 @@ param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory
       [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='')
 $ErrorActionPreference = 'Stop'
 if ($Scenario -eq 'camera' -and $Seconds -lt 100) { throw 'camera requires at least 100 seconds.' }
-if ($Scenario -in @('navigation','zoom-out','near') -and $Seconds -lt 120) { throw 'navigation requires at least 120 seconds.' }
+if ($Scenario -in @('navigation','zoom-out','near','units') -and $Seconds -lt 120) { throw 'navigation requires at least 120 seconds.' }
 if ($Scenario -eq 'city-builds' -and $Seconds -lt 180) { throw 'city-builds requires at least 180 seconds.' }
 if ($Scenario -eq 'route-city' -and $Seconds -lt 245) { throw 'route-city requires at least 245 seconds.' }
 if ($Scenario -in @('research-turn','reveal-scroll') -and $Seconds -lt 200) { throw 'research-turn requires at least 200 seconds.' }
@@ -129,12 +129,12 @@ try {
     $env:C3X_RENDERER_UNIT_PACK=$UnitPack
     if ($SceneSamples -gt 0) { $env:C3X_RENDERER_SCENE_SAMPLES=[string]$SceneSamples }
     if ($SceneSharpness -ge 0) { $env:C3X_RENDERER_SCENE_SHARPNESS=$SceneSharpness.ToString([cultureinfo]::InvariantCulture) }
-    if ($Scenario -in @('mouse','zoom','zoom-out','near','hud','city','route-city','city-builds','navigation','camera','reveal-scroll')) { $env:C3X_RENDERER_TRACE_INPUT='1' }
+    if ($Scenario -in @('mouse','zoom','zoom-out','near','units','hud','city','route-city','city-builds','navigation','camera','reveal-scroll')) { $env:C3X_RENDERER_TRACE_INPUT='1' }
     if ($MeasureCadence -and -not $ProfileRenderer) { $env:C3X_RENDERER_TRACE='0' }
     if ($ProfileRenderer) {
         $env:C3X_RENDERER_TRACE='2'
         $env:C3X_RENDERER_TRACE_BUFFERED='1'
-        if ($Scenario -in @('turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','city-builds','zoom-out','near','city')) { $env:C3X_RENDERER_TRACE_MIB='64' }
+        if ($Scenario -in @('turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','city-builds','zoom-out','near','units','city')) { $env:C3X_RENDERER_TRACE_MIB='64' }
         if ($Scenario -in @('turn-stress','debug-scroll','route-city','city-builds')) {
             # Preserve failure evidence even when a stalled helper must be killed.
             $env:C3X_RENDERER_TRACE_BUFFERED='0'
@@ -190,6 +190,22 @@ try {
             @(92,0,0,0x800,-120),@(93,0,0,0x800,-120),@(94,0,0,0x800,-120),@(95,0,0,0x800,-120),
             @(96,0,0,0x800,-120),@(97,0,0,0x800,-120),@(110,0,0,0))
     }
+    if ($Scenario -eq 'units') {
+        # Unit close-ups on the 1498 AD save (2240-wide client): idle 1x, then
+        # minimap jumps (about 18x20 screen pixels per minimap pixel) to the
+        # Nagoya Bomber, the two ships off the southern peninsula and the
+        # north-eastern harbour, each at 2x and then 3x. Zoom keeps the center.
+        $in=@(0..3|%{0.5*$_}); $out=@(0..5|%{0.5*$_})
+        $mouseSteps=@(@(40,0,0,0))
+        $t=46
+        foreach($target in @(@(-738,498),@(-671,527),@(-661,553),@(-661,505))){
+            $mouseSteps+=@(@($t,$target[0],$target[1],2),@(($t+0.1),$target[0],$target[1],4),@(($t+2),0,0,0))
+            $mouseSteps+=$in|%{,@(($t+4+$_),0,0,0x800,120)}; $mouseSteps+=,@(($t+12),0,0,0x800,240)
+            $mouseSteps+=$out|%{,@(($t+20+$_),0,0,0x800,-120)}
+            $t+=26
+        }
+        $mouseSteps+=,@($t,0,0,0)
+    }
     if ($Scenario -eq 'navigation') {
         # 2240x1260 disposable witness: variable edge proximity, both poles,
         # wrapped horizontal motion, and zoom-out re-clamping without input.
@@ -217,7 +233,7 @@ try {
     $combatNextPrepare=36.0
     $failureCheck=20.0
     $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(39,0x86,'text-192'),@(43,90,'zoom-160'),@(46,0x86,'text-160'),@(50,90,'zoom-128'),@(53,0x86,'text-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
-    if ($Scenario -in @('mouse','zoom','zoom-out','near','route-city','city-builds','navigation','camera','reveal-scroll')) {
+    if ($Scenario -in @('mouse','zoom','zoom-out','near','units','route-city','city-builds','navigation','camera','reveal-scroll')) {
         $interaction=@()
     }
     if ($Scenario -eq 'navigation') { $interaction=@(@(28,0x87,'north-edge'),@(50,0x87,'south-edge'),@(63,0x87,'wrap-edge'),@(75,0x87,'return-interior')) }
@@ -374,7 +390,7 @@ try {
             $elapsed=([DateTime]::UtcNow-$started).TotalSeconds
             $inputElapsed=$elapsed
             if ($Scenario -eq 'camera') { $inputElapsed=if ($null -eq $combatReadyAt) {-1} else {$elapsed-$combatReadyAt} }
-            if ($Scenario -in @('navigation','zoom-out','near','city')) {
+            if ($Scenario -in @('navigation','zoom-out','near','units','city')) {
                 if ($null -eq $navigationReadyAt -and $elapsed -ge $navigationCheck) {
                     $navigationCheck=$elapsed+1
                     if ((Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw) -match 'stage=render-done result=1') {
@@ -393,7 +409,7 @@ try {
                 }
             }
             if ($MeasureCadence -and $elapsed -ge $cadenceNext) {
-                $cadenceNext=$elapsed+$(if ($Scenario -in @('zoom','zoom-out','near','navigation','camera','reveal-scroll')) {0.02} else {1.0})
+                $cadenceNext=$elapsed+$(if ($Scenario -in @('zoom','zoom-out','near','units','navigation','camera','reveal-scroll')) {0.02} else {1.0})
                 if ($cadenceProcess -and $cadenceProcess.HasExited) {
                     $cadence.Dispose(); $cadence=$null; $cadenceProcess=$null
                 }
@@ -419,7 +435,7 @@ try {
                         foreground=([RendererGameCommand]::GetForegroundWindow() -eq $window) }
                 }
             }
-            if ($Scenario -in @('mouse','zoom','zoom-out','near','city','route-city','city-builds','navigation','camera','reveal-scroll','forest-shadow') -and $mouseIndex -lt $mouseSteps.Count -and $inputElapsed -ge $mouseSteps[$mouseIndex][0]) {
+            if ($Scenario -in @('mouse','zoom','zoom-out','near','units','city','route-city','city-builds','navigation','camera','reveal-scroll','forest-shadow') -and $mouseIndex -lt $mouseSteps.Count -and $inputElapsed -ge $mouseSteps[$mouseIndex][0]) {
                 $step=$mouseSteps[$mouseIndex]
                 if ($mouseIndex -eq 0) { [void][RendererGameCommand]::SetForegroundWindow($window) }
                 if ([RendererGameCommand]::GetForegroundWindow() -ne $window) { throw 'Diagnostic game lost foreground before mouse input.' }
@@ -475,7 +491,7 @@ try {
                 Write-Host 'Interaction command: combat-zoom-key'
             }
             if ($key -eq 0) {
-                $pollMs=if ($Scenario -in @('zoom','zoom-out','near','route-city','city-builds','navigation','camera','reveal-scroll','unit-motion')) {20} else {1000}
+                $pollMs=if ($Scenario -in @('zoom','zoom-out','near','units','route-city','city-builds','navigation','camera','reveal-scroll','unit-motion')) {20} else {1000}
                 Start-Sleep -Milliseconds $pollMs; continue
             }
             if ($Scenario -eq 'lifecycle' -and $key -eq 81) {
@@ -504,7 +520,7 @@ try {
             ++$sent
         }
         # Keep cadence observation running after Z as well as mouse input.
-        Start-Sleep -Milliseconds $(if ($Scenario -in @('zoom','zoom-out','near','route-city','city-builds','navigation','camera','reveal-scroll','unit-motion')) {20} else {1000})
+        Start-Sleep -Milliseconds $(if ($Scenario -in @('zoom','zoom-out','near','units','route-city','city-builds','navigation','camera','reveal-scroll','unit-motion')) {20} else {1000})
     }
     if ($child.HasExited) { $earlyExit=$true; $gameExitCode=$child.ExitCode }
     Write-Host ('Posted diagnostic commands: '+$sent)
@@ -539,7 +555,7 @@ if ($MeasureCadence) {
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'cadence.json')
 }
 $log=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
-if ($Scenario -in @('mouse','zoom','zoom-out','near','route-city','city-builds','navigation','camera','reveal-scroll')) {
+if ($Scenario -in @('mouse','zoom','zoom-out','near','units','route-city','city-builds','navigation','camera','reveal-scroll')) {
     [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; events=$mouseEvents } |
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'mouse-events.json')
 }
@@ -644,7 +660,7 @@ if ($MeasureCadence -and $Scenario -in @('turn-stress','debug-scroll','turn-scro
     if ($tail.Count -lt 2 -or $tail[-1].frames -le $tail[0].frames) { Write-Error 'Renderer stopped presenting at the end of the stress run.'; exit 1 }
 }
 if (-not $windowComplete) { Write-Error 'Window evidence did not complete; inspect window-errors.log and window/finished.json.'; exit 1 }
-if (($Scenario -in @('mouse','zoom','zoom-out','near','city','route-city','city-builds','navigation','camera','reveal-scroll') -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -in @('combat','camera') -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -in @('settler','site-toggle','debug','debug-scroll','newgame','turn-stress') -and $readyEvents -lt 1) -or ($Scenario -in @('site-toggle','debug','debug-scroll','newgame','turn-stress') -and $interactionIndex -ne $interaction.Count) -or ($Scenario -in @('interaction','hud') -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'hud' -and (($cityZooms -join ',') -ne '64,128' -or $steps.Count -ne 2)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or ($Scenario -eq 'city' -and ($interactionIndex -ne $interaction.Count -or ($cityZooms -join ',') -ne '64,128')) -or ($Scenario -in @('hud','city') -and ($cityAnchors.Count -ne 2 -or $cityAnchors[0] -ne $cityAnchors[1])) -or ($Scenario -eq 'debug' -and ($steps.Count -ne 2 -or $debugReveals -ne 1 -or $debugHides -ne 1)) -or ($Scenario -eq 'debug-scroll' -and ($steps.Count -ne 32 -or $debugReveals -ne 1 -or $debugHides -ne 0)) -or ($Scenario -eq 'turn-stress' -and ($turns.Count -lt 8 -or @($turns | Select-Object -Unique).Count -lt 8)) -or $errors.Count) { exit 1 }
+if (($Scenario -in @('mouse','zoom','zoom-out','near','units','city','route-city','city-builds','navigation','camera','reveal-scroll') -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -in @('combat','camera') -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -in @('settler','site-toggle','debug','debug-scroll','newgame','turn-stress') -and $readyEvents -lt 1) -or ($Scenario -in @('site-toggle','debug','debug-scroll','newgame','turn-stress') -and $interactionIndex -ne $interaction.Count) -or ($Scenario -in @('interaction','hud') -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'hud' -and (($cityZooms -join ',') -ne '64,128' -or $steps.Count -ne 2)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or ($Scenario -eq 'city' -and ($interactionIndex -ne $interaction.Count -or ($cityZooms -join ',') -ne '64,128')) -or ($Scenario -in @('hud','city') -and ($cityAnchors.Count -ne 2 -or $cityAnchors[0] -ne $cityAnchors[1])) -or ($Scenario -eq 'debug' -and ($steps.Count -ne 2 -or $debugReveals -ne 1 -or $debugHides -ne 1)) -or ($Scenario -eq 'debug-scroll' -and ($steps.Count -ne 32 -or $debugReveals -ne 1 -or $debugHides -ne 0)) -or ($Scenario -eq 'turn-stress' -and ($turns.Count -lt 8 -or @($turns | Select-Object -Unique).Count -lt 8)) -or $errors.Count) { exit 1 }
 
 # DebugView --stop may leave a nonzero native exit code after successful cleanup.
 # Only the explicit diagnostic checks above determine this scenario result.

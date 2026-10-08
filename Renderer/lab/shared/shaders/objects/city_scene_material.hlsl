@@ -107,15 +107,17 @@ float4 q8_effect_over(float4 top,float4 under){
  return float4((top.rgb*top.a+under.rgb*under.a*(1-top.a))/max(a,1e-4),a);
 }
 float4 q8_city_effect(FeaturePixelInput p){
- float kind=round(p.material_index-90),seed=p.city_ao_uv.x,strength=p.city_ao_uv.y;
+ float kind=round(p.material_index-90),seed=clamp(p.city_ao_uv.x,0,64),strength=clamp(p.city_ao_uv.y,0,2);
  float t=Q8_CITY_TIME+seed*17.31,night=saturate(environment_night_activation);
- float2 q=p.uv;
+ // Multisampled edges extrapolate the quad coordinate beyond the quad; keep
+ // it inside so no pow() sees a negative base (NaN feeds bloom as stars).
+ float2 q=float2(clamp(p.uv.x,-1,1),saturate(p.uv.y));
  // Quad units per pixel along each screen axis keep shapes round at any zoom.
- float2 pixel=float2(max(abs(ddx(q.x)),1e-5),max(abs(ddy(q.y)),1e-5));
+ float2 pixel=float2(max(abs(ddx(p.uv.x)),1e-5),max(abs(ddy(p.uv.y)),1e-5));
  if(kind<.5){
   float v=(q.y-.3)/.7,flicker=.85+.15*sin(t*11+seed*6.3)+.12*(q8_effect_noise(float2(t*6,seed*9))-.5);
   float tip=.78*flicker,sway=(q8_effect_noise(float2(t*2.7+v*1.5,seed*5))-.5)*.4*saturate(v);
-  float radius=.55*pow(saturate(1-v/tip),.8)*sqrt(saturate(v*5+.05));
+  float radius=.55*pow(saturate(1-v/max(tip,1e-3)),.8)*sqrt(saturate(v*5+.05));
   float body=saturate(1-abs(q.x-sway)/max(radius,1e-3))*step(0,v)*step(v,tip);
   float core=smoothstep(.35,1,body);
   // Kept near display range: brighter values bloom into a glow that hides
@@ -141,12 +143,12 @@ float4 q8_city_effect(FeaturePixelInput p){
   float alpha=0,tone=0,weight=0;
   [unroll]for(int k=0;k<9;k++){
    float cycle=t/2.6+k/9.0,phase=frac(cycle);
-   float h=pow(phase,.85)*.82,r=.3+.55*h;
+   float h=pow(saturate(phase),.85)*.82,r=.3+.55*h;
    float2 c=float2(wind*pow(h,1.4)+(q8_effect_noise(float2(seed*7+k,floor(cycle)))-.5)*.25*h,h*H+r*.6);
    float2 d=(float2(q.x,Y)-c)/r;
    float erode=(.65*q8_effect_noise(float2(q.x*2.4+k*3.7+seed*11,Y*2.4-t*.8))
     +.35*q8_effect_noise(float2(q.x*5.1+k,Y*5.1-t*1.3))-.5)*.7;
-   float a=smoothstep(1,.45,length(d)+erode)*smoothstep(0,.06,phase)*pow(1-phase,1.1)*.8;
+   float a=smoothstep(1,.45,length(d)+erode)*smoothstep(0,.06,phase)*pow(saturate(1-phase),1.1)*.8;
    alpha=1-(1-alpha)*(1-a);
    tone+=(.13+.36*saturate(.5-.45*d.x+.55*d.y-erode)+.08*h)*a;weight+=a;
   }
@@ -166,7 +168,12 @@ float4 q8_city_effect(FeaturePixelInput p){
 Q6SceneOutput Q8_CITY_FEATURE_ENTRY(FeaturePixelInput p) {
  if(p.material_index<39.5)return Q8LegacyPSFeature(p);
 #ifdef Q8_CITY_TIME
- if(p.material_index>=89.5 && p.material_index<99.5)return q6_scene_output(q8_city_effect(p));
+ if(p.material_index>=89.5 && p.material_index<99.5) {
+  float4 effect=q8_city_effect(p);
+  // A non-finite sample would bloom into a star; drop it.
+  if(any(!isfinite(effect)))discard;
+  return q6_scene_output(float4(clamp(effect.rgb,0,4),saturate(effect.a)));
+ }
 #endif
  if(p.material_index>=59.5 && p.material_index<69.5) {
   float4 ground=city_base_texture_0.Sample(decal_sampler,p.uv);

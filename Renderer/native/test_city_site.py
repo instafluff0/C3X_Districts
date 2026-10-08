@@ -181,6 +181,33 @@ int main(){
 }
 ''')
 
+    def test_effects_redraw_in_their_own_layer_not_the_water_scene(self):
+        from pathlib import Path
+        source = (Path(__file__).parent.parent / "sandbox/fresh_pipeline.h").read_text()
+        self.assertTrue(effects_routed_first(source))
+        # Static preview frames skip the effect layer.
+        self.assertIn("if(!static_preview && !effect_visible[geometry_city].empty()", source)
+        # The reflection contributors skip attached effects.
+        self.assertIn("record.content().animation_texture || record.content().city_effect ||", source)
+        # The earlier routing sent a water-dependent smoke quad to the water
+        # scene, which drew it differently while the camera moved (in-game
+        # purple and white flashes).
+        old = source.replace(
+            "auto& output=record.content().city_effect?effect_visible:\n"
+            "                    renderer.water_scene_active && record.water_dependent?water_visible:static_visible;",
+            "auto& output=renderer.water_scene_active && record.water_dependent?\n"
+            "                    water_visible:record.content().city_effect?effect_visible:static_visible;")
+        self.assertFalse(effects_routed_first(old))
+
+
+def effects_routed_first(source):
+    """Selection tests city_effect before water dependency."""
+    start = source.find("auto& output=")
+    end = source.find(";", start)
+    statement = source[start:end]
+    effect, water = statement.find("city_effect"), statement.find("water_dependent")
+    return start >= 0 and 0 <= effect < water
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2082,9 +2082,13 @@ struct SandboxFreshPipeline {
                     ++culled;return;
                 }
                 // Attached city effects follow the visual clock: they leave
-                // the retained static layer and redraw with the dynamic pass.
-                auto& output=renderer.water_scene_active && record.water_dependent?
-                    water_visible:record.content().city_effect?effect_visible:static_visible;
+                // the retained static layer and redraw with the dynamic pass,
+                // after water and waves. A smoke quad overhanging a river is
+                // water-dependent, but must not join the water scene, whose
+                // retained-overlay and scene paths would draw it differently
+                // while the camera moves.
+                auto& output=record.content().city_effect?effect_visible:
+                    renderer.water_scene_active && record.water_dependent?water_visible:static_visible;
                 if(work.enabled)++work.counts[SandboxPassWorkload::selection][layer].accepted_records;
                 output[layer].push_back(record);
                 all_visible[layer].push_back(record);++visible;
@@ -2100,7 +2104,8 @@ struct SandboxFreshPipeline {
                 layer==geometry_water || layer==geometry_river ||
                 layer==geometry_route || layer==geometry_shadow || layer==geometry_wave)
                 return;
-                if (record.content().animation_texture ||
+                // Attached effects are screen-facing quads; water does not mirror them.
+                if (record.content().animation_texture || record.content().city_effect ||
                     !renderer.chunk_intersects_region(GeometryDrawReference(record),
                         reflected,mirror,true) ||
                     !reflection_reaches_water(GeometryDrawReference(record),reflected)) return;
@@ -4971,8 +4976,11 @@ struct SandboxFreshPipeline {
                     glow.linear.depth,false,float(scene_scale)))return fail("coastal_waves");
         }
         mark_dynamic(dynamic_waves);
-        // Flames, smoke and night lights above city bodies, below units.
-        if(!effect_visible[geometry_city].empty() && !draw_layer(effect_visible,geometry_city,settings,full,
+        // Flames, smoke and night lights above city bodies, below units. A
+        // static preview (resampled from another zoom while the new static
+        // layer builds) skips them for its one or two frames: drawn over the
+        // resampled color and depth they flashed as bright bursts in game.
+        if(!static_preview && !effect_visible[geometry_city].empty() && !draw_layer(effect_visible,geometry_city,settings,full,
                 glow.linear.target,glow.linear.depth,false,float(scene_scale)))return fail("city_effects");
         // World overlays finish before the foreground unit layer.
         auto border_clip=source_bounds(settings,full,false);

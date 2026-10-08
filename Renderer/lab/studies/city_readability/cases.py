@@ -190,7 +190,11 @@ _GAMEPLAY_FOREST = {(-6, 0), (-6, 1), (-7, 0), (1, -5), (2, -5), (1, -6)}
 
 
 def _gameplay_cities(era: int, culture: int):
+    # C3X_LAB_CAPITAL_SIZE (0-2) reviews a smaller capital at the centre.
+    capital_size = os.environ.get("C3X_LAB_CAPITAL_SIZE", "")
     for c, r, size, capital, walled in GAMEPLAY_CITIES:
+        if capital and capital_size in ("0", "1", "2"):
+            size = int(capital_size)
         dx, dy = raw(c, r)
         yield dx, dy, culture, era, size, capital, walled if size == 0 else 0
 

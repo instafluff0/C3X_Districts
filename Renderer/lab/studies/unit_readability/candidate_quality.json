@@ -1,0 +1,82 @@
+{
+ "schema": 1,
+ "frame_pack": "UnitFrameFidelity",
+ "units": {
+  "unit/archer": {
+   "scale": 3.387749322695444,
+   "offset_z": 0.0013318279236949203,
+   "minimum_canvas": 320,
+   "sample_scale": 4
+  },
+  "unit/pikeman": {
+   "scale": 3.8927208007791863,
+   "offset_z": 0.00034242399841682015,
+   "minimum_canvas": 320,
+   "sample_scale": 4
+  },
+  "unit/settler": {
+   "scale": 3.9459979181604936,
+   "offset_z": 0.0012146322705784602,
+   "minimum_canvas": 320,
+   "sample_scale": 4
+  },
+  "unit/spearman": {
+   "scale": 3.7391019864379578,
+   "offset_z": 0.002403227616867295,
+   "minimum_canvas": 320,
+   "sample_scale": 4
+  },
+  "unit/warrior": {
+   "scale": 4.169029481792745,
+   "offset_z": 0.002265060926481838,
+   "minimum_canvas": 320,
+   "sample_scale": 4
+  },
+  "unit/worker": {
+   "scale": 3.430343342594403,
+   "offset_z": 0.0019597919585011333,
+   "minimum_canvas": 320,
+   "sample_scale": 4
+  }
+ },
+ "sizing": {
+  "sprites": "Renderer/inventory/civ3_unit_sprite_sizes.json",
+  "factor": 1.0
+ },
+ "look": {
+  "gain": 0.5,
+  "saturation": 0.25,
+  "owner": 1.0
+ },
+ "waterline": {
+  "domains": [
+   "sea"
+  ],
+  "draft": 0.15
+ },
+ "hover": {
+  "factor": 0.5,
+  "minimum": 8,
+  "sprites": "Renderer/inventory/civ3_unit_sprite_sizes.json"
+ },
+ "owner_marks": {
+  "styles": {
+   "sea": "hull",
+   "air": "extremities"
+  },
+  "targets": {
+   "stripe": 0.12,
+   "accents": 0.02,
+   "accent_floor": 0.1,
+   "tips": 0.05,
+   "tail": 0.02
+  },
+  "strength": 0.9
+ },
+ "owner_garments": {
+  "minimum": 0.1,
+  "garment_share": 0.15,
+  "target": 0.25,
+  "strength": 0.9
+ }
+}

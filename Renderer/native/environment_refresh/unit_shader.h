@@ -95,12 +95,16 @@ float4 PS(Output i):SV_Target {
  }
  // Lab readability look: Quality.y extra gain, .z extra saturation, .w Civ III
  // style owner ramp over the owner mask. Zero (every current caller) keeps the
- // authored response exactly.
+ // authored response exactly. The ramp follows the surface's luminance but is
+ // never brighter than the owner colour itself, and the extra saturation skips
+ // owner colour: a dark red or blue would otherwise clip to an emissive hue.
+ float owned=0;
  if(Quality.w>0) {
   float3 luma=float3(.2126,.7152,.0722);
   float coverage=moon_color.w>.5?(owner.w>.5?b.a:0):mask*owner.w;
-  float3 ramp=saturate(owner.rgb*(dot(b.rgb*tint.rgb,luma)/max(dot(owner.rgb,luma),.03)));
-  albedo=lerp(albedo,ramp,saturate(coverage*Quality.w));
+  float3 ramp=saturate(owner.rgb*min(1,dot(b.rgb*tint.rgb,luma)/max(dot(owner.rgb,luma),.03)));
+  owned=saturate(coverage*Quality.w);
+  albedo=lerp(albedo,ramp,owned);
  }
  float3 n=normalize(i.n);
  if(channels.w>.5) {
@@ -122,7 +126,7 @@ float4 PS(Output i):SV_Target {
  }
  if(Quality.y>0||Quality.z>0) {
   float l=dot(radiance,float3(.2126,.7152,.0722));
-  radiance=max(0,lerp(float3(l,l,l),radiance,1+Quality.z))*(1+Quality.y);
+  radiance=max(0,lerp(float3(l,l,l),radiance,1+Quality.z*(1-owned)))*(1+Quality.y);
  }
  return float4(radiance,1);
 }

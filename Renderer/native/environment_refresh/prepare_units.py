@@ -125,7 +125,7 @@ def fit_sizes(bindings,target,sprites,factor):
         near=[c for a,c in measured if abs(math.log(a/aspect))<math.log(1.25)] or [c for _,c in measured] or [1.0]
         binding['scale']*=float(np.median(near))*factor;binding['fit_policy']='native_sprite_area_shape_neighbors'
     return len(measured),len(pending)
-def build_pack(target=None, source=None):
+def build_pack(target=None, source=None, quality_path=None):
     source=Path(source or PACKS/'UnitAnimationRuntime')
     target=Path(target or PACKS/'UnitAnimationFidelity').resolve()
     target.relative_to(ROOT/'Renderer')
@@ -147,7 +147,7 @@ def build_pack(target=None, source=None):
             raise ValueError('Unit output must not overlap source inputs')
     separate(source);separate(PACKS/'UnitNormalFidelity')
     manifest=read(source/'manifest.json');bindings=read(source/'bindings.json')
-    quality=read(ROOT/'Renderer/native/environment_refresh/unit_quality.json')
+    quality=read(Path(quality_path) if quality_path else ROOT/'Renderer/native/environment_refresh/unit_quality.json')
     frame_root=PACKS/quality['frame_pack'];separate(frame_root)
     frames=read(frame_root/'frames.json')['components'] if quality['units'] else {}
     frame_manifest=read(frame_root/'manifest.json') if quality['units'] else {}
@@ -254,16 +254,15 @@ def build_pack(target=None, source=None):
                 modes[mode]=modes.get(mode,0)+1
     target.mkdir(parents=True,exist_ok=True)
     grounded=ground_skinned_bodies(bindings,target)
-    waterline=quality.get('waterline');floated=None
-    if waterline:
+    waterline=quality.get('waterline');marks=quality.get('owner_marks');floated=None;domains={}
+    if waterline or marks:
         # Recipe domains are pack metadata; procedural sources have no recipe.
-        domains={}
         for unit in manifest['units'].values():
             recipe=PACKS/unit['source_pack']/unit.get('source_recipe','')
             if recipe.is_file():domains[unit['civ3_ids'][0]]=read(recipe).get('domain')
         domains={binding['key0']:next((domains[binding['key'+str(i)]] for i in range(binding['key_count']) if binding['key'+str(i)] in domains),None)
                  for binding in bindings.values() if isinstance(binding,dict) and 'idle' in binding}
-        floated=float_at_waterline(bindings,target,domains,set(waterline['domains']),float(waterline['draft']))
+    if waterline:floated=float_at_waterline(bindings,target,domains,set(waterline['domains']),float(waterline['draft']))
     sizing=quality.get('sizing');fitted=None;sprites=None
     if sizing:
         # Floating hulls match the native sprite on their visible area.
@@ -271,6 +270,18 @@ def build_pack(target=None, source=None):
         fitted=fit_sizes(bindings,target,sprites,float(sizing.get('factor',1)))
     hover=quality.get('hover');hovering=None
     if hover:hovering=hover_flying_units(bindings,target,sprites or read(ROOT/hover['sprites'])['units'],float(hover['factor']),float(hover['minimum']))
+    marked=None
+    if marks:
+        # Hulls and aircraft carry small civ marks instead of their broad authored tint.
+        from Renderer.tools.asset_compiler import unit_owner_coverage as coverage
+        sha(ROOT/'Renderer/tools/asset_compiler/unit_owner_coverage.py')
+        styles={}
+        for binding in bindings.values():
+            if not isinstance(binding,dict) or 'idle' not in binding:continue
+            domain=domains.get(binding['key0']) or ('air' if binding.get('hover_policy') else None)
+            if domain in marks['styles']:styles[binding['key0']]=marks['styles'][domain]
+        marked=coverage.paint_marks(bindings,target,coverage.components_by_binding(manifest,bindings),styles,
+            {k:float(v) for k,v in marks['targets'].items()},float(marks['strength']))
     garments=quality.get('owner_garments');painted=None
     if garments:
         # Units whose measured owner colour is too sparse tint one garment component.
@@ -286,7 +297,7 @@ def build_pack(target=None, source=None):
     evidence={'status':'pass','source_manifest_sha256':sha(source/'manifest.json'),'bindings_sha256':digest(target/'bindings.json'),
       'unit_count':len(manifest['units']),'native_keys':sum(v['key_count'] for v in bindings.values() if isinstance(v,dict)),
       'address_mode_parts':modes,'sizing':{'native_sprite':fitted[0],'shape_neighbors':fitted[1]} if fitted else None,'owner_garments':painted,'grounded':grounded,
-      'waterline':floated,'hover':hovering,'normal_payloads':len(updates),'unchanged_palette_frames':poses,'source_sha256':pins,
+      'waterline':floated,'hover':hovering,'owner_marks':marked,'normal_payloads':len(updates),'unchanged_palette_frames':poses,'source_sha256':pins,
       'settings':{'msaa':4,'anisotropy':16,'mip_bias':0,'render_scale':'pack selected 1 or 4'},
       'limits':['Original generic assets preserve their authored normals; imported components use fingerprinted source octahedral normals.',
                 'Native environment, team colors, projection and working self-shadow visibility adapt the selected Lab material response; the isolated witness LUT is not applied to the native sprite.']}
@@ -295,7 +306,8 @@ def build_pack(target=None, source=None):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,help='Build a disposable pack without publishing a verification report')
+    parser.add_argument('--quality',type=Path,help='Candidate quality settings instead of unit_quality.json')
     args=parser.parse_args()
-    evidence,_=build_pack(ROOT/args.output if args.output else None)
+    evidence,_=build_pack(ROOT/args.output if args.output else None,quality_path=args.quality)
     print(f"PASS {evidence['unit_count']} units, {evidence['native_keys']} native keys; animation palettes preserved")
 if __name__=='__main__':main()

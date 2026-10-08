@@ -5,7 +5,7 @@
   "source_sha256": {
     "Renderer/native/environment_refresh/feature.hlsl": "3cefdb3d2738a35fd962be553ca7dad45440179e0300cfa2ac0ecc0ba4337a96",
     "Renderer/lab/shared/shaders/lighting/local_facade_lights.hlsl": "264bd350d639f897924489c2773434b2f9e0af5cf37e8f3c7034764ae47bb2c3",
-    "Renderer/lab/shared/shaders/objects/city_scene_material.hlsl": "a992ef1cdd5ee4b2833f5f663b733712234d92ef5f4118a3d47b2d9c2985e54c",
+    "Renderer/lab/shared/shaders/objects/city_scene_material.hlsl": "ae3950cb7c16405463909f5f3c9b7edf3e1f3b64813a55f4bc54af19cefdc8aa",
     "Renderer/lab/shared/shaders/lighting/city_environment.hlsl": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9",
     "Renderer/lab/shared/shaders/objects/settlement_ground.hlsl": "a1e5c4cc49daf8c41bda6ec9bebb4bbff94fac4bc9da9dd693027c42718c42f4",
     "Renderer/native/render_core/world_projection.hlsl": "e129a3868ecedbe5176e63862f4d321627bce224bb11d888102f19bd8bdc62fb",

@@ -106,6 +106,7 @@
     "Renderer.native.test_async_image_backpressure",
     "Renderer.native.test_ordered_cold_service",
     "Renderer.native.test_unit_shadow_union",
+    "Renderer.native.test_unit_owner_look",
     "Renderer.native.test_tactical_overlay",
     "Renderer.tools.asset_compiler.test_unit_owner_coverage"
   ],
