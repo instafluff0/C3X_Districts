@@ -12842,6 +12842,35 @@ public:
 
 RendererState renderer;
 
+// Cost attribution (C3X_RENDERER_DRAIN_PROBE=1 only): waits for the immediate
+// context to finish and traces the wall time, charging the work submitted
+// since the previous probe to `phase`. Unlike GPU timestamps this includes a
+// translated driver's per-pass and encoder-switch cost (Parallels: about
+// 0.1 ms per render-target change; tools/d3d_pass_cost_probe.cpp). It
+// serializes CPU and GPU, so it is for attribution captures, never timing.
+inline void drain_probe(char const* phase,unsigned command=0){
+    char enabled[8]={};
+    if(!c3x_renderer::render_core::cached_environment("C3X_RENDERER_DRAIN_PROBE",enabled,sizeof(enabled))||enabled[0]!='1')return;
+    static ID3D11Device* device=nullptr;
+    static Microsoft::WRL::ComPtr<ID3D11Texture2D> source,staging;
+    if(!renderer.device||!renderer.context)return;
+    if(device!=renderer.device){source.Reset();staging.Reset();device=renderer.device;
+        D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;
+        if(FAILED(device->CreateTexture2D(&desc,nullptr,&source)))return;
+        desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        if(FAILED(device->CreateTexture2D(&desc,nullptr,&staging))){source.Reset();return;}}
+    if(!source||!staging)return;
+    LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+    renderer.context->CopyResource(staging.Get(),source.Get());
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if(SUCCEEDED(renderer.context->Map(staging.Get(),0,D3D11_MAP_READ,0,&mapped)))renderer.context->Unmap(staging.Get(),0);
+    QueryPerformanceCounter(&end);
+    char detail[160];std::snprintf(detail,sizeof(detail),"phase=%s command=%u ms=%.3f",phase,command,
+        renderer.trace.milliseconds(end.QuadPart-begin.QuadPart));
+    renderer.trace.write("drain-probe",detail,true);
+}
+
 // A presentation owns all pointer-bearing output fields together. Construction
 // is transactional: an allocation failure cannot partly replace the image or
 // its ownership. Two publications may coexist briefly during commit, each at
@@ -13313,17 +13342,20 @@ public:
             trial_visual_state_busy.fetch_add(1,std::memory_order_relaxed);
             return C3X_RENDERER_RESULT_BUSY;
         }
-        // Without a retained renderable view, camera-job presents only repeat
-        // native UI. Throttle those offers; a retained view or zoom keeps
-        // its normal animation cadence between preparation chunks.
+        // Camera-job frames are serviced on the job's own thread. Without a
+        // retained renderable view they only repeat native UI (8 Hz). With
+        // one they animate, but at full rate they took 189 of a 281 ms reveal
+        // job; 30 Hz cut it to 161 ms without measurable scroll loss
+        // (performance review, October 8, section 11). The job's start counts
+        // as a frame, so short jobs run uninterrupted. A zoom keeps every
+        // frame, and so does a newly committed native front (an adopted scroll
+        // step with its overlays): holding it delayed each step 10-20 ms.
         bool zooming=std::abs(double(c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed))*65536.-
             double(presented_zoom_q16.load(std::memory_order_acquire)))>1.;
-        // Experiment: C3X_RENDERER_JOB_FRAME_HZ caps frames during a job that
-        // has a retained view (each frame runs inside the job's thread).
-        static unsigned const job_frame_hz=[]{char value[8]={};
-            return GetEnvironmentVariableA("C3X_RENDERER_JOB_FRAME_HZ",value,sizeof(value))?unsigned(std::atoi(value)):0u;}();
-        unsigned job_hz=renderer_state.completed_scene_retained.load(std::memory_order_relaxed)?job_frame_hz:8u;
-        if(!consumer_pid&&camera_active&&job_hz&&!zooming&&
+        bool retained=renderer_state.completed_scene_retained.load(std::memory_order_relaxed);
+        bool new_front=retained&&trial_front_pending.load(std::memory_order_acquire);
+        long long job_hz=retained?30:8;
+        if(!consumer_pid&&camera_active&&!zooming&&!new_front&&
            trial_job_presented&&ticks-trial_job_presented<frequency/job_hz)
             return C3X_RENDERER_RESULT_BUSY;
         drain_facts_locked(); // the frame samples every fact received before it
@@ -14955,6 +14987,7 @@ private:
     c3x_renderer_world_capture_fn world_capture=nullptr;
     UINT_PTR world_timer=0;DWORD world_capture_thread=0;
     std::uint64_t world_prepare_sequence=0,world_initialization_scope=0;
+    long long job_submitted_qpc=0; // QPC when the pending job command was submitted
     bool required_world_changes=false;
     c3x_renderer_camera_identity_v1 required_world_changes_identity={},job_required_world_identity={};
     std::uint64_t world_appearance_sequence=0;
@@ -15197,6 +15230,7 @@ private:
             scene_changes.reset();scene_changes_ok=true;
         }
         if(command!=Command::unit)foreground_pending.store(true, std::memory_order_relaxed);
+        LARGE_INTEGER submitted={};QueryPerformanceCounter(&submitted);job_submitted_qpc=submitted.QuadPart;
         job_command = command;
         has_job = true;
         std::uint64_t sequence = ++latest_job_sequence;
@@ -15638,6 +15672,13 @@ private:
                 // the full-quality raster replaces its preview.
                 if(!changed&&!job->pending_since&&!poses_changed&&!animated&&job->zoom==zoom&&
                     !c3x_renderer64_static_refinement_pending(zoom))return;
+                {   // Cost attribution only (C3X_RENDERER_DIAG_ZOOM_SCENE_HOLD=1, wrong
+                    // picture): re-render the scene at most every 120 ms while zooming
+                    // (unit screen poses change with zoom, so they cannot veto it).
+                    char hold[4]={};
+                    if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_DIAG_ZOOM_SCENE_HOLD",hold,sizeof(hold))&&hold[0]=='1'&&
+                       job->ready&&!changed&&job->zoom!=zoom&&ticks-job->completed_ticks<frequency*12/100)return;
+                }
                 if(!job->pending_since)job->pending_since=ticks;++job->turns;
                 auto ready=renderer_state.prepare_frame_unit_assets(poses);
                 if(ready==C3X_RENDERER_RESULT_OK)ready=c3x_renderer64_prepare_unit_meshes();
@@ -15984,8 +16025,15 @@ private:
                 }
 #ifdef C3X_HELPER_TRIAL
             }else if(command==Command::gpu_images_scope){
+                // Drain-mode profiles (C3X_RENDERER_PROFILE=3) attribute image
+                // batch work per native operation like a visual frame.
+                auto& image_timeline=c3x_renderer::render_core::gpu_timeline();
+                image_timeline.configure();bool profile_images=image_timeline.draining();
+                if(profile_images)image_timeline.begin(renderer_state.context);
                 result=image_scope_body?image_scope_body(image_scope_context,this,&RendererWorker::image_scope_execute):
                     C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                if(profile_images){auto summary=image_timeline.collect(renderer_state.context);
+                    if(!summary.empty())renderer_state.trace.write("gpu-image-timeline",summary.c_str(),true);}
 #endif
             }else if(command==Command::gpu_images){
                 gpu_result={sizeof(gpu_result)};gpu_readback.clear();
@@ -16558,6 +16606,7 @@ private:
             renderer_state.reset();
                 result = C3X_RENDERER_RESULT_OK;
             }
+            drain_probe("command",unsigned(command));
             } catch (...) {
 #ifdef C3X_HELPER_TRIAL
                 if(command==Command::trial_present_shared||command==Command::trial_visual_shared||command==Command::trial_required_visual_shared)retire_trial_display();
@@ -16603,7 +16652,7 @@ private:
 #endif
             ;
         if(!independent)return;
-        auto sequence=latest_job_sequence;
+        auto sequence=latest_job_sequence;auto submitted=job_submitted_qpc;
         lock.unlock();
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
         c3x_renderer_output_v1 unused={};int result=execute_command(command,unused);
@@ -16614,10 +16663,12 @@ private:
         foreground_pending.store(false,std::memory_order_relaxed);
         ++camera_service_turns;
         completed.notify_all();
+        // wait_ms: from the command's submission to this checkpoint.
         char detail[256];std::snprintf(detail,sizeof(detail),
-            "ticket=%lld turn=%llu command=%u sequence=%llu ms=%.3f built=%u reused=%u result=%d",
+            "ticket=%lld turn=%llu command=%u sequence=%llu ms=%.3f wait_ms=%.3f built=%u reused=%u result=%d",
             job_camera_ticket,camera_service_turns,unsigned(command),sequence,
             renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),
+            renderer_state.trace.milliseconds(begin.QuadPart-submitted),
             renderer_state.frame_tiles_built,renderer_state.frame_tiles_reused,result);
         renderer_state.trace.write("camera-service-turn",detail,true);
         if(++commands>=8 || std::chrono::steady_clock::now()-started>=std::chrono::milliseconds(1))return;
@@ -16827,6 +16878,13 @@ private:
                     if(!gpu_presentation)gpu_publication.clear();
                     gpu_presentation=true;native_presentation=true;isolated_publication=true;camera_preview_enabled=false;
                     camera_pending=false;camera_active=true;camera_cancelled.store(false,std::memory_order_relaxed);
+#ifdef C3X_HELPER_TRIAL
+                    // The job's start counts as its last frame for the in-job
+                    // cap: a scroll step job (10-20 ms) finishes before
+                    // Civ III's next tick polls it instead of waiting on a
+                    // display frame's GPU waits (performance review, October 8).
+                    {LARGE_INTEGER started={};QueryPerformanceCounter(&started);trial_job_presented=started.QuadPart;}
+#endif
                     renderer_state.cancel_pixel_preparation();
                     lock.unlock();
                     int result=C3X_RENDERER_RESULT_ERROR;

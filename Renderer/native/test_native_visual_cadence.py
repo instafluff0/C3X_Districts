@@ -22,6 +22,18 @@ class NativeVisualCadenceTests(unittest.TestCase):
         self.assertIn('std::array<bool,trial_frames_in_flight> visual_fence_issued{};',source)
         self.assertIn('visual_fence_index=(visual_fence_index+1)%unsigned(visual_fences.size());',source)
 
+    def test_camera_job_start_counts_as_an_in_job_frame(self):
+        # Civ III polls a scroll step once per 78 ms tick. A display frame
+        # serviced inside a short step job waited 18-28 ms on Parallels GPU
+        # pacing and pushed 20% of light-save steps past the next tick
+        # (performance review, October 8). The job's start counts as its last
+        # frame, so the 30 Hz in-job cap keeps such jobs uninterrupted.
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        start=source.index('camera_pending=false;camera_active=true;camera_cancelled.store(false,std::memory_order_relaxed);')
+        block=source[start:start+1000]
+        self.assertIn('trial_job_presented=started.QuadPart;',block)
+        self.assertLess(block.index('trial_job_presented=started.QuadPart;'),block.index('lock.unlock();'))
+
     def test_presentation_permit_is_nonblocking_and_survives_noop(self):
         run_cpp(r'''
 #include <windows.h>
@@ -368,7 +380,7 @@ struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;std::a
  std::uint64_t trial_handle=0;unsigned trial_width=0,trial_height=0,submits=0;
  bool visual_allowed=true,replay_clock_seeded=false;long long visual_ticks=0,visual_frequency=0,visual_last=100;int result=C3X_RENDERER_RESULT_PENDING;
  std::atomic<long long> visual_qpc_offset{0};
- bool camera_active=false;long long trial_job_presented=0;
+ bool camera_active=false;long long trial_job_presented=0;std::atomic<bool> trial_front_pending{false};
  struct {std::atomic<bool> completed_scene_retained{false};} renderer_state;
  enum class Command{trial_visual_shared};
  int submit_locked(std::unique_lock<std::mutex>&,Command){++submits;return result;}
@@ -402,9 +414,15 @@ int main(){State state;std::uint64_t handle=0;unsigned w=0,h=0;
  c3x_renderer::zoom_destination_hint()=.5f;
  assert(state.trial_visual_shared(1135,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==6);
  state.presented_zoom_q16=32768;assert(state.trial_visual_shared(1136,1000,0,handle,w,h)==C3X_RENDERER_RESULT_BUSY&&state.submits==6);
- // A retained renderable scene services animation at display cadence.
+ // A retained renderable scene animates inside the job at up to 30 Hz:
+ // each frame runs on the job's own thread and delays its result.
  state.renderer_state.completed_scene_retained=true;
- assert(state.trial_visual_shared(1137,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==7);
+ assert(state.trial_visual_shared(1137,1000,0,handle,w,h)==C3X_RENDERER_RESULT_BUSY&&state.submits==6);
+ // A newly committed native front (an adopted scroll step) is presented at once.
+ state.trial_front_pending=true;assert(state.trial_visual_shared(1138,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==7);
+ // It counts as the job's latest frame for the 30 Hz cap.
+ state.trial_front_pending=false;assert(state.trial_visual_shared(1169,1000,0,handle,w,h)==C3X_RENDERER_RESULT_BUSY&&state.submits==7);
+ state.submits=6;assert(state.trial_visual_shared(1172,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==7);
  state.renderer_state.completed_scene_retained=false;
  state.submits=5;state.camera_active=false;assert(state.trial_visual_shared(1140,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==6);
  assert(state.trial_visual_shared(1145,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==7);

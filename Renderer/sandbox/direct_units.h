@@ -111,6 +111,7 @@ struct SandboxDirectUnits {
     static constexpr unsigned palette_slot_limit=1024;
     unsigned required_samples=0,part_samples=0,shadow_samples=0,shadow_reuses=0,
         shadow_overflow=0,main_contributors=0,reflection_contributors=0,palette_uploads=0;
+    double shadow_ms=0; // CPU time re-rendering self-shadow maps this frame
     float prepared_light[2]={};
     decltype(c3x_renderer::evaluate_environment(12,0)) prepared_environment{};
     std::array<float,20> prepared_beauty{};
@@ -799,7 +800,7 @@ float4 PSShadow(Output i):SV_Target {
         if(!plan.valid)return false;
         auto required=plan.required(visible);
         prepared_units.clear();transitions.retain(required);shared_shadows.begin();material_samples.begin();
-        required_samples=part_samples=shadow_samples=shadow_reuses=shadow_overflow=0;
+        required_samples=part_samples=shadow_samples=shadow_reuses=shadow_overflow=0;shadow_ms=0;
         main_contributors=reflection_contributors=shadow_contributors=palette_uploads=material_builds=material_reuses=0;
         material_buffer_builds=material_buffer_reuses=material_buffer_uploads=material_upload_fallbacks=0;
         reflection_bounds_builds=reflection_bounds_reuses=reflection_bounds_rejected=0;
@@ -1007,7 +1008,9 @@ float4 PSShadow(Output i):SV_Target {
         else {
             auto& slot=shared_shadows[sample.shadow_slot].value;self_shadow=slot.texture;self_shadow_target=slot.target;self_shadow_view=slot.view;
         }
+        auto shadow_begin=std::chrono::steady_clock::now();
         if(!draw_self_shadow(unit,action,sample.instance,sample.pose,sample.angle,frame,prepared_light[0],prepared_light[1],&sample))return false;
+        shadow_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-shadow_begin).count();
         ++shadow_samples;
         if(sample.shadow_slot==UINT_MAX){working_shadow.texture=self_shadow;working_shadow.target=self_shadow_target;working_shadow.view=self_shadow_view;}
         if(sample.shadow_slot!=UINT_MAX){auto& entry=shared_shadows[sample.shadow_slot];auto& slot=entry.value;

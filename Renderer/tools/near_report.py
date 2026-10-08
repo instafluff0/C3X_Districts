@@ -136,10 +136,15 @@ def report(capture):
                         'adopt_ms_p50': round(percentile(latencies, .5), 1) if latencies else None})
         rows.append(row)
     for name, event in JUMPS:
-        click = events[event]
+        # Civ III can move on the button press, before the release (JUMPS
+        # names the release); time from the press.
+        click = events[event - 1]
         prior = [h for h in handoffs if h[0] < click]
         start = prior[-1] if prior else None
-        landed = next((h for h in handoffs if h[0] > click and start and
+        # A click Civ III ignored has no move before the next scripted input;
+        # a later scroll handoff must not be reported as a slow jump.
+        until = events[event + 1] if event + 1 < len(events) else float('inf')
+        landed = next((h for h in handoffs if click < h[0] < until and start and
                        abs(h[1] - start[1]) + abs(h[2] - start[2]) > 1000), None)
         rows.append({'segment': name, 'jump_ms': round((landed[0] - click) / frequency * 1000, 1) if landed else None})
     return rows

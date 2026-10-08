@@ -20,6 +20,7 @@
 #include "scene_detail_filter.h"
 #include "gpu_unit_scene.h"
 #include "composition_recording.h"
+#include "render_core/gpu_event_timeline.h"
 namespace c3x_gpu_images {
 using Microsoft::WRL::ComPtr;
 struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0,allocations=0,reuses=0;
@@ -673,8 +674,15 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         Image next,next_detail;if(grow)make(next,width,height);if(grow_detail)make(next_detail,detail_width,detail_height);
         if(grow){counters.resident_bytes+=bytes(next)-bytes(scratch);scratch=std::move(next);}
         if(grow_detail){counters.resident_bytes+=bytes(next_detail)-bytes(detail_scratch);detail_scratch=std::move(next_detail);}
+        // C3X_RENDERER_PROFILE=3 charges each native operation its own cost.
+        static char const* const kind_marks[]={"op_copy","op_fill","op_color_key","op_invert","op_quantize","op_expand",
+            "op_sprite","op_unit_over","op_text","op_image","op_blend","op_lookup"};
+        auto& timeline=c3x_renderer::render_core::gpu_timeline();char const* executed=nullptr;
+        timeline.detail(context,"before_op");
         for(std::size_t n=0;n<count;++n){auto const& op=commands[n];auto d=find(op.destination);auto r=selected(op,*d);
+            if(executed){timeline.detail(context,executed);executed=nullptr;}
             if(r.left>=r.right||r.top>=r.bottom)continue;
+            if(unsigned(op.kind)<12)executed=kind_marks[unsigned(op.kind)];
             auto changed=r;
             auto coverage=scene?&scene->coverage:footprint;
             if(op.kind==Kind::unit_over&&coverage&&(*coverage)[0]<(*coverage)[2]&&(*coverage)[1]<(*coverage)[3])
@@ -704,7 +712,9 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
             // GPU mutation invalidates a prior CPU revision; the caller must supply
             // a strictly newer revision to replace this image from CPU content.
             d->cpu_current=false;++counters.commands;
-        }return true;
+        }
+        if(executed)timeline.detail(context,executed);
+        return true;
     }
     // GPU-to-GPU import of a completed display texture; no staging or CPU seed.
     bool import_bgra(Id id,ID3D11Texture2D* source,int x=0,int y=0){

@@ -417,11 +417,11 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
                 renderer.trace.write("pass-census",line.c_str(),true);
             }
         }
-        sprintf_s(detail,"part_samples=%u main_units=%u reflected_units=%u material_buffer_builds=%u material_buffer_reuses=%u material_buffer_uploads=%u material_upload_fallbacks=%u unit_preparation_gpu_bytes=%zu",
+        sprintf_s(detail,"part_samples=%u main_units=%u reflected_units=%u material_buffer_builds=%u material_buffer_reuses=%u material_buffer_uploads=%u material_upload_fallbacks=%u unit_preparation_gpu_bytes=%zu self_shadow_ms=%.3f",
             sandbox_direct_units.part_samples,sandbox_direct_units.main_contributors,sandbox_direct_units.reflection_contributors,
             sandbox_direct_units.material_buffer_builds,sandbox_direct_units.material_buffer_reuses,
             sandbox_direct_units.material_buffer_uploads,sandbox_direct_units.material_upload_fallbacks,
-            sandbox_direct_units.gpu_preparation_bytes());
+            sandbox_direct_units.gpu_preparation_bytes(),sandbox_direct_units.shadow_ms);
         renderer.trace.write("fresh-unit-material-work",detail,true);
         sprintf_s(detail,"bounds_builds=%u bounds_reuses=%u reflections_removed=%u main_units=%u shadow_units=%u reflected_units=%u",
             sandbox_direct_units.reflection_bounds_builds,sandbox_direct_units.reflection_bounds_reuses,

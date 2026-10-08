@@ -2,6 +2,7 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -25,7 +26,12 @@ class GpuEventTimeline {
     std::vector<Total> totals;
     LARGE_INTEGER frequency{},reported{};
     unsigned frames=0;double frame_ms=0,wait_ms=0;
-    bool configured=false;
+    bool configured=false,per_frame=false,drain=false,in_frame=false;
+    void add(char const* name,double ms){
+        Total* total=nullptr;for(auto& t:totals)if(t.name==name){total=&t;break;}
+        if(!total){totals.push_back({name});total=&totals.back();}
+        total->ms+=ms;++total->count;
+    }
     static bool texture(ID3D11Device* device,D3D11_USAGE usage,Texture& out){
         D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=desc.MipLevels=desc.ArraySize=1;
         desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.SampleDesc.Count=1;desc.Usage=usage;
@@ -34,48 +40,77 @@ class GpuEventTimeline {
     }
 public:
     bool enabled=false;
+    bool draining()const{return drain;}
     void configure(){
         if(configured)return;configured=true;
         char value[8]={};
-        enabled=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",value,sizeof(value))&&value[0]=='1';
+        // 1 summarizes every two seconds; 2 reports every frame (short zoom
+        // transitions vanish inside two-second averages). 3 also reports every
+        // frame but waits for the GPU at each mark: a translation layer may
+        // finish a batched frame at once, so in-order readbacks cannot split
+        // it, and a drain charges each phase its own (isolated) cost.
+        enabled=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",value,sizeof(value))&&(value[0]>='1'&&value[0]<='3');
+        per_frame=enabled&&value[0]!='1';drain=enabled&&value[0]=='3';
         QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&reported);
     }
+    // Finer marks (per native operation) only in drain mode, where each one
+    // is charged its isolated cost; in-order readbacks cannot split them.
+    void detail(ID3D11DeviceContext* context,char const* name){if(drain&&in_frame)mark(context,name);}
     void mark(ID3D11DeviceContext* context,char const* name){
-        if(!enabled||!context)return;
+        if(!enabled||!context||(drain&&!in_frame))return;
         Microsoft::WRL::ComPtr<ID3D11Device> device;context->GetDevice(&device);if(!device)return;
         if(!probe && !texture(device.Get(),D3D11_USAGE_DEFAULT,probe))return;
         Texture staging;
         if(!pool.empty()){staging=pool.back();pool.pop_back();}
         else if(!texture(device.Get(),D3D11_USAGE_STAGING,staging))return;
-        context->CopyResource(staging.Get(),probe.Get());marks.push_back({name,staging});
+        context->CopyResource(staging.Get(),probe.Get());
+        if(drain){
+            LARGE_INTEGER before{},after{};QueryPerformanceCounter(&before);
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if(SUCCEEDED(context->Map(staging.Get(),0,D3D11_MAP_READ,0,&mapped)))context->Unmap(staging.Get(),0);
+            QueryPerformanceCounter(&after);pool.push_back(staging);
+            double ms=1000.0*double(after.QuadPart-before.QuadPart)/double(frequency.QuadPart);
+            if(marks.empty())marks.push_back({name,nullptr});else{add(name,ms);frame_ms+=ms;}
+            if(!std::strcmp(name,"begin"))wait_ms+=ms;
+            return;
+        }
+        marks.push_back({name,staging});
     }
-    void begin(ID3D11DeviceContext* context){configure();if(!enabled)return;marks.clear();mark(context,"begin");}
-    // Returns a summary line every two seconds, otherwise an empty string.
+    void begin(ID3D11DeviceContext* context){configure();if(!enabled)return;marks.clear();in_frame=true;mark(context,"begin");}
+    // Returns a summary line every two seconds (every frame with
+    // C3X_RENDERER_PROFILE=2), otherwise an empty string.
     // gpu_frame_ms spans the first to the last mark; wait_ms is how long the
     // CPU waited at collection for the frame's GPU work to drain.
     std::string collect(ID3D11DeviceContext* context){
+        in_frame=false;
         if(!enabled||!context||marks.empty())return {};
+        if(drain){marks.clear();++frames;return report();}
         context->Flush();
         LARGE_INTEGER previous{},first{},start{};QueryPerformanceCounter(&start);
         for(std::size_t i=0;i<marks.size();++i){
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if(SUCCEEDED(context->Map(marks[i].staging.Get(),0,D3D11_MAP_READ,0,&mapped)))context->Unmap(marks[i].staging.Get(),0);
             LARGE_INTEGER now{};QueryPerformanceCounter(&now);
-            if(i){double ms=1000.0*double(now.QuadPart-previous.QuadPart)/double(frequency.QuadPart);
-                Total* total=nullptr;for(auto& t:totals)if(t.name==marks[i].name){total=&t;break;}
-                if(!total){totals.push_back({marks[i].name});total=&totals.back();}
-                total->ms+=ms;++total->count;}
+            if(i)add(marks[i].name,1000.0*double(now.QuadPart-previous.QuadPart)/double(frequency.QuadPart));
             else first=now;
             previous=now;pool.push_back(marks[i].staging);
         }
         frame_ms+=1000.0*double(previous.QuadPart-first.QuadPart)/double(frequency.QuadPart);
         wait_ms+=1000.0*double(previous.QuadPart-start.QuadPart)/double(frequency.QuadPart);++frames;
         marks.clear();
+        return report();
+    }
+    std::string report(){
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
-        if(now.QuadPart-reported.QuadPart<frequency.QuadPart*2)return {};
+        if(!per_frame&&now.QuadPart-reported.QuadPart<frequency.QuadPart*2)return {};
         reported=now;std::string line;char item[96];
         std::snprintf(item,sizeof(item),"frames=%u gpu_frame_ms=%.2f wait_ms=%.2f",frames,frames?frame_ms/frames:0.0,frames?wait_ms/frames:0.0);line+=item;
-        for(auto& t:totals){std::snprintf(item,sizeof(item)," %s_ms=%.2f",t.name,t.count?t.ms/t.count:0.0);line+=item;t.ms=0;t.count=0;}
+        // Drain mode reports each phase's total and its number of marks: per
+        // operation marks repeat within a frame.
+        for(auto& t:totals){if(drain&&!t.count)continue;
+            if(drain)std::snprintf(item,sizeof(item)," %s_ms=%.2f %s_n=%u",t.name,t.ms,t.name,t.count);
+            else std::snprintf(item,sizeof(item)," %s_ms=%.2f",t.name,t.count?t.ms/t.count:0.0);
+            line+=item;t.ms=0;t.count=0;}
         frames=0;frame_ms=0;wait_ms=0;return line;
     }
 };

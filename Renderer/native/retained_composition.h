@@ -24,7 +24,14 @@ public:
         // CPU submission time per visual-frame phase (diagnostic only).
         double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;
         std::array<LONGLONG,8> display_ticks{}; // per call inside the final display draw
+        std::string executed; // C3X_RENDERER_TRACE_EVALUATED=1: kind@area of each executed operation
     };
+    bool trace_evaluated=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_TRACE_EVALUATED",value,sizeof(value))&&value[0]=='1';}();
+    void note_executed(char const* what,Rect area,unsigned count=1){
+        if(!trace_evaluated||work.executed.size()>3000)return;char item[64];
+        std::snprintf(item,sizeof(item)," %s%s%u@%d,%d,%d,%d",what,count>1?"x":"",count>1?count:0u,area.left,area.top,area.right-area.left,area.bottom-area.top);
+        work.executed+=item;
+    }
     struct RecipeReuse {std::uint64_t eligible=0,probed=0,reused=0;};
     struct PlanReuse {std::uint64_t builds=0,reuses=0,source_binds=0,source_reuses=0,batch_builds=0,batch_reuses=0;std::size_t nodes=0;};
     using Texture=ComPtr<ID3D11Texture2D>;
@@ -715,6 +722,7 @@ private:
                     }
                     if(!replay.transform_view(n->sample_target,source,scale,n->view_native_format?&n->view_words:nullptr,
                         n->view_native_format==2?Format::rgb565:Format::rgb555))throw std::runtime_error("retained world view rejected");
+                    render_core_detail("view_transform");
                 }catch(...){replay.recycle(source);throw;}
                 replay.recycle(source);
                 n->view_scale=scale;n->dependencies.swap(versions);n->revision=++serial;
@@ -759,16 +767,17 @@ private:
                             compiled_enabled?n->output[i].Get():nullptr);
                         if(replay.texture(base)!=n->output[i].Get()){
                             context->CopyResource(n->output[i].Get(),replay.texture(base));
-                            ++work.copies;work.copied_pixels+=bytes/4;
+                            ++work.copies;work.copied_pixels+=bytes/4;render_core_detail("hud_base_copy");
                         }
                         replay.recycle(base);
                     }
                     bool spatial=compiled_enabled&&bind_batch(*n,ticks,frequency,depth,pair,scale);
                     if(spatial){
-                        work.operations+=unsigned(n->batch.size());
+                        work.operations+=unsigned(n->batch.size());note_executed("hud-spatial",n->area,unsigned(n->batch.size()));
                         if(!replay.submit_spatial_sources(n->batch_preparation->spatial_plan,pair[0],pair[1],n->batch_preparation->batch_views))throw std::runtime_error("retained spatial HUD operation rejected");
+                        render_core_detail("hud_spatial");
                     }else if(compiled_enabled&&n->batch_preparation->batch_bound){
-                        work.operations+=unsigned(n->batch_preparation->batch_commands.size());
+                        work.operations+=unsigned(n->batch_preparation->batch_commands.size());note_executed("hud-bound",n->area,unsigned(n->batch_preparation->batch_commands.size()));
                         for(std::size_t index=0;index<n->batch_preparation->batch_commands.size();++index){
                             auto c=n->batch_preparation->batch_commands[index];Id ids[6]={};
                             for(unsigned i=0;i<6;++i){auto binding=n->batch_preparation->batch_operands[index][i];
@@ -795,7 +804,7 @@ private:
                             int dx=attachment.x,dy=attachment.y;
                             c.area={c.area.left+dx,c.area.top+dy,c.area.right+dx,c.area.bottom+dy};
                             c.clip={c.clip.left+dx,c.clip.top+dy,c.clip.right+dx,c.clip.bottom+dy};
-                            ++work.operations;
+                            ++work.operations;note_executed("hud-draw",c.area);
                             if(attachment.visible&&!replay.submit(&c,1))throw std::runtime_error("retained HUD operation rejected");
                         }catch(...){for(unsigned i=0;i<6;++i)if(ids[i]&&ids[i]!=pair[0]&&ids[i]!=pair[1]&&
                             std::find(ids,ids+i,ids[i])==ids+i)replay.recycle(ids[i]);throw;}
@@ -830,7 +839,7 @@ private:
                 n->dynamic|=patch.node->dynamic;n->map_dynamic|=patch.node->map_dynamic;
             }
             if(!n->output[0]||versions!=n->dependencies){
-                ++work.operations;
+                ++work.operations;{char kind[8];std::snprintf(kind,sizeof(kind),"k%d%s",int(n->command.kind),n->placement?"p":"");note_executed(kind,n->area);}
                 Id temporary[6]={};
                 auto const& original=n->command;
                 // Ordinary passes need only their affected underlay rectangle.
@@ -1468,6 +1477,8 @@ public:
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}
         lap(work.evaluate_ms);render_core_mark("compose_evaluate");
         if(drawn_revision==front_revision&&versions==drawn_dependencies)return 2; // no new source sample
+        if(trace_evaluated&&work.operations>=48){std::string line="[C3X renderer] stage=evaluated-operations operations="+
+            std::to_string(work.operations)+" front_revision="+std::to_string(front_revision)+work.executed+"\n";OutputDebugStringA(line.c_str());}
         Id image=0;Rect damage=extent(front);
         if(!assemble_front(image,damage))image=assemble(front,ticks,frequency,0,{},true);
         lap(work.assemble_ms);render_core_mark("compose_assemble");
@@ -1487,6 +1498,7 @@ public:
         if(ok){if(buffer)context->CopyResource(buffer,display);drawn_revision=front_revision;drawn_dependencies.swap(versions);}return ok?1:0;
     }
     void render_core_mark(char const* name){c3x_renderer::render_core::gpu_timeline().mark(context,name);}
+    void render_core_detail(char const* name){c3x_renderer::render_core::gpu_timeline().detail(context,name);}
     double view_scale()const{return selected_view_scale;}
     Work last_work()const{return work;}
     // Native completed-front identity; visual clock samples do not advance it.

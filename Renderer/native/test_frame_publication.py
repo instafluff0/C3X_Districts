@@ -470,6 +470,7 @@ unsigned GetEnvironmentVariableA(char const* name,char* out,std::size_t){
 #ifndef _MSC_VER
 template<std::size_t N,class... T> void sprintf_s(char (&buffer)[N],char const* format,T... args){std::snprintf(buffer,N,format,args...);}
 #endif
+inline void drain_probe(char const*,unsigned=0){} // production: C3X_RENDERER_DRAIN_PROBE diagnostic
 namespace c3x_renderer {
 std::atomic<float>& zoom_destination_hint(){static std::atomic<float> value{1.f};return value;}
 namespace render_core {unsigned cached_environment(char const* name,char* out,unsigned size){return GetEnvironmentVariableA(name,out,size);}}
