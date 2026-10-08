@@ -11,8 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 class TileSites(unittest.TestCase):
     def test_visibility_capture_and_exclusive_ownership(self):
         source = (ROOT / "injected_code.c").read_text()
-        start = source.index("\t\t\trecord->barbarian_tribe_id = -1;")
-        end = source.index("\t\t\tif (tile->vtable->m18_Check_Mines", start)
+        body = source.index("\ncapture_custom_renderer_overlay_body")
+        start = source.index("record->barbarian_tribe_id = -1;", body)
+        end = source.index("if (tile->vtable->m18_Check_Mines", start)
         capture = source[start:end]
         start = source.index("bool\nvalidate_custom_renderer_replacement_ownership")
         end = source.index("\n// Compact topology", start)
@@ -28,7 +29,8 @@ struct Vtable {bool (*m15_Check_Goody_Hut)(Tile*,int,int); bool (*m7_Check_Barba
 struct Tile {Vtable* vtable; bool hut,camp; int allowed_viewer;short tribe;};
 int queries=0;
 bool hut(Tile* t,int,int viewer){++queries;return viewer==t->allowed_viewer && t->hut;}
-bool camp(Tile* t,int,int viewer){++queries;return viewer==t->allowed_viewer && t->camp;}
+// Native m7(0) is the live presence test; m7(viewer) then admits the viewer.
+bool camp(Tile* t,int,int viewer){++queries;return (viewer==0 || viewer==t->allowed_viewer) && t->camp;}
 short tribe(Tile* t){return t->tribe;}
 void capture(c3x_renderer_tile_v1* record,Tile* tile,int visible_to_civ_id){int __=0;
 ''' + capture + "\n}\n" + source[start:end] + r'''
@@ -36,7 +38,7 @@ int main(){
     Vtable table={hut,camp,tribe};Tile native={&table,true,true,7,29};
     c3x_renderer_tile_v1 tile={};unsigned flags=0;state={1,&tile};
     c3x_renderer_output_v1 out={};out.replacement_tile_count=1;out.replacement_tile_flags=&flags;
-    for(int viewer:{0,6,7,8}){
+    for(int viewer:{6,7,8}){
         tile={};tile.tile_flags=C3X_RENDERER_TILE_RENDER;capture(&tile,&native,viewer);
         flags=C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED;
         if(viewer==7){
@@ -56,7 +58,7 @@ int main(){
     native.hut=native.camp=false;tile={};tile.tile_flags=C3X_RENDERER_TILE_RENDER;
     capture(&tile,&native,7);assert(!tile.improvement_flags && tile.barbarian_tribe_id==-1);
     flags=C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED;assert(validate_custom_renderer_replacement_ownership(&out));
-    assert(queries==10);
+    assert(queries==11);
 }
 '''
         harness = harness.replace('#include <cassert>', '#include <cassert>\n#include <initializer_list>')

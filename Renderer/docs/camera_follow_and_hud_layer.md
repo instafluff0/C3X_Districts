@@ -1,5 +1,11 @@
 # Camera-follow scrolling and the retained HUD layer — design
 
+**Status, October 7, 2026.** At the user's request, Civ III's own edge
+scroll drives the camera again. C1 (held motion in a custom scroll timer) and
+C3 (image-space slides between steps) are removed; each adopted step shows
+exactly the camera Civ III chose. See
+[performance review, October 7](performance_review_20261007.md).
+
 October 5, 2026. Game Integration work following
 [the performance review](performance_review_20261004.md), findings 4k and 5.
 Both items change how the composition treats map-space and screen-space

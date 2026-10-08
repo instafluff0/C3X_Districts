@@ -147,26 +147,36 @@ class GenericDecalCompilerTests(unittest.TestCase):
         self.assertEqual({"base_color", "fog_color"}, set(descriptor["textures"]))
 
     def test_decal_mesh_recovers_exact_triangles_and_atlas_uvs(self) -> None:
+        # first 3 + base 1: six consecutive vertices from 4, two triangles of a
+        # quad. The slot's index buffer belongs to other geometry; reading
+        # through it (the pre-2026-10-07 decoder) returns vertex 0 three times.
         raw = bytearray(108)
         struct.pack_into("<5I", raw, 0x3C, 7, 0, 3, 1, 6)
-        vertices = b"".join(struct.pack("<4e", *vertex) for vertex in (
-            (0.0, 0.0, 0.0, 0.0),
-            (0.2, 0.3, 0.55, 0.10),
-            (0.8, 0.3, 0.90, 0.10),
-            (0.8, 0.7, 0.90, 0.45),
-            (0.2, 0.7, 0.55, 0.45),
-        ))
-        indices = struct.pack("<9H", 0, 0, 0, 0, 1, 2, 0, 2, 3)
+        quad = ((0.2, 0.3, 0.55, 0.10), (0.8, 0.3, 0.90, 0.10), (0.8, 0.7, 0.90, 0.45),
+                (0.2, 0.3, 0.55, 0.10), (0.8, 0.7, 0.90, 0.45), (0.2, 0.7, 0.55, 0.45))
+        vertices = b"".join(struct.pack("<4e", *vertex) for vertex in ((0.0, 0.0, 0.0, 0.0),) * 4 + quad)
+        indices = struct.pack("<9H", 0, 0, 0, 0, 0, 0, 0, 0, 0)
         mesh, evidence = decode_decal_mesh(
-            bytes(raw), [-2.0, -1.0, 2.0, 1.0], vertices, indices, 5, 9
+            bytes(raw), [-2.0, -1.0, 2.0, 1.0], vertices, indices, 10, 9
         )
         self.assertEqual([0, 1, 2, 0, 2, 3], mesh["indices"])
+        self.assertEqual(4, len(mesh["vertices"]))
         self.assertAlmostEqual(-1.2, mesh["vertices"][0]["position"][0], places=3)
         self.assertAlmostEqual(-0.4, mesh["vertices"][0]["position"][1], places=3)
         self.assertAlmostEqual(0.55, mesh["vertices"][0]["uv0"][0], places=3)
         self.assertAlmostEqual(0.10, mesh["vertices"][0]["uv0"][1], places=3)
+        self.assertAlmostEqual(1.2, mesh["vertices"][2]["position"][0], places=2)
+        self.assertAlmostEqual(0.45, mesh["vertices"][3]["uv0"][1], places=3)
         self.assertEqual(7, evidence["buffer_index"])
         self.assertEqual(6, evidence["index_count"])
+
+    def test_decal_mesh_rejects_range_past_vertex_buffer(self) -> None:
+        raw = bytearray(108)
+        struct.pack_into("<5I", raw, 0x3C, 0, 0, 2, 0, 3)
+        vertices = b"".join(struct.pack("<4e", 0.5, 0.5, 0.5, 0.5) for _ in range(4))
+        with self.assertRaisesRegex(ValueError, "invalid triangle range"):
+            decode_decal_mesh(bytes(raw), [-1.0, -1.0, 1.0, 1.0], vertices,
+                              struct.pack("<9H", *range(9)), 4, 9)
 
     def test_decal_mesh_rejects_rectangle_substitution_inputs(self) -> None:
         raw = bytearray(108)

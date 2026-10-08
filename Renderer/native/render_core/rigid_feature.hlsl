@@ -11,9 +11,15 @@ FeaturePixelInput VSSharedFeature(RigidInput i){
  // basis of the terrain and water beneath them, as resource_natural_depth does
  // for resource bodies; the feature basis weights ground height far less.
  bool bridge=i.projection.z!=0 && i.placement_view.w>12.5 && i.placement_view.w<20.5;
+ // A railroad tunnel's portal shares the bridge slots, marked .0035 as farm
+ // kit props are. It sorts on the same basis without the river's bias or
+ // waterline clip, so the mountain's rock hides the block behind it.
+ float tunnel_fraction=frac(i.placement_view.w);
+ bool tunnel=bridge && tunnel_fraction<.05 && abs(frac(tunnel_fraction*100)-.35)<.05;
+ bridge=bridge && !tunnel;
  // Farm kit trees and farmhouses stand on low relief and hills in the same way.
  bool farm=i.projection.z!=0 && farm_kit_material(i.placement_view.w);
- if(bridge || farm){float h=p.world.z*112-2.5;
+ if(bridge || tunnel || farm){float h=p.world.z*112-2.5;
   position.z=position.y+h*(i.projection.z/224*.82)+h*.0016*i.projection.w;}
  o.position.z=clamp(.5-(floor(position.z*256+.5)/256+i.placement_view.z)/16384.,.001,.999);
  // The river surface (kind 9) sorts over its bed and banks 0.025*reserved.x

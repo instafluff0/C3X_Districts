@@ -105,6 +105,8 @@ const units = primaries.map((record) => {
     icon_index: Number(record.iconIndex),
     unit_class: Number(record.unitClass),
     ranged_attack_animations: Boolean(Number(record.unitAbilities) & (1 << 25)),
+    cruise_missile: Boolean(Number(record.unitAbilities) & (1 << 3)),
+    nuclear_weapon: Boolean(Number(record.unitAbilities) & (1 << 16)),
     direct_art_folder: direct ? direct.art_folder : null,
     art_variants: variants,
   };

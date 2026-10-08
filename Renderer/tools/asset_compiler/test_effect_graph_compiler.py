@@ -16,7 +16,7 @@ from Renderer.tools.asset_compiler.effect_graph_compiler import (
 class EffectGraphCompilerTests(unittest.TestCase):
     def test_checked_profiles_resolve_and_sample_deterministically(self) -> None:
         result = compile_effect_graphs()
-        self.assertEqual(6, result["summary"]["profiles"])
+        self.assertEqual(len(json.loads(DEFAULT_SOURCE.read_text(encoding="utf-8"))["profiles"]), result["summary"]["profiles"])
         self.assertGreaterEqual(result["summary"]["emitters"], 9)
         self.assertEqual("none", result["source_behavior_claim"])
         profile = result["profiles"]["infrastructure/pollution_radiation"]
@@ -41,10 +41,22 @@ class EffectGraphCompilerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unavailable texture"):
                 compile_effect_graphs(path)
 
+    def test_impact_sets_cover_every_native_outcome(self) -> None:
+        result = compile_effect_graphs()
+        for outcomes in result["impact_sets"].values():
+            self.assertEqual({"hit", "miss", "water", "ship", "air"}, set(outcomes))
+        source = json.loads(DEFAULT_SOURCE.read_text(encoding="utf-8"))
+        del source["impact_sets"]["naval"]["ship"]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bad.json"
+            path.write_text(json.dumps(source), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "impact set naval"):
+                compile_effect_graphs(path)
+
     def test_non_looping_profile_cleans_up(self) -> None:
         result = compile_effect_graphs()
-        profile = result["profiles"]["combat/land_impact"]
-        self.assertEqual([], sample_effect("combat/land_impact", profile, "impact/7", 1100, "normal"))
+        profile = result["profiles"]["combat/land_hit"]
+        self.assertEqual([], sample_effect("combat/land_hit", profile, "impact/7", profile["duration_ms"], "normal"))
 
 
 if __name__ == "__main__":

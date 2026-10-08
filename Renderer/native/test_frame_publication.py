@@ -531,6 +531,7 @@ struct TacticalGPU {template<class... T> ID3D11Texture2D* packed(T&&...){unexpec
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
     std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> fresh_unit_poses;
+    bool borrowed_scene_frame=false,borrowed_scene_stale=false; // camera-job snapshot frames (review 4v)
     char const* frame_cache_path="cold";
     void gpu_failure(char const*){} // Failure diagnostics do not initialize or mutate GPU ownership.
     std::size_t publication_working_bytes=0,publication_capacity_bytes=0;bool memory_pressured=false;void preserve_process_headroom(){}

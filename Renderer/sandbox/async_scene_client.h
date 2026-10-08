@@ -33,6 +33,8 @@ template<class Transport>class AsyncSceneClient {
     c3x_renderer_camera_identity_v1 published_identity={};
     std::unique_ptr<CameraOutput> displayed;
     std::atomic<int> policy{0};
+    // Last posted ambient permission (0/1); a reset forgets it (transport thread).
+    std::atomic<unsigned> requested_policy{~0u};
     struct Page {
         std::mutex mutex;bool query=false,ready=false;int code=C3X_RENDERER_RESULT_PENDING;
         c3x_renderer_world_page_v1 value={};
@@ -196,7 +198,7 @@ template<class Transport>class AsyncSceneClient {
         },0,delta?"world-delta":"world-page",delta?independent_canvas:nullptr);
     }
     void clear(){
-        image_ids.clear();ticket_ids.clear();worker_camera=remote_camera=worker_map=0;policy=0;
+        image_ids.clear();ticket_ids.clear();worker_camera=remote_camera=worker_map=0;policy=0;requested_policy=~0u;
         {std::lock_guard<std::mutex> lock(world_page.mutex);
             world_page.query=world_page.ready=false;world_page.code=C3X_RENDERER_RESULT_PENDING;world_page.value={};}
         {std::lock_guard<std::mutex> lock(world_progress.mutex);
@@ -210,7 +212,6 @@ public:
     ~AsyncSceneClient(){publication.stop();}
     bool asynchronous()const{return enabled;}
     unsigned presented_zoom()const{return transport.presented_zoom();}
-    int presented_pan()const{return transport.presented_pan();}
     void observe_publication(std::function<void(char const*,double,double)> observer){
         publication.observe([this,observer=std::move(observer)](char const* label,double queued,double service){
             transport.publication_pressure(publication.status().records);
@@ -259,6 +260,11 @@ public:
     int visual_policy(unsigned value){
         if(!enabled)return transport.visual_policy(value);
         if(value>=2)return policy.load(std::memory_order_acquire);
+        // Civ III repeats the same permission on every present. Each post cost
+        // two helper round trips on the shared transport; every present
+        // already refreshes `policy`, and the helper's clock accumulates
+        // elapsed time whenever it is next sampled.
+        if(requested_policy.exchange(value)==value)return C3X_RENDERER_RESULT_OK;
         return post(sizeof(value),[this,value]{transport.visual_policy(value);policy=transport.visual_policy(3);});
     }
     int camera_begin(c3x_renderer_camera_request_v1 const& request,Id& result){
@@ -410,10 +416,35 @@ public:
     int unit_state(c3x_renderer_unit_state_v1 value){return enabled?post_fact(sizeof(value),{fact_state,false,"unit-state",
         [value](c3x_inputs::Writer& out)mutable{c3x_inputs::unit_state_fields(out,value);}},
         [this,value]{accept_state(transport.unit_state(value),"unit-state");}):transport.unit_state(value);}
+    // Consecutive native strokes into the same canvas (borders, routes) join
+    // the last queued tactical record: each line was its own helper round
+    // trip, ~150 a second on a busy map. The helper draws a capture's
+    // primitives in order with premultiplied blending in one pass, so the
+    // joined record composes as the separate ones did. Animated and static
+    // captures never join (an animated one is redrawn every frame).
+    struct TacticalGroup {c3x_renderer::tactical::Input capture;c3x_renderer_gpu_unit_v1 destination;};
+    c3x_renderer_gpu_unit_v1 tactical_target={};bool tactical_animated=false;unsigned tactical_key=0,tactical_serial=0;
+    static bool same_target(c3x_renderer_gpu_unit_v1 const& a,c3x_renderer_gpu_unit_v1 const& b){
+        return a.ticket==b.ticket&&a.destination==b.destination&&a.background==b.background&&a.detail==b.detail&&
+            a.background_detail==b.background_detail&&a.playback_flags==b.playback_flags&&
+            a.clip[0]==b.clip[0]&&a.clip[1]==b.clip[1]&&a.clip[2]==b.clip[2]&&a.clip[3]==b.clip[3];
+    }
     int tactical(c3x_renderer::tactical::Input capture,c3x_renderer_gpu_unit_v1 destination){
         if(!enabled)return transport.tactical(capture,destination);
         auto size=sizeof(destination)+capture.primitives.size()*sizeof(capture.primitives[0]);
-        return post(size,[this,capture=std::move(capture),destination]()mutable{target(destination);require_result(transport.tactical(capture,destination),"tactical");},0,"tactical");
+        if(!tactical_key||!same_target(destination,tactical_target)||capture.animated!=tactical_animated){
+            tactical_target=destination;tactical_animated=capture.animated;
+            tactical_key=0x80000000u|(++tactical_serial&0x7fffffffu); // disjoint from fact/image groups
+        }
+        auto units=std::max<std::size_t>(1,capture.primitives.size());
+        auto group=std::make_shared<TacticalGroup>(TacticalGroup{std::move(capture),destination});
+        bool accepted=publication.post_group(size,units,tactical_key,group,
+            [this](TacticalGroup& value){target(value.destination);require_result(transport.tactical(value.capture,value.destination),"tactical");},
+            [](TacticalGroup& into,TacticalGroup& incoming){auto& p=into.capture.primitives;
+                p.insert(p.end(),incoming.capture.primitives.begin(),incoming.capture.primitives.end());},
+            std::size_t(256)*1024,std::size_t(4096),std::size_t(4096),"tactical");
+        transport.publication_pressure(publication.status().records);
+        return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }
     // Loading admission stays ordered, but returns only after ownership transfer.
     // The native callback itself remains on the caller/game thread between pages.

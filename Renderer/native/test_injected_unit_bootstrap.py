@@ -135,11 +135,11 @@ typedef struct State {
     int custom_renderer_unit_display_action;
     bool custom_renderer_unit_cursor_visible, custom_renderer_loading_world_capture;
     bool combat_unit_display_override_active;
-    double custom_renderer_scroll_x, custom_renderer_scroll_y;
     unsigned custom_renderer_dirty_flags;
     unsigned custom_renderer_unit_bootstrap_copies;
     Unit *custom_renderer_unit_bootstrap_selected, *custom_renderer_unit_context;
     PCX_Image *custom_renderer_unit_canvas;
+    bool custom_renderer_team_disc;
     struct c3x_renderer_tile_v1 *custom_renderer_tiles;
     int custom_renderer_tile_count;
     c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw;
@@ -171,6 +171,8 @@ static JGL_Image image, background_image;
 static PCX_Image background;
 static PCX_Color_Table palette;
 static unsigned preferences, *p_preferences = &preferences;
+#define P_SHOW_TEAM_COLOR_DISC 0x800u
+void hide_custom_renderer_fireworks(bool hide) { (void)hide; }
 static unsigned debug_bits, *p_debug_mode_bits = &debug_bits;
 enum { C3X_NAV_POLL_TEST_UNUSED = 0 };
 static int update_calls, update_edx, update_redraws, navigation_calls;
@@ -640,6 +642,10 @@ void failure_config_case(void) {
     reset(); place(0, 2, 2); screen.Current_Unit = &units[0];
     patch_Unit_tick_anim(&units[0], 0, &screen.Units_Control.Data.Canvas, 0, 0, true);
     assert(draw_count == 1 && (draw_flags[0] & C3X_RENDERER_UNIT_CURSOR));
+    // Civ III's team-colour disc preference becomes the 3D owner disc: the
+    // native 2D disc is suppressed and the preference is restored afterwards.
+    assert(marker_count == 0 && (draw_flags[0] & C3X_RENDERER_UNIT_TEAM_DISC));
+    assert(preferences == 0x800u && !state.custom_renderer_team_disc);
     reset(); place(0, 2, 2); tiles[2 * bic.Map.Width + 2].visible = false;
     units[0].army = true; units[0].Body.army_top_defender_id = 101;
     patch_Unit_tick_anim(&units[0], 0, &screen.Units_Control.Data.Canvas, 0, 0, true);
@@ -698,10 +704,10 @@ void accepted_selection_case(void) {
     assert(native_selection_calls==1&&screen.Current_Unit==&units[0]);
     assert(!state.custom_renderer_unit_representatives_dirty&&!state.custom_renderer_redraw_pending);
     native_selection_accepts=true;
-    int prior_navigation=navigation_calls;state.custom_renderer_scroll_x=.9;state.custom_renderer_scroll_y=-.7;
+    int prior_navigation=navigation_calls;
     execute_native_selection_hook(&screen, &units[1], true);
     assert(native_selection_calls==2&&screen.Current_Unit==&units[1]);
-    assert(navigation_calls==prior_navigation+1&&state.custom_renderer_scroll_x==0.&&state.custom_renderer_scroll_y==0.);
+    assert(navigation_calls==prior_navigation+1);
     assert(state.custom_renderer_unit_representatives_dirty&&state.custom_renderer_redraw_pending);
     state.custom_renderer_unit_representatives_dirty=state.custom_renderer_redraw_pending=false;
     execute_native_selection_hook(&screen, &units[1], true);

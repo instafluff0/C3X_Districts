@@ -317,6 +317,7 @@ int main(){
  o.city.resize(2);auto light=std::make_shared<city_fidelity::Lighting>();light->lights.resize(1);light->lights[0].owner=9;
  light->blockers.push_back({{1,2,3,4},{5,6,7,8}});
  for(auto& p:o.city){p.mesh=mesh;p.material=42;p.environment=true;p.terrain_conforming=true;p.atlas={1,2,3,4};p.lighting=light;}
+ o.city[1].effect=true; // a smoke or plume part keeps redrawing after a restore
  o.composition=7;o.instances=11;o.routes=3;
  o.rigid.resize(1);o.rigid[0].family=objects::mine_family;o.rigid[0].asset=2;o.rigid[0].layer=objects::mine_layer;
  o.rigid[0].instance.place[7]=12.5f;o.rigid[0].bounds={1,2,3,4};o.rigid[0].material=21.18f;
@@ -329,6 +330,7 @@ int main(){
  assert(copied->objects->draws.size()==2 && copied->objects->draws[0].count==3 && copied->objects->draws[1].rigid==0);
  assert(copied->objects->city[1].lighting==copied->objects->city[0].lighting && copied->objects->city[0].lighting!=light);
  assert(copied->objects->city[1].lighting->lights[0].owner==9 && copied->objects->city[1].atlas==o.city[1].atlas);
+ assert(!copied->objects->city[0].effect && copied->objects->city[1].effect);
  auto const& proof=copied->terrain->rivers.front();assert(proof.first==key && proof.second->values==cell->values);
  assert(proof.second->inputs->values==cell->inputs->values && proof.second->inputs->flow==cell->inputs->flow);
  assert(!proof.second->inputs->checked_world && proof.second->inputs->checked_revision==-1 && !proof.second->inputs->current);

@@ -11,6 +11,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <cstdio>
 #include <chrono>
 #include <cstdlib>
@@ -40,21 +41,26 @@ class WorkerClient {
         // unbounded queue let Civ III's end-of-load UI burst stall the first
         // hover/zoom query for ~7 s. Past the bound the producer waits until
         // the backlog halves, which costs what inline processing did.
-        static constexpr std::size_t backlog_operations=512,backlog_bytes=64u*1024u*1024u;
+        // C3X_RENDERER_HIT_BACKLOG overrides the operation bound for measurement.
+        std::size_t backlog_operations=512;static constexpr std::size_t backlog_bytes=64u*1024u*1024u;
         // Caller-thread staging: one lock and wake per batch instead of per
         // native command (thousands per second while scrolling).
         std::vector<Operation> staged;static constexpr std::size_t stage_operations=64;
+        // Caller thread: canvases Civ III's form hit test never reads. Their
+        // draws (most of the busy-map stream) never reach the worker.
+        std::unordered_set<Id> exempted;
         std::size_t queued_bytes=0;
         std::thread thread;
         // Diagnostic stream for offline replay (C3X_RENDERER_HIT_TRACE=1 with a
-        // trace file): every applied operation and its measured apply time.
+        // trace file): every applied operation and its measured apply time,
+        // and every query with its answer.
         std::FILE* dump=nullptr;std::uint64_t dump_bytes=0;
         void record(Operation const& op,std::uint64_t began,std::uint32_t micros){
             if(!dump||dump_bytes>(1536ull<<20))return;
             auto put=[&](auto value){std::fwrite(&value,sizeof(value),1,dump);dump_bytes+=sizeof(value);};
             put(std::uint32_t(op.kind));put(began);put(micros);
             if(op.kind==0){put(std::uint64_t(op.id));put(std::uint32_t(op.width));put(std::uint32_t(op.height));put(std::uint32_t(op.format));}
-            else if(op.kind==1)put(std::uint64_t(op.id));
+            else if(op.kind==1||op.kind==5)put(std::uint64_t(op.id));
             else if(op.kind==2){put(std::uint64_t(op.id));put(std::uint32_t(op.pixels.size()));
                 std::fwrite(op.pixels.data(),sizeof(unsigned),op.pixels.size(),dump);dump_bytes+=op.pixels.size()*sizeof(unsigned);}
             else{auto const& c=op.command;
@@ -67,6 +73,7 @@ class WorkerClient {
             if(op.kind==0)scene.create(op.id,op.width,op.height,op.format);
             else if(op.kind==1)scene.destroy(op.id);
             else if(op.kind==2)scene.upload(op.id,op.pixels.data(),op.pixels.size());
+            else if(op.kind==5)scene.exempt(op.id);
             else scene.submit(op.command);
         }
         void run(){
@@ -109,6 +116,9 @@ class WorkerClient {
         HitWorker(){
 #ifdef _WIN32
             char option[4]={},path[MAX_PATH]={};
+            char backlog[16]={};
+            if(GetEnvironmentVariableA("C3X_RENDERER_HIT_BACKLOG",backlog,sizeof(backlog))>0){
+                auto value=std::strtoul(backlog,nullptr,10);if(value>=64&&value<=65536)backlog_operations=value;}
             if(GetEnvironmentVariableA("C3X_RENDERER_HIT_TRACE",option,sizeof(option))==1&&option[0]=='1'){
                 auto length=GetEnvironmentVariableA("C3X_RENDERER_TRACE_FILE",path,MAX_PATH-8);
                 if(length>0&&length<MAX_PATH-8){strcat_s(path,".hit");if(fopen_s(&dump,path,"wb"))dump=nullptr;}
@@ -118,15 +128,20 @@ class WorkerClient {
         }
         ~HitWorker(){{std::lock_guard<std::mutex> lock(mutex);stopping=true;}wake.notify_all();drained.notify_all();thread.join();if(dump)std::fclose(dump);}
         HitWorker(HitWorker const&)=delete;HitWorker& operator=(HitWorker const&)=delete;
-        void create(Id id,unsigned width,unsigned height,Format format){Operation op;op.kind=0;op.id=id;op.width=width;op.height=height;op.format=format;push(std::move(op));}
-        void destroy(Id id){Operation op;op.kind=1;op.id=id;push(std::move(op));}
-        void upload(Id id,std::uint32_t const* pixels,std::size_t count){Operation op;op.kind=2;op.id=id;op.pixels.assign(pixels,pixels+count);push(std::move(op));}
-        void submit(Command const& command){Operation op;op.kind=3;op.command=command;push(std::move(op));}
+        void create(Id id,unsigned width,unsigned height,Format format){exempted.erase(id);Operation op;op.kind=0;op.id=id;op.width=width;op.height=height;op.format=format;push(std::move(op));}
+        void destroy(Id id){exempted.erase(id);Operation op;op.kind=1;op.id=id;push(std::move(op));}
+        void exempt(Id id){if(!id||!exempted.insert(id).second)return;Operation op;op.kind=5;op.id=id;push(std::move(op));}
+        void upload(Id id,std::uint32_t const* pixels,std::size_t count){if(exempted.count(id))return;Operation op;op.kind=2;op.id=id;op.pixels.assign(pixels,pixels+count);push(std::move(op));}
+        void submit(Command const& command){if(exempted.count(command.destination))return;Operation op;op.kind=3;op.command=command;push(std::move(op));}
         bool pixel(Id id,int x,int y,unsigned& value){
             auto began=std::chrono::steady_clock::now();publish();
             std::unique_lock<std::mutex> lock(mutex);
             idle.wait(lock,[&]{return queue.empty()&&!busy;});
             bool found=scene.pixel(id,x,y,value); // the worker cannot dequeue while this lock is held
+            if(dump&&dump_bytes<=(1536ull<<20)){ // query record (kind 4); the worker is idle under this lock
+                auto put=[&](auto v){std::fwrite(&v,sizeof(v),1,dump);dump_bytes+=sizeof(v);};
+                put(std::uint32_t(4));put(std::uint64_t(began.time_since_epoch().count()));put(std::uint32_t(0));
+                put(std::uint64_t(id));put(std::int32_t(x));put(std::int32_t(y));put(std::uint32_t(found));put(std::uint32_t(value));}
             profile.add(profile.query,began);return found;
         }
         // Game-thread waits, reported with the client's call profile.
@@ -195,6 +210,7 @@ public:
         if(!fn||ticket<=0||session<=0||frame.struct_size!=sizeof(frame))throw std::runtime_error("missing GPU image session");pending.reserve(2048);
         if(input_coverage)hit_scene=std::make_unique<HitWorker>();
     }
+    void hit_exempt(Id id){if(hit_scene)hit_scene->exempt(id);}
     bool hit_pixel(Id id,int x,int y,unsigned& value)const{
         if(!hit_scene||!hit_scene->pixel(id,x,y,value))return false;
         if(value==c3x_native_hit::opaque_map)value=1;return true;

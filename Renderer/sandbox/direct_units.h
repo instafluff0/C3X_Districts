@@ -89,6 +89,7 @@ struct SandboxDirectUnits {
         c3x_renderer_unit_v1 draw{};
         c3x_renderer::UnitAnimationPose pose{};
         float low=0,ground_pixels=0,ground_depth=0,angle=0;
+        float lift=0; // eased flight height above the pack offset (model units)
         std::vector<PartSample> parts;
         bool main=false,shadow=false,reflected=false;
         unsigned shadow_slot=UINT_MAX;
@@ -728,6 +729,23 @@ float4 PSShadow(Output i):SV_Target {
         renderer.context->VSSetShaderResources(0,1,&palette);return true;
     }
     using ContributionPlan=c3x_renderer::render_core::UnitContributionPlan;
+    // Aircraft climb to their pack flight height while flying (moving or
+    // attacking) and settle back when parked, eased so they never jump.
+    struct Climb{float from=0,to=0;long long started=0,ticks=-1;};
+    std::unordered_map<int,Climb> climbs;
+    float flight_lift(c3x_renderer::UnitBodyRenderer::Unit const& unit,ScenePose const& instance,c3x_renderer_frame_v1 const& frame){
+        long long frequency=frame.presentation_frequency;
+        if(unit.arms.flight_lift<=0||frequency<=0)return 0;
+        long long ticks=instance.pose_ticks>=0?instance.pose_ticks:frame.presentation_time_ticks;
+        int action=instance.draw.action;
+        float target=instance.travelling||(action>=2&&action<=5)?unit.arms.flight_lift:0.f;
+        auto& climb=climbs[instance.draw.unit_id];
+        if(climb.ticks<0||ticks<climb.ticks||climbs.size()>4096){climb={target,target,ticks,ticks};return target;}
+        float t=std::clamp(float(double(ticks-climb.started)/double(frequency)/.35),0.f,1.f);t=t*t*(3-2*t);
+        float current=climb.from+(climb.to-climb.from)*t;
+        if(target!=climb.to){climb.from=current;climb.to=target;climb.started=ticks;}
+        climb.ticks=ticks;return current;
+    }
     // Selection runs before payload admission. No body palette, ground query,
     // GPU allocation or material evaluation is required to form the union.
     bool select_real(c3x_renderer_frame_v1 const& frame,std::vector<ScenePose> const& candidates,
@@ -764,7 +782,8 @@ float4 PSShadow(Output i):SV_Target {
             if(!c3x_renderer::prepare_native_unit_pose(native,action.loop,pose)){plan={};plan.valid=false;return false;}
             UnitContributionCandidate input;input.visible=true; // caller's native VISIBLE occurrence contract
             input.anchor_x=pose.anchor_x;input.anchor_y=pose.anchor_y;input.projection_scale=pose.projection_scale;
-            input.model_scale=unit.scale;input.offset_z=unit.offset_z;input.bounds=bodies.contribution_bound(instance.unit);
+            input.model_scale=unit.scale;input.offset_z=unit.offset_z+flight_lift(unit,instance,frame);
+            input.bounds=bodies.contribution_bound(instance.unit);
             input.ground_known=ground_known;input.ground_min=0;input.ground_max=ground*1.0001+1e-4;
             inputs.push_back(input);
         }
@@ -834,6 +853,10 @@ float4 PSShadow(Output i):SV_Target {
             source_draw.projection_scale_milli=projection;
             if(!c3x_renderer::prepare_native_unit_pose(source_draw,action.loop,pose) ||
                 !c3x_renderer::expand_unit_canvas(draw.body_x,draw.body_y,draw.sprite_width,draw.sprite_height,projection,unit.minimum_canvas))return false;
+            // Pack sync: the attack clip's first release lands on Civ III's report.
+            bool attacking=draw.action>=3&&draw.action<=5;
+            if(attacking)pose.phase=c3x_renderer::effects::clip_phase(float(pose.phase),unit.arms.sync,unit.arms.first);
+            sample.lift=flight_lift(unit,instance,frame);
             // Native occurrences carry their own exact wrap/anchor. A canvas
             // heuristic must neither relocate nor discard a pass contributor.
             sample.main=bool(entry.mask&c3x_renderer::render_core::unit_main_body);
@@ -846,11 +869,13 @@ float4 PSShadow(Output i):SV_Target {
             sample.ground_depth=float(instance.tile_y)*frame.tile_height*.5f+renderer.geometry_viewport_settings.depth_translation+frame.tile_height*.5f+4.f;
             // Payloads and mesh buffers are admitted before this frame starts.
             auto pose_ticks=instance.pose_ticks>=0?instance.pose_ticks:frame.presentation_time_ticks;
+            // Broadsides turn their line of fire, not their bow, to the target.
+            float bearing=attacking?unit.arms.bearing*.01745329252f:0.f;
             sample.angle=transitions.facing(draw.unit_id,instance.pose_identity,pose_ticks,
-                frame.presentation_frequency,c3x_renderer::native_unit_yaw(unit.yaw_offset,draw.direction));
+                frame.presentation_frequency,c3x_renderer::native_unit_yaw(unit.yaw_offset,draw.direction)-bearing,unit.arms.turn_scale);
             auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
             auto& shadow_key=shadow_key_scratch;
-            shadow_key.assign({bodies.catalogue_generation,bits(unit.scale),bits(unit.offset_z),
+            shadow_key.assign({bodies.catalogue_generation,bits(unit.scale),bits(unit.offset_z+sample.lift),
                 bits(sample.angle),bits(light[0]),bits(light[1]),action.parts.size()});
             sample.parts.reserve(action.parts.size());
             for(auto const& part:action.parts){
@@ -951,9 +976,9 @@ float4 PSShadow(Output i):SV_Target {
                         auto const& p=sample.parts[part_index++];
                         auto* palette=p.blended?p.blended:source.palettes.data()+std::size_t(p.frame)*source.bones*16;
                         auto const& bounds=meshes[part.mesh].shadow_bounds;auto first=shadow_points.size();
-                        bounds.append(palette,sample.angle,unit.scale,unit.offset_z,shadow_points);
+                        bounds.append(palette,sample.angle,unit.scale,unit.offset_z+sample.lift,shadow_points);
                         sample.reflection_bounds.append(shadow_points,first,bounds.known,bounds.weight_low,bounds.weight_high,
-                            double(unit.offset_z)*unit.scale);
+                            double(unit.offset_z+sample.lift)*unit.scale);
                     }
                     ++reflection_bounds_builds;
                     if(!sample.fit.fit(shadow_points,light[0],light[1],true))return false;
@@ -1155,7 +1180,7 @@ float4 PSShadow(Output i):SV_Target {
                     (float(pose.anchor_y+guard)+(reflected?ground_pixels:-ground_pixels))/pose.projection_scale,
                     float(scene.width),float(scene.height),scale,ground_depth+low*.0016f*frame.target_height,0,0,
                     float(blended?0:frame_number),float(source->bones),std::cos(angle),std::sin(angle),
-                    unit.scale,unit.offset_z,0,0,
+                    unit.scale,unit.offset_z+prepared.lift,0,0,
                     reflected?2.f:0.f,0,0,part.cutout,
                     shadow_fit.left,shadow_fit.top,1/shadow_fit.width,1/shadow_fit.height,shadow_fit.dx,shadow_fit.dy};
                 c3x_renderer::SceneProjection(frame.target_width,frame.target_height,zoom)

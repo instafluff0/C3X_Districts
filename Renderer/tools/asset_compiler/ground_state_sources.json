@@ -1,0 +1,33 @@
+{
+  "schema": "c3x.source_ground_state_mapping.v0",
+  "note": "Civ VI sources for Civ III ground states (user choice 2026-10-07): all pollution as ash and char, blast craters, and razed-city rubble with low stones. Local import only; derived pixels are never redistributed.",
+  "props": {
+    "schema": "c3x.source_compound_landmark_mapping.v0",
+    "packages": [
+      {
+        "source_package": "Base/Platforms/Windows/BLPs/environment/clutter.blp",
+        "shared_data": ["Base/Platforms/Windows/BLPs/SHARED_DATA"],
+        "source_units_per_tile": 100.0,
+        "assets": [
+          {"source_entry": "IMP_Antiquity_Stones_A", "asset_id": "ground/ruins/stones"},
+          {"source_entry": "IMP_Antiquity_Wall_Debris_A", "asset_id": "ground/ruins/wall"},
+          {"source_entry": "IMP_Antiquity_Wall_Debris_Corner", "asset_id": "ground/ruins/corner"}
+        ]
+      }
+    ]
+  },
+  "decals": [
+    {"source_package": "DLC/GranColombia_Maya/Platforms/Windows/BLPs/environment/clutter.blp", "source_entry": "Decal_Forest_Burnt_Clutter", "asset_id": "ash_heavy"},
+    {"source_package": "DLC/GranColombia_Maya/Platforms/Windows/BLPs/environment/clutter.blp", "source_entry": "Decal_Forest_Burnt_Variant_Clutter", "asset_id": "ash_light"},
+    {"source_package": "DLC/CivRoyaleScenario/Platforms/Windows/BLPs/environment/clutter.blp", "source_entry": "PIL_CraterDecal001", "asset_id": "crater_1"},
+    {"source_package": "DLC/CivRoyaleScenario/Platforms/Windows/BLPs/environment/clutter.blp", "source_entry": "PIL_CraterDecal002", "asset_id": "crater_2"},
+    {"source_package": "DLC/CivRoyaleScenario/Platforms/Windows/BLPs/environment/clutter.blp", "source_entry": "PIL_CraterDecal003", "asset_id": "crater_3"},
+    {"source_package": "DLC/CivRoyaleScenario/Platforms/Windows/BLPs/environment/clutter.blp", "source_entry": "PIL_CraterDecal004", "asset_id": "crater_4"}
+  ],
+  "textures": [
+    {"shared_data": "Base/Platforms/Windows/BLPs/SHARED_DATA", "source_entry": "TEXTURE_FX_ScorchMark", "asset_id": "scorch"},
+    {"shared_data": "Base/Platforms/Windows/BLPs/SHARED_DATA", "source_entry": "TEXTURE_Ruin_Debris_Decal", "asset_id": "rubble"},
+    {"shared_data": "Base/Platforms/Windows/BLPs/SHARED_DATA", "source_entry": "TEXTURE_Ruin_Debris_Decal_Light", "asset_id": "rubble_light"},
+    {"shared_data": "Base/Platforms/Windows/BLPs/SHARED_DATA", "source_entry": "TEXTURE_Ruin_Debris_Decal_H", "asset_id": "rubble_height"}
+  ]
+}

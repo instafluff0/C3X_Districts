@@ -49,6 +49,14 @@ struct NaturalData {
     unsigned terrain[31]={},floodplain[3]={},mountain[13]={},macro[5][2]={};
     // Principal ridge direction of each macro stamp (radians; u right, v up).
     float macro_axis[5]={};
+    // Optional dedicated volcano element: height, footprint blend, and the
+    // lava-channel mask from its region IDs (region 112). Without it a
+    // volcano uses an ordinary mountain stamp. volcano_trend is the authored
+    // height's mean at each distance from the element centre (64 steps over
+    // half its width): MountainShape keeps the gullies and ridges about it.
+    HeightField volcano_height,volcano_blend,volcano_channel;
+    std::array<float,64> volcano_trend{};
+    bool volcano_ready=false;
     // The broadleaf contract: the pack's first 25 recipes, weighing 180.
     std::array<RecipeSet,forest_variety_count> forest_sets{{{0,25,180},{},{}}};
     std::string failure;
@@ -178,7 +186,40 @@ struct NaturalData {
         d.clear();
         if(read(std::string(natural_pack)+"forest-varieties.bin",d))
             load_forest_varieties(d,textures,read,upload,natural_pack);
+        volcano_ready=load_volcano_element(read);
         return true;
+    }
+    template<class Read> bool load_volcano_element(Read read){
+        constexpr char const* element="Renderer/packs/TerrainElementsNormalized/textures/terrain_elements/terrain_feature_volcano/";
+        HeightField* targets[]={&volcano_height,&volcano_blend,&volcano_channel};
+        char const* names[]={"height_lod0.dds","blend_lod0.dds","region_ids_lod0.dds"};
+        for(unsigned i=0;i<3;i++){
+            std::vector<std::uint8_t> bytes;
+            if(!read(std::string(element)+names[i],bytes)||bytes.size()<148)return false;
+            unsigned format=0;std::memcpy(&format,bytes.data()+128,4);
+            if(format!=61 && format!=62)return false; // DDS R8_UNORM, R8_UINT
+            auto& f=*targets[i];std::memcpy(&f.height,bytes.data()+12,4);std::memcpy(&f.width,bytes.data()+16,4);
+            if(!f.width||f.width>1024||f.height!=f.width||148ull+std::uint64_t(f.width)*f.height>bytes.size())return false;
+            f.pixels.assign(bytes.begin()+148,bytes.begin()+148+std::size_t(f.width)*f.height);
+            if(i<2){auto mm=std::minmax_element(f.pixels.begin(),f.pixels.end());f.minimum=*mm.first/255.f;f.maximum=*mm.second/255.f;}
+        }
+        if(volcano_blend.width!=volcano_height.width || volcano_channel.width!=volcano_height.width)return false;
+        for(auto& id:volcano_channel.pixels)id=id==112?255:0;
+        volcano_channel.minimum=0;volcano_channel.maximum=1;
+        measure_volcano_trend();
+        return true;
+    }
+    void measure_volcano_trend(){
+        std::array<float,64> count{};volcano_trend.fill(0);
+        unsigned const w=volcano_height.width;
+        for(unsigned y=0;y<w;y++)for(unsigned x=0;x<w;x++){
+            float dx=(x+.5f)/w-.5f,dy=(y+.5f)/w-.5f;
+            unsigned bin=unsigned(std::sqrt(dx*dx+dy*dy)*128);if(bin>=64)continue;
+            volcano_trend[bin]+=(volcano_height.pixels[y*w+x]/255.f-volcano_height.minimum)/
+                std::max(.0001f,volcano_height.maximum-volcano_height.minimum);
+            count[bin]++;
+        }
+        for(unsigned i=0;i<64;i++)volcano_trend[i]=count[i]>0?volcano_trend[i]/count[i]:0;
     }
     std::array<Frame,3> frame_settings(EnvironmentState const&e,float const*light)const{
         // Source response coefficients retained; one authoritative phase and L.

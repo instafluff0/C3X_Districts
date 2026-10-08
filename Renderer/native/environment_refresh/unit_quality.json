@@ -57,7 +57,8 @@
   "hover": {
     "factor": 0.5,
     "minimum": 8,
-    "sprites": "Renderer/inventory/civ3_unit_sprite_sizes.json"
+    "sprites": "Renderer/inventory/civ3_unit_sprite_sizes.json",
+    "flight": 2.0
   },
   "owner_marks": {
     "styles": {
@@ -78,5 +79,14 @@
     "garment_share": 0.15,
     "target": 0.25,
     "strength": 0.9
+  },
+  "turning": {
+    "sea": 2.5
+  },
+  "combat": {
+    "timing": "Renderer/packs/UnitEffectTiming/timing.json",
+    "map": "Renderer/tools/asset_compiler/civ6_combat_effect_map.json",
+    "civ3_timing": "Renderer/inventory/civ3_unit_action_timing.json",
+    "biq": "Renderer/inventory/vanilla_conquests_biq_semantics.json"
   }
 }

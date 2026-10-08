@@ -566,15 +566,25 @@ def idle_motion(pack: Path, binding: dict, indices) -> dict:
     whole = [np.concatenate([frames[i][f] for i in frames]) for f in range(count)]
     limit = .02 * float(np.ptp(whole[0], axis=0).max())
     residual = np.zeros(len(whole[0]))
-    a = whole[0] - whole[0].mean(0)
     for pose in whole[1:]:
-        b = pose - pose.mean(0)
-        h = np.array([[float((a[:, r] * b[:, c]).sum()) for c in range(3)] for r in range(3)])
-        u, _, vt = np.linalg.svd(h)
-        d = np.sign(np.linalg.det(vt.T @ u.T))
-        rotation = vt.T @ np.diag([1, 1, d]) @ u.T
-        fitted = sum(a[:, k, None] * rotation[:, k] for k in range(3))
-        residual = np.maximum(residual, np.linalg.norm(fitted - b, axis=1))
+        # Fit the body's rigid motion, refitting to the vertices that follow
+        # it so a large spinning rotor does not drag the fit.
+        inliers = np.ones(len(pose), bool)
+        for _ in range(4):
+            ca, cb = whole[0][inliers].mean(0), pose[inliers].mean(0)
+            a, b = whole[0][inliers] - ca, pose[inliers] - cb
+            h = np.array([[float((a[:, r] * b[:, c]).sum()) for c in range(3)] for r in range(3)])
+            u, _, vt = np.linalg.svd(h)
+            d = np.sign(np.linalg.det(vt.T @ u.T))
+            rotation = vt.T @ np.diag([1, 1, d]) @ u.T
+            fitted = sum((whole[0][:, k, None] - ca[k]) * rotation[:, k] for k in range(3)) + cb
+            error = np.linalg.norm(fitted - pose, axis=1)
+            # Start from the better-fitting half, then keep the body's vertices.
+            follow = error <= (max(limit, float(np.median(error))) if inliers.all() else limit)
+            if follow.sum() < 3 or np.array_equal(follow, inliers):
+                break
+            inliers = follow
+        residual = np.maximum(residual, error)
     result, start = {}, 0
     for i in frames:
         n = len(frames[i][0])

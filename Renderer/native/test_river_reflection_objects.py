@@ -25,13 +25,16 @@ def between(text, start, end):
     return text[begin:text.index(end, begin)]
 
 
-def compose(mask_alpha, layers):
-    """Premultiplied ONE / INV_SRC_ALPHA blending onto a cleared mirror texel."""
+def compose(mask_alpha, layers, factor=1.0):
+    """Premultiplied ONE / INV_SRC_ALPHA blending onto a cleared mirror texel.
+    An alpha-only coverage pass takes its source alpha times the blend factor."""
     rgb, alpha = 0.0, 0.0
     for color, coverage, ground in layers:
         if ground != 'alpha':  # an alpha-only pass leaves the color
             rgb = color * coverage + rgb * (1 - coverage)
-        if not ground or ground == 'alpha' or mask_alpha:
+        if ground == 'alpha':
+            alpha = coverage * factor + alpha * (1 - coverage)
+        elif not ground or mask_alpha:
             alpha = coverage + alpha * (1 - coverage)
     return rgb, alpha
 
@@ -59,15 +62,22 @@ class RiverReflectionObjectTests(unittest.TestCase):
             for layer in ('geometry_feature', 'geometry_city', 'geometry_natural_forest0',
                           'geometry_natural_mountain'):
                 self.assertNotIn(layer, block)
-        # The cached-terrain mirror redraws mountains with alpha-only coverage.
+        # The cached-terrain mirror redraws mountains with alpha-only coverage,
+        # and the Lab draws them color-only, then the same coverage pass.
         cached = between(fresh, 'if(cached_terrain){', '}else for(auto layer:')
         self.assertIn('draw(geometry_natural_mountain)', cached)
         self.assertIn('mirror_mountain_coverage=true;', cached)
-        self.assertIn('reflection_coverage_blend', between(
-            fresh, 'auto& mirror=sandbox_active_reflection();', 'else if(mirrored && renderer.reflection_terrain_blend'))
+        game_coverage = between(fresh, 'auto& mirror=sandbox_active_reflection();',
+                                'else if(mirrored && renderer.reflection_terrain_blend')
+        self.assertIn('renderer.mountain_mirror_coverage', game_coverage)
+        lab_pass = between(renderer, 'if(reflection_pass){', 'return draw_cached_geometry(')
+        self.assertIn('bool mountain=layer==geometry_natural_mountain', lab_pass)
+        self.assertIn('reflection_coverage_blend,mountain_mirror_coverage', lab_pass)
         coverage = between(renderer, 'hr = device->CreateBlendState(&blend, &reflection_terrain_blend);',
                            'hr = device->CreateBlendState(&blend, &reflection_coverage_blend);')
         self.assertIn('D3D11_COLOR_WRITE_ENABLE_ALPHA;', coverage)
+        self.assertIn('SrcBlendAlpha = D3D11_BLEND_BLEND_FACTOR;', coverage)
+        factor = float(re.search(r'mountain_mirror_coverage\[4\] = \{([.\d]+)f', renderer)[1])
         self.assertIn('reflection_terrain_blend', between(fresh, 'void relight_reflected_terrain()',
                                                           'context->Draw(3,0);'))
         writes_alpha = self.ground_mask_writes_alpha(renderer)
@@ -75,13 +85,19 @@ class RiverReflectionObjectTests(unittest.TestCase):
         grass = [(0.30, 1.0, True)]
         tree = grass + [(0.08, 0.9, False)]
         # A mountain: relit color first, then its alpha-only coverage pass.
+        # Rivers mirror it at half strength: a tall peak beside a narrow
+        # river broke into pale patches at full strength (1498 AD volcano).
         mountain = [(0.55, 1.0, True), (0.0, 1.0, 'alpha')]
-        _, ground_alpha = compose(writes_alpha, grass)
-        tree_rgb, tree_alpha = compose(writes_alpha, tree)
-        peak_rgb, peak_alpha = compose(writes_alpha, mountain)
+        _, ground_alpha = compose(writes_alpha, grass, factor)
+        tree_rgb, tree_alpha = compose(writes_alpha, tree, factor)
+        peak_rgb, peak_alpha = compose(writes_alpha, mountain, factor)
         self.assertEqual(ground_alpha, 0.0, 'mirrored ground gives rivers reflection coverage')
         self.assertAlmostEqual(tree_alpha, 0.9)
-        self.assertEqual((peak_rgb, peak_alpha), (0.55, 1.0))
+        self.assertEqual(peak_rgb, 0.55)
+        self.assertAlmostEqual(peak_alpha, 0.5, msg='mountains mirror into rivers at full strength')
+        # A tree in front of a mountain still mirrors fully over it.
+        _, both = compose(writes_alpha, mountain + [(0.08, 1.0, False)], factor)
+        self.assertEqual(both, 1.0)
         # The river weighs the mirror by its alpha; the seas add ground presence.
         material = (ROOT / 'Renderer/lab/shared/shaders/hydrology/scene_material_v1.hlsl').read_text()
         self.assertIn('mirrored_alpha=saturate(mirrored.a)*inside', material)  # alpha only, no ground presence
@@ -113,6 +129,31 @@ class RiverReflectionObjectTests(unittest.TestCase):
         open_sky = pool(sky, 0.0)
         self.assertGreater(pool(face, 1.0), .7 * open_sky, 'a shaded face mirrors near-black')
         self.assertGreater(pool(lit, 1.0), 1.3 * open_sky, 'a lit face no longer reads in the water')
+
+    def test_a_mountain_foot_does_not_mirror_into_rivers(self):
+        # Mountain and volcano meshes carry a grassy foot just above the
+        # ground. Counting it as mountain mirrored patchy ground onto rivers
+        # beside a volcano (1498 AD). Coverage now eases in up the slope;
+        # peaks (about 112 units, volcanoes 84) still reflect fully.
+        plane = 2.5 / 112
+
+        def coverage(name, height):
+            text = (ROOT / f'Renderer/native/city_fidelity/{name}.hlsl').read_text()
+            body = between(text, 'float4 PSReflection(P input):SV_Target {', '\n}\n')
+            ramp = re.search(r'return PSMain\(input\)\.color(?:\*smoothstep\((\d+),(\d+),'
+                             r'\(input\.world\.z-NativeReflection\.z\)\*112\))?;', body)
+            if not ramp[1]:
+                return 1.0
+            low, high = float(ramp[1]), float(ramp[2])
+            t = min(max(((height - plane) * 112 - low) / (high - low), 0.0), 1.0)
+            return t * t * (3 - 2 * t)
+
+        foot, flank, peak = plane + 4 / 112, plane + 20 / 112, plane + 80 / 112
+        self.assertLess(coverage('mountain', foot), .01, 'a grassy mountain foot mirrors into rivers')
+        self.assertGreater(coverage('mountain', flank), .3)
+        self.assertEqual(coverage('mountain', peak), 1.0)
+        # Standing objects keep full coverage from the ground up.
+        self.assertEqual(coverage('objects', foot), 1.0)
 
     def test_the_old_full_mask_reflected_ground_in_rivers(self):
         # Confirm the check: drawing ground with alpha writes gives coverage 1.

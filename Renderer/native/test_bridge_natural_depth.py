@@ -107,6 +107,16 @@ int main(){
   assert(std::fabs(bridge-river)<2e-6f);
   for(float material:{14.f,17.f,18.f,19.f,20.f})
    assert(std::fabs(rigid_depth(part(material,0,height))-rigid_depth(part(material,40,height))-river)<2e-6f);
+  // A railroad tunnel's portal shares the bridge slots, marked .0035 as farm
+  // kit props are. It sorts on the same natural basis without the river's
+  // bias, so mountain rock a little above a part hides it; with the bias its
+  // block showed through the rock (a bridge part there stays in front).
+  for(float material:{14.0035f,16.0035f})for(float g:{0.f,40.f}){
+   RigidInput tunnel=part(material,g,height);RigidPoint at=rigid_point(tunnel);float h=at.world.z*112-2.5f;
+   float rock=natural_depth(h+3,projection,at.world.x,at.world.y);
+   std::printf("tunnel=%.7f rock=%.7f bridge=%.7f\n",rigid_depth(tunnel),rock,rigid_depth(part(std::floor(material),g,height)));
+   assert(rock<rigid_depth(tunnel) && rigid_depth(part(std::floor(material),g,height))<rock);
+  }
   // Other rigid materials keep the feature basis: raised ground moves them less.
   for(float material:{8.f,12.f,21.f,30.f}){
    float shift=rigid_depth(part(material,0,height))-rigid_depth(part(material,40,height));

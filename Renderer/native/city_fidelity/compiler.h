@@ -156,6 +156,61 @@ SiteFilter<World,Shore,River,Height> site_filter(Composition const& composition,
         World world,Shore shore,River river,Height height){
     return {composition,nc,nr,world,shore,river,height};
 }
+// An attached effect at a world anchor: column, row, height in tile units.
+struct EffectAnchor {float world[3];Effect effect;};
+// Attached effects become one chunk of camera-facing quads drawn by the city
+// effect layer (q8_city_effect, city_scene_material.hlsl).
+template<class Project>
+void append_effects(Library const& library,std::vector<EffectAnchor> const& anchors,
+        std::shared_ptr<Lighting> const& lighting,Project project_natural,bool indexed,Surfaces& output){
+    if(anchors.empty() || library.effect_material>=library.materials.size() ||
+       !library.materials[library.effect_material].ground)return;
+    // Screen-aligned quads in world space: (+1,+1) in column/row moves
+    // only across the screen and height only up it, so every projection
+    // path places these exactly as it places the bodies. Read-only depth
+    // and the ground material keep them out of shadows and depth writes.
+    Chunk chunk;chunk.material=library.effect_material;chunk.lighting=lighting;chunk.terrain_conforming=true;
+    chunk.effect=true;
+    std::vector<fidelity::MapVertex> corners;
+    for(auto const& a:anchors){
+        auto const& e=a.effect;
+        // Smoke rises from its anchor; flames and lights centre on theirs.
+        bool rises=e.kind==float(effect_smoke) || e.kind==float(effect_volcano_plume);
+        float half=e.width*.5f,low=rises?0.f:-.5f*e.height,high=low+e.height;
+        float uv[4][2]={{-1,0},{1,0},{1,1},{-1,1}};
+        unsigned base=unsigned(corners.size());
+        for(auto const& c:uv){
+            float x=a.world[0]+c[0]*half,y=a.world[1]+c[0]*half,z=a.world[2]+(c[1]?high:low);
+            auto out=project_natural(x,y,z*112);
+            out.u=c[0];out.v=c[1];out.normal_x=out.normal_y=0;out.normal_z=1;
+            out.macro_u=e.seed;out.macro_v=e.intensity;
+            out.material_grass=1;out.material_plains=out.material_desert=out.material_marsh=0;
+            out.authored_relief_height=out.authored_relief_blend=0;
+            out.relief_owner_u=e.width;out.relief_owner_v=e.height;
+            out.base_terrain=90.f+e.kind;corners.push_back(out);
+        }
+        unsigned quad[]={base,base+1,base+2,base,base+2,base+3};
+        chunk.indices.insert(chunk.indices.end(),std::begin(quad),std::end(quad));
+    }
+    if(indexed)chunk.vertices=std::move(corners);
+    else {for(unsigned index:chunk.indices)chunk.vertices.push_back(corners[index]);chunk.indices.clear();}
+    output.chunks.push_back(std::move(chunk));
+}
+// An active Civ III volcano's plume rising from its crater: `crater` is the
+// rendered surface height at the tile centre (mountain units); an eruption
+// thickens it and lights its base. Needs the city pack's effect material.
+template<class Project>
+bool volcano_plume(Library const& library,int nc,int nr,float crater,bool erupting,
+        Project project_natural,bool indexed,Surfaces& output){
+    // A narrow, tall quad (like the chimney smoke's) leaves the puffs room to
+    // billow and rise; an eruption's column is larger and denser.
+    EffectAnchor plume{{float(nc)+.5f,float(nr)+.5f,(crater+3.f)/112},
+        Effect{{0,0,0},float(effect_volcano_plume),erupting?.55f:.45f,erupting?1.8f:1.5f,
+            float((unsigned(nc)*73u^unsigned(nr)*151u)%64u),erupting?1.6f:1.f}};
+    auto before=output.chunks.size();
+    append_effects(library,{plume},std::make_shared<Lighting>(),project_natural,indexed,output);
+    return output.chunks.size()>before;
+}
 template<class Height,class Project,class Stop=ContinueCompilation,class Site=EverySite>
 bool compile(Library const& library,Composition const& selected,int nc,int nr,
         Height height_natural,Project project_natural,Surfaces& output,Stop stop={},bool indexed=false,Site site={}){
@@ -163,8 +218,7 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
     auto lighting=std::make_shared<Lighting>();
     // Attached effects, in world space, become camera-facing quads after the
     // bodies they belong to.
-    struct Anchor {float world[3];Effect effect;};
-    std::vector<Anchor> anchors;
+    std::vector<EffectAnchor> anchors;
     lighting->blockers.reserve(composition->instances.size());
     for(unsigned owner_index=0;owner_index<composition->instances.size();owner_index++){
         if(stop())return false;
@@ -194,7 +248,7 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
         auto placement=place(i,float(nc)+.5f,float(nr)+.5f,
                              terrace?ground_high-lowest_source+.02f:ground_center);
         for(auto const&l:i.lights)lighting->lights.push_back(placement.light(l,owner));
-        for(auto const&e:i.effects){Anchor a;placement.position(e.position,a.world);a.effect=e;anchors.push_back(a);}
+        for(auto const&e:i.effects){EffectAnchor a;placement.position(e.position,a.world);a.effect=e;anchors.push_back(a);}
         Lighting::Box b={{placement.x+i.bounds[0],-placement.y+i.bounds[1],
             placement.z*source_z_metric+std::max(0.f,m.low[2])*i.scale,0},
             {placement.x+i.bounds[2],-placement.y+i.bounds[3],placement.z*source_z_metric+m.high[2]*i.scale,0}};
@@ -336,37 +390,7 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
         // Paving precedes the source ground and bodies; depth is read-only.
         output.chunks.insert(output.chunks.begin(),std::move(chunk));
     }
-    if(!anchors.empty() && library.effect_material<library.materials.size() &&
-       library.materials[library.effect_material].ground){
-        // Screen-aligned quads in world space: (+1,+1) in column/row moves
-        // only across the screen and height only up it, so every projection
-        // path places these exactly as it places the bodies. Read-only depth
-        // and the ground material keep them out of shadows and depth writes.
-        Chunk chunk;chunk.material=library.effect_material;chunk.lighting=lighting;chunk.terrain_conforming=true;
-        chunk.effect=true;
-        std::vector<fidelity::MapVertex> corners;
-        for(auto const& a:anchors){
-            auto const& e=a.effect;
-            float half=e.width*.5f,low=e.kind==float(effect_smoke)?0.f:-.5f*e.height,high=low+e.height;
-            float uv[4][2]={{-1,0},{1,0},{1,1},{-1,1}};
-            unsigned base=unsigned(corners.size());
-            for(auto const& c:uv){
-                float x=a.world[0]+c[0]*half,y=a.world[1]+c[0]*half,z=a.world[2]+(c[1]?high:low);
-                auto out=project_natural(x,y,z*112);
-                out.u=c[0];out.v=c[1];out.normal_x=out.normal_y=0;out.normal_z=1;
-                out.macro_u=e.seed;out.macro_v=e.intensity;
-                out.material_grass=1;out.material_plains=out.material_desert=out.material_marsh=0;
-                out.authored_relief_height=out.authored_relief_blend=0;
-                out.relief_owner_u=e.width;out.relief_owner_v=e.height;
-                out.base_terrain=90.f+e.kind;corners.push_back(out);
-            }
-            unsigned quad[]={base,base+1,base+2,base,base+2,base+3};
-            chunk.indices.insert(chunk.indices.end(),std::begin(quad),std::end(quad));
-        }
-        if(indexed)chunk.vertices=std::move(corners);
-        else {for(unsigned index:chunk.indices)chunk.vertices.push_back(corners[index]);chunk.indices.clear();}
-        output.chunks.push_back(std::move(chunk));
-    }
+    append_effects(library,anchors,lighting,project_natural,indexed,output);
     return !stop();
 }
 }}

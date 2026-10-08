@@ -647,6 +647,16 @@ and async fixture (`4d1970a3d1e9480d82340855b661141e`), but live
 The trial code was removed and the source-matched `c704` trio restored; its
 three staged binary hashes were rechecked with Civ III and its helper closed.
 
+### Unit close-ups
+
+`-Scenario units -Seconds 260 -SampleHz 2 [-UnitPack PACK]` uses the 1498 AD
+save at a 2240-wide client. After first-map readiness it idles at 1x, then uses
+minimap clicks (about 18 by 20 screen pixels per minimap pixel) to centre the
+Nagoya Bomber, two ships off the southern peninsula and a north-eastern harbour,
+zooming each to 2x and 3x (wheel zoom keeps the screen centre). Targets are
+specific to that save. A Lab pack under the checkout's `Renderer/packs` loads
+without installation; the staged Renderer64 binaries are used as they are.
+
 ### Wheel and transition diagnostic
 
 `-Scenario zoom -Seconds 55 -SampleHz 10` loads the disposable save and applies

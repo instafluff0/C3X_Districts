@@ -7,7 +7,8 @@ if(fidelity_profile) {
     auto lookup_natural=[&](int c,int r){
         return queries.natural_tile(c,r);
     };
-    auto mountain_snow=[&](int c,int r){return queries.tile(c,r).snow;};
+    auto mountain_flags=[&](int c,int r){auto t=queries.tile(c,r);
+        return (t.snow?1u:0u)|(t.active?2u:0u)|(t.erupting?4u:0u);};
     Tile owner=lookup_natural(nc,nr);
     HillMaterialFootprint hill_material={owner.real==5,
         lookup_natural(nc-1,nr).real==5,lookup_natural(nc+1,nr).real==5,
@@ -45,6 +46,20 @@ if(fidelity_profile) {
         #include "terrain_mesh_body.h"
     }
     #include "../city_fidelity/geometry.h"
+    // An active volcano's plume (world bits 24/27) in the city effect layer,
+    // rising from the crater of the rendered relief (relief_mesh_body.h).
+    if(!prepared_objects && city_profile && cities.ready && owner.real==10 && queries.tile(nc,nr).active){
+        MountainShape const cone(natural,nc,nr,lookup_natural,mountain_flags);
+        float x=float(nc)+.5f,y=float(nr)+.5f;
+        auto shore=shore_sample_at(x,y);
+        float river_scale=river_terrain_near?smooth01((float(river_at(x,y))-6.f)/16.f):1.f;
+        float crater=height_natural(x,y)+cone.sample(natural,x,y).displacement*
+            coast_relief(float(shore.distance),float(shore.beach_width))*river_scale*hidden_taper_at(x,y);
+        c3x_renderer::city_fidelity::Surfaces plume;
+        if(c3x_renderer::city_fidelity::volcano_plume(cities.library,nc,nr,crater,queries.tile(nc,nr).erupting,
+                project_natural,false,plume))
+            for(auto& chunk:plume.chunks)city_chunks.push_back(std::move(chunk));
+    }
     record_natural_phase(4);
     if(tile.real_terrain_type==7 || tile.real_terrain_type==8 ||
        hill_vegetation==7 || hill_vegetation==8 ||

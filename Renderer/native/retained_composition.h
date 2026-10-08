@@ -135,11 +135,6 @@ private:
     std::map<Id,Picture> images;
     Picture front;
     std::shared_ptr<Node> world_selection;
-    // Image-space camera step (Session's PanTransition). The selected world
-    // (map, world overlays and map-anchored HUD) is shifted by whole pixels;
-    // the previous selected world fills the trailing strip. Screen UI drawn
-    // above the selection is unaffected.
-    int pan_x=0,pan_y=0,pan_under_x=0,pan_under_y=0;Texture pan_under[2];
     std::uint64_t serial=0,frame=0,front_revision=0,drawn_revision=0;
     std::vector<std::uint64_t> drawn_dependencies;
     std::vector<std::uint64_t> pending_drawn_dependencies;
@@ -653,50 +648,7 @@ private:
                 evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);
                 n->map_dynamic|=patch.node->map_dynamic;
             }
-            bool panning=(pan_x||pan_y)&&pan_under[0]&&pan_under[1]&&n->output[0]&&n->output[1];
-            if(panning){
-                versions.push_back((std::uint64_t(unsigned(pan_x))<<32)|unsigned(pan_y));
-                versions.push_back((std::uint64_t(unsigned(pan_under_x))<<32)|unsigned(pan_under_y));
-                versions.push_back(std::uint64_t(reinterpret_cast<std::uintptr_t>(pan_under[0].Get())));
-            }
-            if(panning&&versions!=n->dependencies){
-                int w=n->area.right-n->area.left,h=n->area.bottom-n->area.top;
-                auto shifted=[&](ID3D11Texture2D* target,ID3D11Texture2D* source,int x,int y){
-                    int cw=w-std::abs(x),ch=h-std::abs(y);if(cw<=0||ch<=0)return;
-                    D3D11_BOX box={unsigned(std::max(0,-x)),unsigned(std::max(0,-y)),0,
-                        unsigned(std::max(0,-x)+cw),unsigned(std::max(0,-y)+ch),1};
-                    context->CopySubresourceRegion(target,0,unsigned(std::max(0,x)),unsigned(std::max(0,y)),0,source,0,&box);
-                    ++work.copies;work.copied_pixels+=std::uint64_t(cw)*ch;
-                };
-                for(unsigned i=0;i<2;++i){
-                    D3D11_TEXTURE2D_DESC desc={},under={};n->output[i]->GetDesc(&desc);pan_under[i]->GetDesc(&under);
-                    if(under.Width!=desc.Width||under.Height!=desc.Height||under.Format!=desc.Format){panning=false;break;}
-                }
-                if(panning){
-                    for(unsigned i=0;i<2;++i){
-                        if(n->borrowed_output[i]){
-                            reserve(std::uint64_t(w)*h*4,"selected-pan-output");
-                            D3D11_TEXTURE2D_DESC desc={};n->output[i]->GetDesc(&desc);
-                            Texture target;checked(device->CreateTexture2D(&desc,nullptr,&target));
-                            output(*n,i,std::move(target));n->borrowed_output[i]=false;
-                        }
-                        // An exact single-patch plane is its own assembly, as
-                        // in the resting selection below: slide straight from
-                        // it instead of re-assembling both planes every frame.
-                        Id source=0;ID3D11Texture2D* from=nullptr;
-                        if(compiled_enabled&&n->inputs[i].format==n->selected_format[i]&&exact_plane(n->inputs[i],n->area)){
-                            auto const& patch=n->inputs[i].patches.front();from=patch.node->output[patch.output].Get();
-                            ++work.selected_borrows;work.avoided_copy_pixels+=std::uint64_t(w)*h;
-                        }else{source=assemble(n->inputs[i],ticks,frequency,depth+1,{},true);from=replay.texture(source);}
-                        try{
-                            shifted(n->output[i].Get(),pan_under[i].Get(),pan_under_x,pan_under_y);
-                            shifted(n->output[i].Get(),from,pan_x,pan_y);
-                        }catch(...){if(source)replay.recycle(source);throw;}if(source)replay.recycle(source);
-                    }
-                    n->dependencies.swap(versions);n->revision=++serial;
-                }
-            }
-            if(!panning&&(!n->output[0]||versions!=n->dependencies)){
+            if(!n->output[0]||versions!=n->dependencies){
                 for(unsigned i=0;i<2;++i){
                     if(compiled_enabled&&n->inputs[i].format==n->selected_format[i]&&exact_plane(n->inputs[i],n->area)){
                         auto const& patch=n->inputs[i].patches.front();
@@ -1349,22 +1301,6 @@ public:
     // every map underlay samples the latest complete world and map HUD. This
     // explicit live selection prevents stale labels without repainting or
     // erasing native panels that Civ III did not redraw this time.
-    void set_pan(int x,int y,int under_x,int under_y,Texture const* under){
-        pan_x=x;pan_y=y;pan_under_x=under_x;pan_under_y=under_y;
-        pan_under[0]=under?under[0]:Texture{};pan_under[1]=under?under[1]:Texture{};
-    }
-    // Copy the displayed world planes before a camera step replaces them.
-    bool copy_selected_world(Texture out[2]){
-        auto n=world_selection;if(!n||!n->output[0]||!n->output[1])return false;
-        for(unsigned i=0;i<2;++i){
-            D3D11_TEXTURE2D_DESC desc={},have={};n->output[i]->GetDesc(&desc);if(out[i])out[i]->GetDesc(&have);
-            if(!out[i]||have.Width!=desc.Width||have.Height!=desc.Height||have.Format!=desc.Format){
-                out[i].Reset();desc.MiscFlags=0;checked(device->CreateTexture2D(&desc,nullptr,&out[i]));
-            }
-            context->CopyResource(out[i].Get(),n->output[i].Get());
-        }
-        return true;
-    }
     void select_world(Id words,Id detail,Id source_words,Id source_detail){
         if(!admitted)return;
         auto const& source=images.at(source_detail);

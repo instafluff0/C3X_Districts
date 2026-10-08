@@ -256,6 +256,7 @@ int main() {
 
     def test_mountain_projection_preserves_ground_and_tracks_local_volcano_ownership(self):
         shader=(LAB/'shaders/relief/beauty_mountain.hlsl').read_text()
+        volcano=(LAB/'shaders/relief/volcano_material.hlsl').read_text()
         source='''
 #include <algorithm>
 #include <cassert>
@@ -271,8 +272,9 @@ float4 normalize(float4 n) {
     float length=std::sqrt(n.x*n.x+n.y*n.y+n.z*n.z);
     return {n.x/length,n.y/length,n.z/length,0};
 }
-struct P {float4 world,normal,volcano_owner;float base_relief=0;};
-'''+function(shader,'mountain_material_weight')+function(shader,'ground_side_projection')+'''
+struct P {float4 world,normal,volcano_owner,material;float base_relief=0;};
+float4 Macro;
+'''+function(volcano,'volcano_coverage')+function(shader,'relief_rise')+function(shader,'mountain_material_weight')+function(shader,'ground_side_projection')+'''
 int main() {
     P p{};p.world.z=.5f;p.normal={1,0,0,0};
     assert(mountain_material_weight(p)==1);
@@ -293,14 +295,26 @@ int main() {
     p.base_relief=0;p.world.z=.5f;p.volcano_owner={0,0,1,0};
 #ifdef BEAUTY_VOLCANO_MATERIAL
     assert(mountain_material_weight(p)==0 && ground_side_projection(p)==0);
-    p.volcano_owner.x=.7f;
+    // owner.xy is the volcano stamp's texture offset (-.5 to .5): its art
+    // fades out before the texture edge.
+    p.volcano_owner.x=.46f;
     float edge=mountain_material_weight(p);assert(edge>0 && edge<1);
     // Captured local offsets survive relocation and world-wrap occurrences.
     for(float shift:{-1000.f,0.f,37.f,1000.f}) {
         p.world.x=shift;p.world.y=-shift;
         assert(mountain_material_weight(p)==edge);
     }
-    p.volcano_owner.x=2;assert(mountain_material_weight(p)==1);
+    p.volcano_owner.x=.6f;assert(mountain_material_weight(p)==1);
+    // Ash meets the ground through the rise blend, as mountain rock does.
+    p.world={0,0,2.5f/112,0};p.volcano_owner={0,0,1,0};
+    assert(mountain_material_weight(p)==1);
+    p.base_relief=.25f;p.world.z=.25f+2.5f/112;   // its foot on raised ground
+    assert(mountain_material_weight(p)==1);
+    p.base_relief=0;
+    for(float previous=2,step=0;step<80;++step) {
+        p.world.z=2.5f/112+step*.005f;float weight=mountain_material_weight(p);
+        assert(weight<=previous && (step<3 || weight<1));previous=weight;
+    }
     p.volcano_owner={0,0,0,0};assert(mountain_material_weight(p)==1);
 #else
     assert(mountain_material_weight(p)==1 && ground_side_projection(p)>.99f);
@@ -311,7 +325,7 @@ int main() {
             cpp=Path(directory)/'projection.cpp';binary=Path(directory)/'projection'
             cpp.write_text(source)
             for defines in ([],['-DBEAUTY_VOLCANO_MATERIAL=1']):
-                subprocess.run(['c++','-std=c++17',*defines,str(cpp),'-o',str(binary)],
+                subprocess.run(['c++','-std=c++17','-DBEAUTY_TERRAIN_TRANSITIONS=1',*defines,str(cpp),'-o',str(binary)],
                                check=True,capture_output=True,text=True)
                 subprocess.run([str(binary)],check=True,capture_output=True,text=True)
 

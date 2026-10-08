@@ -126,7 +126,7 @@ struct RendererState {
  struct {std::vector<Unit> units=std::vector<Unit>(1);} unit_bodies;
  std::vector<UnitInstances::ScenePose> fresh_unit_poses;
  UnitArrivalVisibility arrival_visibility;
- unsigned moving_resources=0,visible_wave_animations=0,visible_water_animations=0,asset_prepares=0;
+ unsigned moving_resources=0,visible_wave_animations=0,visible_water_animations=0,visible_city_effects=0,asset_prepares=0;
  bool water_scene_active=true,wave_ready=true,visibility_pass=true;
  std::vector<int> resource_animations;
  int resource_animation_for(c3x_renderer_tile_v1 const& tile)const{return tile.resource_id==101?0:-1;}
@@ -144,7 +144,7 @@ struct RendererState {
      (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)){selected.push_back(pose);break;}
   }return true;
  }
- unsigned ambient_count()const{return moving_resources+visible_wave_animations+visible_water_animations;}
+ unsigned ambient_count()const{return moving_resources+visible_wave_animations+visible_water_animations+visible_city_effects;}
  int prepare_frame_unit_assets(std::vector<UnitInstances::ScenePose> const&){++asset_prepares;
   return assets_pending?C3X_RENDERER_RESULT_PENDING:C3X_RENDERER_RESULT_OK;}
  struct {int level=1;LARGE_INTEGER frequency{1000};void write(char const*,char const*,bool){}double milliseconds(long long){return 0.;}} trace;

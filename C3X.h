@@ -2665,8 +2665,6 @@ struct district_button_image_set {
 	bool custom_renderer_timer_running;
 	UINT_PTR custom_renderer_view_timer;
 	bool custom_renderer_view_timer_running, custom_renderer_scroll_request;
-	LARGE_INTEGER custom_renderer_scroll_at;
-	double custom_renderer_scroll_x, custom_renderer_scroll_y;
 	int custom_renderer_minimap_zoom;
 	int custom_renderer_capture_cover; // zoom tile width the last capture envelope covers
 	// Opt-in scripted game diagnostics; inactive without the per-process save path.
@@ -2721,6 +2719,12 @@ struct district_button_image_set {
 	// Civ III's team-colour disc preference for the unit being captured; the 3D
 	// scene draws it as an owner ring instead of the native 2D disc.
 	bool custom_renderer_team_disc;
+	// Animator effect-list FLCs (bomb drop, SAM, SDI): the one Civ III keeps
+	// hidden until the bomb release, the last one the renderer drew (hidden by
+	// C3X) and the last one it declined (watch_custom_renderer_effect_anims).
+	FLC_Animation * custom_renderer_bomb_anim;
+	FLC_Animation * custom_renderer_drawn_anim;
+	FLC_Animation * custom_renderer_declined_anim;
 	c3x_renderer_export_scene_fn custom_renderer_export_scene;
 	c3x_renderer_schedule_fn custom_renderer_schedule;
 	c3x_renderer_reset_fn custom_renderer_reset;

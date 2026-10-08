@@ -96,7 +96,8 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     SurfaceQueries queries(world_coast,scratch.shores,input.tile_x,input.tile_y,observe_world,observe_coast,input.skip_flat_shore,&scratch.rivers);
     auto world_lookup=[&](int c,int r){return queries.tile(c,r);};
     auto lookup_natural=[&](int c,int r){return queries.natural_tile(c,r);};
-    auto mountain_snow=[&](int c,int r){return queries.tile(c,r).snow;};
+    auto mountain_flags=[&](int c,int r){auto t=queries.tile(c,r);
+        return (t.snow?1u:0u)|(t.active?2u:0u)|(t.erupting?4u:0u);};
     auto shore_sample_at=[&](float x,float y){return queries.shore(x,y);};
     auto material_weights_for=[&](float x,float y){return queries.weights(x,y);};
     auto relief_sample=[&](int kind,unsigned variant,int channel,float u,float v){return relief_source(assets,true,kind,variant,channel,u,v);};

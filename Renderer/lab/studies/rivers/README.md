@@ -33,6 +33,12 @@ river shader change, rerun `Renderer/tools/overlay_river_shading.py`
   A mirror image keeps a quarter sky haze and outweighs the water's dark body
   (weight .9 vs .272 for open sky), so a shaded mountain face reads as soft
   grey instead of near-black.
+  A mountain's grassy foot mirrors like ground, so its mirror coverage eases
+  in with height (smoothstep 10→30 units in the generated mountain
+  `PSReflection`, from `environment_refresh/prepare.py`); peaks still reflect.
+  Rivers mirror mountains and volcanoes at half strength: the coverage blend
+  takes its alpha from `mountain_mirror_coverage` (.5) in both the Lab and the
+  game, since a tall peak beside a narrow river broke into pale patches.
   Tests: `Renderer/native/test_river_reflection_objects.py`.
 - **Stream lines.** Thin pale lines parallel to the banks, broken into dashes
   that drift downstream along the drainage tangent; a broad world field picks

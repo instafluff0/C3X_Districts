@@ -211,7 +211,6 @@ int status_calls=0,cursor_calls=0,marker_calls=0,overlay_x=0,overlay_y=0;
 int ring_calls=0,route_begins=0,route_ends=0,capable=1;std::vector<int> route_anchors;
 int native_image(int op,void*,void*,void const* from,void const* to,unsigned count){
  if(op==C3X_NATIVE_ZOOM_PRESENTED)return 65536;
- if(op==C3X_NATIVE_PAN_PRESENTED)return 0;
  if(op==C3X_NATIVE_TACTICAL_CAPABLE)return capable;
  if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){++route_begins;auto a=(int const*)to;route_anchors.assign(a,a+4*count);return 1;}
  if(op==C3X_NATIVE_TACTICAL_ROUTE_END){++route_ends;return 1;}

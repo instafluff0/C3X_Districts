@@ -8,6 +8,7 @@
 #pragma comment(lib,"windowscodecs.lib")
 
 #include "direct_units.h"
+#include "direct_effects.h"
 #include "bloom.h"
 #include "fresh_pipeline.h"
 #include "world_content_receipt.h"

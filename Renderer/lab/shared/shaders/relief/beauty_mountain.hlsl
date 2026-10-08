@@ -242,13 +242,20 @@ float3 atmosphere(float y) {
 }
 
 
+// Relief rise above the ground, in mountain units.
+float relief_rise(P input) {
+#ifdef BEAUTY_TERRAIN_TRANSITIONS
+    return max(0, input.world.z - input.base_relief - 2.5 / 112.0);
+#else
+    return max(0, input.material.x * Macro.z);
+#endif
+}
+
 // Relief surfaces can contain captured volcanoes beside ordinary mountains.
 // Use their material coverage, never fixture coordinates, for both calibrations.
 float mountain_material_weight(P input) {
 #ifdef BEAUTY_VOLCANO_MATERIAL
-    float4 owner = input.volcano_owner;
-    return 1 - owner.z * smoothstep(.025,.20,input.world.z) *
-        (1-smoothstep(.60,.78,max(abs(owner.x),abs(owner.y))));
+    return 1 - volcano_coverage(input.volcano_owner, relief_rise(input));
 #else
     return 1;
 #endif
@@ -609,7 +616,7 @@ Output shade(P input) {
 #endif
 #ifdef SANDBOX_TERRAIN_MATERIAL
 #ifdef BEAUTY_VOLCANO_MATERIAL
-    albedo = volcano_albedo(albedo, input.volcano_owner, input.world.z);
+    albedo = volcano_surface(albedo, ground_albedo, input.volcano_owner, mountain_rise);
 #endif
     float altitude = input.material.y > 1.5 ? input.material.x : 0;
     float mountain_cavity = lerp(0.76, 1.0, smoothstep(0.03, 0.48, altitude));
@@ -652,7 +659,7 @@ Output shade(P input) {
     float shadow = horizon_visibility(input.world);
 #endif
 #ifdef BEAUTY_VOLCANO_MATERIAL
-    albedo = volcano_albedo(albedo, input.volcano_owner, input.world.z);
+    albedo = volcano_surface(albedo, ground_albedo, input.volcano_owner, mountain_rise);
 #endif
     float ndl = saturate(dot(normal, light_direction));
     float wrap_bias = lerp(0.20, 0.18, rock_albedo_coverage);
@@ -684,6 +691,9 @@ Output shade(P input) {
         saturate(dot(normal, -light_direction) * 0.5 + 0.5) : 0;
     float3 radiance = diffuse + SunColorExposure.rgb * Sun.w * specular * shadow +
                       Ambient.rgb * rim * 0.13;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    radiance += volcano_emission(input.volcano_owner, mountain_rise);
+#endif
     // The relief patch owns its terrain as well as its rock. Only the
     // authoritative coast mask may make it transparent; there is no second
     // ground surface beneath it and therefore no collar to cross-fade.

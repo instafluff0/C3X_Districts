@@ -28,73 +28,20 @@ class VolcanoFixtureTests(unittest.TestCase):
             self.assertEqual([terrain[xy] for xy in pair], [6, 6], case)
             self.assertGreater(sum(int(row[3]) in (0, 1, 2, 3) for row in rows), 100, case)
 
-    def test_production_ownership_follows_tiles_and_wraps(self):
-        import subprocess
-        source = (renderer.ROOT / 'Renderer/native/source_fidelity/terrain_mesh_body.h').read_text()
-        body = source[source.index('    struct VolcanoCenter {'):
-                      source.index('    record_natural_phase(2);')]
-        program = r'''#include <array>
-#include <vector>
-#include <cassert>
-#include <cmath>
-#include "Renderer/lab/shared/natural/vertex.h"
-#include "Renderer/native/render_core/terrain_query.h"
-using Vertex=c3x_renderer::fidelity::MapVertex;
-struct Tile {int real;};
-struct Dimensions {int width=32,height=32;bool wrap_x=false,wrap_y=false;};
-struct Coast {Dimensions size;Coast const& world()const{return *this;}
-    Dimensions dimensions()const{return size;}};
-void check(int nc,int nr,int owner_c,int owner_r,bool present,bool wrapped) {
-    Coast world_coast{{32,32,wrapped,false}};
-    std::vector<Vertex> natural_vertices[3];
-    for(unsigned layer:{0u,2u})for(int y=0;y<=16;y++)for(int x=0;x<=16;x++) {
-        Vertex v{};v.world_x=nc+x/16.f;v.world_y=nr+y/16.f;v.world_z=.25;
-        v.normal_x=.3;v.normal_z=.8;natural_vertices[layer].push_back(v);
-    }
-    auto original=natural_vertices[0];unsigned observed=0;
-    auto lookup_natural=[&](int c,int r) {
-        ++observed;
-        auto wrap=[&](int n){return wrapped?(n%32+32)%32:n;};
-        return Tile{present && wrap(c)==wrap(owner_c) && r==owner_r?10:6};
-    };
-''' + body + r'''
-    assert(observed==9);
-    for(unsigned layer:{0u,2u})for(unsigned i=0;i<original.size();i++) {
-        auto a=original[i],b=natural_vertices[layer][i];
-        assert(a.world_x==b.world_x && a.world_y==b.world_y && a.world_z==b.world_z);
-        assert(a.normal_x==b.normal_x && a.normal_z==b.normal_z);
-        assert(b.relief_owner_coverage==float(present));
-        if(present) {
-            int local_c=owner_c;
-            if(wrapped)while(local_c<nc-1)local_c+=32;
-            float dx=b.world_x-(local_c+.5f),dy=b.world_y-(owner_r+.5f);
-            int raw_x=local_c+owner_r,raw_y=local_c-owner_r;
-            if(wrapped)raw_x=c3x_renderer::render_core::mod(raw_x,32);
-            unsigned slot=c3x_renderer::render_core::volcano_slot(raw_x,raw_y);
-            auto oriented=c3x_renderer::render_core::volcano_source_offset(
-                dx,-dy,c3x_renderer::render_core::volcano_orientation(slot));
-            assert(b.relief_owner_u==oriented[0]);
-            assert(b.relief_owner_v==-oriented[1]);
-        }
-    }
-}
-int main() {
-    for(int c:{-9,0,16,42})for(int r:{-4,0,11})for(int dc=-1;dc<=1;dc++)for(int dr=-1;dr<=1;dr++) {
-        check(c,r,c+dc,r+dr,true,false);
-        check(c,r,c+dc,r+dr,false,false);
-    }
-    check(31,2,0,2,true,true);
-    check(32,2,0,2,true,true);
-}
-'''
-        with tempfile.TemporaryDirectory() as directory:
-            cpp=Path(directory)/'ownership.cpp';binary=Path(directory)/'ownership'
-            cpp.write_text(program)
-            result=subprocess.run(['c++','-std=c++17','-O2','-Wall','-Wextra','-Werror',
-                                   '-I',str(renderer.ROOT),str(cpp),'-o',str(binary)],
-                                  capture_output=True,text=True)
-            self.assertEqual(result.returncode,0,result.stderr)
-            subprocess.run([str(binary)],check=True,capture_output=True)
+    def test_volcano_ownership_follows_the_shared_relief(self):
+        # Volcanoes are stamps of the shared mountain relief: their tiles use
+        # the joined relief grid, and each vertex takes the volcano's texture
+        # position, coverage, activity and lava channel from that same shape
+        # (behaviour and wrapped occurrences: test_mountain_shape.cpp). The
+        # retired ground provider adds no second cone (test_relief.cpp).
+        terrain = (renderer.ROOT / 'Renderer/native/source_fidelity/terrain_mesh_body.h').read_text()
+        self.assertIn('unified_mountain_surface|=real==6 || real==10;', terrain)
+        self.assertNotIn('VolcanoCenter', terrain)
+        relief = (renderer.ROOT / 'Renderer/lab/shared/natural/relief_mesh_body.h').read_text()
+        for line in ('out.relief_owner_u=sample.volcano_u-.5f;out.relief_owner_v=sample.volcano_v-.5f;',
+                     'out.relief_owner_coverage=sample.volcano;',
+                     'out.relief_owner_state=2.f*float(sample.activity)+sample.channel;'):
+            self.assertIn(line, relief)
 
     def test_shared_changes_select_volcanoes_and_terrain_witness(self):
         for category in ('day-night', 'shadows', 'transitions'):

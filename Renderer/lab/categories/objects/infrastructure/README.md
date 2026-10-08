@@ -45,29 +45,24 @@ whole rendered mountain surface, so the rock never cuts them along a ragged
 contour, and each route point fades out between 35 and 65 height units of
 mountain rise: routes show on a mountain's feet and lower flanks and dissolve
 before its upper slopes, as Civ III draws routes on a mountain tile's lower art
-but never over its peak. A railroad running into a mountain goes through
-a tunnel instead (Lab, in review; `tunnel_route`). The user asked for the
-portal near ground level, not up the mountain, with its block kept but
-mostly inside the mountain, and chose a smaller portal so a gentle foot can
-hold it (2026-10-07). The rail is hidden in rock: at least 4 units over the
-land with the rock 0.16 tile along the line 20 units over the rail (three
-quarters of the block's height), or 30 units over the land. Between two
-mountain tiles it is also hidden from their shared edge until it reaches
-rock, so it never surfaces in a range's saddle. Where hidden rail meets
-shown rail, Civ VI's tunnel portal (the facade, its cutting and the block
-behind) and its rock cap stand, seated on the rail and turned toward the
-shown rail. At an open tile edge where a range's tunnel ends, they stand at
-that edge. The shown rail ends inside the arch. They are half the railroad
-bridge's calibrated scale. Their bridge material is marked .0035, so
-`rigid_feature.hlsl` sorts them on the bridges' natural basis without the
-river's bias, and the mountain's rock hides the block.
-They come from Gathering Storm's `IMP_Mountain_Tunnel`
-(`route_tunnel_sets.json`, compound importer with
-`--terrain-edits preserve_unresolved`, into `RouteTunnelsNormalized`).
-`build_route_bridge_runtime.py` adds them to the bridge bundle in the unused
-medieval and industrial pillaged bridge texture slots (1 and 3), so no shader
-change is needed. The Lab `network` case runs a railroad through its small range (raw
-row 16, fixed to the range whatever the view center). Neighboring tiles share one axis at every
+but never over its peak.
+
+Railroad tunnels are out of the game (the user's call, 2026-10-07, after the
+portals crowded the 1498 save's ranges). Their code stays in the tree,
+dormant: `tunnel_route` and `tunnel_portal_length` run only when the bridge
+bundle has a `tunnel_railroad` group, and `build_route_bridge_runtime.py`
+adds one only with `--tunnel-pack Renderer/packs/RouteTunnelsNormalized`.
+For a Lab study, the last design was:
+- Civ VI's Gathering Storm `IMP_Mountain_Tunnel` portal and rock cap, greyed
+  to the mountains' rock, at half the railroad bridge's scale.
+- The portal stands at the mountain's foot, centred on its cutting and seated
+  9 units up, where route strips are drawn.
+- Its block reaches back into the rock (1x to 4x deep).
+- The rail is hidden in rock, and between two mountain or volcano tiles.
+- The pack overlay for `rigid_feature.hlsl`'s tunnel depth marker was
+  reverted; its backup is `Renderer64ResidentRuntime-before-tunnels-20261007`.
+The Lab `network` case still runs a railroad through its small range (raw row
+16). Neighboring tiles share one axis at every
 join (a variant's neighbors compute its variant too), and route strips are a
 depth-tested decal without depth writes. Renderer64 compiles its shaders from
 `Renderer/packs/Renderer64ResidentRuntime`: after a Lab route-shader change,
@@ -92,12 +87,17 @@ parts beyond start at the run's end. Rivers run in valleys about 15 units
 below the land beyond ~0.6 tile from the water. A level deck on the valley
 floor sits that far below the paths coming over the land, and on the fixed
 oblique view a straight path descending to it is drawn bent into the deck's
-side. So the deck stands at the top of the lower bank (the highest route
-ground out to 0.75 tile on each side, the lower of the two sides, at most 20
-units over its ends). Its paths are carried level to it where their ground lies
-lower, out to 0.75 tile, then fade back onto their ground. The user chose this
-over the higher bank, which looked silly with a high bridge and long raised
-approach (2026-10-07).
+side. So a railroad's truss deck stands at the top of the lower bank (the
+highest route ground out to 0.75 tile on each side, the lower of the two
+sides, at most 20 units over its ends). Its paths are carried level to it where
+their ground lies lower, out to 0.75 tile, then fade back onto their ground.
+The user chose this over the higher bank, which looked silly with a high
+bridge and long raised approach (2026-10-07). A road's arch bridge rests on its
+lower end instead: raised, its ends hung in the air over the 1498 save's deep
+valleys, since an arch has only about 6 units of stonework below its deck (the
+user's choice, 2026-10-07). `Renderer/lab/studies/roads/save_window.js` and
+`save_window.py` replay a window of a save in the Lab (terrain, rivers, routes
+and cities, through the C3X Editor's save inspector).
 Route strips draw 6.5 units over their height (world z +9 against the
 features' +2.5), and the rails stand about 2.5 over the deck, so the carried
 level is 4 under the deck's. Renderer64 gives bridge
@@ -111,8 +111,9 @@ Without the pack the previous segment routes remain.
 gameplay and close zooms beside the segment roads; `--eras` renders each road
 era and its bridge (`C3X_LAB_ROAD_ERA` overrides the `network` fixture era).
 
-This category does not imply new support for pollution, craters, colonies or
-other tile improvements that the current renderer does not replace.
+Pollution, craters and city ruins are drawn from the site pack (see
+`huts-camps`). This category does not imply support for colonies, forts or other
+tile buildings that the current renderer does not replace.
 
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.

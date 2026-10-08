@@ -212,6 +212,20 @@ get_city_ptr (int id)
 	return NULL;
 }
 
+// Custom rendering only: We Love the King Day fireworks are a flat native
+// overlay that bursts over the 3D city. The native effect walk queues a city's
+// FLC only while field_A4 > 0, so the Animator update hides celebrating cities
+// for its call and restores their saved effect after. Disorder and plague play.
+void
+hide_custom_renderer_fireworks (bool hide)
+{
+	for (int n = 0; n <= p_cities->LastIndex; n++) {
+		City * city = get_city_ptr (n);
+		if ((city != NULL) && (city->Body.field_A4 == (hide ? AE_Fireworks : -AE_Fireworks)))
+			city->Body.field_A4 = hide ? -AE_Fireworks : AE_Fireworks;
+	}
+}
+
 // Forward declarations for unit counter system (defined after their dependencies)
 enum recognizable_parse_result parse_counter_rule (char ** p_cursor, struct error_line ** p_unrecognized_lines, void * out_rule);
 Unit * find_counter_best_defender_against (Unit * attacker, Tile * tile, int tile_x, int tile_y, Unit * excluded, bool require_visible, bool * out_any_counter_effect);
@@ -229,6 +243,8 @@ Unit * __fastcall patch_Main_Screen_Form_find_visible_unit (Main_Screen_Form * t
 void notify_custom_renderer_unit_move (Unit * unit, int old_x, int old_y, bool source_visible);
 void notify_custom_renderer_unit_spawn (Unit * unit);
 void notify_custom_renderer_unit_state (Unit * unit, unsigned int kind);
+int notify_custom_renderer_combat (Unit * source, unsigned int kind, int tile_x, int tile_y, int code);
+void watch_custom_renderer_effect_anims (Animator * animator);
 void notify_custom_renderer_unit_selection (bool changed);
 
 // Declare various functions needed for districts and hard to untangle and reorder here
@@ -19865,6 +19881,12 @@ translate_custom_renderer_native (int operation, JGL_Image * image, void * sourc
 	LARGE_INTEGER begin = {0}, end = {0}, frequency = {0};
 	if (is->custom_renderer_trace_input) QueryPerformanceCounter (&begin);
 	int result = is->custom_renderer_native_image (operation, image, source, source_rect, destination_rect, color);
+	// Civ III's form hit test reads only form canvases whose Status1 lacks bit 2:
+	// never the screen canvas, and not Units_Control's (created with 0x1000022).
+	// Their native drawing then needs no renderer input coverage.
+	if (result > 0 && operation == C3X_NATIVE_IMAGE_DRAW && image == p_jgl_screen_canvas->JGL.Image &&
+	    source == p_main_screen_form->Units_Control.Data.Canvas.JGL.Image && (p_main_screen_form->Units_Control.Data.Status1 & 2))
+		is->custom_renderer_native_image (C3X_NATIVE_HIT_EXEMPT, image, source, NULL, NULL, 0);
 	if (result > 0 && is->current_config.enable_custom_rendering_zoom && *p_player_bits != 0 &&
 	    ! p_main_screen_form->is_now_loading_game && p_bic_data->Map.Renderer.spotlight_on_city == NULL &&
 	    image == p_jgl_screen_canvas->JGL.Image) {
@@ -23998,13 +24020,6 @@ custom_renderer_zoom_transform_point (int * x, int * y)
 void
 custom_renderer_zoom_inverse_point (int * x, int * y)
 {
-	// A camera step may still be sliding into place: the screen shows the new
-	// native camera shifted by the last presented slide offset.
-	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL) {
-		int pan = is->custom_renderer_native_image (C3X_NATIVE_PAN_PRESENTED, NULL, NULL, NULL, NULL, 0);
-		*x -= (short)(pan & 0xffff);
-		*y -= (short)((unsigned)pan >> 16);
-	}
 	if (! custom_renderer_zoom_enabled ()) return;
 	sync_custom_renderer_zoom_to_native ();
 	// One atomic display sample for both coordinates. This is the last
@@ -28283,8 +28298,6 @@ unload_custom_renderer ()
         if (kill_timer != NULL) kill_timer (NULL, is->custom_renderer_view_timer);
         is->custom_renderer_view_timer = 0;
     }
-    is->custom_renderer_scroll_at.QuadPart = 0;
-    is->custom_renderer_scroll_x = is->custom_renderer_scroll_y = 0.;
     if (is->custom_renderer_combat_odds_background != NULL) {
         is->custom_renderer_combat_odds_background->vtable->destruct (is->custom_renderer_combat_odds_background, __, 0);
         free (is->custom_renderer_combat_odds_background);
@@ -29049,6 +29062,8 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 			if (record->real_terrain_type == SQ_Volcano) record->feature_flags |= C3X_RENDERER_FEATURE_VOLCANO;
 			capture_custom_renderer_overlay_body (record, tile, visible_to_civ_id, tile_x, tile_y);
 			if (tile->vtable->m26_Check_Tile_Building (tile)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_TILE_BUILDING;
+			// City ruins: native m12 draws them from the global flag, with no viewer memory.
+			if (tile->vtable->m36_Get_Ruins (tile)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_RUINS;
 			record->tile_building_id = tile->vtable->m47_Get_Tile_BuildingID (tile);
 			record->has_effect = tile->Body.active_tile_effect != NULL;
 
@@ -29549,6 +29564,9 @@ capture_custom_renderer_world_topology ()
 			// Bit 26: Civ III's snow-capped mountain (as m29_Check_Mountain_Snowcap tests it).
 			if ((((value >> 8) & 255u) == SQ_Mountains) && ((tile->vtable->m43_Get_field_30 (tile) & 0x100000) != 0))
 				value |= 1u << 26;
+			// Bit 27: an erupting volcano (bit 24 alone: smoldering).
+			if ((tile->Body.active_tile_effect != NULL) && (tile->Body.active_tile_effect->V[2] == AE_Eruption))
+				value |= 1u << 27;
 			int index = (y * map->Width + x) / 2;
 			if (observe_visibility) {
 				unsigned long long visibility = ((unsigned long long)(unsigned int)tile->Body.Fog_Of_War << 32) |
@@ -32483,6 +32501,18 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
     if (requested.camera_x != displayed.camera_x || requested.camera_y != displayed.camera_y)
         is->custom_renderer_unit_representatives_dirty = true;
     log_custom_renderer_test_route_resolved (requested.camera_x, requested.camera_y);
+    if (is->custom_renderer_scroll_request && is->custom_renderer_trace_input &&
+        (requested.camera_x != displayed.camera_x || requested.camera_y != displayed.camera_y)) {
+        LARGE_INTEGER now = {0};
+        QueryPerformanceCounter (&now);
+        int scale = custom_renderer_zoom_enabled () && is->custom_renderer_native_image != NULL ?
+            is->custom_renderer_native_image (C3X_NATIVE_ZOOM_PRESENTED, NULL, NULL, NULL, NULL, 0) : 65536;
+        char message[240];
+        snprintf (message, sizeof message, "[C3X renderer] stage=edge-scroll qpc=%lld step=%d,%d camera=%d,%d scale=%d\n",
+            now.QuadPart, requested.camera_x - displayed.camera_x, requested.camera_y - displayed.camera_y,
+            requested.camera_x, requested.camera_y, scale);
+        (*p_OutputDebugStringA) (message);
+    }
     // A zoom-out target beyond the captured envelope recaptures at the same
     // camera (asynchronously when deferrable) while the transition runs. The
     // target-only need is stable during the transition, so this fires once.
@@ -32568,9 +32598,12 @@ patch_Animator_update_display (Animator * this, int edx)
         // A pending manual pan must not move the battlefield between clips.
         settle_custom_renderer_navigation (is->combat_unit_display_override_active ? C3X_NAV_DISCARD :
             custom_renderer_camera_may_defer (this) ? C3X_NAV_POLL : C3X_NAV_BARRIER);
+        watch_custom_renderer_effect_anims (this);
     }
     // Always run the native director and UI, including the active player turn.
+    hide_custom_renderer_fireworks (true);
     Animator_update_display (this, __);
+    hide_custom_renderer_fireworks (false);
 }
 #endif
 
@@ -32578,11 +32611,18 @@ patch_Animator_update_display (Animator * this, int edx)
 void __fastcall
 patch_Main_Screen_Form_scroll_at_mouse (Main_Screen_Form * this, int edx)
 {
-    if (! is->current_config.enable_custom_rendering || is->custom_renderer_view_timer == 0) {
+    if (! is->current_config.enable_custom_rendering) {
         Main_Screen_Form_scroll_at_mouse (this, edx);
         return;
     }
-    // The dedicated UI-thread timer supplies pixel-sized, elapsed-time steps.
+    // Civ III chooses edge-scroll steps and timing. The battlefield camera
+    // stays fixed during custom combat display. Tag the request so a step in
+    // flight finishes before another replaces it: until it is adopted, each
+    // tick asks again for the displayed camera plus one step.
+    if (is->combat_unit_display_override_active) return;
+    is->custom_renderer_scroll_request = true;
+    Main_Screen_Form_scroll_at_mouse (this, edx);
+    is->custom_renderer_scroll_request = false;
 }
 #endif
 
@@ -32593,36 +32633,18 @@ custom_renderer_view_timer (HWND window, UINT message, UINT_PTR timer, DWORD tim
     if (! is->current_config.enable_custom_rendering || is->custom_renderer_view_timer_running ||
         timer != is->custom_renderer_view_timer) return;
     Main_Screen_Form * screen = p_main_screen_form;
-    LARGE_INTEGER now;
-    if (! QueryPerformanceCounter (&now) || is->custom_renderer_qpc_frequency.QuadPart <= 0) return;
-    double elapsed = is->custom_renderer_scroll_at.QuadPart ?
-        (double)(now.QuadPart - is->custom_renderer_scroll_at.QuadPart) / is->custom_renderer_qpc_frequency.QuadPart : 0.;
-    bool trace_sample = is->custom_renderer_trace_input &&
-        now.QuadPart / is->custom_renderer_qpc_frequency.QuadPart !=
-        is->custom_renderer_scroll_at.QuadPart / is->custom_renderer_qpc_frequency.QuadPart;
-    is->custom_renderer_scroll_at = now;
-    // Modal/interturn callbacks discard accumulated motion. The step below
-    // caps late callbacks instead of disabling scroll on a busy game thread.
+    // Edge scrolling is Civ III's own (scroll_at_mouse). This timer follows the
+    // presented zoom only: the minimap box, and a re-clamp after zooming out
+    // at an expanded map edge.
     bool ready = *p_player_bits && ! screen->is_now_loading_game && screen->turn_end_flag &&
         ! is->custom_renderer_modal && ! is->paused_for_popup && ! is->custom_renderer_draw_in_progress &&
         ! p_bic_data->Map.Renderer.spotlight_on_city && ! (p_city_form->Base.Data.Status2 & 1) &&
         screen->GUI.is_enabled && ! is->combat_unit_display_override_active &&
-        screen->animator.Units2_Count == 0 && ! *(bool *)(screen->animator.field_18E4 + 0xD) &&
-        elapsed > 0.;
+        screen->animator.Units2_Count == 0 && ! *(bool *)(screen->animator.field_18E4 + 0xD);
 #ifdef p_native_modal_depth
     ready = ready && *p_native_modal_depth == 0 && *p_native_timer_inhibited == 0 && *p_native_game_ending == 0;
 #endif
-    if (trace_sample && ! ready) {
-        char detail[320];
-        snprintf (detail, sizeof detail, "[C3X renderer] stage=scroll-blocked player=%u loading=%d turn=%d modal=%d popup=%d drawing=%d city=%d city_status=%d gui=%d combat=%d directed=%d animating=%d elapsed=%.4f\n",
-            *p_player_bits, screen->is_now_loading_game, screen->turn_end_flag, is->custom_renderer_modal,
-            is->paused_for_popup, is->custom_renderer_draw_in_progress, p_bic_data->Map.Renderer.spotlight_on_city != NULL,
-            p_city_form->Base.Data.Status2 & 1, screen->GUI.is_enabled, is->combat_unit_display_override_active,
-            screen->animator.Units2_Count, *(bool *)(screen->animator.field_18E4 + 0xD), elapsed);
-        (*p_OutputDebugStringA) (detail);
-    }
-    // A native map pass keeps motion held for the camera it is adopting.
-    if (! ready) { if (! is->custom_renderer_draw_in_progress) is->custom_renderer_scroll_x = is->custom_renderer_scroll_y = 0.; return; }
+    if (! ready) return;
     is->custom_renderer_view_timer_running = true;
     // Zoom can change while the native map is idle. Redraw the GUI directly;
     // the Animator minimap bit also repaints native map underlays.
@@ -32630,61 +32652,14 @@ custom_renderer_view_timer (HWND window, UINT message, UINT_PTR timer, DWORD tim
         is->custom_renderer_native_image (C3X_NATIVE_ZOOM_PRESENTED, NULL, NULL, NULL, NULL, 0) : 65536;
     if (scale < 32768 || scale > 196608) scale = 65536;
     bool zoom_out = scale < is->custom_renderer_minimap_zoom;
-    bool zoom_changed = scale != is->custom_renderer_minimap_zoom;
-    if (zoom_changed) {
+    if (scale != is->custom_renderer_minimap_zoom) {
         is->custom_renderer_minimap_zoom = scale;
         screen->GUI.Base.vtable->m73_call_m22_Draw ((Base_Form *)&screen->GUI);
     }
-    BOOL (WINAPI * get_cursor) (POINT *) = (void *)(*p_GetProcAddress) (is->user32, "GetCursorPos");
-    BOOL (WINAPI * to_client) (HWND, POINT *) = (void *)(*p_GetProcAddress) (is->user32, "ScreenToClient");
-    BOOL (WINAPI * client_rect) (HWND, RECT *) = (void *)(*p_GetProcAddress) (is->user32, "GetClientRect");
-    HWND focus = GetFocus ();
-    POINT point; RECT client;
-    int dx = 0, dy = 0;
-    bool held = false;
-    if (focus && get_cursor && to_client && client_rect && get_cursor (&point) &&
-        to_client (focus, &point) && client_rect (focus, &client) &&
-        client.right == p_bic_data->ScreenWidth && client.bottom == p_bic_data->ScreenHeight &&
-        point.x >= 0 && point.y >= 0 && point.x < client.right && point.y < client.bottom) {
-        int speed = screen->scroll_speed < 0 ? 0 : screen->scroll_speed > 2 ? 2 : screen->scroll_speed;
-        double pixels = (450 << speed) * (elapsed > .1 ? .1 : elapsed) * 65536. / scale;
-        double vx = point.x < 32 ? -(32 - point.x) / 32. : point.x >= client.right - 32 ? (point.x - client.right + 33) / 32. : 0.;
-        double vy = point.y < 32 ? -(32 - point.y) / 32. : point.y >= client.bottom - 32 ? (point.y - client.bottom + 33) / 32. : 0.;
-        if (vx == 0. || vx * is->custom_renderer_scroll_x < 0.) is->custom_renderer_scroll_x = 0.;
-        if (vy == 0. || vy * is->custom_renderer_scroll_y < 0.) is->custom_renderer_scroll_y = 0.;
-        is->custom_renderer_scroll_x += vx * (vx < 0. ? -vx : vx) * pixels;
-        is->custom_renderer_scroll_y += vy * (vy < 0. ? -vy : vy) * pixels;
-        // Motion that arrives while a camera job is in flight is held for the
-        // next request instead of being captured and discarded. Bound it by
-        // the retained rasters' shift margin so recentering stays a copy.
-        double limit_x = 256. * 65536. / scale, limit_y = 160. * 65536. / scale;
-        if (is->custom_renderer_scroll_x > limit_x) is->custom_renderer_scroll_x = limit_x;
-        if (is->custom_renderer_scroll_x < -limit_x) is->custom_renderer_scroll_x = -limit_x;
-        if (is->custom_renderer_scroll_y > limit_y) is->custom_renderer_scroll_y = limit_y;
-        if (is->custom_renderer_scroll_y < -limit_y) is->custom_renderer_scroll_y = -limit_y;
-        struct custom_renderer_native_view unused = {0};
-        held = is->custom_renderer_navigation != NULL &&
-            is->custom_renderer_navigation (C3X_NAV_PENDING, ((PCX_Image *)&p_bic_data->Map.Renderer)->JGL.Image, &unused, NULL) ==
-            C3X_RENDERER_RESULT_PENDING;
-        if (! held) {
-            dx = (int)is->custom_renderer_scroll_x; dy = (int)is->custom_renderer_scroll_y;
-            is->custom_renderer_scroll_x -= dx; is->custom_renderer_scroll_y -= dy;
-        }
-    } else is->custom_renderer_scroll_x = is->custom_renderer_scroll_y = 0.;
-    if (dx || dy || zoom_out) {
-        // Re-clamp when zooming out after reaching an expanded map edge.
-        is->custom_renderer_scroll_request = ! zoom_out;
-        patch_Main_Screen_Form_move_camera (screen, __, screen->camera_x + dx, screen->camera_y + dy, 1, false);
-        is->custom_renderer_scroll_request = false;
+    if (zoom_out) {
+        patch_Main_Screen_Form_move_camera (screen, __, screen->camera_x, screen->camera_y, 1, false);
         patch_Animator_update_display (&screen->animator, __);
-        if (is->custom_renderer_trace_input && (dx || dy)) {
-            char message[240];
-            snprintf (message, sizeof message, "[C3X renderer] stage=edge-scroll qpc=%lld step=%d,%d camera=%d,%d scale=%d\n",
-                now.QuadPart, dx, dy, screen->camera_x, screen->camera_y, scale);
-            (*p_OutputDebugStringA) (message);
-        }
-    } else if (held)
-        patch_Animator_update_display (&screen->animator, __); // adopt the in-flight camera promptly
+    }
     is->custom_renderer_view_timer_running = false;
 }
 #endif
@@ -32850,8 +32825,8 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		char detail[512];
 		double scale = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
 		snprintf (detail, sizeof detail,
-			"[C3X renderer] stage=native-handoff requested=%d,%d displayed=%d,%d valid=%d ticket=%lld call_ms=%.3f animation_age_ms=%.3f\n",
-			requested_view.camera_x, requested_view.camera_y, is->custom_renderer_display_view.camera_x,
+			"[C3X renderer] qpc=%lld stage=native-handoff requested=%d,%d displayed=%d,%d valid=%d ticket=%lld call_ms=%.3f animation_age_ms=%.3f\n",
+			map_pass_finished.QuadPart, requested_view.camera_x, requested_view.camera_y, is->custom_renderer_display_view.camera_x,
 			is->custom_renderer_display_view.camera_y, is->custom_renderer_display_valid,
 			is->custom_renderer_camera_ticket, map_pass_ticks * scale,
 			(is->custom_renderer_animation_timestamp.QuadPart - is->custom_renderer_display_clock) * scale);
@@ -47063,7 +47038,6 @@ patch_Main_Screen_Form_set_selected_unit (Main_Screen_Form * this, int edx, Unit
 	if (is->current_config.enable_custom_rendering && this == p_main_screen_form && unit != previous_selected) {
 		// Even a selection already in view supersedes an unfinished manual pan.
 		settle_custom_renderer_navigation (C3X_NAV_DISCARD);
-		is->custom_renderer_scroll_x = is->custom_renderer_scroll_y = 0.;
 	}
 	Main_Screen_Form_set_selected_unit (this, __, unit, param_2);
 	if (this == p_main_screen_form)
@@ -49049,6 +49023,15 @@ patch_Units_Image_Data_load_animated_effect (Units_Image_Data * this, int edx, F
 	if (is->current_config.enable_custom_rendering) is->custom_renderer_unit_images = this;
 	if (! is->current_config.enable_custom_animations || is->current_config.enable_custom_rendering) {
 		Units_Image_Data_load_animated_effect (this, __, anim, effect_id);
+		// A bombard hit or miss: Civ III's effect record holds the target tile
+		// just before its FLC. When the renderer draws the impact, hide only
+		// the FLC's pixels; its ticks, sound and wait stay native.
+		if (is->current_config.enable_custom_rendering && anim != NULL && effect_id >= AE_Hit && effect_id <= AE_WaterMiss) {
+			int * record = (int *)anim - 3;
+			if (record[2] == effect_id &&
+			    notify_custom_renderer_combat (is->bombarding_unit, C3X_RENDERER_UNIT_STATE_IMPACT, record[0], record[1], effect_id) == C3X_RENDERER_RESULT_OK)
+				*(unsigned char *)&anim->Last = 0;
+		}
 		return;
 	}
 
@@ -49138,6 +49121,12 @@ patch_Tile_spawn_animated_effect (Tile * this, int edx, enum AnimatedEffect effe
 		return;
 	}
 	Tile_spawn_animated_effect (this, __, effect, tile_x, tile_y, randomize_start_frame, dummy_dir);
+	// The custom renderer draws volcano smoke, glow and lava itself. The effect
+	// keeps ticking (and carries the eruption state), but Animator::update only
+	// draws an FLC whose Last field is set.
+	if (is->current_config.enable_custom_rendering && ((effect == AE_Smolder) || (effect == AE_Eruption)) &&
+	    (this->Body.active_tile_effect != NULL))
+		this->Body.active_tile_effect->flc_animation.Last = 0;
 }
 
 // Renderer-only game-thread notifications. Shared Civ III hooks call these
@@ -49372,6 +49361,29 @@ patch_FLC_Animation_set_move_target (FLC_Animation * this, int edx, int x, int y
 }
 #endif
 
+#ifdef FLC_Animation_tick
+// The map animator ticks every animating unit, and each tick re-creates the
+// unit's JGL frame sprite before decoding the frame. Under Civ III's
+// compatibility layers, each JGL sprite destroy/create costs a shimmed
+// critical-section call; on busy maps this filled Civ III's thread. Custom
+// rendering draws map unit bodies in 3D and reads only the frame's FLC and
+// size, which change only with the animation. The selected unit still ticks
+// because the unit panel shows its frame.
+void __fastcall
+patch_FLC_Animation_tick_map_unit (FLC_Animation * this, int edx, int direction, int frame)
+{
+	if (! is->current_config.enable_custom_rendering) {
+		FLC_Animation_tick (this, edx, direction, frame);
+		return;
+	}
+	Animation_Info * info = this->Animation_Info;
+	bool current = info != NULL && info->Animations != NULL &&
+		this->Frame_1.Flic_Info == info->Animations[this->summary.current_anim_type];
+	if (! current || this->Unit == p_main_screen_form->Current_Unit)
+		FLC_Animation_tick (this, edx, direction, frame);
+}
+#endif
+
 // Civ III owns the accepted move. Send one ordered value event, then refresh
 // only its sight neighborhoods; Renderer owns copying, batching and diffing.
 void
@@ -49504,6 +49516,69 @@ notify_custom_renderer_unit_state (Unit * unit, unsigned int kind)
 		int result = is->custom_renderer_unit_state (&state);
 		if (result == C3X_RENDERER_RESULT_ERROR || result == C3X_RENDERER_RESULT_DEVICE_ERROR)
 			is->custom_renderer_world_audit_needed = true;
+	}
+}
+
+// A combat presentation fact (bombard impact or bomb release) for the renderer.
+// RESULT_OK means the renderer draws it, so the caller may hide native pixels.
+int
+notify_custom_renderer_combat (Unit * source, unsigned int kind, int tile_x, int tile_y, int code)
+{
+	if (! is->current_config.enable_custom_rendering || is->custom_renderer_unit_state == NULL ||
+	    is->custom_renderer_viewer_civ_id < 0 || ! Map_in_range (&p_bic_data->Map, __, tile_x, tile_y))
+		return C3X_RENDERER_RESULT_ERROR;
+	struct c3x_renderer_unit_state_v1 fact = {0};
+	fact.struct_size = sizeof fact;
+	fact.kind = kind;
+	// An unknown source (city defenses, other strike paths) gets the renderer's default munition.
+	fact.unit_id = source != NULL ? source->Body.ID : -1;
+	fact.tile_x = tile_x; fact.tile_y = tile_y;
+	fact.unit_type_id = source != NULL ? source->Body.UnitTypeID : -1;
+	fact.owner_id = source != NULL ? source->Body.CivID : -1;
+	fact.action = code;
+	fact.visible = custom_renderer_tile_visible_at (tile_x, tile_y);
+	fact.map_epoch = is->custom_renderer_map_epoch;
+	fact.viewer_epoch = is->custom_renderer_viewer_epoch;
+	fact.presentation_frequency = is->custom_renderer_qpc_frequency.QuadPart;
+	if (is->custom_renderer_visual_clock != NULL)
+		fact.presentation_time_ticks = is->custom_renderer_visual_clock ();
+	else {
+		LARGE_INTEGER now;
+		if (QueryPerformanceCounter (&now)) fact.presentation_time_ticks = now.QuadPart;
+	}
+	if (! fact.visible || fact.presentation_frequency <= 0) return C3X_RENDERER_RESULT_ERROR;
+	return is->custom_renderer_unit_state (&fact);
+}
+
+// The Animator's effect list holds Civ III's standalone combat FLCs: a bombing
+// run's bomb FLC (loaded hidden, Last's low byte 0, revealed as the bomber passes
+// the target), a SAM shoot-down and an SDI interception (visible from the start).
+// Report each once; when the renderer draws it, keep the FLC hidden so only its
+// sound and timing remain.
+void
+watch_custom_renderer_effect_anims (Animator * animator)
+{
+	FLC_Animation ** each = (FLC_Animation **)animator->field_18E4[3], ** end = (FLC_Animation **)animator->field_18E4[4];
+	if (each == NULL || each >= end) is->custom_renderer_drawn_anim = is->custom_renderer_declined_anim = NULL;
+	for (; each != NULL && end != NULL && each < end; each++) {
+		FLC_Animation * anim = *each;
+		if (anim == NULL) continue;
+		unsigned char * shown = (unsigned char *)&anim->Last;
+		if (*shown == 0) {
+			if (anim != is->custom_renderer_drawn_anim) is->custom_renderer_bomb_anim = anim;
+			continue;
+		}
+		if (anim == is->custom_renderer_declined_anim) continue;
+		bool release = anim == is->custom_renderer_bomb_anim;
+		Unit * source = is->bombarding_unit;
+		if (source == NULL && animator->Units2_Count > 0) source = animator->Units2[0];
+		if (notify_custom_renderer_combat (source, release ? C3X_RENDERER_UNIT_STATE_BOMB_RELEASE : C3X_RENDERER_UNIT_STATE_STANDALONE_EFFECT,
+		                                   anim->summary.tile_x, anim->summary.tile_y, anim->summary.direction) == C3X_RENDERER_RESULT_OK) {
+			*shown = 0;
+			is->custom_renderer_drawn_anim = anim;
+		} else
+			is->custom_renderer_declined_anim = anim;
+		if (release) is->custom_renderer_bomb_anim = NULL;
 	}
 }
 

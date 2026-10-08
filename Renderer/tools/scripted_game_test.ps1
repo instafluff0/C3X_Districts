@@ -1,13 +1,16 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,360)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','city-builds','navigation','camera','forest-shadow')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','volcanoes','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','city-builds','navigation','camera','forest-shadow')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1,
       # Renderer diagnostics for the game child only, e.g. C3X_SANDBOX_PASS_COUNTS=1;C3X_RENDERER_PROFILE=1
       [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='')
 $ErrorActionPreference = 'Stop'
+# 'volcanoes' is the units camera script aimed at the 1498 AD save's volcano groups.
+$volcanoTargets=$Scenario -eq 'volcanoes'
+if ($volcanoTargets) { $Scenario='units' }
 if ($Scenario -eq 'camera' -and $Seconds -lt 100) { throw 'camera requires at least 100 seconds.' }
 if ($Scenario -in @('navigation','zoom-out','near','units') -and $Seconds -lt 120) { throw 'navigation requires at least 120 seconds.' }
 if ($Scenario -eq 'city-builds' -and $Seconds -lt 180) { throw 'city-builds requires at least 180 seconds.' }
@@ -61,7 +64,7 @@ public static class RendererGameCommand {
 // the IPC header read-only; it never requests pixels or submits renderer work.
 public sealed class RendererCadenceReader : IDisposable {
     // Mirrored from helper_trial/scene_wire.h; executable test checks this ABI.
-    public const int WireVersion = 15, FrameOffset = 228, ZoomOffset = 232;
+    public const int WireVersion = 16, FrameOffset = 228, ZoomOffset = 232;
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] static extern IntPtr OpenFileMapping(uint access, bool inherit, string name);
     [DllImport("kernel32.dll")] static extern IntPtr MapViewOfFile(IntPtr mapping, uint access, uint high, uint low, UIntPtr bytes);
     [DllImport("kernel32.dll")] static extern bool UnmapViewOfFile(IntPtr view);
@@ -74,7 +77,7 @@ public sealed class RendererCadenceReader : IDisposable {
         // Later versions add independent mailboxes after these counters; the
         // accepted controls retain this read-only telemetry ABI.
         int version=Marshal.ReadInt32(view,4);
-        if(Marshal.ReadInt32(view)!=0x32483343 || (version!=WireVersion && version!=14 && version!=13 && version!=12 && version!=11)) {
+        if(Marshal.ReadInt32(view)!=0x32483343 || (version!=WireVersion && version!=15 && version!=14 && version!=13 && version!=12 && version!=11)) {
             Dispose(); throw new InvalidOperationException("Renderer telemetry ABI changed");
         }
     }
@@ -198,7 +201,11 @@ try {
         $in=@(0..3|%{0.5*$_}); $out=@(0..5|%{0.5*$_})
         $mouseSteps=@(@(40,0,0,0))
         $t=46
-        foreach($target in @(@(-738,498),@(-671,527),@(-661,553),@(-661,505))){
+        # Volcanoes: minimap pixel (33+3.5x, 970+1.62y) for map tile (x,y) on that
+        # client; the southern group near (95,91), the south-western group near
+        # (40,103) and the western pair near (31,40).
+        $targets=if ($volcanoTargets) {@(@(-754,521),@(-947,541),@(-978,439))} else {@(@(-738,498),@(-671,527),@(-661,553),@(-661,505))}
+        foreach($target in $targets){
             $mouseSteps+=@(@($t,$target[0],$target[1],2),@(($t+0.1),$target[0],$target[1],4),@(($t+2),0,0,0))
             $mouseSteps+=$in|%{,@(($t+4+$_),0,0,0x800,120)}; $mouseSteps+=,@(($t+12),0,0,0x800,240)
             $mouseSteps+=$out|%{,@(($t+20+$_),0,0,0x800,-120)}

@@ -1,11 +1,13 @@
-"""Unit owner colour (Look A): a civ colour must read as paint, not glow.
+"""Unit look (Look A): civ colour reads as paint and units never bloom.
 
 The owner ramp follows the surface's luminance. For a dark owner colour (red,
 blue) on a light surface that ratio pushed the colour past its own brightness
 and clipped it to a pure hue; the look's extra saturation then crushed its
 other channels. The ramp is now never brighter than the owner colour and the
-extra saturation skips owner colour. This GPU oracle runs the generated unit
-material shader (`environment_refresh/unit_shader.h`) on one fully owned pixel.
+extra saturation skips owner colour. The look's extra gain also rolls
+highlights off below the shared bloom knee (2.5), so sunlit metal and white
+paint do not halo. This GPU oracle runs the generated unit material shader
+(`environment_refresh/unit_shader.h`) on single owned and unowned pixels.
 """
 import pathlib
 import unittest
@@ -78,8 +80,9 @@ int main(){try{
  ComPtr<ID3D11SamplerState> sampler;checked(device->CreateSamplerState(&s,&sampler));
  D3D11_RASTERIZER_DESC raster={};raster.FillMode=D3D11_FILL_SOLID;raster.CullMode=D3D11_CULL_NONE;raster.DepthClipEnable=TRUE;
  ComPtr<ID3D11RasterizerState> rs;checked(device->CreateRasterizerState(&raster,&rs));
- auto shade=[&](float grey,float saturation,float* out){
-  float rgba[4]={grey,grey,grey,0}; // alpha 0: fully owner-marked texel
+ auto shade=[&](float grey,float saturation,float* out,float alpha=0,float sun=2.05f){
+  float rgba[4]={grey,grey,grey,alpha}; // alpha 0: fully owner-marked texel
+  beauty[3]=sun;
   context->UpdateSubresource(texel.Get(),0,nullptr,rgba,16,16);
   beauty[18]=saturation;context->UpdateSubresource(bb.Get(),0,nullptr,beauty,0,0);
   float clear[4]={};context->ClearRenderTargetView(target.Get(),clear);
@@ -94,8 +97,8 @@ int main(){try{
   context->Draw(3,0);context->OMSetRenderTargets(0,nullptr,nullptr);context->CopyResource(read.Get(),color.Get());
   D3D11_MAPPED_SUBRESOURCE m={};checked(context->Map(read.Get(),0,D3D11_MAP_READ,0,&m));
   std::memcpy(out,m.pData,16);context->Unmap(read.Get(),0);};
- float light[4],mid[4],plain[4];
- shade(.45f,.25f,light);shade(.30f,.25f,mid);shade(.45f,0,plain);
+ float light[4],mid[4],plain[4],white[4];
+ shade(.45f,.25f,light);shade(.30f,.25f,mid);shade(.45f,0,plain);shade(.95f,.25f,white,1,6);
  std::printf("light=%.4f,%.4f,%.4f mid=%.4f,%.4f,%.4f unsaturated=%.4f,%.4f,%.4f\n",
   light[0],light[1],light[2],mid[0],mid[1],mid[2],plain[0],plain[1],plain[2]);
  if(!(light[0]>.05f&&light[1]>0))throw std::runtime_error("owner colour missing");
@@ -106,7 +109,10 @@ int main(){try{
  // The look's extra saturation leaves owner colour alone.
  for(int c=0;c<3;++c)if(std::fabs(light[c]-plain[c])>1e-3f*(1+light[c]))
   throw std::runtime_error("extra saturation applied to owner colour");
- std::puts("PASS unit owner look: owner colour capped at its own brightness, no extra saturation");
+ // A sunlit white, unmarked surface stays below the bloom knee.
+ std::printf("white=%.4f,%.4f,%.4f\n",white[0],white[1],white[2]);
+ if(!(std::fmax(white[0],std::fmax(white[1],white[2]))<2.5f&&white[1]>1.2f))throw std::runtime_error("unit highlight blooms");
+ std::puts("PASS unit owner look: owner colour capped at its own brightness, no extra saturation, no unit bloom");
 }catch(std::exception const& e){std::printf("FAIL unit owner look: %s\n",e.what());return 1;}}
 '''
 

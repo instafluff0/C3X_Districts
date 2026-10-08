@@ -93,6 +93,17 @@ float4 ShadeWaterSurface(PixelInput input) {
         object_alpha = saturate(max(object.a, terrain_present)) * inside * coastal_detail;
         reflected = lerp(reflected, object.rgb, object_alpha);
     }
+    // Standing objects (ships, cities) also mirror offshore, where the coastal
+    // block above does not sample. Alpha only: mirrored terrain stays coastal.
+    // Their reflection weight ramps to a .25 floor away from the coast.
+    float open_object = 0;
+    if (coastal_detail < 1) {
+        float4 open_mirror = q3_object_reflection_texture.Sample(decal_sampler, distorted_uv);
+        float open_inside = step(0, reflected_uv.x) * step(reflected_uv.x, 1) *
+            step(0, reflected_uv.y) * step(reflected_uv.y, 1) * NativeReflection.w;
+        open_object = saturate(open_mirror.a) * open_inside * (1 - coastal_detail);
+        reflected = lerp(reflected, open_mirror.rgb, open_object);
+    }
     float reflection_strength = max(object_alpha, .4);
     float ndotv = saturate(dot(normal, eye));
     float fresnel = clamp(pow(1.1 - ndotv, 2) * 1.5, .1, .75);
@@ -102,7 +113,7 @@ float4 ShadeWaterSurface(PixelInput input) {
     float specular = smoothstep(.82, .995,
         max(dot(specular_direction, eye), 0)) * .9;
     float3 sun = environment_sun_color * environment_sun_intensity;
-    float blend = fresnel * reflection_strength * .68;
+    float blend = max(fresnel * reflection_strength * .68, .25 * open_object);
     float3 color = lerp(refracted, reflected, blend);
     float marine_coverage = saturate(aquatic.a * 1.6) * (1 - blend);
     float3 marine_body = aquatic.rgb / max(aquatic.a, .01);

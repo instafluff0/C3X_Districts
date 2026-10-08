@@ -79,7 +79,8 @@ public:
         for(auto it=states.begin();it!=states.end();)
             if(it->second.ticks!=ticks)it=states.erase(it);else ++it;
     }
-    float facing(int id,std::uint64_t incarnation,long long ticks,long long frequency,float target){
+    // turn_scale > 1 slows the turn (pack metadata, e.g. large hulls).
+    float facing(int id,std::uint64_t incarnation,long long ticks,long long frequency,float target,float turn_scale=1){
         if(frequency<=0||!std::isfinite(target))return target;
         auto found=facings.find(id);
         if(found==facings.end()||found->second.incarnation!=incarnation||found->second.frequency!=frequency||ticks<found->second.ticks){
@@ -90,7 +91,7 @@ public:
         float delta=std::remainder(target-s.target,6.28318530718f);
         if(std::abs(delta)>1e-5f){
             s.from=s.current;s.target=s.from+std::remainder(target-s.from,6.28318530718f);s.started=ticks;
-            s.duration=.06+.12*std::abs(s.target-s.from)/3.14159265359;
+            s.duration=(.06+.12*std::abs(s.target-s.from)/3.14159265359)*std::clamp(double(turn_scale),.25,8.);
         }
         float t=float(std::clamp(double(ticks-s.started)/frequency/s.duration,0.,1.));t=t*t*(3-2*t);
         s.current=s.from+(s.target-s.from)*t;s.ticks=ticks;return s.current;

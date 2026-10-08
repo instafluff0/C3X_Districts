@@ -94,8 +94,9 @@ Memory allocate(void* p,std::size_t bytes){largest_request=std::max(largest_requ
 #define malloc(bytes) allocate(nullptr,bytes)
 struct Tile;
 struct Vtable {int(*m49_Get_Square_RealType)(Tile*);int(*m50_Get_Square_BaseType)(Tile*);int(*m37_Get_River_Code)(Tile*);int(*m43_Get_field_30)(Tile*);};
-constexpr int SQ_Mountains=6;
-struct Tile {Vtable* vtable;struct {int FOWStatus=0,Visibility=0,Fog_Of_War=0,V3=0,field_D0_Visibility=0;void* active_tile_effect=nullptr;}Body;int ground=2,base=2,river=0,field30=0;};
+constexpr int SQ_Mountains=6,AE_Eruption=10;
+struct Effect {int V[3];};
+struct Tile {Vtable* vtable;struct {int FOWStatus=0,Visibility=0,Fog_Of_War=0,V3=0,field_D0_Visibility=0;Effect* active_tile_effect=nullptr;}Body;int ground=2,base=2,river=0,field30=0;};
 Vtable vtable{[](Tile*t){return t->ground;},[](Tile*t){return t->base;},[](Tile*t){return t->river;},[](Tile*t){return t->field30;}};
 struct MapData{int Width=4,Height=4;int Renderer=0;};using Map=MapData;
 struct Bic {MapData Map;bool is_zoomed_out=false;} bic;Bic* p_bic_data=&bic;
@@ -194,6 +195,16 @@ int main(){
  assert((state.custom_renderer_world_topology[3]>>26&1u)==1 && (state.custom_renderer_world_topology[4]>>26&1u)==0 &&
         (state.custom_renderer_world_topology[5]>>26&1u)==0);
  tiles[3]=tiles[4]=tiles[5]=Tile{&vtable};
+ state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
+ assert(state.custom_renderer_world_topology_revision==++topology);
+ // A tile effect is bit 24; an eruption (effect id in V[2]) adds bit 27, so a
+ // smoldering volcano is bit 24 alone.
+ Effect erupting{{0,0,AE_Eruption}},smoldering{{0,0,9}};
+ tiles[3].Body.active_tile_effect=&erupting;tiles[4].Body.active_tile_effect=&smoldering;
+ state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
+ assert(state.custom_renderer_world_topology_revision==++topology);
+ assert((state.custom_renderer_world_topology[3]>>24&9u)==9 && (state.custom_renderer_world_topology[4]>>24&9u)==1);
+ tiles[3]=tiles[4]=Tile{&vtable};
  state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_revision==++topology);
  assert(demand()==C3X_RENDERER_RESULT_BAD_ARGUMENT && !modern_calls && !legacy_calls && state.custom_renderer_map_epoch==1);
@@ -357,6 +368,7 @@ bool custom_renderer_zoom_enabled(){return !screen.is_now_loading_game;}
 int custom_renderer_capture_cover_width(bool){return 112;}
 void log_custom_renderer_event(char const*,int){}
 void debug(char const*){}auto p_OutputDebugStringA=debug;
+struct LARGE_INTEGER{long long QuadPart;};bool QueryPerformanceCounter(LARGE_INTEGER* p){p->QuadPart=1;return true;}
 constexpr int IS_OK=1;void poll_custom_renderer_combat_zoom(){}
 void notify_custom_renderer_unit_selection(bool){}
 void sync_custom_renderer_zoom_to_native(){}
@@ -479,7 +491,7 @@ int main(){
                                   '#define Main_Screen_Form_move_camera native_move\n#define Animator_update_display native_animator\n#define Main_Screen_Form_center_camera native_center')
         enabled = enabled.replace('struct Clock {', 'struct City {struct {struct {int Status2=0;}Data;}Base;} city;auto p_city_form=&city;\nstruct Clock {')
         enabled = enabled.replace('unsigned captures=0', 'void native_center(Main_Screen_Form*,int,int,int,int,bool,bool);\nunsigned captures=0')
-        enabled = enabled.replace('void native_move(', 'unsigned native_calls=0,native_work=0;int overlay_x=0;\nvoid native_animator(Animator* a,int){++native_calls;if(screen.turn_end_flag || a->Units2_Count || a->fields[10] || a->fields[13]){++native_work;overlay_x=screen.camera_x;a->fields[10]=0;}}\nvoid native_move(')
+        enabled = enabled.replace('void native_move(', 'void hide_custom_renderer_fireworks(bool){}\nunsigned native_calls=0,native_work=0;int overlay_x=0;\nvoid native_animator(Animator* a,int){++native_calls;if(screen.turn_end_flag || a->Units2_Count || a->fields[10] || a->fields[13]){++native_work;overlay_x=screen.camera_x;a->fields[10]=0;}}\nvoid native_move(')
         enabled = enabled.replace('s->camera_x=(x%8192', 's->animator.fields[10]=1;s->camera_x=(x%8192')
         enabled = enabled[:enabled.index('int main(){')]+r'''
 void native_center(Main_Screen_Form* s,int,int x,int y,int reason,bool bounds,bool){

@@ -121,8 +121,18 @@ public:
         return client.pack(path);}
     int set_units(int enabled){std::lock_guard<std::mutex> lock(gate);if(!enabled)unit_facts.clear();return client.set_units(enabled);}
     unsigned presented_zoom(){std::lock_guard<std::mutex> lock(gate);return client.presented_zoom();}
-    int presented_pan(){std::lock_guard<std::mutex> lock(gate);return client.presented_pan();}
-    int visual_policy(unsigned policy){std::lock_guard<std::mutex> lock(gate);return client.visual_policy(policy);}
+    int visual_policy(unsigned policy){
+        LARGE_INTEGER began={},locked={},done={},rate={};if(trace_input)QueryPerformanceCounter(&began);
+        std::lock_guard<std::mutex> lock(gate);if(trace_input)QueryPerformanceCounter(&locked);
+        int result=client.visual_policy(policy);
+        if(trace_input){QueryPerformanceCounter(&done);QueryPerformanceFrequency(&rate);
+            double gate_ms=1000.*double(locked.QuadPart-began.QuadPart)/double(rate.QuadPart),
+                post_ms=1000.*double(done.QuadPart-locked.QuadPart)/double(rate.QuadPart);
+            if(gate_ms+post_ms>=2.){char line[192];std::snprintf(line,sizeof(line),
+                "[C3X renderer] qpc=%lld stage=visual-policy-wait gate_ms=%.2f post_ms=%.2f policy=%u\n",
+                done.QuadPart,gate_ms,post_ms,policy);OutputDebugStringA(line);}}
+        return result;
+    }
     int render(c3x_renderer_camera_request_v1 const& request,c3x_renderer_gpu_frame_v1& gpu,
                c3x_renderer_output_v1& output){
         std::lock_guard<std::mutex> lock(gate);return client.render(request,gpu,output);
@@ -217,7 +227,10 @@ public:
     }
     int unit_state(c3x_renderer_unit_state_v1 const& value){
         std::lock_guard<std::mutex> lock(gate);
-        auto found=unit_facts.find(value.unit_id);
+        // Combat facts are one-off events: never deduplicated or kept as state.
+        bool one_off=value.kind==C3X_RENDERER_UNIT_STATE_IMPACT||value.kind==C3X_RENDERER_UNIT_STATE_BOMB_RELEASE||
+            value.kind==C3X_RENDERER_UNIT_STATE_STANDALONE_EFFECT;
+        auto found=one_off?unit_facts.end():unit_facts.find(value.unit_id);
         if(found!=unit_facts.end()){
             auto const& old=found->second;
             if(old.kind==value.kind&&old.tile_x==value.tile_x&&old.tile_y==value.tile_y&&
@@ -233,7 +246,7 @@ public:
         int code=C3X_RENDERER_RESULT_ERROR;
         try{code=input.result(client.unit_state(value));}
         catch(...){input.result(C3X_RENDERER_RESULT_ERROR);throw;}
-        if(code==C3X_RENDERER_RESULT_OK){
+        if(code==C3X_RENDERER_RESULT_OK&&!one_off){
             if(unit_facts.size()>=8192&&found==unit_facts.end())unit_facts.clear();
             unit_facts[value.unit_id]=value;
         }

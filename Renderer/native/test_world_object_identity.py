@@ -157,6 +157,61 @@ int main(){
 '''
         run_cpp(program.replace("// RUNTIME_LEAF_FUNCTIONS", leaves))
 
+    def test_active_volcano_carries_a_plume_that_observes_its_activity(self):
+        # Same portable leaves as the worker test above.
+        source = Path(__file__).with_name("terrain_scene_runtime.cpp").read_text()
+        definitions = []
+        for signature in ("std::uint32_t feature_hash(std::uint32_t value)",
+                          "FeatureGroup const * find_feature_group(FeatureBundle const & bundle, char const * name)",
+                          "float stable_random(std::uint32_t value)", "std::uint32_t stable_hash(std::uint32_t value)"):
+            start = source.index(signature)
+            end = source.index("{", start) + 1
+            depth = 1
+            while depth:
+                depth += (source[end] == "{") - (source[end] == "}")
+                end += 1
+            definitions.append(source[start:end])
+        leaves = "namespace c3x_renderer { namespace {\n" + definitions[0] + "\n}\n" + "\n".join(definitions[1:]) + "\n}\n"
+        program = r'''
+#define NOMINMAX
+#include "Renderer/native/object_preparation.h"
+#include "Renderer/native/render_core/captured_scene.h"
+#include "Renderer/lab/shared/natural/patterns.h"
+#include <cassert>
+// RUNTIME_LEAF_FUNCTIONS
+using namespace c3x_renderer;
+int main(){
+ std::array<FeatureBundle,objects::family_count> bundles;objects::Assets assets;
+ for(unsigned i=0;i<bundles.size();++i)assets.bundles[i]=&bundles[i];
+ city_fidelity::Library library;library.materials.resize(2);library.materials[1].ground=1;library.effect_material=1;
+ fidelity::NaturalData natural;natural.fields.resize(1);natural.fields[0].width=natural.fields[0].height=2;
+ natural.fields[0].pixels={0,64,128,255};std::array<fidelity::ReliefFields,14> terrain;
+ render_core::CapturedScene scene;c3x_renderer_frame_v1 frame{};
+ frame.world_width_tiles=frame.world_height_tiles=32;frame.world_wrap_x=frame.world_wrap_y=1;
+ assert(scene.begin(frame));scene.finish();auto observations=scene.observation_view();
+ unsigned const at=(8*32+16)/2; // raw tile (16,8)
+ // Dormant, smoldering (bit 24) and erupting (bits 24 and 27) volcanoes.
+ for(unsigned state:{0u,1u<<24,(1u<<24)|(1u<<27)}){
+  render_core::WorldCoast coast;std::vector<std::uint32_t> bits(512,2|(2<<8));bits[at]=10|(10<<8)|state;
+  coast.update({32,32,true,true},bits.data(),bits.size(),1);
+  objects::PreparationInput input;auto& p=input.projection;p.tile.tile_x=16;p.tile.tile_y=8;p.tile.city_id=-1;
+  p.tile.real_terrain_type=10;p.tile.resource_id=p.tile.resource_class=-1;p.tile.tile_flags=C3X_RENDERER_TILE_RENDER;
+  p.tile_width=128;p.half_w=64;p.half_h=32;p.content_view_height=480;
+  p.relief_projection_scale=128/224.f*.82f;p.feature_projection_scale=128/224.f;p.pickup_profile=p.world_objects=true;
+  input.ground=2;input.world_revision=1;input.city_ready=true;
+  fidelity::TerrainCompileScratch scratch;
+  auto result=objects::prepare(input,assets,library,natural,terrain,coast,observations,scratch,[]{return false;});
+  assert(result);
+  // The tile's own activity is a recorded dependency: a change re-prepares it.
+  assert(result->world.count(at) && result->world.at(at)==bits[at]);
+  if(!state){assert(result->city.empty());continue;}
+  assert(result->city.size()==1 && result->city[0].effect && result->city[0].material==1 &&
+         result->city[0].terrain_conforming && result->city[0].lighting && !result->city[0].mesh.empty());
+ }
+}
+'''
+        run_cpp(program.replace("// RUNTIME_LEAF_FUNCTIONS", leaves))
+
     def test_compiler_body_and_lifetime_inputs_are_conservative_exact_words(self):
         run_cpp(r'''
 using UINT=unsigned;

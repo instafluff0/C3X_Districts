@@ -1,4 +1,4 @@
-"""Execute the production zoom bounds, minimap scope and timed edge scrolling."""
+"""Execute the production zoom bounds, minimap scope and Civ III edge scrolling."""
 from pathlib import Path
 import re
 import unittest
@@ -99,7 +99,7 @@ struct Navigator_Data {RECT Rect={10,20,410,220};int Mini_Map_Width2=400,Mini_Ma
 struct State {struct{bool enable_custom_rendering=true;}current_config;
  int (*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned);
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
- bool custom_renderer_trace_input=false,combat_unit_display_override_active=false;
+ bool custom_renderer_trace_input=false,combat_unit_display_override_active=false,custom_renderer_scroll_request=false;
  unsigned custom_renderer_view_timer=1;
 }state,*is=&state;
 void debug(char const*){}auto p_OutputDebugStringA=debug;
@@ -116,7 +116,8 @@ int native_calls=0,scroll_calls=0;RECT observed{};int marker=0;RECT observed_nav
 void Navigator_Data_draw_viewport(Navigator_Data* n,int edx){assert(n==&nav&&edx==91);++native_calls;
  observed={screen.TileX_Min,screen.TileY_Min,screen.TileX_Max,screen.TileY_Max};
  observed_nav=n->Rect;observed_width=n->Mini_Map_Width2;observed_height=n->Mini_Map_Height2;}
-void Main_Screen_Form_scroll_at_mouse(Main_Screen_Form* p,int e){assert(p==&screen&&e==91);++scroll_calls;}
+bool scroll_tagged=false;
+void Main_Screen_Form_scroll_at_mouse(Main_Screen_Form* p,int e){assert(p==&screen&&e==91);scroll_tagged=state.custom_renderer_scroll_request;++scroll_calls;}
 void Main_Screen_Form_move_camera(Main_Screen_Form* p,int e,int x,int y,int reason,bool update){
  assert(p==&screen&&e==91);++native_calls;auto& m=bic.Map;auto&r=m.Renderer;
  int hw=bic.is_zoomed_out?32:64,hh=hw/2,ox=p->camera_x,oy=p->camera_y;
@@ -161,9 +162,15 @@ int main(){state.custom_renderer_native_image=sample;
  assert(nav.Rect.left==10&&nav.Rect.top==20&&nav.Mini_Map_Width2==400&&nav.Mini_Map_Height2==200);
  state.current_config.enable_custom_rendering=false;int before=samples;
  patch_Navigator_Data_draw_viewport(&nav,91);assert(samples==before&&observed.left==screen.TileX_Min);
- patch_Main_Screen_Form_scroll_at_mouse(&screen,91);assert(scroll_calls==1);
- state.current_config.enable_custom_rendering=true;patch_Main_Screen_Form_scroll_at_mouse(&screen,91);assert(scroll_calls==1);
- state.custom_renderer_view_timer=0;patch_Main_Screen_Form_scroll_at_mouse(&screen,91);assert(scroll_calls==2);
+ // Civ III chooses edge-scroll steps. With the renderer on, its request is
+ // tagged as a scroll so an in-flight step finishes before the next.
+ patch_Main_Screen_Form_scroll_at_mouse(&screen,91);assert(scroll_calls==1&&!scroll_tagged);
+ state.current_config.enable_custom_rendering=true;patch_Main_Screen_Form_scroll_at_mouse(&screen,91);
+ assert(scroll_calls==2&&scroll_tagged&&!state.custom_renderer_scroll_request);
+ state.custom_renderer_view_timer=0;patch_Main_Screen_Form_scroll_at_mouse(&screen,91);assert(scroll_calls==3);
+ // The custom combat display keeps its battlefield camera fixed.
+ state.combat_unit_display_override_active=true;patch_Main_Screen_Form_scroll_at_mouse(&screen,91);assert(scroll_calls==3);
+ state.combat_unit_display_override_active=false;
  for(int bad:{0,-1,32767,196609}){scale=bad;auto r=custom_renderer_visible_map_rect();assert(r.left==0&&r.right==2240);}
  zoom=false;scale=196608;auto r=custom_renderer_visible_map_rect();assert(r.top==0&&r.bottom==1260);
  zoom=true;city=true;r=custom_renderer_visible_map_rect();assert(r.left==0&&r.right==2240);
@@ -250,104 +257,65 @@ int main(){
 }
 ''')
 
-    def test_scroll_elapsed_time_speed_and_interruption(self):
+    def test_view_timer_follows_zoom_and_never_scrolls(self):
+        # Edge scrolling is Civ III's own (scroll_at_mouse). The renderer's
+        # 16 ms timer only redraws the minimap box for the presented zoom and
+        # re-clamps the camera after a zoom-out at an expanded map edge.
         body = function((ROOT / 'injected_code.c').read_text(), 'custom_renderer_view_timer')
-        body = re.sub(r'BOOL \(WINAPI \* (get_cursor|to_client|client_rect)\).*?;',
-                      lambda m: f'auto {m[1]} = test_{m[1]};', body)
         run_cpp(r'''
 #include <cassert>
 #include <cstdio>
-#include <cmath>
-#include <initializer_list>
-#include <cstddef>
 using HWND=int;using UINT=unsigned;using UINT_PTR=unsigned;using DWORD=unsigned;
-struct LARGE_INTEGER{long long QuadPart=0;};struct POINT{int x,y;};struct RECT{int left,top,right,bottom;};
-void debug(char const*){}auto p_OutputDebugStringA=debug;
-constexpr int __=0,C3X_NATIVE_ZOOM_PRESENTED=130,C3X_NAV_PENDING=5,C3X_RENDERER_RESULT_PENDING=1;
-struct PCX_Image{struct{void* Image;}JGL;};struct custom_renderer_native_view{int camera_x;};
+constexpr int __=0,C3X_NATIVE_ZOOM_PRESENTED=130;
 struct Animator{int Units2_Count=0,field_18E4[20]={};};
 struct Base_Form;void gui_draw(Base_Form*);struct FormVtable{void(*m73_call_m22_Draw)(Base_Form*)=gui_draw;}vtable;
 struct Base_Form{FormVtable* vtable=&::vtable;};
 struct Main_Screen_Form{struct{Base_Form Base;bool is_enabled=true;}GUI;bool is_now_loading_game=false,turn_end_flag=true;Animator animator;
- int scroll_speed=1,camera_x=0,camera_y=0;}screen,*p_main_screen_form=&screen;
-struct{struct{struct{void* spotlight_on_city=nullptr;}Renderer;}Map;int ScreenWidth=2240,ScreenHeight=1260;}bic,*p_bic_data=&bic;
+ int camera_x=500,camera_y=300;}screen,*p_main_screen_form=&screen;
+struct{struct{struct{void* spotlight_on_city=nullptr;}Renderer;}Map;}bic,*p_bic_data=&bic;
 struct{struct{struct{int Status2=0;}Data;}Base;}city,*p_city_form=&city;
-int players=1,*p_player_bits=&players,scale=65536,moves=0,draws=0,queries=0,last_reason=-1;bool last_scroll=false;
+int players=1,*p_player_bits=&players,scale=65536,moves=0,draws=0,gui_draws=0,last_x=0,last_y=0;
 int modal_depth=0,inhibited=0,ending=0;
 #define p_native_modal_depth (&modal_depth)
 #define p_native_timer_inhibited (&inhibited)
 #define p_native_game_ending (&ending)
-long long now=1000000;int cx=2239,cy=630;bool focus=true;
 struct State{struct{bool enable_custom_rendering=true;}current_config;
- bool custom_renderer_trace_input=false,combat_unit_display_override_active=false;
- unsigned custom_renderer_view_timer=17;bool custom_renderer_view_timer_running=false,custom_renderer_scroll_request=false;
- LARGE_INTEGER custom_renderer_qpc_frequency{1000000},custom_renderer_scroll_at{1000000};
- double custom_renderer_scroll_x=0,custom_renderer_scroll_y=0;
+ bool combat_unit_display_override_active=false;
+ unsigned custom_renderer_view_timer=17;bool custom_renderer_view_timer_running=false;
  bool custom_renderer_modal=false,paused_for_popup=false,custom_renderer_draw_in_progress=false;
  int custom_renderer_minimap_zoom=65536;
  int (*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=nullptr;
- int (*custom_renderer_navigation)(int,void*,custom_renderer_native_view*,void const*)=nullptr;
 }state,*is=&state;
-bool in_flight=false;int pending_queries=0;
-int navigation(int action,void*,custom_renderer_native_view* view,void const* request){
- assert(action==C3X_NAV_PENDING&&view&&!request);++pending_queries;return in_flight?C3X_RENDERER_RESULT_PENDING:0;}
-bool QueryPerformanceCounter(LARGE_INTEGER* p){p->QuadPart=now;return true;}
 bool custom_renderer_zoom_enabled(){return true;}
-int GetFocus(){return focus?1:0;}
-bool test_get_cursor(POINT* p){*p={cx,cy};return true;}
-bool test_to_client(HWND,POINT*){return true;}
-bool test_client_rect(HWND,RECT* p){*p={0,0,2240,1260};return true;}
-int query(int,void*,void*,void const*,void const*,unsigned){++queries;return scale;}
-void patch_Main_Screen_Form_move_camera(Main_Screen_Form*p,int,int x,int y,int r,bool b){assert(r==1&&!b);last_reason=r;last_scroll=is->custom_renderer_scroll_request;p->camera_x=x;p->camera_y=y;++moves;}
+int query(int op,void*,void*,void const*,void const*,unsigned){assert(op==C3X_NATIVE_ZOOM_PRESENTED);return scale;}
+void patch_Main_Screen_Form_move_camera(Main_Screen_Form*p,int,int x,int y,int r,bool b){
+ assert(p==&screen&&r==1&&!b);last_x=x;last_y=y;++moves;}
 void patch_Animator_update_display(Animator*,int){++draws;}
-int gui_draws=0;void gui_draw(Base_Form*){++gui_draws;}
+void gui_draw(Base_Form*){++gui_draws;}
 void ''' + body + r'''
-void tick(int us){now+=us;custom_renderer_view_timer(0,0,17,0);assert(!state.custom_renderer_view_timer_running);}
-void reset(){screen.camera_x=screen.camera_y=0;state.custom_renderer_scroll_x=state.custom_renderer_scroll_y=0;state.custom_renderer_scroll_at.QuadPart=now;}
-int main(){state.custom_renderer_native_image=query;state.custom_renderer_navigation=navigation;
- for(int rate:{20,25,40,50,100}){reset();for(int n=0;n<rate;++n)tick(1000000/rate);assert(std::abs(screen.camera_x-900)<=1);}
- int prev=-1;for(int distance=31;distance>=0;--distance){cx=2239-distance;reset();for(int n=0;n<100;++n)tick(10000);assert(screen.camera_x>=prev);prev=screen.camera_x;}
- cx=0;reset();for(int n=0;n<100;++n)tick(10000);assert(std::abs(screen.camera_x+900)<=1);
- cx=2239;scale=196608;state.custom_renderer_minimap_zoom=scale;reset();for(int n=0;n<100;++n)tick(10000);assert(std::abs(screen.camera_x-300)<=1);
- cx=1000;cy=0;scale=65536;state.custom_renderer_minimap_zoom=scale;reset();for(int n=0;n<100;++n)tick(10000);assert(screen.camera_x==0&&std::abs(screen.camera_y+900)<=1);
- int before=moves;int old_y=screen.camera_y;tick(500000);
- assert(moves==before+1&&screen.camera_y==old_y-90); // late callbacks retain one capped step
- old_y=screen.camera_y;tick(3000000);assert(screen.camera_y==old_y-90);
- state.custom_renderer_scroll_at.QuadPart=0;before=moves;tick(16000);assert(moves==before); // first sample establishes the clock
- for(int k=0;k<10;++k){reset();state.custom_renderer_modal=k==0;state.paused_for_popup=k==1;
-  screen.is_now_loading_game=k==2;screen.turn_end_flag=k!=3;city.Base.Data.Status2=k==4;
-  screen.animator.Units2_Count=k==5;focus=k!=6;state.combat_unit_display_override_active=k==7;
-  screen.GUI.is_enabled=k!=8;*(bool*)(screen.animator.field_18E4+0xD)=k==9;before=moves;tick(16000);assert(moves==before);}
- state.custom_renderer_modal=state.paused_for_popup=screen.is_now_loading_game=false;screen.turn_end_flag=true;city.Base.Data.Status2=0;screen.animator.Units2_Count=0;focus=true;
- for(int which=0;which<3;++which){modal_depth=which==0;inhibited=which==1;ending=which==2;before=moves;tick(16000);assert(moves==before);}
- modal_depth=inhibited=ending=0;
- state.combat_unit_display_override_active=false;screen.GUI.is_enabled=true;*(bool*)(screen.animator.field_18E4+0xD)=false;
- before=moves;state.current_config.enable_custom_rendering=false;tick(16000);assert(moves==before);
- state.current_config.enable_custom_rendering=true;cx=1000;cy=630;scale=131072;int drawn=draws,gui_before=gui_draws;tick(16000);
- assert(draws==drawn&&moves==before&&gui_draws==gui_before+1); // minimap-only zoom-in
- scale=65536;tick(16000);assert(moves==before+1&&last_reason==1&&!last_scroll); // zoom-out supersedes pending edge movement
- // Continuous wheel transitions and reversals retain display-pixel speed.
- cx=2239;cy=630;reset();double expected=0.;
- for(int n=0;n<400;++n){scale=65536+(n<200?n:399-n)*655;expected+=9.*65536/scale;tick(10000);}
- assert(std::abs(screen.camera_x-expected)<1.1);
- // Motion arriving while a camera job is in flight is held, not captured
- // and discarded. The adoption pass keeps it; the next tick requests it all.
- scale=65536;state.custom_renderer_minimap_zoom=scale;reset();in_flight=true;before=moves;drawn=draws;int asked=pending_queries;
- for(int n=0;n<10;++n)tick(16000);
- assert(moves==before&&draws==drawn+10&&pending_queries==asked+10&&screen.camera_x==0);
- state.custom_renderer_draw_in_progress=true;tick(16000);state.custom_renderer_draw_in_progress=false;
- in_flight=false;tick(16000);assert(moves==before+1&&screen.camera_x==158); // 11 ticks of 14.4 px
- // Held motion is bounded by the retained-raster shift margin at the presented zoom.
- reset();in_flight=true;for(int n=0;n<100;++n)tick(16000);in_flight=false;tick(16000);assert(screen.camera_x==256);
- scale=32768;state.custom_renderer_minimap_zoom=scale;reset();in_flight=true;for(int n=0;n<100;++n)tick(16000);
- in_flight=false;tick(16000);assert(screen.camera_x==512);
- // Modal interruptions still discard held motion.
- scale=65536;state.custom_renderer_minimap_zoom=scale;reset();in_flight=true;for(int n=0;n<10;++n)tick(16000);
- state.custom_renderer_modal=true;tick(16000);state.custom_renderer_modal=false;in_flight=false;tick(16000);
- assert(screen.camera_x==14);
+void tick(){custom_renderer_view_timer(0,0,17,0);assert(!state.custom_renderer_view_timer_running);}
+int main(){state.custom_renderer_native_image=query;
+ // Steady zoom: no camera movement, wherever the cursor is.
+ for(int n=0;n<100;++n)tick();
+ assert(moves==0&&draws==0&&gui_draws==0);
+ // Zoom in redraws the minimap box only.
+ scale=131072;tick();assert(moves==0&&gui_draws==1&&state.custom_renderer_minimap_zoom==131072);
+ tick();assert(gui_draws==1);
+ // Zoom out also re-clamps at the current camera, once.
+ scale=65536;tick();assert(moves==1&&last_x==500&&last_y==300&&draws==1&&gui_draws==2);
+ tick();assert(moves==1);
+ // Blocked states change nothing.
+ for(int k=0;k<13;++k){
+  state.custom_renderer_modal=k==0;state.paused_for_popup=k==1;screen.is_now_loading_game=k==2;screen.turn_end_flag=k!=3;
+  city.Base.Data.Status2=k==4;screen.animator.Units2_Count=k==5;state.combat_unit_display_override_active=k==6;
+  screen.GUI.is_enabled=k!=7;*(bool*)(screen.animator.field_18E4+0xD)=k==8;state.custom_renderer_draw_in_progress=k==9;
+  modal_depth=k==10;inhibited=k==11;ending=k==12;
+  scale=k%2?32768:131072;int before=moves,drawn=gui_draws;tick();assert(moves==before&&gui_draws==drawn);
+ }
+ state.current_config.enable_custom_rendering=false;screen.turn_end_flag=true;scale=32768;
+ int before=moves;tick();assert(moves==before);
 }
 ''')
-
 
 if __name__ == '__main__':
     unittest.main()

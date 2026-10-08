@@ -92,8 +92,8 @@ float3 q8_city_emission(float3 emission,float2 look) {
 }
 #endif
 #ifdef Q8_CITY_TIME
-// Procedural attached effects on camera-facing quads: flame (90), smoke (91)
-// and night light (92). p.uv is the quad coordinate (x -1..1 across, y 0..1
+// Procedural attached effects on camera-facing quads: flame (90), smoke (91),
+// night light (92) and a volcano's plume (93). p.uv is the quad coordinate (x -1..1 across, y 0..1
 // up); seed and strength ride in the auxiliary coordinates. The phase is a
 // pure function of the visual clock and the seed: no state, no catch-up.
 float q8_effect_hash(float n){return frac(sin(n)*43758.5453);}
@@ -105,6 +105,34 @@ float4 q8_effect_over(float4 top,float4 under){
  // Premultiplied "over", returned straight for q6_scene_output.
  float a=top.a+under.a*(1-top.a);
  return float4((top.rgb*top.a+under.rgb*under.a*(1-top.a))/max(a,1e-4),a);
+}
+// Billowing plume: puffs leave the mouth continuously, rise along a
+// wind-bent path, grow, erode and thin; a short stem keeps the plume on its
+// mouth. Units are quad half-widths on both axes so puffs stay round at any
+// zoom, and the upper-left of each puff is sunlit. At night the smoke darkens
+// and its source lights the base. shape: puff period (s), rise, radius at the
+// mouth and its growth; look: tone, sunlit tone and tone gained with height.
+float4 q8_effect_plume(float2 q,float2 pixel,float t,float seed,float strength,float night,float4 shape,float3 look){
+  float H=pixel.x/pixel.y,Y=q.y*H;
+  float wind=.45+.3*q8_effect_noise(float2(seed*3,t*.1));
+  float alpha=0,tone=0,weight=0;
+  [unroll]for(int k=0;k<9;k++){
+   float cycle=t/shape.x+k/9.0,phase=frac(cycle);
+   float h=pow(saturate(phase),.85)*shape.y,r=shape.z+shape.w*h;
+   float2 c=float2(wind*pow(h,1.4)+(q8_effect_noise(float2(seed*7+k,floor(cycle)))-.5)*.25*h,h*H+r*.6);
+   float2 d=(float2(q.x,Y)-c)/r;
+   float erode=(.65*q8_effect_noise(float2(q.x*2.4+k*3.7+seed*11,Y*2.4-t*.8))
+    +.35*q8_effect_noise(float2(q.x*5.1+k,Y*5.1-t*1.3))-.5)*.7;
+   float a=smoothstep(1,.45,length(d)+erode)*smoothstep(0,.06,phase)*pow(saturate(1-phase),1.1)*.8;
+   alpha=1-(1-alpha)*(1-a);
+   tone+=(look.x+look.y*saturate(.5-.45*d.x+.55*d.y-erode)+look.z*h)*a;weight+=a;
+  }
+  float stem=smoothstep(1,.35,abs(q.x-wind*pow(q.y,1.4))/(.18+.5*q.y))*smoothstep(.22,0,q.y)*smoothstep(0,.015,q.y)*.75;
+  alpha=saturate((1-(1-alpha)*(1-stem))*strength)*lerp(1,.75,night);
+  clip(alpha-.004);
+  float grey=saturate((tone+.22*stem)/max(weight+stem,1e-4))*lerp(1,.18,night);
+  float glow=exp(-q.y*14)*night*.7*strength;
+  return float4(grey+glow,grey*.98+glow*.42,grey*.96+glow*.12,alpha);
 }
 float4 q8_city_effect(FeaturePixelInput p){
  float kind=round(p.material_index-90),seed=clamp(p.city_ao_uv.x,0,64),strength=clamp(p.city_ao_uv.y,0,2);
@@ -132,32 +160,15 @@ float4 q8_city_effect(FeaturePixelInput p){
   float4 result=q8_effect_over(flame,halo);
   clip(result.a-.004);return result;
  }
- if(kind<1.5){
-  // Billowing plume: puffs leave the mouth continuously, rise along a
-  // wind-bent path, grow, erode and thin; a short stem keeps the plume on
-  // its chimney. Units are quad half-widths on both axes so puffs stay round
-  // at any zoom, and the upper-left of each puff is sunlit. At night the
-  // smoke darkens and the furnace lights its base.
-  float H=pixel.x/pixel.y,Y=q.y*H;
-  float wind=.45+.3*q8_effect_noise(float2(seed*3,t*.1));
-  float alpha=0,tone=0,weight=0;
-  [unroll]for(int k=0;k<9;k++){
-   float cycle=t/2.6+k/9.0,phase=frac(cycle);
-   float h=pow(saturate(phase),.85)*.82,r=.3+.55*h;
-   float2 c=float2(wind*pow(h,1.4)+(q8_effect_noise(float2(seed*7+k,floor(cycle)))-.5)*.25*h,h*H+r*.6);
-   float2 d=(float2(q.x,Y)-c)/r;
-   float erode=(.65*q8_effect_noise(float2(q.x*2.4+k*3.7+seed*11,Y*2.4-t*.8))
-    +.35*q8_effect_noise(float2(q.x*5.1+k,Y*5.1-t*1.3))-.5)*.7;
-   float a=smoothstep(1,.45,length(d)+erode)*smoothstep(0,.06,phase)*pow(saturate(1-phase),1.1)*.8;
-   alpha=1-(1-alpha)*(1-a);
-   tone+=(.13+.36*saturate(.5-.45*d.x+.55*d.y-erode)+.08*h)*a;weight+=a;
-  }
-  float stem=smoothstep(1,.35,abs(q.x-wind*pow(q.y,1.4))/(.18+.5*q.y))*smoothstep(.22,0,q.y)*smoothstep(0,.015,q.y)*.75;
-  alpha=saturate((1-(1-alpha)*(1-stem))*strength)*lerp(1,.75,night);
-  clip(alpha-.004);
-  float grey=saturate((tone+.22*stem)/max(weight+stem,1e-4))*lerp(1,.18,night);
-  float glow=exp(-q.y*14)*night*.7*strength;
-  return float4(grey+glow,grey*.98+glow*.42,grey*.96+glow*.12,alpha);
+ if(kind<1.5)return q8_effect_plume(q,pixel,t,seed,strength,night,float4(2.6,.82,.3,.55),float3(.13,.36,.08));
+ if(kind>2.5){
+  // A volcano's plume (93): a darker, slower ash column; strength 1.6
+  // (erupting) thickens it, quickens it and lights its base from the crater.
+  float erupt=saturate((strength-1)/.6);
+  float4 ash=q8_effect_plume(q,pixel,t,seed,strength,night,float4(lerp(3.4,2.4,erupt),.82,.3,lerp(.5,.6,erupt)),
+                             float3(lerp(.10,.07,erupt),lerp(.28,.20,erupt),.06));
+  float lit=exp(-q.y*5)*erupt*(.55+.45*q8_effect_noise(float2(seed*3,t*2.3)));
+  return float4(ash.rgb+float3(1,.36,.08)*lit*1.6,ash.a);
  }
  float2 g=float2(q.x,(q.y-.5)*2);
  float glow=exp(-dot(g,g)*3)*night*strength;

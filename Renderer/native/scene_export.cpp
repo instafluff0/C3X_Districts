@@ -255,7 +255,8 @@ bool export_scene(c3x_renderer_frame_v1 const & frame, c3x_renderer_scene_export
             {C3X_RENDERER_IMPROVEMENT_POLLUTION, "pollution"},
             {C3X_RENDERER_IMPROVEMENT_CRATER, "crater"},
             {C3X_RENDERER_IMPROVEMENT_GOODY_HUT, "goody-hut"},
-            {C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP, "barbarian-camp"}
+            {C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP, "barbarian-camp"},
+            {C3X_RENDERER_IMPROVEMENT_RUINS, "ruins"}
         };
         for (Improvement const & improvement : improvements) {
             if ((tile->improvement_flags & improvement.flag) == 0)

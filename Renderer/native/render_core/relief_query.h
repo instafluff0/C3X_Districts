@@ -23,8 +23,8 @@ struct FlatGroundRegion {
         certified = true;
         for (int y=-2;y<=2;y++) for (int x=-2;x<=2;x++) {
             Tile t=lookup(c+x,r+y);
-            if (!t.present || t.real==10 || (!separate_natural_relief &&
-                (t.real==5 || t.real==6 || (t.base==0 && t.real==0)))) certified=false;
+            if (!t.present || (!separate_natural_relief &&
+                (t.real==10 || t.real==5 || t.real==6 || (t.base==0 && t.real==0)))) certified=false;
         }
     }
     bool contains(float x, float y) const {
@@ -53,8 +53,9 @@ template<class Lookup,class Source,class Shore,class River,class Dune,class Acti
 class ReliefQuery {
     World world;
     Lookup lookup; Source source; Shore shore; River river; Dune dune; Activity activity;
-    // Contract: direct hills/mountains and analytic dunes contribute zero to
-    // this underlying provider; their separate natural meshes still own relief.
+    // Contract: direct hills/mountains/volcanoes and analytic dunes contribute
+    // zero to this underlying provider; their separate natural meshes own
+    // relief (volcanoes: lab/shared/natural/mountain_shape.h).
     bool separate_natural_relief;
     mutable bool quiet_ready=false,quiet=false;
     mutable int quiet_c=0,quiet_r=0;
@@ -63,8 +64,8 @@ class ReliefQuery {
         quiet=true;quiet_c=c;quiet_r=r;quiet_ready=true;
         for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){
             Tile t=lookup(c+dx,r+dy);
-            if(t.real==10 || (!separate_natural_relief &&
-                (t.real==5 || t.real==6 || (t.present && t.base==0 && t.real==0))))quiet=false;
+            if(!separate_natural_relief &&
+                (t.real==10 || t.real==5 || t.real==6 || (t.present && t.base==0 && t.real==0)))quiet=false;
         }
         return quiet;
     }

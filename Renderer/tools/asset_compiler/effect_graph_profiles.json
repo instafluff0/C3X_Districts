@@ -5,195 +5,4202 @@
     "ambient/fire_small": {
       "loop": true,
       "duration_ms": 1600,
-      "bounds_tile": [-0.12, -0.12, 0.0, 0.12, 0.12, 0.34],
+      "bounds_tile": [
+        -0.12,
+        -0.12,
+        0.0,
+        0.12,
+        0.12,
+        0.34
+      ],
       "emitters": [
         {
           "id": "flame",
           "texture": "effect/fire/four_flames",
           "blend": "additive",
-          "layout": {"columns": 2, "rows": 2, "frames": 4, "order": "row_major"},
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
           "rate_per_second": 5.0,
           "particle_lifetime_ms": 620,
           "max_particles": 4,
-          "size_tile": [0.08, 0.16],
-          "velocity_tile_per_second": [0.0, 0.0, 0.12],
+          "size_tile": [
+            0.08,
+            0.16
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.12
+          ],
           "spawn_radius_tile": 0.025,
-          "opacity_curve": [[0.0, 0.0], [0.15, 1.0], [0.72, 0.8], [1.0, 0.0]]
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.15,
+              1.0
+            ],
+            [
+              0.72,
+              0.8
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ]
         },
         {
           "id": "glow",
           "texture": "effect/glow/flame_soft",
           "blend": "additive",
-          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
           "rate_per_second": 1.0,
           "particle_lifetime_ms": 1600,
           "max_particles": 1,
-          "size_tile": [0.18, 0.18],
-          "velocity_tile_per_second": [0.0, 0.0, 0.0],
+          "size_tile": [
+            0.18,
+            0.18
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
           "spawn_radius_tile": 0.0,
-          "opacity_curve": [[0.0, 0.55], [0.5, 0.75], [1.0, 0.55]]
+          "opacity_curve": [
+            [
+              0.0,
+              0.55
+            ],
+            [
+              0.5,
+              0.75
+            ],
+            [
+              1.0,
+              0.55
+            ]
+          ]
         }
       ],
-      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.55, "size": 1.15}},
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.15
+        }
+      },
       "activation": "attachment_policy",
       "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
     },
     "ambient/smoke_small": {
       "loop": true,
       "duration_ms": 3200,
-      "bounds_tile": [-0.18, -0.18, 0.0, 0.18, 0.18, 0.62],
+      "bounds_tile": [
+        -0.18,
+        -0.18,
+        0.0,
+        0.18,
+        0.18,
+        0.62
+      ],
       "emitters": [
         {
           "id": "smoke",
           "texture": "effect/smoke/cloud",
           "blend": "alpha",
-          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
           "rate_per_second": 1.7,
           "particle_lifetime_ms": 2200,
           "max_particles": 5,
-          "size_tile": [0.13, 0.22],
-          "velocity_tile_per_second": [0.018, -0.012, 0.18],
+          "size_tile": [
+            0.13,
+            0.22
+          ],
+          "velocity_tile_per_second": [
+            0.018,
+            -0.012,
+            0.18
+          ],
           "spawn_radius_tile": 0.035,
-          "opacity_curve": [[0.0, 0.0], [0.2, 0.55], [0.65, 0.38], [1.0, 0.0]]
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.2,
+              0.55
+            ],
+            [
+              0.65,
+              0.38
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ]
         }
       ],
-      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.6, "size": 1.1}},
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.6,
+          "size": 1.1
+        }
+      },
       "activation": "attachment_policy",
       "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
     },
     "ambient/steam_small": {
       "loop": true,
       "duration_ms": 2400,
-      "bounds_tile": [-0.15, -0.15, 0.0, 0.15, 0.15, 0.5],
+      "bounds_tile": [
+        -0.15,
+        -0.15,
+        0.0,
+        0.15,
+        0.15,
+        0.5
+      ],
       "emitters": [
         {
           "id": "steam",
           "texture": "effect/steam/cloud",
           "blend": "alpha",
-          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
           "rate_per_second": 2.4,
           "particle_lifetime_ms": 1350,
           "max_particles": 4,
-          "size_tile": [0.1, 0.19],
-          "velocity_tile_per_second": [0.01, 0.0, 0.24],
+          "size_tile": [
+            0.1,
+            0.19
+          ],
+          "velocity_tile_per_second": [
+            0.01,
+            0.0,
+            0.24
+          ],
           "spawn_radius_tile": 0.02,
-          "opacity_curve": [[0.0, 0.0], [0.12, 0.48], [0.55, 0.28], [1.0, 0.0]]
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.12,
+              0.48
+            ],
+            [
+              0.55,
+              0.28
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ]
         }
       ],
-      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.55, "size": 1.1}},
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
       "activation": "attachment_policy",
       "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
     },
     "infrastructure/pollution_radiation": {
       "loop": true,
       "duration_ms": 2800,
-      "bounds_tile": [-0.42, -0.28, 0.0, 0.42, 0.28, 0.48],
+      "bounds_tile": [
+        -0.42,
+        -0.28,
+        0.0,
+        0.42,
+        0.28,
+        0.48
+      ],
       "emitters": [
         {
           "id": "ground_wisps",
           "texture": "effect/pollution/radiation_atlas",
           "alpha_texture": "effect/pollution/radiation_alpha_01",
           "blend": "additive",
-          "layout": {"columns": 4, "rows": 4, "frames": 16, "order": "row_major"},
+          "layout": {
+            "columns": 4,
+            "rows": 4,
+            "frames": 16,
+            "order": "row_major"
+          },
           "rate_per_second": 3.2,
           "particle_lifetime_ms": 1700,
           "max_particles": 7,
-          "size_tile": [0.11, 0.2],
-          "velocity_tile_per_second": [0.0, 0.0, 0.1],
+          "size_tile": [
+            0.11,
+            0.2
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.1
+          ],
           "spawn_radius_tile": 0.28,
-          "opacity_curve": [[0.0, 0.0], [0.18, 0.68], [0.74, 0.52], [1.0, 0.0]]
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.18,
+              0.68
+            ],
+            [
+              0.74,
+              0.52
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ]
         }
       ],
-      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.58, "size": 1.12}},
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.58,
+          "size": 1.12
+        }
+      },
       "activation": "authoritative_civ3_pollution_bit",
       "source_claim": "authored_restrained_layout_not_civ6_disaster_emitter_decode"
     },
-    "combat/land_impact": {
+    "combat/land_hit": {
       "loop": false,
-      "duration_ms": 1100,
-      "bounds_tile": [-0.34, -0.28, 0.0, 0.34, 0.28, 0.48],
+      "duration_ms": 1800,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.7
+      ],
       "emitters": [
         {
           "id": "flash",
           "texture": "effect/combat/explosion/hot_center",
           "blend": "additive",
-          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
-          "rate_per_second": 10.0,
-          "particle_lifetime_ms": 180,
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 110,
           "max_particles": 1,
-          "size_tile": [0.2, 0.2],
-          "velocity_tile_per_second": [0.0, 0.0, 0.0],
+          "size_tile": [
+            0.45,
+            0.45
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
           "spawn_radius_tile": 0.0,
-          "opacity_curve": [[0.0, 1.0], [1.0, 0.0]]
-        },
-        {
-          "id": "fireball",
-          "texture": "effect/combat/explosion/fireball_sheet",
-          "blend": "premultiplied",
-          "layout": {"columns": 2, "rows": 2, "frames": 4, "order": "row_major"},
-          "rate_per_second": 4.0,
-          "particle_lifetime_ms": 650,
-          "max_particles": 2,
-          "size_tile": [0.22, 0.3],
-          "velocity_tile_per_second": [0.0, 0.0, 0.08],
-          "spawn_radius_tile": 0.04,
-          "opacity_curve": [[0.0, 0.0], [0.08, 1.0], [0.7, 0.7], [1.0, 0.0]]
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 1.4,
+          "size_curve": [
+            [
+              0.0,
+              0.6
+            ],
+            [
+              1.0,
+              1.3
+            ]
+          ],
+          "tint": [
+            1.0,
+            0.8,
+            0.55
+          ]
         },
         {
           "id": "dust",
           "texture": "effect/combat/impact/ground_dust",
           "blend": "alpha",
-          "layout": {"columns": 2, "rows": 2, "frames": 4, "order": "row_major"},
-          "rate_per_second": 5.0,
-          "particle_lifetime_ms": 900,
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 950,
           "max_particles": 3,
-          "size_tile": [0.19, 0.24],
-          "velocity_tile_per_second": [0.03, -0.015, 0.08],
-          "spawn_radius_tile": 0.12,
-          "opacity_curve": [[0.0, 0.0], [0.18, 0.55], [1.0, 0.0]]
+          "size_tile": [
+            0.42,
+            0.26
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.04,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.12,
+              0.6
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "frame_mode": "variant",
+          "spread_tile_per_second": [
+            0.18,
+            0.32,
+            0.0,
+            0.03
+          ],
+          "intensity": 0.8,
+          "size_curve": [
+            [
+              0.0,
+              0.45
+            ],
+            [
+              1.0,
+              1.35
+            ]
+          ]
+        },
+        {
+          "id": "fireball",
+          "texture": "effect/combat/explosion/flipbook_08",
+          "blend": "alpha",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1000,
+          "max_particles": 1,
+          "size_tile": [
+            0.6,
+            0.6
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.05
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.8,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 0.9,
+          "tint": [
+            1.0,
+            0.58,
+            0.28
+          ]
+        },
+        {
+          "id": "heat",
+          "texture": "effect/combat/explosion/flipbook_05",
+          "blend": "additive",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 420,
+          "max_particles": 1,
+          "burst": 1,
+          "size_tile": [
+            0.6,
+            0.6
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.04
+          ],
+          "spawn_radius_tile": 0.0,
+          "intensity": 1.5,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "tint": [
+            1.0,
+            0.55,
+            0.25
+          ]
+        },
+        {
+          "id": "smoke",
+          "texture": "effect/combat/smoke/cannon_01",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1500,
+          "max_particles": 4,
+          "size_tile": [
+            0.3,
+            0.3
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.05,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.15,
+              0.65
+            ],
+            [
+              0.6,
+              0.4
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "start_ms": 140,
+          "burst_spread_ms": 120,
+          "spread_tile_per_second": [
+            0.04,
+            0.12,
+            0.1,
+            0.2
+          ],
+          "rotation": "random",
+          "spin_per_second": 0.6,
+          "intensity": 0.55,
+          "size_curve": [
+            [
+              0.0,
+              0.55
+            ],
+            [
+              1.0,
+              1.6
+            ]
+          ]
+        },
+        {
+          "id": "debris",
+          "texture": "effect/combat/debris/general",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 750,
+          "max_particles": 8,
+          "size_tile": [
+            0.06,
+            0.06
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.03,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.8,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 8,
+          "spread_tile_per_second": [
+            0.3,
+            0.65,
+            0.55,
+            0.95
+          ],
+          "gravity_tile_per_second2": -2.4,
+          "rotation": "random",
+          "spin_per_second": 6.0,
+          "intensity": 0.5
         }
       ],
-      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.55, "size": 1.08}},
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/land_miss": {
+      "loop": false,
+      "duration_ms": 1500,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "emitters": [
+        {
+          "id": "dust",
+          "texture": "effect/combat/impact/ground_dust",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1100,
+          "max_particles": 4,
+          "size_tile": [
+            0.5,
+            0.3
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.05,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.1,
+              0.7
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "frame_mode": "variant",
+          "spread_tile_per_second": [
+            0.15,
+            0.3,
+            0.0,
+            0.04
+          ],
+          "intensity": 0.85,
+          "size_curve": [
+            [
+              0.0,
+              0.45
+            ],
+            [
+              1.0,
+              1.4
+            ]
+          ]
+        },
+        {
+          "id": "plume",
+          "texture": "effect/combat/smoke/dust_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1300,
+          "max_particles": 3,
+          "size_tile": [
+            0.32,
+            0.38
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.04,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.15,
+              0.6
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "frame_mode": "variant",
+          "start_ms": 40,
+          "spread_tile_per_second": [
+            0.03,
+            0.08,
+            0.12,
+            0.22
+          ],
+          "rotation": "random",
+          "intensity": 0.75,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.5
+            ]
+          ]
+        },
+        {
+          "id": "debris",
+          "texture": "effect/combat/debris/general",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 650,
+          "max_particles": 6,
+          "size_tile": [
+            0.05,
+            0.05
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.03,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.8,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 6,
+          "spread_tile_per_second": [
+            0.2,
+            0.45,
+            0.45,
+            0.8
+          ],
+          "gravity_tile_per_second2": -2.4,
+          "rotation": "random",
+          "spin_per_second": 6.0,
+          "intensity": 0.5
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
       "activation": "authoritative_impact_event",
       "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
     },
     "combat/water_impact": {
       "loop": false,
-      "duration_ms": 900,
-      "bounds_tile": [-0.36, -0.24, -0.02, 0.36, 0.24, 0.26],
+      "duration_ms": 1400,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        -0.02,
+        0.5,
+        0.5,
+        0.7
+      ],
       "emitters": [
         {
-          "id": "ring",
-          "texture": "effect/combat/impact/water_wave",
-          "alpha_texture": "effect/combat/impact/water_wave_mask",
+          "id": "column",
+          "texture": "effect/combat/splash/vertical_sheet",
           "blend": "alpha",
-          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
-          "rate_per_second": 10.0,
-          "particle_lifetime_ms": 720,
+          "layout": {
+            "columns": 4,
+            "rows": 2,
+            "frames": 8,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 800,
           "max_particles": 1,
-          "size_tile": [0.3, 0.14],
-          "velocity_tile_per_second": [0.0, 0.0, 0.0],
+          "size_tile": [
+            0.34,
+            0.55
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
           "spawn_radius_tile": 0.0,
-          "opacity_curve": [[0.0, 0.8], [0.75, 0.45], [1.0, 0.0]]
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.7,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 1.1
         },
         {
           "id": "mist",
-          "texture": "effect/steam/cloud",
+          "texture": "effect/combat/splash/mist",
           "blend": "alpha",
-          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
-          "rate_per_second": 3.0,
-          "particle_lifetime_ms": 760,
-          "max_particles": 2,
-          "size_tile": [0.12, 0.22],
-          "velocity_tile_per_second": [0.0, 0.0, 0.18],
-          "spawn_radius_tile": 0.08,
-          "opacity_curve": [[0.0, 0.0], [0.16, 0.5], [1.0, 0.0]]
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1200,
+          "max_particles": 3,
+          "size_tile": [
+            0.4,
+            0.3
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.06,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.2,
+              0.55
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "start_ms": 120,
+          "burst_spread_ms": 150,
+          "spread_tile_per_second": [
+            0.05,
+            0.14,
+            0.04,
+            0.1
+          ],
+          "rotation": "random",
+          "intensity": 1.0,
+          "size_curve": [
+            [
+              0.0,
+              0.6
+            ],
+            [
+              1.0,
+              1.5
+            ]
+          ]
+        },
+        {
+          "id": "ring",
+          "texture": "effect/combat/impact/water_wave",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1100,
+          "max_particles": 1,
+          "size_tile": [
+            0.55,
+            0.3
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.15,
+              0.7
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "alpha_texture": "effect/combat/impact/water_wave_mask",
+          "intensity": 1.0,
+          "size_curve": [
+            [
+              0.0,
+              0.4
+            ],
+            [
+              1.0,
+              1.6
+            ]
+          ]
         }
       ],
-      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.55, "size": 1.1}},
-      "activation": "authoritative_water_impact_event",
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/muzzle_cannon": {
+      "loop": false,
+      "duration_ms": 1400,
+      "bounds_tile": [
+        -0.2,
+        -0.3,
+        0.0,
+        0.6,
+        0.3,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "flash",
+          "texture": "effect/combat/muzzle/flash_primary",
+          "blend": "additive",
+          "layout": {
+            "columns": 2,
+            "rows": 4,
+            "frames": 8,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 130,
+          "max_particles": 1,
+          "size_tile": [
+            0.55,
+            0.27
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.6,
+              0.8
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "frame_mode": "variant",
+          "rotation": "emitter",
+          "intensity": 3.2,
+          "size_curve": [
+            [
+              0.0,
+              0.8
+            ],
+            [
+              1.0,
+              1.2
+            ]
+          ],
+          "tint": [
+            1.0,
+            0.82,
+            0.6
+          ],
+          "pivot": [
+            0.15,
+            0.5
+          ]
+        },
+        {
+          "id": "glow",
+          "texture": "effect/glow/flame_soft",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 170,
+          "max_particles": 1,
+          "size_tile": [
+            0.38,
+            0.38
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 2.2,
+          "tint": [
+            1.0,
+            0.82,
+            0.6
+          ]
+        },
+        {
+          "id": "smoke",
+          "texture": "effect/combat/smoke/cannon_02",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1500,
+          "max_particles": 4,
+          "size_tile": [
+            0.3,
+            0.3
+          ],
+          "velocity_tile_per_second": [
+            0.22,
+            0.0,
+            0.06
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.1,
+              0.6
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "start_ms": 30,
+          "burst_spread_ms": 90,
+          "spread_tile_per_second": [
+            0.0,
+            0.05,
+            0.02,
+            0.1
+          ],
+          "rotation": "random",
+          "spin_per_second": 0.8,
+          "intensity": 0.65,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.7
+            ]
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "pack_release_marker",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/bomb_stick": {
+      "extends": "combat/land_hit",
+      "scale": 0.75,
+      "repeat": {
+        "count": 3,
+        "interval_ms": 130,
+        "spacing_tile": [
+          0.3,
+          0.0,
+          0.0
+        ]
+      },
+      "duration_ms": 2060
+    },
+    "combat/bomb_stick_miss": {
+      "extends": "combat/land_miss",
+      "scale": 0.8,
+      "repeat": {
+        "count": 3,
+        "interval_ms": 130,
+        "spacing_tile": [
+          0.3,
+          0.0,
+          0.0
+        ]
+      },
+      "duration_ms": 1760
+    },
+    "combat/bomb_stick_water": {
+      "extends": "combat/water_impact",
+      "scale": 0.8,
+      "repeat": {
+        "count": 3,
+        "interval_ms": 130,
+        "spacing_tile": [
+          0.3,
+          0.0,
+          0.0
+        ]
+      },
+      "duration_ms": 1660
+    },
+    "combat/naval_salvo": {
+      "extends": "combat/land_hit",
+      "scale": 1.0,
+      "repeat": {
+        "count": 3,
+        "interval_ms": 150,
+        "jitter_tile": 0.2
+      },
+      "duration_ms": 2100
+    },
+    "combat/naval_salvo_miss": {
+      "extends": "combat/land_miss",
+      "scale": 1.0,
+      "repeat": {
+        "count": 3,
+        "interval_ms": 150,
+        "jitter_tile": 0.2
+      },
+      "duration_ms": 1800
+    },
+    "combat/naval_salvo_water": {
+      "extends": "combat/water_impact",
+      "scale": 1.25,
+      "repeat": {
+        "count": 3,
+        "interval_ms": 150,
+        "jitter_tile": 0.2
+      },
+      "duration_ms": 1700
+    },
+    "combat/stone_hit": {
+      "loop": false,
+      "duration_ms": 1900,
+      "bounds_tile": [
+        -0.6,
+        -0.6,
+        0.0,
+        0.6,
+        0.6,
+        0.7
+      ],
+      "emitters": [
+        {
+          "id": "earth",
+          "texture": "effect/combat/explosion/flipbook_08",
+          "blend": "alpha",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 820,
+          "max_particles": 2,
+          "size_tile": [
+            0.5,
+            0.5
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.05,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.6,
+              0.85
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 2,
+          "burst_spread_ms": 50,
+          "spread_tile_per_second": [
+            0.0,
+            0.1,
+            0.15,
+            0.3
+          ],
+          "rotation": "random",
+          "tint": [
+            0.3,
+            0.23,
+            0.16
+          ],
+          "intensity": 0.55,
+          "size_curve": [
+            [
+              0.0,
+              0.55
+            ],
+            [
+              1.0,
+              1.1
+            ]
+          ]
+        },
+        {
+          "id": "clods",
+          "texture": "effect/combat/debris/general",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 780,
+          "max_particles": 8,
+          "size_tile": [
+            0.32,
+            0.32
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.04,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.8,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 8,
+          "spread_tile_per_second": [
+            0.4,
+            0.95,
+            1.5,
+            2.3
+          ],
+          "gravity_tile_per_second2": -5.5,
+          "rotation": "random",
+          "spin_per_second": 5.0,
+          "tint": [
+            0.42,
+            0.35,
+            0.27
+          ],
+          "intensity": 0.85
+        },
+        {
+          "id": "ring",
+          "texture": "effect/combat/impact/ground_dust",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1200,
+          "max_particles": 3,
+          "size_tile": [
+            0.7,
+            0.4
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.04,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.08,
+              0.85
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "frame_mode": "variant",
+          "start_ms": 20,
+          "spread_tile_per_second": [
+            0.2,
+            0.35,
+            0.0,
+            0.03
+          ],
+          "tint": [
+            0.72,
+            0.62,
+            0.48
+          ],
+          "intensity": 0.85,
+          "size_curve": [
+            [
+              0.0,
+              0.4
+            ],
+            [
+              1.0,
+              1.5
+            ]
+          ]
+        },
+        {
+          "id": "plume",
+          "texture": "effect/combat/smoke/dust_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1500,
+          "max_particles": 3,
+          "size_tile": [
+            0.4,
+            0.46
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.05,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.15,
+              0.7
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "frame_mode": "variant",
+          "start_ms": 80,
+          "spread_tile_per_second": [
+            0.03,
+            0.09,
+            0.14,
+            0.26
+          ],
+          "rotation": "random",
+          "tint": [
+            0.72,
+            0.62,
+            0.48
+          ],
+          "intensity": 0.8,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.6
+            ]
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/muzzle_naval": {
+      "extends": "combat/muzzle_cannon",
+      "scale": 1.45
+    },
+    "combat/naval_shockwave": {
+      "extends": "combat/water_impact",
+      "scale": 0.55,
+      "activation": "pack_release_marker"
+    },
+    "combat/muzzle_small": {
+      "extends": "combat/muzzle_cannon",
+      "scale": 0.4
+    },
+    "combat/ship_hit": {
+      "loop": false,
+      "duration_ms": 1800,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.7
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence",
+      "emitters": [
+        {
+          "id": "flash",
+          "texture": "effect/combat/explosion/hot_center",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 110,
+          "max_particles": 1,
+          "size_tile": [
+            0.45,
+            0.45
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 1.4,
+          "size_curve": [
+            [
+              0.0,
+              0.6
+            ],
+            [
+              1.0,
+              1.3
+            ]
+          ],
+          "tint": [
+            1.0,
+            0.8,
+            0.55
+          ]
+        },
+        {
+          "id": "fireball",
+          "texture": "effect/combat/explosion/flipbook_08",
+          "blend": "alpha",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1000,
+          "max_particles": 1,
+          "size_tile": [
+            0.6,
+            0.6
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.05
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.8,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 0.9,
+          "tint": [
+            1.0,
+            0.58,
+            0.28
+          ]
+        },
+        {
+          "id": "heat",
+          "texture": "effect/combat/explosion/flipbook_05",
+          "blend": "additive",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 420,
+          "max_particles": 1,
+          "burst": 1,
+          "size_tile": [
+            0.6,
+            0.6
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.04
+          ],
+          "spawn_radius_tile": 0.0,
+          "intensity": 1.5,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "tint": [
+            1.0,
+            0.55,
+            0.25
+          ]
+        },
+        {
+          "id": "smoke",
+          "texture": "effect/combat/smoke/cannon_01",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1500,
+          "max_particles": 4,
+          "size_tile": [
+            0.3,
+            0.3
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.05,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.15,
+              0.65
+            ],
+            [
+              0.6,
+              0.4
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "start_ms": 140,
+          "burst_spread_ms": 120,
+          "spread_tile_per_second": [
+            0.04,
+            0.12,
+            0.1,
+            0.2
+          ],
+          "rotation": "random",
+          "spin_per_second": 0.6,
+          "intensity": 0.55,
+          "size_curve": [
+            [
+              0.0,
+              0.55
+            ],
+            [
+              1.0,
+              1.6
+            ]
+          ]
+        },
+        {
+          "id": "debris",
+          "texture": "effect/combat/debris/general",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 750,
+          "max_particles": 8,
+          "size_tile": [
+            0.06,
+            0.06
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.03,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.8,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 8,
+          "spread_tile_per_second": [
+            0.3,
+            0.65,
+            0.55,
+            0.95
+          ],
+          "gravity_tile_per_second2": -2.4,
+          "rotation": "random",
+          "spin_per_second": 6.0,
+          "intensity": 0.5
+        },
+        {
+          "id": "spray",
+          "texture": "effect/combat/splash/vertical_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 4,
+            "rows": 2,
+            "frames": 8,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 800,
+          "max_particles": 1,
+          "size_tile": [
+            0.204,
+            0.33
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.7,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 1.1,
+          "start_ms": 30
+        }
+      ]
+    },
+    "combat/naval_salvo_ship": {
+      "extends": "combat/ship_hit",
+      "scale": 1.0,
+      "repeat": {
+        "count": 3,
+        "interval_ms": 150,
+        "jitter_tile": 0.2
+      },
+      "duration_ms": 2100
+    },
+    "combat/bomb_stick_ship": {
+      "extends": "combat/ship_hit",
+      "scale": 0.75,
+      "repeat": {
+        "count": 3,
+        "interval_ms": 130,
+        "spacing_tile": [
+          0.3,
+          0.0,
+          0.0
+        ]
+      },
+      "duration_ms": 2060
+    },
+    "combat/bullet_hit": {
+      "loop": false,
+      "duration_ms": 900,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "spurts",
+          "texture": "effect/combat/impact/ground_dust",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 480,
+          "max_particles": 4,
+          "size_tile": [
+            0.13,
+            0.09
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.16,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.1,
+              0.85
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "frame_mode": "variant",
+          "burst_spread_ms": 260,
+          "spread_tile_per_second": [
+            0.0,
+            0.05,
+            0.25,
+            0.45
+          ],
+          "tint": [
+            0.78,
+            0.68,
+            0.54
+          ],
+          "intensity": 0.85,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.3
+            ]
+          ]
+        },
+        {
+          "id": "sparks",
+          "texture": "effect/glow/flame_soft",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 90,
+          "max_particles": 4,
+          "size_tile": [
+            0.05,
+            0.05
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.14,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "burst_spread_ms": 260,
+          "spread_tile_per_second": [
+            0.0,
+            0.0,
+            0.1,
+            0.25
+          ],
+          "tint": [
+            1.0,
+            0.78,
+            0.45
+          ],
+          "intensity": 2.4
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/bullet_miss": {
+      "loop": false,
+      "duration_ms": 900,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "spurts",
+          "texture": "effect/combat/impact/ground_dust",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 480,
+          "max_particles": 4,
+          "size_tile": [
+            0.13,
+            0.09
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.16,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.1,
+              0.85
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "frame_mode": "variant",
+          "burst_spread_ms": 260,
+          "spread_tile_per_second": [
+            0.0,
+            0.05,
+            0.25,
+            0.45
+          ],
+          "tint": [
+            0.78,
+            0.68,
+            0.54
+          ],
+          "intensity": 0.85,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.3
+            ]
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/bullet_water": {
+      "loop": false,
+      "duration_ms": 900,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "droplets",
+          "texture": "effect/combat/splash/vertical_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 4,
+            "rows": 2,
+            "frames": 8,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 520,
+          "max_particles": 4,
+          "size_tile": [
+            0.09,
+            0.16
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.16,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.6,
+              0.8
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "burst_spread_ms": 260,
+          "intensity": 0.9,
+          "pivot": [
+            0.5,
+            0.92
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/bullet_ship": {
+      "loop": false,
+      "duration_ms": 900,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "sparks",
+          "texture": "effect/glow/flame_soft",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 90,
+          "max_particles": 6,
+          "size_tile": [
+            0.05,
+            0.05
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.14,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 6,
+          "burst_spread_ms": 260,
+          "spread_tile_per_second": [
+            0.0,
+            0.0,
+            0.1,
+            0.25
+          ],
+          "tint": [
+            1.0,
+            0.78,
+            0.45
+          ],
+          "intensity": 2.4
+        },
+        {
+          "id": "droplets",
+          "texture": "effect/combat/splash/vertical_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 4,
+            "rows": 2,
+            "frames": 8,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 520,
+          "max_particles": 2,
+          "size_tile": [
+            0.09,
+            0.16
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.16,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.6,
+              0.8
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 2,
+          "burst_spread_ms": 260,
+          "intensity": 0.9,
+          "pivot": [
+            0.5,
+            0.92
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/bullet_air": {
+      "loop": false,
+      "duration_ms": 600,
+      "bounds_tile": [
+        -0.3,
+        -0.3,
+        0.0,
+        0.3,
+        0.3,
+        0.4
+      ],
+      "emitters": [
+        {
+          "id": "sparks",
+          "texture": "effect/glow/flame_soft",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 90,
+          "max_particles": 5,
+          "size_tile": [
+            0.05,
+            0.05
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.14,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 5,
+          "burst_spread_ms": 260,
+          "spread_tile_per_second": [
+            0.0,
+            0.0,
+            0.1,
+            0.25
+          ],
+          "tint": [
+            1.0,
+            0.78,
+            0.45
+          ],
+          "intensity": 2.4
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/arrow_hit": {
+      "loop": false,
+      "duration_ms": 900,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "spurts",
+          "texture": "effect/combat/impact/ground_dust",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 480,
+          "max_particles": 6,
+          "size_tile": [
+            0.09,
+            0.06
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.16,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.1,
+              0.85
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 6,
+          "frame_mode": "variant",
+          "burst_spread_ms": 340,
+          "spread_tile_per_second": [
+            0.0,
+            0.05,
+            0.25,
+            0.45
+          ],
+          "tint": [
+            0.74,
+            0.65,
+            0.52
+          ],
+          "intensity": 0.85,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.3
+            ]
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/arrow_water": {
+      "loop": false,
+      "duration_ms": 900,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "droplets",
+          "texture": "effect/combat/splash/vertical_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 4,
+            "rows": 2,
+            "frames": 8,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 520,
+          "max_particles": 6,
+          "size_tile": [
+            0.07,
+            0.12
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.16,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.6,
+              0.8
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 6,
+          "burst_spread_ms": 340,
+          "intensity": 0.9,
+          "pivot": [
+            0.5,
+            0.92
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/melee_hit": {
+      "loop": false,
+      "duration_ms": 1000,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "clash",
+          "texture": "effect/combat/smoke/dust_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 800,
+          "max_particles": 2,
+          "size_tile": [
+            0.3,
+            0.22
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.06,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.12,
+              0.6
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 2,
+          "frame_mode": "variant",
+          "burst_spread_ms": 120,
+          "spread_tile_per_second": [
+            0.05,
+            0.15,
+            0.05,
+            0.12
+          ],
+          "tint": [
+            0.76,
+            0.67,
+            0.53
+          ],
+          "intensity": 0.8,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.3
+            ]
+          ],
+          "rotation": "random"
+        },
+        {
+          "id": "sparks",
+          "texture": "effect/glow/flame_soft",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 90,
+          "max_particles": 3,
+          "size_tile": [
+            0.05,
+            0.05
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.14,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "burst_spread_ms": 150,
+          "spread_tile_per_second": [
+            0.0,
+            0.0,
+            0.1,
+            0.25
+          ],
+          "tint": [
+            1.0,
+            0.78,
+            0.45
+          ],
+          "intensity": 2.4
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/melee_miss": {
+      "loop": false,
+      "duration_ms": 1000,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "clash",
+          "texture": "effect/combat/smoke/dust_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 800,
+          "max_particles": 2,
+          "size_tile": [
+            0.3,
+            0.22
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.06,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.12,
+              0.6
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 2,
+          "frame_mode": "variant",
+          "burst_spread_ms": 120,
+          "spread_tile_per_second": [
+            0.05,
+            0.15,
+            0.05,
+            0.12
+          ],
+          "tint": [
+            0.76,
+            0.67,
+            0.53
+          ],
+          "intensity": 0.8,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.3
+            ]
+          ],
+          "rotation": "random"
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/torpedo_launch": {
+      "extends": "combat/water_impact",
+      "scale": 0.35,
+      "activation": "pack_release_marker"
+    },
+    "combat/torpedo_ship": {
+      "loop": false,
+      "duration_ms": 2200,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.7
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence",
+      "emitters": [
+        {
+          "id": "flash",
+          "texture": "effect/combat/explosion/hot_center",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 110,
+          "max_particles": 1,
+          "size_tile": [
+            0.45,
+            0.45
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 1.4,
+          "size_curve": [
+            [
+              0.0,
+              0.6
+            ],
+            [
+              1.0,
+              1.3
+            ]
+          ],
+          "tint": [
+            1.0,
+            0.8,
+            0.55
+          ]
+        },
+        {
+          "id": "fireball",
+          "texture": "effect/combat/explosion/flipbook_08",
+          "blend": "alpha",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1000,
+          "max_particles": 1,
+          "size_tile": [
+            0.6,
+            0.6
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.05
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.8,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 0.9,
+          "tint": [
+            1.0,
+            0.58,
+            0.28
+          ]
+        },
+        {
+          "id": "heat",
+          "texture": "effect/combat/explosion/flipbook_05",
+          "blend": "additive",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 420,
+          "max_particles": 1,
+          "burst": 1,
+          "size_tile": [
+            0.6,
+            0.6
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.04
+          ],
+          "spawn_radius_tile": 0.0,
+          "intensity": 1.5,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "tint": [
+            1.0,
+            0.55,
+            0.25
+          ]
+        },
+        {
+          "id": "smoke",
+          "texture": "effect/combat/smoke/cannon_01",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1500,
+          "max_particles": 4,
+          "size_tile": [
+            0.3,
+            0.3
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.05,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.15,
+              0.65
+            ],
+            [
+              0.6,
+              0.4
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "start_ms": 140,
+          "burst_spread_ms": 120,
+          "spread_tile_per_second": [
+            0.04,
+            0.12,
+            0.1,
+            0.2
+          ],
+          "rotation": "random",
+          "spin_per_second": 0.6,
+          "intensity": 0.55,
+          "size_curve": [
+            [
+              0.0,
+              0.55
+            ],
+            [
+              1.0,
+              1.6
+            ]
+          ]
+        },
+        {
+          "id": "debris",
+          "texture": "effect/combat/debris/general",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 750,
+          "max_particles": 8,
+          "size_tile": [
+            0.06,
+            0.06
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.03,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.8,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 8,
+          "spread_tile_per_second": [
+            0.3,
+            0.65,
+            0.55,
+            0.95
+          ],
+          "gravity_tile_per_second2": -2.4,
+          "rotation": "random",
+          "spin_per_second": 6.0,
+          "intensity": 0.5
+        },
+        {
+          "id": "spray",
+          "texture": "effect/combat/splash/vertical_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 4,
+            "rows": 2,
+            "frames": 8,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 800,
+          "max_particles": 3,
+          "size_tile": [
+            0.49,
+            0.792
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.7,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "intensity": 1.1,
+          "start_ms": 30
+        }
+      ]
+    },
+    "combat/torpedo_water": {
+      "extends": "combat/water_impact",
+      "scale": 1.5
+    },
+    "combat/missile_launch": {
+      "loop": false,
+      "duration_ms": 1600,
+      "bounds_tile": [
+        -0.6,
+        -0.4,
+        0.0,
+        0.4,
+        0.4,
+        0.8
+      ],
+      "emitters": [
+        {
+          "id": "flash",
+          "texture": "effect/glow/flame_soft",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 160,
+          "max_particles": 1,
+          "size_tile": [
+            0.34,
+            0.34
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "tint": [
+            1.0,
+            0.8,
+            0.55
+          ],
+          "intensity": 2.4
+        },
+        {
+          "id": "exhaust",
+          "texture": "effect/combat/smoke/cannon_02",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1500,
+          "max_particles": 6,
+          "size_tile": [
+            0.24,
+            0.24
+          ],
+          "velocity_tile_per_second": [
+            -0.15,
+            0.0,
+            0.25
+          ],
+          "spawn_radius_tile": 0.05,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.1,
+              0.7
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 6,
+          "burst_spread_ms": 260,
+          "rotation": "random",
+          "spread_tile_per_second": [
+            0.02,
+            0.08,
+            0.05,
+            0.15
+          ],
+          "intensity": 0.75,
+          "size_curve": [
+            [
+              0.0,
+              0.4
+            ],
+            [
+              1.0,
+              1.6
+            ]
+          ],
+          "spin_per_second": 0.6
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/missile_hit": {
+      "extends": "combat/land_hit",
+      "scale": 1.15
+    },
+    "combat/air_burst": {
+      "loop": false,
+      "duration_ms": 1500,
+      "bounds_tile": [
+        -0.4,
+        -0.4,
+        0.0,
+        0.4,
+        0.4,
+        0.5
+      ],
+      "emitters": [
+        {
+          "id": "burst",
+          "texture": "effect/combat/smoke/cannon_02",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1300,
+          "max_particles": 3,
+          "size_tile": [
+            0.26,
+            0.26
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.1,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.08,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "burst_spread_ms": 180,
+          "rotation": "random",
+          "tint": [
+            0.28,
+            0.27,
+            0.26
+          ],
+          "intensity": 0.8,
+          "spread_tile_per_second": [
+            0.02,
+            0.06,
+            0.0,
+            0.05
+          ],
+          "size_curve": [
+            [
+              0.0,
+              0.45
+            ],
+            [
+              1.0,
+              1.35
+            ]
+          ]
+        },
+        {
+          "id": "flash",
+          "texture": "effect/glow/flame_soft",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 110,
+          "max_particles": 3,
+          "size_tile": [
+            0.22,
+            0.22
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.1,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "burst_spread_ms": 180,
+          "tint": [
+            1.0,
+            0.72,
+            0.4
+          ],
+          "intensity": 2.6
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/charge_dust": {
+      "loop": false,
+      "duration_ms": 1200,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "dust",
+          "texture": "effect/combat/impact/ground_dust",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1000,
+          "max_particles": 2,
+          "size_tile": [
+            0.3,
+            0.18
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.06,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.15,
+              0.55
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 2,
+          "frame_mode": "variant",
+          "spread_tile_per_second": [
+            0.05,
+            0.15,
+            0.0,
+            0.03
+          ],
+          "tint": [
+            0.78,
+            0.69,
+            0.55
+          ],
+          "intensity": 0.8,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.4
+            ]
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/muzzle_dust": {
+      "extends": "combat/land_miss",
+      "scale": 0.7,
+      "activation": "pack_release_marker"
+    },
+    "combat/flame_burst": {
+      "loop": false,
+      "duration_ms": 700,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.6
+      ],
+      "emitters": [
+        {
+          "id": "flame",
+          "texture": "effect/combat/explosion/flipbook_08",
+          "blend": "alpha",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 520,
+          "max_particles": 1,
+          "size_tile": [
+            0.5,
+            0.26
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.05
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.7,
+              0.8
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 1.3,
+          "tint": [
+            1.0,
+            0.62,
+            0.3
+          ],
+          "rotation": "emitter",
+          "pivot": [
+            0.12,
+            0.5
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/nuclear_detonation": {
+      "loop": false,
+      "duration_ms": 7000,
+      "bounds_tile": [
+        -2.0,
+        -2.0,
+        0.0,
+        2.0,
+        2.0,
+        3.0
+      ],
+      "emitters": [
+        {
+          "id": "flash",
+          "texture": "effect/combat/nuclear/scorch",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 700,
+          "max_particles": 1,
+          "size_tile": [
+            3.2,
+            3.2
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.3,
+              0.7
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "tint": [
+            1.0,
+            0.95,
+            0.85
+          ],
+          "intensity": 4.0,
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.3
+            ]
+          ]
+        },
+        {
+          "id": "fireball",
+          "texture": "effect/combat/explosion/flipbook_08",
+          "blend": "alpha",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 2600,
+          "max_particles": 3,
+          "size_tile": [
+            1.6,
+            1.6
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.35
+          ],
+          "spawn_radius_tile": 0.15,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.7,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 3,
+          "burst_spread_ms": 200,
+          "tint": [
+            1.0,
+            0.62,
+            0.3
+          ],
+          "intensity": 1.4,
+          "size_curve": [
+            [
+              0.0,
+              0.6
+            ],
+            [
+              1.0,
+              1.5
+            ]
+          ]
+        },
+        {
+          "id": "column",
+          "texture": "effect/combat/smoke/cannon_02",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 5600,
+          "max_particles": 10,
+          "size_tile": [
+            0.8,
+            0.8
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.9
+          ],
+          "spawn_radius_tile": 0.12,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.08,
+              0.85
+            ],
+            [
+              0.75,
+              0.6
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 10,
+          "start_ms": 300,
+          "burst_spread_ms": 1600,
+          "rotation": "random",
+          "spin_per_second": 0.2,
+          "gravity_tile_per_second2": -0.22,
+          "tint": [
+            0.86,
+            0.8,
+            0.74
+          ],
+          "intensity": 1.0,
+          "size_curve": [
+            [
+              0.0,
+              0.6
+            ],
+            [
+              1.0,
+              2.2
+            ]
+          ]
+        },
+        {
+          "id": "cap",
+          "texture": "effect/combat/smoke/dust_sheet",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 5200,
+          "max_particles": 6,
+          "size_tile": [
+            1.3,
+            1.0
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            1.25
+          ],
+          "spawn_radius_tile": 0.3,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.12,
+              0.8
+            ],
+            [
+              0.8,
+              0.55
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 6,
+          "frame_mode": "variant",
+          "start_ms": 1200,
+          "burst_spread_ms": 900,
+          "rotation": "random",
+          "gravity_tile_per_second2": -0.42,
+          "spread_tile_per_second": [
+            0.08,
+            0.22,
+            0.0,
+            0.05
+          ],
+          "tint": [
+            0.92,
+            0.84,
+            0.76
+          ],
+          "intensity": 1.0,
+          "size_curve": [
+            [
+              0.0,
+              0.7
+            ],
+            [
+              1.0,
+              1.8
+            ]
+          ]
+        },
+        {
+          "id": "shockwave",
+          "texture": "effect/combat/impact/ground_dust",
+          "blend": "alpha",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 2200,
+          "max_particles": 4,
+          "size_tile": [
+            1.6,
+            0.9
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.1,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.06,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 4,
+          "frame_mode": "variant",
+          "start_ms": 60,
+          "spread_tile_per_second": [
+            0.6,
+            0.9,
+            0.0,
+            0.02
+          ],
+          "tint": [
+            0.8,
+            0.72,
+            0.6
+          ],
+          "intensity": 0.9,
+          "size_curve": [
+            [
+              0.0,
+              0.4
+            ],
+            [
+              1.0,
+              2.6
+            ]
+          ]
+        },
+        {
+          "id": "flames",
+          "texture": "effect/combat/nuclear/flames",
+          "blend": "additive",
+          "layout": {
+            "columns": 8,
+            "rows": 4,
+            "frames": 32,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1800,
+          "max_particles": 10,
+          "size_tile": [
+            0.45,
+            0.6
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.9,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.2,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 10,
+          "burst_spread_ms": 1600,
+          "start_ms": 200,
+          "tint": [
+            1.0,
+            0.6,
+            0.25
+          ],
+          "intensity": 1.6,
+          "pivot": [
+            0.5,
+            0.92
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/intercept_burst": {
+      "loop": false,
+      "duration_ms": 2200,
+      "bounds_tile": [
+        -0.8,
+        -0.8,
+        0.0,
+        0.8,
+        0.8,
+        1.0
+      ],
+      "emitters": [
+        {
+          "id": "flash",
+          "texture": "effect/combat/nuclear/scorch",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 260,
+          "max_particles": 1,
+          "size_tile": [
+            1.2,
+            1.2
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "tint": [
+            1.0,
+            0.92,
+            0.8
+          ],
+          "intensity": 3.0,
+          "size_curve": [
+            [
+              0.0,
+              0.6
+            ],
+            [
+              1.0,
+              1.2
+            ]
+          ]
+        },
+        {
+          "id": "fireball",
+          "texture": "effect/combat/explosion/flipbook_08",
+          "blend": "alpha",
+          "layout": {
+            "columns": 8,
+            "rows": 8,
+            "frames": 64,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 900,
+          "max_particles": 1,
+          "size_tile": [
+            0.7,
+            0.7
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.05
+          ],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.8,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 1,
+          "intensity": 0.9,
+          "tint": [
+            1.0,
+            0.58,
+            0.28
+          ]
+        },
+        {
+          "id": "smoke",
+          "texture": "effect/combat/smoke/cannon_02",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 2000,
+          "max_particles": 5,
+          "size_tile": [
+            0.4,
+            0.4
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.12,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.1,
+              0.9
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "burst": 5,
+          "burst_spread_ms": 200,
+          "rotation": "random",
+          "tint": [
+            0.3,
+            0.29,
+            0.28
+          ],
+          "intensity": 0.8,
+          "spread_tile_per_second": [
+            0.05,
+            0.15,
+            0.0,
+            0.05
+          ],
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.6
+            ]
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.1
+        }
+      },
+      "activation": "authoritative_impact_event",
       "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
     }
   },
-  "runtime_activation": "not_enabled"
+  "runtime_activation": "not_enabled",
+  "impact_sets": {
+    "shell": {
+      "hit": "combat/land_hit",
+      "miss": "combat/land_miss",
+      "water": "combat/water_impact",
+      "ship": "combat/ship_hit",
+      "air": "combat/air_burst"
+    },
+    "naval": {
+      "hit": "combat/naval_salvo",
+      "miss": "combat/naval_salvo_miss",
+      "water": "combat/naval_salvo_water",
+      "ship": "combat/naval_salvo_ship",
+      "air": "combat/air_burst"
+    },
+    "bomb": {
+      "hit": "combat/land_hit",
+      "miss": "combat/land_miss",
+      "water": "combat/water_impact",
+      "ship": "combat/ship_hit",
+      "air": "combat/air_burst"
+    },
+    "stone": {
+      "hit": "combat/stone_hit",
+      "miss": "combat/land_miss",
+      "water": "combat/water_impact",
+      "ship": "combat/water_impact",
+      "air": "combat/air_burst"
+    },
+    "bullet": {
+      "hit": "combat/bullet_hit",
+      "miss": "combat/bullet_miss",
+      "water": "combat/bullet_water",
+      "ship": "combat/bullet_ship",
+      "air": "combat/bullet_air"
+    },
+    "arrow": {
+      "hit": "combat/arrow_hit",
+      "miss": "combat/arrow_hit",
+      "water": "combat/arrow_water",
+      "ship": "combat/arrow_hit",
+      "air": "combat/bullet_air"
+    },
+    "melee": {
+      "hit": "combat/melee_hit",
+      "miss": "combat/melee_miss",
+      "water": "combat/bullet_water",
+      "ship": "combat/melee_hit",
+      "air": "combat/bullet_air"
+    },
+    "torpedo": {
+      "hit": "combat/land_hit",
+      "miss": "combat/water_impact",
+      "water": "combat/torpedo_water",
+      "ship": "combat/torpedo_ship",
+      "air": "combat/air_burst"
+    },
+    "missile": {
+      "hit": "combat/missile_hit",
+      "miss": "combat/land_miss",
+      "water": "combat/water_impact",
+      "ship": "combat/ship_hit",
+      "air": "combat/air_burst"
+    },
+    "bomb_drop": {
+      "hit": "combat/bomb_stick",
+      "miss": "combat/bomb_stick_miss",
+      "water": "combat/bomb_stick_water",
+      "ship": "combat/bomb_stick_ship",
+      "air": "combat/air_burst"
+    },
+    "nuclear": {
+      "hit": "combat/nuclear_detonation",
+      "miss": "combat/nuclear_detonation",
+      "water": "combat/nuclear_detonation",
+      "ship": "combat/nuclear_detonation",
+      "air": "combat/intercept_burst"
+    },
+    "default": {
+      "hit": "combat/land_hit",
+      "miss": "combat/land_miss",
+      "water": "combat/water_impact",
+      "ship": "combat/ship_hit",
+      "air": "combat/air_burst"
+    },
+    "default_drop": {
+      "hit": "combat/bomb_stick",
+      "miss": "combat/bomb_stick_miss",
+      "water": "combat/bomb_stick_water",
+      "ship": "combat/bomb_stick_ship",
+      "air": "combat/air_burst"
+    },
+    "intercept": {
+      "hit": "combat/intercept_burst",
+      "miss": "combat/intercept_burst",
+      "water": "combat/intercept_burst",
+      "ship": "combat/intercept_burst",
+      "air": "combat/intercept_burst"
+    }
+  }
 }

@@ -1,0 +1,222 @@
+{
+  "schema": "c3x.civ6_combat_effect_map.v0",
+  "purpose": "Source importer data: translates Civ VI unit timeline effect and impact names (c3x.unit_effect_timing.v0) into generic C3X effect profiles and impact sets. First matching glob wins; null means the trigger has no C3X effect yet. Runtime code never sees Civ VI names.",
+  "release_profiles": [
+    [
+      "FX_*WaterShockwave*",
+      "combat/naval_shockwave"
+    ],
+    [
+      "FX_Battleship_Big_Muzzleflash",
+      "combat/muzzle_naval"
+    ],
+    [
+      "FX_Destroyer_Big_MuzzFlash_*",
+      "combat/muzzle_naval"
+    ],
+    [
+      "FX_Caravel_Cannon_MuzzFlash_*",
+      "combat/muzzle_naval"
+    ],
+    [
+      "FX_Privateer_Cannon_MuzzFlash_*",
+      "combat/muzzle_naval"
+    ],
+    [
+      "FX_Artillery_MuzzleFlash",
+      "combat/muzzle_cannon"
+    ],
+    [
+      "FX_Cannon_Muzzleflash",
+      "combat/muzzle_cannon"
+    ],
+    [
+      "FX_CannonBronze",
+      "combat/muzzle_cannon"
+    ],
+    [
+      "FX_Tank_Muzzleflash_*",
+      "combat/muzzle_cannon"
+    ],
+    [
+      "FX_ModArmor_Muzzleflash_*",
+      "combat/muzzle_cannon"
+    ],
+    [
+      "FX_*Musket*",
+      "combat/muzzle_small"
+    ],
+    [
+      "FX_Rifle_Muzzleflash",
+      "combat/muzzle_small"
+    ],
+    [
+      "FX_*MchnGn*",
+      "combat/muzzle_small"
+    ],
+    [
+      "FX_Fighter_MuzzFlash_*",
+      "combat/muzzle_small"
+    ],
+    [
+      "FX_Helicopter_Vulcan_Muzzleflash",
+      "combat/muzzle_small"
+    ],
+    [
+      "FX_AntiAir_Muzzleflash_*",
+      "combat/muzzle_small"
+    ],
+    [
+      "FX_Conquistador_MuzzleFlash",
+      "combat/muzzle_small"
+    ],
+    [
+      "FX_GardeImperial_Muzzleflash",
+      "combat/muzzle_small"
+    ],
+    [
+      "FX_Gun_FlintFlash",
+      "combat/muzzle_small"
+    ],
+    [
+      "FX_Torpedo_*",
+      "combat/torpedo_launch"
+    ],
+    [
+      "FX_SAM_Launch_*",
+      "combat/missile_launch"
+    ],
+    [
+      "FX_MsslCrsr_Missile_Launch_*",
+      "combat/missile_launch"
+    ],
+    [
+      "FX_JetFighter_Launch_*",
+      "combat/missile_launch"
+    ],
+    [
+      "FX_Rocket_Launcher_Exhaust",
+      "combat/missile_launch"
+    ],
+    [
+      "FX_ModArmor_GroundShock_*",
+      "combat/muzzle_dust"
+    ],
+    [
+      "FX_Horse_Dust",
+      "combat/charge_dust"
+    ],
+    [
+      "FX_Dust_Tank",
+      "combat/charge_dust"
+    ],
+    [
+      "FX_Dromon_FlameThrower_*",
+      "combat/flame_burst"
+    ],
+    [
+      "*",
+      null
+    ]
+  ],
+  "impact_set_by_release": [
+    [
+      "FX_Bomber_Bomb_*",
+      "bomb"
+    ],
+    [
+      "FX_JetBomber_Bomb_*",
+      "bomb"
+    ],
+    [
+      "FX_Catapult_Boulder_Trail_*",
+      "stone"
+    ],
+    [
+      "FX_Slinger_Rock_Trail",
+      "stone"
+    ],
+    [
+      "FX_Torpedo_*",
+      "torpedo"
+    ],
+    [
+      "FX_SAM_Launch_*",
+      "missile"
+    ],
+    [
+      "FX_MsslCrsr_*",
+      "missile"
+    ],
+    [
+      "FX_JetFighter_Launch_*",
+      "missile"
+    ],
+    [
+      "FX_Rocket_Launcher_Exhaust",
+      "missile"
+    ],
+    [
+      "FX_Hwei_Bolt_trail",
+      "shell"
+    ],
+    [
+      "FX_Cannonball_Trail",
+      "naval"
+    ],
+    [
+      "FX_Dromon_FlameThrower_*",
+      "shell"
+    ],
+    [
+      "*Arrow*",
+      "arrow"
+    ],
+    [
+      "FX_Crossbolt_trail",
+      "arrow"
+    ],
+    [
+      "FX_Smack_*",
+      "melee"
+    ],
+    [
+      "FX_*Sword_Trail",
+      "melee"
+    ],
+    [
+      "FX_*Club_Trail_*",
+      "melee"
+    ]
+  ],
+  "impact_set_by_impact": {
+    "TerrainVFX/AoE_Hit": "shell",
+    "MaterialVFX/Cannonball_Hit": "naval",
+    "MaterialVFX/Battleship_Hit": "naval",
+    "MaterialVFX/Rocket_Hit": "missile",
+    "MaterialVFX/SAM_Hit": "missile",
+    "MaterialVFX/Bullet_Hit": "bullet"
+  },
+  "attack_bearing_by_state": [
+    [
+      "ATTACK_P",
+      90
+    ],
+    [
+      "ATTACK_S",
+      -90
+    ],
+    [
+      "*",
+      0
+    ]
+  ],
+  "impact_set_by_profile": {
+    "combat/muzzle_cannon": "shell",
+    "combat/muzzle_naval": "naval",
+    "combat/muzzle_small": "bullet",
+    "combat/missile_launch": "missile",
+    "combat/torpedo_launch": "torpedo",
+    "combat/flame_burst": "shell"
+  }
+}

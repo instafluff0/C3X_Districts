@@ -361,8 +361,7 @@ void settle_custom_renderer_navigation(int action){settled=action;}
 void set_custom_renderer_native_probe(void*){++detaches;}
 struct State {
  struct {bool enable_custom_rendering=false;}current_config;
- unsigned custom_renderer_view_timer=17;struct{long long QuadPart=1;}custom_renderer_scroll_at;
- double custom_renderer_scroll_x=1,custom_renderer_scroll_y=1;
+ unsigned custom_renderer_view_timer=17;
  PCX_Image* custom_renderer_combat_odds_background=nullptr;
  bool combat_odds_hud_rect_drawn=true;void* combat_odds_hud_background_canvas=this;
  int custom_renderer_init_state=1;
@@ -387,8 +386,7 @@ int main(){
  unload_custom_renderer();assert(drains==1&&!resets&&!frees&&!detaches&&settled==C3X_NAV_BARRIER&&state.custom_renderer_init_state==IS_INIT_FAILED);
  assert(background_destroys==1&&!state.custom_renderer_combat_odds_background&&
         !state.combat_odds_hud_rect_drawn&&!state.combat_odds_hud_background_canvas);
- assert(kills==1&&!state.custom_renderer_view_timer&&!state.custom_renderer_scroll_at.QuadPart&&
-        !state.custom_renderer_scroll_x&&!state.custom_renderer_scroll_y);
+ assert(kills==1&&!state.custom_renderer_view_timer);
  fail=false;unload_custom_renderer();assert(kills==1);assert(drains==2&&resets==1&&frees==1&&detaches==1);
  assert(background_destroys==1);
  assert(state.custom_renderer_zoom_tile_width==0&&state.custom_renderer_zoom_target_width==128&&

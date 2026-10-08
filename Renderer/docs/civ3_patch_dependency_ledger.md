@@ -1,5 +1,116 @@
 # Civ III patch dependency ledger
 
+## Map unit frame sprites rebuilt only on animation change
+
+`required_user_action: []`. The user authorized adding these rows on
+2026-10-07 for clean, simple patches with major performance gains.
+
+- **New patch-table rows** (added with the patch; other builds unverified):
+
+| Capability | Symbol | GOG | Steam | PCGames.de |
+| --- | --- | --- | --- | --- |
+| `define` | `FLC_Animation_tick` (`FUN_00402620`) | `0x00402620` | unverified (`0x0`) | unverified (`0x0`) |
+| `repl call` | `FLC_Animation_tick_map_unit` | `0x004F0AA2` | unverified (`0x0`) | unverified (`0x0`) |
+
+```csv
+define, 0x402620, 0x0, 0x0, "FLC_Animation_tick", "void (__fastcall *) (FLC_Animation * this, int edx, int direction, int frame)"
+repl call, 0x4F0AA2, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
+```
+
+- **Why:** the map animator's unit walk (`FUN_004f08f0`, under
+  `Animator::update`) calls `FLC_Animation::tick` for every animating unit
+  every tick (`mov ecx,[ebx]; add ecx,0x27c; call 0x402620` at 0x4F0AA2).
+  Each call re-initializes `Frame_1` (`FLC_Frame_Image::FUN_005f7b60`), which
+  destroys and re-creates its JGL sprite. JGL objects own critical sections,
+  and under the game's compatibility layers (`DWM8And16BitMitigation …
+  WINXPSP2`) the destroy path spent most of Civ III's thread in
+  `AcLayers.DLL` on the busy save (performance review, October 7, section 7).
+- **What changes:** with custom rendering on, `patch_FLC_Animation_tick_map_unit`
+  calls the original only when `Frame_1.Flic_Info` differs from the current
+  animation's FLC, or for `Main_Screen_Form.Current_Unit` (the unit panel
+  draws its frame through `FUN_005cca00`). Map bodies are drawn in 3D;
+  `forward_custom_unit_body` reads only the FLC, sprite size, action,
+  direction and `field_FC`, none of which depend on the per-tick decode.
+  One-shot, combat, cursor and effect animations use other calls and are
+  unchanged. The second call in the same walk (0x4F0AF0, the effect
+  animation selected by `+0x1D0`) is unchanged.
+- **Config-off:** the patch calls the original with unchanged arguments first.
+- **Test:** `test_unit_frame_rebuild.py`.
+
+## Input coverage exemption for unreadable canvases
+
+`required_user_action: []`.
+
+- **Existing symbols relied on:** `p_jgl_screen_canvas`, `Main_Screen_Form.Units_Control`
+  and the JGL draw translation in `translate_custom_renderer_native`. No
+  patch-table entry is added.
+- **What changes:** at the overlay's transfer onto the screen canvas, injected
+  code declares both canvases with `C3X_NATIVE_HIT_EXEMPT` (137) while
+  `Units_Control.Data.Status1` has bit 2, which makes Civ III's form hit test
+  (`FUN_00608d50`) skip that canvas. The screen canvas is not a form canvas.
+- **Config-off:** the declaration runs only inside the custom-rendering native
+  translation.
+
+## Combat effects: no native 2D combat effect art
+
+`required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.
+
+- **Existing symbols relied on:** `Units_Image_Data_load_animated_effect`
+  (`inlead`) and `Animator_update_display` (the `inlead` at `Animator::update`).
+  Signatures and supported-build addresses are unchanged.
+- **What changes:**
+  - Impacts. After Civ III loads any bombard hit or miss effect
+    (`AE_Hit`..`AE_WaterMiss`, from `Unit::play_bombard_damage_animation`,
+    whose effect record stores the target tile three ints before its FLC),
+    `notify_custom_renderer_combat` sends `C3X_RENDERER_UNIT_STATE_IMPACT`
+    through the existing `c3x_renderer_unit_state` entry. The source is
+    `is->bombarding_unit`, or -1 when unknown (city defenses, other strike
+    paths); the renderer then uses its default munition.
+  - Effect-list FLCs. `watch_custom_renderer_effect_anims` scans the Animator
+    effect list (`field_18E4[3..4]`, an array of `FLC_Animation*`). Civ III
+    fills it only from `play_bombing_animation` (bomb FLC, also the nuclear
+    delivery), `play_shot_down_by_sam_anim` (SAM) and `FUN_005c98d0` (SDI).
+    - An FLC that Civ III kept hidden and then revealed
+      (`FUN_005cb990`) is reported as `C3X_RENDERER_UNIT_STATE_BOMB_RELEASE`.
+    - An FLC visible from the start is reported as
+      `C3X_RENDERER_UNIT_STATE_STANDALONE_EFFECT`.
+    - Both are reported with their tile and direction.
+  - Suppression. When the renderer answers `RESULT_OK`, which it does for
+    every fact once its effect pack has loaded, only the low byte of
+    `FLC_Animation.Last` is cleared. That hides the pixels; native ticks,
+    sound and waits are unchanged.
+  - A declined FLC is not reported again until the effect list empties.
+  - Tested by `test_combat_effect_bridge`.
+- **Not added:** no patch-table entry and no new address. Injected-state
+  fields: `custom_renderer_bomb_anim`, `custom_renderer_drawn_anim` and
+  `custom_renderer_declined_anim`. The API struct is unchanged: three new
+  `c3x_renderer_unit_state_kind` values are added and
+  `C3X_RENDERER_API_VERSION` stays 21.
+- **Config-off:** both patches return through the vanilla path before this code.
+- **Considered, not needed:**
+  - A direct `inlead` at `Unit_play_bombard_damage_animation` (GOG
+    `0x5CAF80`, `void (__fastcall *) (Unit * this, int edx, int x, int y, bool hit)`).
+    The existing effect-load inlead sees the same call with its tile and outcome.
+  - Making `Units_Image_Data_load_animation` an inlead. The effect-list
+    watcher covers the SAM and SDI FLCs without it.
+
+## We Love the King Day fireworks under custom rendering
+
+`required_user_action: []`.
+
+- **Existing symbol relied on:** `Animator_update_display` (the `inlead` at
+  `Animator::update`). Its signature and supported-build addresses are unchanged.
+- **What changes:** with custom rendering on, the patch (via
+  `hide_custom_renderer_fireworks`, tested by `test_custom_renderer_fireworks`) hides each celebrating
+  city's effect (`City_Body.field_A4 == AE_Fireworks`) from the native effect
+  walk for the duration of the native call, by storing `-AE_Fireworks`, and
+  restores it afterwards. That walk (`Animator::FUN_004efb70`, called only from
+  `Animator::update`) queues a city's FLC only while `field_A4 > 0`, so the flat
+  fireworks overlay is never ticked or blitted onto the map overlay canvas.
+  Saved state and celebration logic are unchanged; disorder and plague still play.
+- **Not added:** no patch-table entry and no injected-state field.
+- **Config-off:** the vanilla path returns before this code.
+
 ## Native unit travel speed
 
 `required_user_action: []`.
@@ -2008,6 +2119,26 @@ infrastructure/source findings before extending a category.
 - **Not added:** no patch-table entry, injected-state field or new address.
 - **Config-off:** the topology capture runs only for custom rendering.
 
+## Volcano activity and native volcano animation
+
+`required_user_action: []`.
+
+- **Existing symbols relied on:** the existing `Tile_spawn_animated_effect`
+  inlead (`patch_Tile_spawn_animated_effect`) and `Tile::Body.active_tile_effect`.
+  Civ III's spawn (0x5DA5E0 in the GOG build) stores the effect id in `V[2]`:
+  `AE_Smolder` (9) while a volcano smolders, `AE_Eruption` (10) when it erupts.
+  `Animator::update` keeps ticking every effect but draws an FLC only while its
+  `Last` field (offset 0x184) is non-zero (both draw sites in the decompile).
+- **What changes:** the world-topology capture sets bit 27 when the tile's effect
+  is an eruption (bit 24 already marks any tile effect), and Renderer64 lights the
+  volcano's crater and lava from bits 24 and 27. With custom rendering on, the
+  patch clears `Last` after the native spawn of a smolder or eruption effect: the
+  effect and its state stay live, only Civ III's smoke/lava animation is hidden.
+- **Not added:** no patch-table entry, injected-state field or new address.
+- **Config-off:** the native spawn runs with unchanged arguments and nothing is
+  cleared (`test_volcano_effect_suppression.py`); the capture runs only for
+  custom rendering.
+
 ## Goody huts and barbarian camps
 
 The existing `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture/insertion hook
@@ -2830,3 +2961,19 @@ scenarios already do. `interaction` keeps its popup for explicit UI coverage.
 The change requires the existing test-save environment and renderer enablement;
 ordinary gameplay and config-off delegation are unchanged. No patch entry is
 added or changed; `required_user_action: []`.
+
+
+## Ground states: city ruins capture
+
+`required_user_action: ["Re-run INSTALL.bat with the matching staged Renderer64 trio"]`.
+The existing `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture
+(`read_custom_renderer_tile`) now also sets `C3X_RENDERER_IMPROVEMENT_RUINS` (128)
+from the native vtable accessor `Tile::m36_Get_Ruins`, beside the tile-building
+capture. Native ruins carry no viewer memory; native m12 draws them from the same
+global field, and the separate fog pass masks unexplored tiles. Pollution
+(`m20_Check_Pollution`, remembered overlay bit 0x40) and craters (`m21_Check_Crates`,
+bit 0x100, not remembered) were already captured. City razing already notifies
+the renderer through the existing `City_raze` patch. No new patch-table symbol,
+signature or supported-build address is required; config-off never reaches the
+capture. The renderer draws all three from the site pack (`TileSitesRuntime`);
+packs without ground-state groups draw nothing new.

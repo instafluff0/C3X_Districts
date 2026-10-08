@@ -75,7 +75,7 @@ struct Chunk {struct Bounds {int left,top,right,bottom;} bounds{};int translatio
 using Membership=SceneMembership<Chunk,2>;
 struct Pass {
  Membership::Lease resident_lease;
- std::vector<int> resident,static_visible,water_visible,reflection_visible,all_visible;
+ std::vector<int> resident,static_visible,water_visible,reflection_visible,all_visible,effect_visible;
  std::vector<int> roi_records,roi_shadow_records,selected_lighting,body_requirements;
  bool body_requirements_valid=true,visibility_valid=true;std::uint64_t resident_signature=42;
  struct Shadow {std::vector<int> casters,caster_inputs,instance_groups,prepared_instances{7};Membership::Lease caster_lease;

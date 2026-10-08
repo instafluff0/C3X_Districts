@@ -118,15 +118,15 @@ using LONG=int;
 struct D3D11_RECT{int left,top,right,bottom;};
 struct ViewportShaderSettings{float translation[2]={};};
 constexpr unsigned geometry_layer_count=9,geometry_underlay=0,geometry_bed=1,geometry_water=2,
- geometry_river=3,geometry_route=4,geometry_shadow=5,geometry_wave=6;
+ geometry_river=3,geometry_route=4,geometry_shadow=5,geometry_wave=6,geometry_city=7;
 namespace c3x_renderer{namespace render_core{constexpr unsigned raster_scene=0,raster_classification=1;}}
-struct Record{unsigned id=1;bool water_dependent=false;struct Content{bool animation_texture=false;}value;
+struct Record{unsigned id=1;bool water_dependent=false;struct Content{bool animation_texture=false,city_effect=false;}value;
  Content const& content()const{return value;}};
 Record const& GeometryDrawReference(Record const&r){return r;}
 struct SandboxPassWorkload{enum{selection,screen=0};};
 using Records=std::array<std::vector<Record>,geometry_layer_count>;
 struct Pipeline {
- struct Renderer {Records geometry_vertex_buffers;bool water_scene_active=false,hidden=false;
+ struct Renderer {Records geometry_vertex_buffers;bool water_scene_active=false,hidden=false;unsigned visible_city_effects=0;
   struct{float height_pixels=0;}reflection;
   bool chunk_intersects_region(Record const&,ViewportShaderSettings const&,D3D11_RECT,bool){return !hidden;}
  }renderer;
@@ -135,7 +135,7 @@ struct Pipeline {
  struct Work {bool enabled=true;struct Counts{unsigned reuses=0,rebuilds=0,tested_records=0,accepted_records=0;};
  std::array<std::array<Counts,9>,1> counts;}work;
  struct RasterInputs{using Key=unsigned;};
- Records resident,static_visible,water_visible,reflection_visible,all_visible;
+ Records resident,static_visible,water_visible,reflection_visible,all_visible,effect_visible;
  std::uint64_t resident_signature=0,visibility_revision=0,reflection_revision=0,static_receiver_revision=0;
  bool visibility_valid=false,reflection_valid=false,reflected_terrain_material_valid=false,resident_water_scene=false;
  int wrap_pixels=0;unsigned resident_builds=0,visible=0,culled=0,reflection_count=0;

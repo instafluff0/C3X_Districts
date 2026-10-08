@@ -588,6 +588,9 @@ check.
 
 ### 4r. Scroll steps lost input and queued behind native UI (critical: scroll)
 
+**Superseded, October 7, 2026:** held motion (change 1) is removed; Civ III's
+own edge scroll drives the camera ([review 20261007](performance_review_20261007.md)).
+
 This is the first stage of [camera-follow](camera_follow_and_hud_layer.md).
 At 0.5× on the busy save, the camera advanced 75 native px/s (run50).
 
@@ -773,6 +776,9 @@ remove that wait:
 scene render (units ~3 ms, water ~3 ms).
 
 **C3: image-space camera-step slides.**
+**Removed, October 7, 2026:** at the user's request each adopted step now
+shows Civ III's camera directly ([review 20261007](performance_review_20261007.md)).
+
 - **Slide.** A small published step (at most half the screen) is first shown
   at the previous camera's position, then slides to rest (`PanTransition`).
 - **Easing.** An isolated step (a recentre, or a scroll's first step) eases

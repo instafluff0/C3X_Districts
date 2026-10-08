@@ -220,6 +220,18 @@ class UnitPreparation(unittest.TestCase):
         self.assertAlmostEqual((.05 + plane["offset_z"]) * plane["scale"] * units.Z_PIXELS, 15.0, places=4)
         self.assertEqual(plane["hover_policy"], "native_sprite_lift")
         self.assertEqual(bindings["unit1"]["offset_z"], 0.0)
+        self.assertNotIn("flight_lift", plane)
+
+    def test_flying_units_climb_to_their_flight_lift(self):
+        target = self.root / "Renderer/flight"
+        bindings = {"unit0": self.column(target, "plane", .05, .3), "unit1": self.column(target, "walker", 0, .5),
+                    "unit_count": 2}
+        sprites = {"PRTO_plane": {"lift": 30.0}, "PRTO_walker": {"lift": -4.0}}
+        units.hover_flying_units(bindings, target, sprites, .5, 8, flight=2.0)
+        plane = bindings["unit0"]
+        # In flight the lowest point is 2 sprite lifts up: 1.5 lifts above the hover.
+        self.assertAlmostEqual(plane["flight_lift"] * plane["scale"] * units.Z_PIXELS, 45.0, places=3)
+        self.assertNotIn("flight_lift", bindings["unit1"])
 
 
 if __name__ == "__main__":

@@ -285,7 +285,7 @@ inline Ref retain(Ref const& node,Regions const& needed,RetentionCache& cache,un
     return save(n);
 }
 class Scene {
-    struct Image {unsigned width=0,height=0;Format format=Format::rgb555;Ref value;unsigned uploads=0;};
+    struct Image {unsigned width=0,height=0;Format format=Format::rgb555;Ref value;unsigned uploads=0;bool exempt=false;};
     std::unordered_map<Id,Image> images;
     std::shared_ptr<Budget> budget=std::make_shared<Budget>();
     std::uint32_t visits=0;
@@ -296,9 +296,13 @@ public:
         auto n=std::make_shared<Node>(budget);n->width=w;n->height=h;n->format=format;n->constant=value;
         auto& image=images[id];release(image.value);image={w,h,format,n};
     }
+    // Civ III's form hit test never reads this image (its owner states why), so
+    // it keeps no coverage. An image it later draws into loses coverage too:
+    // a query there fails closed rather than answering from partial history.
+    void exempt(Id id){auto f=images.find(id);if(f==images.end()||f->second.exempt)return;release(f->second.value);f->second.value=nullptr;f->second.exempt=true;}
     void destroy(Id id){auto found=images.find(id);if(found==images.end())return;release(found->second.value);images.erase(found);}
     void upload(Id id,unsigned const* data,std::size_t count){
-        auto found=images.find(id);if(found==images.end())return;auto& i=found->second;
+        auto found=images.find(id);if(found==images.end()||found->second.exempt)return;auto& i=found->second;
         if(count!=std::size_t(i.width)*i.height)throw std::runtime_error("native input coverage upload size");
         if(count*sizeof(unsigned)>96u*1024u*1024u-budget->bytes)throw std::runtime_error("native input coverage byte budget exceeded");
         auto n=std::make_shared<Node>(budget);n->width=i.width;n->height=i.height;n->format=i.format;
@@ -324,9 +328,11 @@ public:
         release(i.value);n->live=n->pixels&&++i.uploads==1;i.value=n;
     }
     void submit(Command const& c){
-        auto found=images.find(c.destination);if(found==images.end()||found->second.format==Format::bgra32)return;
+        auto found=images.find(c.destination);if(found==images.end()||found->second.format==Format::bgra32||found->second.exempt)return;
         auto& i=found->second;auto bounds=intersection(intersection(c.area,c.clip),{0,0,int(i.width),int(i.height)});
         if(bounds.left>=bounds.right||bounds.top>=bounds.bottom)return;
+        for(Id read:{c.source,c.background,c.program}){auto f=read?images.find(read):images.end();
+            if(f!=images.end()&&f->second.exempt){exempt(c.destination);throw std::runtime_error("an exempt image feeds a hit-tested image");}}
         auto get=[&](Id id)->Ref{auto f=images.find(id);return f==images.end()?Ref{}:f->second.value;};
         if(c.kind==Kind::copy&&c.source==c.destination&&c.source_x==c.area.left&&c.source_y==c.area.top)return;
         bool full=!bounds.left&&!bounds.top&&bounds.right==int(i.width)&&bounds.bottom==int(i.height);
@@ -459,7 +465,7 @@ public:
         release(i.value);i.value=std::move(root);
     }
     bool pixel(Id id,int x,int y,unsigned& value)const{
-        auto f=images.find(id);if(f==images.end()||f->second.format==Format::bgra32)return false;
+        auto f=images.find(id);if(f==images.end()||f->second.format==Format::bgra32||f->second.exempt)return false;
         value=sample(f->second.value,x,y);return true;
     }
     std::size_t nodes()const{return budget->nodes;}

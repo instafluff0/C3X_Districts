@@ -139,7 +139,9 @@ int main() {
     }
     // Production natural providers already return zero for direct hills,
     // mountains and analytic dunes. A source-aware flat certificate must retain
-    // exact underlying heights/materials, coast rims, rivers and volcano owners.
+    // exact underlying heights/materials, coast rims and rivers. Volcanoes
+    // belong to the natural relief mesh (mountain_shape.h): with separate
+    // relief the provider sees them exactly as bare ground.
     for(unsigned scene=0;scene<6;scene++){
         auto lookup=[&](int c,int r){
             if(scene==4 && c==-1 && r==0)return render_core::Tile{};
@@ -147,6 +149,7 @@ int main() {
             if((scene==3 && c==0 && r==0) || (scene==5 && c==2 && r==0))real=10;
             return render_core::Tile{real==0?0:2,real,true};
         };
+        auto bare=[&](int c,int r){auto t=lookup(c,r);if(t.real==10)t.real=2;return t;};
         auto shore=[&](float x,float){return render_core::ShoreSample{
             scene==2?.12+double(x)*.1:scene==1?1.61+(double(x)-.5):3.,.06,.9,0};};
         auto source=[&](int kind,unsigned variant,int channel,float u,float v){
@@ -156,7 +159,7 @@ int main() {
         render_core::ExactPointCache<render_core::GroundSample> before_cache,after_cache;
         std::size_t before_count=0,after_count=0;
         render_core::World world{64,64,true,true};
-        ReliefSurface before(world,0,0,shore(.5f,.5f).distance,lookup,source,shore,river,dune,activity,before_cache,before_count);
+        ReliefSurface before(world,0,0,shore(.5f,.5f).distance,bare,source,shore,river,dune,activity,before_cache,before_count);
         ReliefSurface after(world,0,0,shore(.5f,.5f).distance,lookup,source,shore,river,dune,activity,after_cache,after_count,true);
         for(int y=-2;y<=66;y++)for(int x=-2;x<=66;x++){
             float u=x/64.f,v=y/64.f;auto a=before.sample(u,v),b=after.sample(u,v);
@@ -165,7 +168,7 @@ int main() {
         }
         if(scene==0)assert(after_count<before_count/8);
         render_core::FlatGroundRegion certificate(0,0,3.,lookup,true);
-        assert(certificate.certified==(scene!=3 && scene!=4 && scene!=5));
+        assert(certificate.certified==(scene!=4));
     }
     {
         std::vector<std::array<int,2>> observed;bool add_volcano=false;
@@ -175,10 +178,39 @@ int main() {
         assert(observed.size()==25);
         for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++)
             assert((observed[unsigned((y+2)*5+x+2)]==std::array<int,2>{x,y}));
-        // A previously certified owner observes even this outer support cell.
-        // Its authoritative edit must reject/recompute the certificate.
+        // A previously certified owner observes even this outer support cell;
+        // its edit rejects the certificate wherever this provider owns the
+        // relief. Separate natural meshes own (and observe) volcanoes.
         add_volcano=true;
-        assert(!render_core::FlatGroundRegion(0,0,3.,lookup,true).certified);
+        assert(render_core::FlatGroundRegion(0,0,3.,lookup,true).certified);
+        auto ground=[&](int c,int r){return render_core::Tile{2,add_volcano && c==2 && r==2?10:2,true};};
+        assert(!render_core::FlatGroundRegion(0,0,3.,ground,false).certified);
+    }
+    {
+        // Regression: a slot-family-1 volcano's analytic cone ignored the
+        // retired source fields, so the provider raised a second cone under
+        // the natural volcano stamp (a spike twice a mountain's height).
+        int k=0;while((render_core::volcano_slot(2*k,0)>>1)!=1)k++;
+        assert(k<32);
+        auto lookup=[&](int c,int r){return render_core::Tile{2,c==k && r==k?10:2,true};};
+        auto shore=[](float,float){return render_core::ShoreSample{3.,.06,.9,0};};
+        auto source=[&](int kind,unsigned variant,int channel,float u,float v){
+            return relief_source(assets,true,kind,variant,channel,u,v);};
+        auto river=[](int,int,float,float){return 8.f;};
+        auto dune=[](float,float){return 0.f;};auto activity=[](int,int){return 1.f;};
+        render_core::ExactPointCache<render_core::GroundSample> shared_cache,separate_cache;
+        std::size_t shared_count=0,separate_count=0;
+        render_core::World world{64,64,true,true};
+        ReliefSurface shared(world,k,k,3.,lookup,source,shore,river,dune,activity,shared_cache,shared_count);
+        ReliefSurface separate(world,k,k,3.,lookup,source,shore,river,dune,activity,separate_cache,separate_count,true);
+        float retired=0;
+        for(float y=0;y<=1;y+=.0625f)for(float x=0;x<=1;x+=.0625f){
+            retired=std::max(retired,shared.height(float(k)+x,float(k)+y));
+            assert(separate.height(float(k)+x,float(k)+y)==0);
+            auto g=separate.sample(float(k)+x,float(k)+y);
+            assert(g.height==0 && g.owner==(std::array<float,4>{}));
+        }
+        assert(retired>10);
     }
     assert(sample_normalized_field({},4,4,0,1,0,0)==0);
     assert(sample_normalized_field({255},0,1,0,1,0,0)==0);

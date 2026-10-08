@@ -94,9 +94,11 @@ def float_at_waterline(bindings,target,domains,afloat,draft):
         near=[f for a,f in authored if abs(math.log(a/aspect))<math.log(1.25)] or [f for _,f in authored] or [draft]
         binding['offset_z']=-(low+float(np.median(near))*(high-low));binding['ground_policy']='shape_neighbor_waterline'
     return [binding['key0'] for binding in bindings.values() if isinstance(binding,dict) and binding.get('ground_policy') in ('authored_waterline','shape_neighbor_waterline')]
-def hover_flying_units(bindings,target,sprites,factor,minimum):
+def hover_flying_units(bindings,target,sprites,factor,minimum,flight=None):
     """A unit whose native sprite floats above its own shadow (aircraft,
-    missiles) keeps its lowest idle point that many pixels above the ground."""
+    missiles) keeps its lowest idle point that many pixels above the ground.
+    In flight (moving, e.g. a bombing run) it climbs to `flight` sprite lifts:
+    `flight_lift` is the extra height in model units."""
     hovering=[]
     for binding in bindings.values():
         if not isinstance(binding,dict) or 'idle' not in binding:continue
@@ -105,6 +107,7 @@ def hover_flying_units(bindings,target,sprites,factor,minimum):
         low,_,_=idle_extent(binding,target)
         binding['offset_z']=sprite['lift']*factor/(Z_PIXELS*binding['scale'])-low
         binding['hover_policy']='native_sprite_lift';hovering.append(binding['key0'])
+        if flight and flight>factor:binding['flight_lift']=round(sprite['lift']*(flight-factor)/(Z_PIXELS*binding['scale']),5)
     return hovering
 def fit_sizes(bindings,target,sprites,factor):
     """Match each idle silhouette to its native sprite's area. Units without a
@@ -269,7 +272,14 @@ def build_pack(target=None, source=None, quality_path=None):
         sprites=read(ROOT/sizing['sprites'])['units']
         fitted=fit_sizes(bindings,target,sprites,float(sizing.get('factor',1)))
     hover=quality.get('hover');hovering=None
-    if hover:hovering=hover_flying_units(bindings,target,sprites or read(ROOT/hover['sprites'])['units'],float(hover['factor']),float(hover['minimum']))
+    if hover:hovering=hover_flying_units(bindings,target,sprites or read(ROOT/hover['sprites'])['units'],float(hover['factor']),float(hover['minimum']),
+        float(hover['flight']) if 'flight' in hover else None)
+    turning=quality.get('turning')
+    if turning:
+        # Large hulls turn slower than the shared facing ease (per domain).
+        for binding in bindings.values():
+            if isinstance(binding,dict) and domains.get(binding.get('key0')) in turning:
+                binding['turn_scale']=float(turning[domains[binding['key0']]])
     marked=None
     if marks:
         # Hulls and aircraft carry small civ marks instead of their broad authored tint.
@@ -289,6 +299,23 @@ def build_pack(target=None, source=None, quality_path=None):
         sha(ROOT/'Renderer/tools/asset_compiler/unit_owner_coverage.py')
         painted=coverage.paint_garments(bindings,target,coverage.components_by_binding(manifest,bindings),
             float(garments['minimum']),float(garments['garment_share']),float(garments['target']),float(garments['strength']))
+    combat=quality.get('combat');armed=None
+    if combat:
+        # Combat effects: generic releases, munition, bearing and native sync,
+        # resolved from importer evidence (source names never reach the pack).
+        from Renderer.tools.asset_compiler import unit_combat_bindings as resolver,unit_owner_coverage as coverage
+        sha(ROOT/'Renderer/tools/asset_compiler/unit_combat_bindings.py')
+        timing=read(ROOT/combat['timing'])['units'];mapping=read(ROOT/combat['map'])
+        civ3=read(ROOT/combat['civ3_timing'])['units']
+        roles={unit['civilopedia_entry'].upper():unit for unit in read(ROOT/combat['biq'])['unit_types']}
+        components=coverage.components_by_binding(manifest,bindings);armed={}
+        for key,binding in bindings.items():
+            if not isinstance(binding,dict) or 'attack' not in binding or key not in components:continue
+            native=binding['key0'];evidence_=timing.get(native)
+            # No native 2D effect remains: without evidence the Civ III role picks the munition.
+            resolved=resolver.resolve(evidence_,mapping,components[key]['attack'],binding['attack'],
+                lambda path:payload(target,path).read_bytes()) if evidence_ else None
+            armed[native]=resolver.publish(binding,resolved,civ3.get(native),roles.get(native.upper()))
     for name,value in (quality.get('look') or {}).items():
         if name not in ('gain','saturation','owner') or not 0<=float(value)<=2:raise ValueError('unit look values are gain, saturation, owner in [0,2]')
         bindings['look_'+name]=float(value)
@@ -297,7 +324,7 @@ def build_pack(target=None, source=None, quality_path=None):
     evidence={'status':'pass','source_manifest_sha256':sha(source/'manifest.json'),'bindings_sha256':digest(target/'bindings.json'),
       'unit_count':len(manifest['units']),'native_keys':sum(v['key_count'] for v in bindings.values() if isinstance(v,dict)),
       'address_mode_parts':modes,'sizing':{'native_sprite':fitted[0],'shape_neighbors':fitted[1]} if fitted else None,'owner_garments':painted,'grounded':grounded,
-      'waterline':floated,'hover':hovering,'owner_marks':marked,'normal_payloads':len(updates),'unchanged_palette_frames':poses,'source_sha256':pins,
+      'waterline':floated,'hover':hovering,'owner_marks':marked,'combat':armed,'normal_payloads':len(updates),'unchanged_palette_frames':poses,'source_sha256':pins,
       'settings':{'msaa':4,'anisotropy':16,'mip_bias':0,'render_scale':'pack selected 1 or 4'},
       'limits':['Original generic assets preserve their authored normals; imported components use fingerprinted source octahedral normals.',
                 'Native environment, team colors, projection and working self-shadow visibility adapt the selected Lab material response; the isolated witness LUT is not applied to the native sprite.']}

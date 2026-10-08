@@ -165,8 +165,9 @@ def shader_root(name: str) -> str:
     return "..\\..\\" + renderer.relative(OUT / name).replace("/", "\\")
 
 
-STATES = {"dormant": {}, "smoldering": {"C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO": "1"},
-          "erupting": {"C3X_RENDERER_PREVIEW_ERUPTING_VOLCANO": "1"}}
+# Active states pin the effect clock so plume frames are repeatable.
+STATES = {"dormant": {}, "smoldering": {"C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO": "1", "C3X_LAB_EFFECT_TIME": "1.7"},
+          "erupting": {"C3X_RENDERER_PREVIEW_ERUPTING_VOLCANO": "1", "C3X_LAB_EFFECT_TIME": "1.7"}}
 
 
 def render(label: str, pinned: Path | None = None, views=None, hour: int = 12, root_name: str = "",

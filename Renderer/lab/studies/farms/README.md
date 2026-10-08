@@ -133,6 +133,17 @@ unchanged; production builds with
   `*~NAME.dds`. Production rebuilds overwrite the untagged names, so swap
   them only at stage time.
 
+Slopes and props (promoted 2026-10-07, staged 18:27; 1498 AD capture
+`20261007-183157-slopes`):
+- `farm_slope_clearance` (object_compiler.h), applied in
+  object_preparation.h's farm relief, ends farm clearance where a mountain
+  lifts the rendered ground (rise 1-10 source pixels) or, for a farm not on a
+  hill, where a neighbouring hill's footprint support reaches .15. Fields,
+  ground and props stop at the slope's foot. The `farms-terrain` case has a
+  mountain ridge and a hill beside the plains block.
+- The plots' wider fade (relief x.4) applies to plots only (region != 0).
+  Applied to props too, it dropped about 70% of trees and farmhouses.
+
 Derived textures are named by option (`patchwork_green.dds`,
 `patchwork_ripe~green.dds`, `ground.dds`, `ditch.dds`); production uses
 these names, so a Lab experiment that changes their parameters must write

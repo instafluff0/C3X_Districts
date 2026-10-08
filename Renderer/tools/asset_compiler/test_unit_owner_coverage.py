@@ -240,15 +240,15 @@ class OwnerCoverageTests(unittest.TestCase):
         self.assertGreater(abs(axis[0]), .99)
 
     def test_idle_motion_marks_a_rotor_not_a_banking_body(self):
-        body = [(x, y, 0) for x in (-1, 1) for y in (-.2, .2)]
+        body = [(x, y, z) for x in (-1, -.3, .3, 1) for y in (-.2, .2) for z in (0, .2)]
         rotor = [(x, y, .5) for x in (-.8, .8) for y in (-.05, .05)]
-        triangles = [0, 1, 3, 0, 3, 2, 4, 5, 7, 4, 7, 6]
-        joints = [0] * 4 + [1] * 4
+        triangles = [0, 1, 3, 0, 3, 2, 16, 17, 19, 16, 19, 18]
+        joints = [0] * 16 + [1] * 4
         spinning = [(np.eye(4), np.eye(4))] + [(np.eye(4), turn(30 * k)) for k in range(1, 4)]
         mesh(self.pack / "clips/heli.bin", body + rotor, triangles, joints, spinning)
         binding = {"idle": {"part_count": 1, "part0": {"mesh": "clips/heli.bin"}}}
         moving = coverage.idle_motion(self.pack, binding, [0])[0]
-        self.assertEqual(list(moving), [False] * 4 + [True] * 4)
+        self.assertEqual(list(moving), [False] * 16 + [True] * 4)
         banking = [(turn(10 * k), turn(10 * k)) for k in range(4)]
         mesh(self.pack / "clips/heli.bin", body + rotor, triangles, joints, banking)
         self.assertFalse(coverage.idle_motion(self.pack, binding, [0])[0].any())
@@ -268,11 +268,12 @@ class OwnerCoverageTests(unittest.TestCase):
         self.assertEqual(report["PRTO_Ship"]["style"], "hull")
         hull_part, mast_part, sail_part = (action[f"part{i}"] for i in range(3))
         rows = 1 - coverage.dds_alpha(self.pack / hull_part["texture"]).mean(1)
-        self.assertLess(rows[0], .05)               # not the deck edge
-        self.assertGreater(rows.max(), .5)          # a band along the side
+        self.assertGreater(rows[:16].max(), .5)     # a band on the upper hull (V=0 is the deck edge)
+        self.assertLess(rows[-6:].max(), .05)       # clear of the waterline
+        self.assertTrue(2 < (rows > .5).sum() < 24)  # not the whole side
         mast = 1 - coverage.dds_alpha(self.pack / mast_part["texture"]).mean(1)
         self.assertGreater(mast[:3].mean(), .3)     # the mast's top (texture V=0)
-        self.assertLess(mast[8:].mean(), .02)       # not its lower length
+        self.assertLess(mast[6:28].max(), .02)      # nothing between the hull band and the masthead
         # The sail sits below the accent floor: no mark, and no broad tint left.
         self.assertEqual((sail_part["texture"], sail_part["owner_mask"]), ("textures/sail.dds", 0))
 

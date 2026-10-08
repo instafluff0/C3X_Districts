@@ -1,0 +1,8506 @@
+{
+ "method": "INI ATTACK1/VICTORY/DEATH: FLC frames per direction x header frame delay; AMB note-on cues with sample peak and onset (20 ms loudness reaches half its maximum); sync_s = loudest cue's onset (earliest on a tie)",
+ "schema": 1,
+ "units": {
+  "PRTO_AEGIS_Cruiser": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.3194,
+      "peak": 0.304,
+      "samples": [
+       "AegisCruiserAttackMetal.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1142,
+      "peak": 0.049,
+      "samples": [
+       "AegisCruiserAttackWater.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0996,
+      "peak": 0.035,
+      "samples": [
+       "AegisCruiserAttackTurret1.wav"
+      ],
+      "t": 0.0729
+     },
+     {
+      "onset_s": 0.5126,
+      "peak": 0.742,
+      "samples": [
+       "AegisCruiserAttackExplo2.wav"
+      ],
+      "t": 0.4562
+     },
+     {
+      "onset_s": 0.5284,
+      "peak": 0.307,
+      "samples": [
+       "AegisCruiserAttackExplo1.wav"
+      ],
+      "t": 0.4688
+     },
+     {
+      "onset_s": 0.79,
+      "peak": 0.116,
+      "samples": [
+       "AegisCruiserAttackSplash.wav"
+      ],
+      "t": 0.5667
+     },
+     {
+      "onset_s": 0.8118,
+      "peak": 0.05,
+      "samples": [
+       "AegisCruiserAttackTurret2.wav"
+      ],
+      "t": 0.7875
+     },
+     {
+      "onset_s": 1.5161,
+      "peak": 0.048,
+      "samples": [
+       "AegisCruiserAttackTurret3.wav"
+      ],
+      "t": 1.4917
+     }
+    ],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": 0.5126
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0514,
+      "peak": 0.532,
+      "samples": [
+       "AegisCruiserDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.0514
+   },
+   "art": "AEGIS Cruiser"
+  },
+  "PRTO_Abu": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.4065,
+      "peak": 0.852,
+      "samples": [
+       "KingArabDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4065
+   },
+   "art": "King Arab"
+  },
+  "PRTO_Aegis_Cruiser": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.3194,
+      "peak": 0.304,
+      "samples": [
+       "AegisCruiserAttackMetal.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1142,
+      "peak": 0.049,
+      "samples": [
+       "AegisCruiserAttackWater.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0996,
+      "peak": 0.035,
+      "samples": [
+       "AegisCruiserAttackTurret1.wav"
+      ],
+      "t": 0.0729
+     },
+     {
+      "onset_s": 0.5126,
+      "peak": 0.742,
+      "samples": [
+       "AegisCruiserAttackExplo2.wav"
+      ],
+      "t": 0.4562
+     },
+     {
+      "onset_s": 0.5284,
+      "peak": 0.307,
+      "samples": [
+       "AegisCruiserAttackExplo1.wav"
+      ],
+      "t": 0.4688
+     },
+     {
+      "onset_s": 0.79,
+      "peak": 0.116,
+      "samples": [
+       "AegisCruiserAttackSplash.wav"
+      ],
+      "t": 0.5667
+     },
+     {
+      "onset_s": 0.8118,
+      "peak": 0.05,
+      "samples": [
+       "AegisCruiserAttackTurret2.wav"
+      ],
+      "t": 0.7875
+     },
+     {
+      "onset_s": 1.5161,
+      "peak": 0.048,
+      "samples": [
+       "AegisCruiserAttackTurret3.wav"
+      ],
+      "t": 1.4917
+     }
+    ],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": 0.5126
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0514,
+      "peak": 0.532,
+      "samples": [
+       "AegisCruiserDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.0514
+   },
+   "art": "Aegis Cruiser"
+  },
+  "PRTO_Alexander": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0642,
+      "peak": 0.839,
+      "samples": [
+       "KingGreekDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0642
+   },
+   "art": "King Greek"
+  },
+  "PRTO_Ancient_Cavalry": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.069,
+      "peak": 0.387,
+      "samples": [
+       "HCavalryAttackFoot1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.179,
+      "peak": 0.222,
+      "samples": [
+       "HCavalryAttackHorseVox.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.4492,
+      "peak": 0.664,
+      "samples": [
+       "HCavalryAttackVox.wav"
+      ],
+      "t": 0.2882
+     },
+     {
+      "onset_s": 0.4049,
+      "peak": 0.523,
+      "samples": [
+       "HCavalryAttackFoot2.wav"
+      ],
+      "t": 0.3191
+     },
+     {
+      "onset_s": 0.5367,
+      "peak": 0.97,
+      "samples": [
+       "HCavalryAttackStab.wav"
+      ],
+      "t": 0.5265
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.5367
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0094,
+      "peak": 1.0,
+      "samples": [
+       "HCavalryDeath .wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.056,
+    "frame_ms": 66,
+    "frames": 16,
+    "sync_s": 0.0094
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3021,
+      "peak": 0.784,
+      "samples": [
+       "HCavalryVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.3021
+   },
+   "art": "Ancient Cavalry"
+  },
+  "PRTO_Ansar_Warrior": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1814,
+      "peak": 0.164,
+      "samples": [
+       "AnsarWarriorAttackAWood.wav"
+      ],
+      "t": 0.0583
+     },
+     {
+      "onset_s": 0.3443,
+      "peak": 0.097,
+      "samples": [
+       "AnsarWarriorAttackABridal.wav"
+      ],
+      "t": 0.2437
+     },
+     {
+      "onset_s": 0.3609,
+      "peak": 1.0,
+      "samples": [
+       "AnsarWarriorAttackAStab.wav"
+      ],
+      "t": 0.2667
+     },
+     {
+      "onset_s": 0.628,
+      "peak": 0.26,
+      "samples": [
+       "AnsarWarriorAttackAHorse.wav"
+      ],
+      "t": 0.5646
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3609
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0559,
+      "peak": 1.0,
+      "samples": [
+       "AnsarWarriorDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0559
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.2157,
+      "peak": 0.986,
+      "samples": [
+       "AnsarWarriorVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.162,
+    "frame_ms": 83,
+    "frames": 14,
+    "sync_s": 0.2157
+   },
+   "art": "ansar warrior"
+  },
+  "PRTO_Archer": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0613,
+      "peak": 0.067,
+      "samples": [
+       "ArcherAttackBreath1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0123,
+      "peak": 0.144,
+      "samples": [
+       "ArcherAttackCreek.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2258,
+      "peak": 0.536,
+      "samples": [
+       "ArcherAttackBowTwang.wav"
+      ],
+      "t": 0.1729
+     },
+     {
+      "onset_s": 0.4579,
+      "peak": 0.388,
+      "samples": [
+       "ArcherAttackWoosh.wav"
+      ],
+      "t": 0.225
+     },
+     {
+      "onset_s": 0.4631,
+      "peak": 0.065,
+      "samples": [
+       "ArcherAttackBreath2.wav"
+      ],
+      "t": 0.4188
+     },
+     {
+      "onset_s": 0.7218,
+      "peak": 0.068,
+      "samples": [
+       "ArcherAttackQuiver2.wav"
+      ],
+      "t": 0.5833
+     },
+     {
+      "onset_s": 0.8406,
+      "peak": 0.08,
+      "samples": [
+       "ArcherAttackQuiver1.wav"
+      ],
+      "t": 0.5958
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2258
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.5028,
+      "peak": 0.722,
+      "samples": [
+       "ArcherDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.5028
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1592,
+      "peak": 0.598,
+      "samples": [
+       "ArcherVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1592
+   },
+   "art": "Archer"
+  },
+  "PRTO_Army_Ancient_Times": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1502,
+      "peak": 0.386,
+      "samples": [
+       "ArmyAncientAttack.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1502
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2853,
+      "peak": 0.988,
+      "samples": [
+       "ArmyAncientDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.2853
+   },
+   "art": "Army Ancient Times"
+  },
+  "PRTO_Army_ERAS_Ancient_Times": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1502,
+      "peak": 0.386,
+      "samples": [
+       "ArmyAncientAttack.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1502
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2853,
+      "peak": 0.988,
+      "samples": [
+       "ArmyAncientDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.2853
+   },
+   "art": "Army Ancient Times"
+  },
+  "PRTO_Army_ERAS_Industrial_Age": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0914,
+      "peak": 0.471,
+      "samples": [
+       "ArmyIndustrialAttack.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0914
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2852,
+      "peak": 0.995,
+      "samples": [
+       "ArmyIndustrialDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.2852
+   },
+   "art": "Army Industrial Ages"
+  },
+  "PRTO_Army_ERAS_Middle_Ages": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1663,
+      "peak": 0.409,
+      "samples": [
+       "ArmyMiddleAttack.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1663
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2852,
+      "peak": 0.988,
+      "samples": [
+       "ArmyMiddleDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.2852
+   },
+   "art": "Army Middle Ages"
+  },
+  "PRTO_Army_ERAS_Modern_Era": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2115,
+      "peak": 0.473,
+      "samples": [
+       "ArmyModernAttack.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2115
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2851,
+      "peak": 0.996,
+      "samples": [
+       "ArmyModernDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.2851
+   },
+   "art": "Army Modern Times"
+  },
+  "PRTO_Army_Industrial_Ages": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0914,
+      "peak": 0.471,
+      "samples": [
+       "ArmyIndustrialAttack.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0914
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2852,
+      "peak": 0.995,
+      "samples": [
+       "ArmyIndustrialDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.2852
+   },
+   "art": "Army Industrial Ages"
+  },
+  "PRTO_Army_Middle_Ages": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1663,
+      "peak": 0.409,
+      "samples": [
+       "ArmyMiddleAttack.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1663
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2852,
+      "peak": 0.988,
+      "samples": [
+       "ArmyMiddleDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.2852
+   },
+   "art": "Army Middle Ages"
+  },
+  "PRTO_Army_Modern_Times": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2115,
+      "peak": 0.473,
+      "samples": [
+       "ArmyModernAttack.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2115
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2851,
+      "peak": 0.996,
+      "samples": [
+       "ArmyModernDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.2851
+   },
+   "art": "Army Modern Times"
+  },
+  "PRTO_Artillery": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1298,
+      "peak": 0.632,
+      "samples": [
+       "ArtilleryAttackMetalHit.wav"
+      ],
+      "t": 0.0167
+     },
+     {
+      "onset_s": 0.1141,
+      "peak": 0.504,
+      "samples": [
+       "ArtilleryAttackHowie.wav"
+      ],
+      "t": 0.0458
+     },
+     {
+      "onset_s": 0.1091,
+      "peak": 0.22,
+      "samples": [
+       "ArtilleryAttackTurret1.wav"
+      ],
+      "t": 0.0563
+     },
+     {
+      "onset_s": 0.1016,
+      "peak": 0.708,
+      "samples": [
+       "ArtilleryAttackExp1.wav"
+      ],
+      "t": 0.0604
+     },
+     {
+      "onset_s": 0.11,
+      "peak": 1.0,
+      "samples": [
+       "ArtilleryAttackExp2.wav"
+      ],
+      "t": 0.0729
+     },
+     {
+      "onset_s": 0.4624,
+      "peak": 0.335,
+      "samples": [
+       "ArtilleryAttackSqueak.wav"
+      ],
+      "t": 0.3063
+     },
+     {
+      "onset_s": 0.4939,
+      "peak": 0.165,
+      "samples": [
+       "ArtilleryAttackTurret2.wav"
+      ],
+      "t": 0.4646
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.11
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.041,
+      "peak": 0.997,
+      "samples": [
+       "ArtilleryDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.996,
+    "frame_ms": 83,
+    "frames": 12,
+    "sync_s": 0.041
+   },
+   "art": "Artillery"
+  },
+  "PRTO_Battleship": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.4455,
+      "peak": 0.892,
+      "samples": [
+       "IowaAtckMetal1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2927,
+      "peak": 0.894,
+      "samples": [
+       "IowaAtckMetal2.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2726,
+      "peak": 0.546,
+      "samples": [
+       "IowaAtckWater1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.264,
+      "peak": 0.956,
+      "samples": [
+       "IowaAtckCannon1.wav"
+      ],
+      "t": 0.2104
+     },
+     {
+      "onset_s": 0.3758,
+      "peak": 0.969,
+      "samples": [
+       "IowaAtckCannon2.wav"
+      ],
+      "t": 0.3229
+     },
+     {
+      "onset_s": 0.4328,
+      "peak": 0.956,
+      "samples": [
+       "IowaAtckCannon5.wav"
+      ],
+      "t": 0.3792
+     },
+     {
+      "onset_s": 0.6379,
+      "peak": 0.931,
+      "samples": [
+       "IowaAtckWater2.wav"
+      ],
+      "t": 0.4146
+     },
+     {
+      "onset_s": 0.5219,
+      "peak": 0.954,
+      "samples": [
+       "IowaAtckCannon3.wav"
+      ],
+      "t": 0.4562
+     },
+     {
+      "onset_s": 0.5446,
+      "peak": 0.969,
+      "samples": [
+       "IowaAtckCannon6.wav"
+      ],
+      "t": 0.4917
+     },
+     {
+      "onset_s": 0.6474,
+      "peak": 0.956,
+      "samples": [
+       "IowaAtckCannon4.wav"
+      ],
+      "t": 0.5938
+     },
+     {
+      "onset_s": 0.6907,
+      "peak": 0.954,
+      "samples": [
+       "IowaAtckCannon7.wav"
+      ],
+      "t": 0.625
+     },
+     {
+      "onset_s": 0.8161,
+      "peak": 0.956,
+      "samples": [
+       "IowaAtckCannon8.wav"
+      ],
+      "t": 0.7625
+     }
+    ],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": 0.3758
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0713,
+      "peak": 0.671,
+      "samples": [
+       "BattleshipDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": 0.0713
+   },
+   "art": "Battleship"
+  },
+  "PRTO_Berserk": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.3211,
+      "peak": 0.282,
+      "samples": [
+       "BerserkAttackAGrunt.wav"
+      ],
+      "t": 0.0583
+     },
+     {
+      "onset_s": 0.305,
+      "peak": 0.853,
+      "samples": [
+       "BerserkAttackAAxe.wav"
+      ],
+      "t": 0.2562
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.305
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.38,
+      "peak": 1.0,
+      "samples": [
+       "BerserkDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.38
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0776,
+      "peak": 1.0,
+      "samples": [
+       "BerserkVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0776
+   },
+   "art": "Berserk"
+  },
+  "PRTO_Bismarck": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0647,
+      "peak": 0.998,
+      "samples": [
+       "KingGermanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0647
+   },
+   "art": "King German"
+  },
+  "PRTO_Bomber": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0282,
+      "peak": 0.681,
+      "samples": [
+       "BomberAtckGun.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.66,
+    "frame_ms": 66,
+    "frames": 10,
+    "sync_s": 0.0282
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0202,
+      "peak": 1.0,
+      "samples": [
+       "BomberDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0202
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.6378,
+      "peak": 1.0,
+      "samples": [
+       "BomberBomb.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.6378
+   },
+   "art": "Bomber"
+  },
+  "PRTO_Bowman": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0041,
+      "peak": 0.158,
+      "samples": [
+       "BowmanAttackCreek.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1457,
+      "peak": 0.161,
+      "samples": [
+       "BowmanAttackBreath.wav"
+      ],
+      "t": 0.0813
+     },
+     {
+      "onset_s": 0.2405,
+      "peak": 0.9,
+      "samples": [
+       "BowmanAttackTwang.wav"
+      ],
+      "t": 0.2146
+     },
+     {
+      "onset_s": 0.3995,
+      "peak": 0.996,
+      "samples": [
+       "BowmanAttackWhoosh.wav"
+      ],
+      "t": 0.3458
+     },
+     {
+      "onset_s": 0.5243,
+      "peak": 0.086,
+      "samples": [
+       "BowmanAttackQuiver.wav"
+      ],
+      "t": 0.4771
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3995
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0169,
+      "peak": 0.996,
+      "samples": [
+       "BowmanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0169
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0803,
+      "peak": 0.996,
+      "samples": [
+       "BowmanVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0803
+   },
+   "art": "Bowman"
+  },
+  "PRTO_Brennus": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0236,
+      "peak": 0.87,
+      "samples": [
+       "KingCelticDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0236
+   },
+   "art": "King Celtic"
+  },
+  "PRTO_Caesar": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0644,
+      "peak": 0.993,
+      "samples": [
+       "KingRomanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0644
+   },
+   "art": "King Roman"
+  },
+  "PRTO_Cannon": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0147,
+      "peak": 0.343,
+      "samples": [
+       "CannonAttackCreek.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0358,
+      "peak": 0.958,
+      "samples": [
+       "CannonAttackBoom.wav"
+      ],
+      "t": 0.0083
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0358
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0547,
+      "peak": 0.987,
+      "samples": [
+       "CannonDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.254,
+    "frame_ms": 66,
+    "frames": 19,
+    "sync_s": 0.0547
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1766,
+      "peak": 0.876,
+      "samples": [
+       "CannonVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1766
+   },
+   "art": "Cannon"
+  },
+  "PRTO_Carrack": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1259,
+      "peak": 0.432,
+      "samples": [
+       "CarrackAttackSails.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2672,
+      "peak": 1.0,
+      "samples": [
+       "CarrackAttackCannon1.wav"
+      ],
+      "t": 0.0985
+     },
+     {
+      "onset_s": 0.5143,
+      "peak": 1.0,
+      "samples": [
+       "CarrackAttackCannon2.wav"
+      ],
+      "t": 0.3456
+     },
+     {
+      "onset_s": 0.6188,
+      "peak": 1.0,
+      "samples": [
+       "CarrackAttackWater.wav"
+      ],
+      "t": 0.3706
+     },
+     {
+      "onset_s": 0.6626,
+      "peak": 1.0,
+      "samples": [
+       "CarrackAttackCannon3.wav"
+      ],
+      "t": 0.5176
+     },
+     {
+      "onset_s": 0.9839,
+      "peak": 0.223,
+      "samples": [
+       "CarrackAttackCreak.wav"
+      ],
+      "t": 0.5176
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2672
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0981,
+      "peak": 1.0,
+      "samples": [
+       "CarrackDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.0981
+   },
+   "art": "Carrack"
+  },
+  "PRTO_Carrier": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0222,
+      "peak": 0.781,
+      "samples": [
+       "CarrierAttackGun.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0627,
+      "peak": 0.227,
+      "samples": [
+       "CarrierAttackMetal.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0552,
+      "peak": 0.176,
+      "samples": [
+       "CarrierAttackWater.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.66,
+    "frame_ms": 66,
+    "frames": 10,
+    "sync_s": 0.0222
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1136,
+      "peak": 0.652,
+      "samples": [
+       "CarrierDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": 0.1136
+   },
+   "art": "Carrier"
+  },
+  "PRTO_Catapult": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0805,
+      "peak": 0.828,
+      "samples": [
+       "CatapultAttackCatapult.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.563,
+      "peak": 0.744,
+      "samples": [
+       "CatapultAttackWhoosh.wav"
+      ],
+      "t": 0.4417
+     },
+     {
+      "onset_s": 0.9854,
+      "peak": 0.277,
+      "samples": [
+       "CatapultAttackGrunt.wav"
+      ],
+      "t": 0.9104
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.0805
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0455,
+      "peak": 1.0,
+      "samples": [
+       "CatapultDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.254,
+    "frame_ms": 66,
+    "frames": 19,
+    "sync_s": 0.0455
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1084,
+      "peak": 0.664,
+      "samples": [
+       "CatapultVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1084
+   },
+   "art": "Catapult"
+  },
+  "PRTO_Catherine": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0293,
+      "peak": 0.826,
+      "samples": [
+       "KingRussianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0293
+   },
+   "art": "King Russian"
+  },
+  "PRTO_Cavalry": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2649,
+      "peak": 0.115,
+      "samples": [
+       "CavalryAttackBridal.wav"
+      ],
+      "t": 0.1542
+     },
+     {
+      "onset_s": 0.2443,
+      "peak": 0.72,
+      "samples": [
+       "CavalryAttackRifle.wav"
+      ],
+      "t": 0.1958
+     },
+     {
+      "onset_s": 0.3517,
+      "peak": 0.729,
+      "samples": [
+       "CavalryAttackHorseUp.wav"
+      ],
+      "t": 0.3
+     },
+     {
+      "onset_s": 0.4726,
+      "peak": 0.344,
+      "samples": [
+       "CavalryAttackWhinny.wav"
+      ],
+      "t": 0.4292
+     },
+     {
+      "onset_s": 0.8094,
+      "peak": 0.729,
+      "samples": [
+       "CavalryAttackHorseDown.wav"
+      ],
+      "t": 0.7396
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3517
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0134,
+      "peak": 0.967,
+      "samples": [
+       "CavalryDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0134
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0595,
+      "peak": 0.826,
+      "samples": [
+       "CavalryVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0595
+   },
+   "art": "Cavalry"
+  },
+  "PRTO_Chariot": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0859,
+      "peak": 0.07,
+      "samples": [
+       "CharAtckHorseMove1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2562,
+      "peak": null,
+      "samples": [],
+      "t": 0.2562
+     },
+     {
+      "onset_s": 0.6886,
+      "peak": 0.121,
+      "samples": [
+       "CharAtckWhinny.wav"
+      ],
+      "t": 0.5146
+     },
+     {
+      "onset_s": 0.6602,
+      "peak": 0.914,
+      "samples": [
+       "CharAtckPunch.wav"
+      ],
+      "t": 0.6375
+     },
+     {
+      "onset_s": 0.6567,
+      "peak": 0.919,
+      "samples": [
+       "CharAtckStab.wav"
+      ],
+      "t": 0.6479
+     },
+     {
+      "onset_s": 0.7221,
+      "peak": 0.581,
+      "samples": [
+       "CharAtckGrunt.wav"
+      ],
+      "t": 0.6521
+     },
+     {
+      "onset_s": 0.6613,
+      "peak": 0.758,
+      "samples": [
+       "CharAtckMetal.wav"
+      ],
+      "t": 0.6542
+     },
+     {
+      "onset_s": 1.1336,
+      "peak": 0.171,
+      "samples": [
+       "CharAtckSnort.wav"
+      ],
+      "t": 1.0479
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.6567
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0495,
+      "peak": 0.666,
+      "samples": [
+       "ChariotDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0495
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3528,
+      "peak": 0.505,
+      "samples": [
+       "ChariotVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3528
+   },
+   "art": "chariot"
+  },
+  "PRTO_Charles_V": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0992,
+      "peak": 0.929,
+      "samples": [
+       "KingAustriaDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0992
+   },
+   "art": "King Austria"
+  },
+  "PRTO_Chasquis_Scout": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.4708,
+      "peak": 0.018,
+      "samples": [
+       "IncanScoutAttackClothes.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2217,
+      "peak": 0.403,
+      "samples": [
+       "IncanScoutAttackVox.wav"
+      ],
+      "t": 0.0897
+     },
+     {
+      "onset_s": 0.3688,
+      "peak": 1.0,
+      "samples": [
+       "IncanScoutAttackChop.wav"
+      ],
+      "t": 0.2206
+     },
+     {
+      "onset_s": 0.274,
+      "peak": 0.395,
+      "samples": [
+       "IncanScoutAttackFoot.wav"
+      ],
+      "t": 0.2706
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3688
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0681,
+      "peak": 0.957,
+      "samples": [
+       "IncanScoutDeath .wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0681
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3796,
+      "peak": 0.621,
+      "samples": [
+       "IncanScoutVictory .wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3796
+   },
+   "art": "Chasquis Scout"
+  },
+  "PRTO_Cleopatra": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0267,
+      "peak": 0.978,
+      "samples": [
+       "KingEgyptianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0267
+   },
+   "art": "King Egyptian"
+  },
+  "PRTO_Conquistador": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.5005,
+      "peak": 0.351,
+      "samples": [
+       "ConquistadorAttackAGrunt.wav"
+      ],
+      "t": 0.2146
+     },
+     {
+      "onset_s": 0.3131,
+      "peak": 0.204,
+      "samples": [
+       "ConquistadorAttackAMove.wav"
+      ],
+      "t": 0.2437
+     },
+     {
+      "onset_s": 0.3566,
+      "peak": 0.446,
+      "samples": [
+       "ConquistadorAttackADog.wav"
+      ],
+      "t": 0.2854
+     },
+     {
+      "onset_s": 0.569,
+      "peak": 0.989,
+      "samples": [
+       "ConquistadorAttackAStab.wav"
+      ],
+      "t": 0.4604
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.569
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.034,
+      "peak": 0.965,
+      "samples": [
+       "ConquistadorDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.034
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.2359,
+      "peak": 1.0,
+      "samples": [
+       "ConquistadorVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.2359
+   },
+   "art": "Conquistador"
+  },
+  "PRTO_Cossack": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1724,
+      "peak": 1.0,
+      "samples": [
+       "RusCosAtckRifle.wav"
+      ],
+      "t": 0.1521
+     },
+     {
+      "onset_s": 0.2371,
+      "peak": 0.461,
+      "samples": [
+       "RusCosAtckHooves1.wav"
+      ],
+      "t": 0.1854
+     },
+     {
+      "onset_s": 0.2959,
+      "peak": 0.079,
+      "samples": [
+       "RusCosAtckBridal1.wav"
+      ],
+      "t": 0.1896
+     },
+     {
+      "onset_s": 0.7682,
+      "peak": 0.357,
+      "samples": [
+       "RusCosAtckWhinny.wav"
+      ],
+      "t": 0.6896
+     },
+     {
+      "onset_s": 0.799,
+      "peak": 0.556,
+      "samples": [
+       "RusCosAtckHooves2.wav"
+      ],
+      "t": 0.7292
+     },
+     {
+      "onset_s": 0.8461,
+      "peak": 0.092,
+      "samples": [
+       "RusCosAtckBridal2.wav"
+      ],
+      "t": 0.7354
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1724
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0172,
+      "peak": 0.999,
+      "samples": [
+       "CossackDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0172
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.09,
+      "peak": 0.699,
+      "samples": [
+       "CossackVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.09
+   },
+   "art": "Cossack"
+  },
+  "PRTO_Cruise_Missile": {
+   "ATTACK1": {
+    "cues": [],
+    "duration_s": 0.2,
+    "frame_ms": 50,
+    "frames": 4,
+    "sync_s": null
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0233,
+      "peak": 1.0,
+      "samples": [
+       "CruiseMissileDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.45,
+    "frame_ms": 50,
+    "frames": 29,
+    "sync_s": 0.0233
+   },
+   "art": "Cruise Missile"
+  },
+  "PRTO_Cruiser": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0088,
+      "peak": 0.723,
+      "samples": [
+       "HeavyCruiserAttackGun.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2926,
+      "peak": 0.149,
+      "samples": [
+       "HeavyCruiserAttackSplash.wav"
+      ],
+      "t": 0.1333
+     }
+    ],
+    "duration_s": 0.66,
+    "frame_ms": 66,
+    "frames": 10,
+    "sync_s": 0.0088
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0194,
+      "peak": 0.707,
+      "samples": [
+       "HeavyCruiserDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.122,
+    "frame_ms": 66,
+    "frames": 17,
+    "sync_s": 0.0194
+   },
+   "art": "Cruiser"
+  },
+  "PRTO_Crusader": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2929,
+      "peak": 0.015,
+      "samples": [
+       "CrusaderAttackClothes.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.4438,
+      "peak": 0.227,
+      "samples": [
+       "CrusaderAttackVox.wav"
+      ],
+      "t": 0.2735
+     },
+     {
+      "onset_s": 0.4245,
+      "peak": 0.246,
+      "samples": [
+       "CrusaderAttackHit.wav"
+      ],
+      "t": 0.3765
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4245
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0436,
+      "peak": 0.894,
+      "samples": [
+       "CrusaderDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0436
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.4876,
+      "peak": 0.55,
+      "samples": [
+       "CrusaderVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.4876
+   },
+   "art": "Crusader"
+  },
+  "PRTO_Curragh": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2989,
+      "peak": 0.358,
+      "samples": [
+       "CurraghAttackSails.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2894,
+      "peak": 1.0,
+      "samples": [
+       "CurraghAttackArrow1.wav"
+      ],
+      "t": 0.2397
+     },
+     {
+      "onset_s": 0.5008,
+      "peak": 0.997,
+      "samples": [
+       "CurraghAttackArrow2.wav"
+      ],
+      "t": 0.3941
+     },
+     {
+      "onset_s": 0.5883,
+      "peak": 0.544,
+      "samples": [
+       "CurraghAttackArrow3.wav"
+      ],
+      "t": 0.4471
+     },
+     {
+      "onset_s": 0.553,
+      "peak": 0.672,
+      "samples": [
+       "CurraghAttackArrow4.wav"
+      ],
+      "t": 0.5294
+     },
+     {
+      "onset_s": 0.7805,
+      "peak": 0.389,
+      "samples": [
+       "CurraghAttackWater.wav"
+      ],
+      "t": 0.6441
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2894
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0136,
+      "peak": 1.0,
+      "samples": [
+       "CurraghDeath .wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0136
+   },
+   "art": "Curragh"
+  },
+  "PRTO_Destroyer": {
+   "ATTACK1": {
+    "cues": [],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": null
+   },
+   "DEATH": {
+    "cues": [],
+    "duration_s": 1.8,
+    "frame_ms": 90,
+    "frames": 20,
+    "sync_s": null
+   },
+   "art": "Destroyer"
+  },
+  "PRTO_Dromon": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2194,
+      "peak": 1.0,
+      "samples": [
+       "DromonAttackExplos#1.wav"
+      ],
+      "t": 0.0809
+     },
+     {
+      "onset_s": 0.2531,
+      "peak": 1.0,
+      "samples": [
+       "DromonAttackFlames.wav"
+      ],
+      "t": 0.1265
+     },
+     {
+      "onset_s": 0.4795,
+      "peak": 1.0,
+      "samples": [
+       "DromonAttackExplos#2.wav"
+      ],
+      "t": 0.3853
+     },
+     {
+      "onset_s": 0.7313,
+      "peak": 1.0,
+      "samples": [
+       "DromonAttackExplos#3.wav"
+      ],
+      "t": 0.5926
+     },
+     {
+      "onset_s": 0.7805,
+      "peak": 0.389,
+      "samples": [
+       "DromonAttackWater.wav"
+      ],
+      "t": 0.6441
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.2194
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0526,
+      "peak": 1.0,
+      "samples": [
+       "Dromon Death .wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.0526
+   },
+   "art": "Dromon"
+  },
+  "PRTO_Elizabeth": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0283,
+      "peak": 0.774,
+      "samples": [
+       "KingEnglishDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0283
+   },
+   "art": "King English"
+  },
+  "PRTO_Enkidu_Warrior": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0,
+      "peak": 0.094,
+      "samples": [
+       "EnkiduWarriorAttackClothes.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2227,
+      "peak": 0.826,
+      "samples": [
+       "EnkiduWarriorAttackVox.wav"
+      ],
+      "t": 0.1603
+     },
+     {
+      "onset_s": 0.2431,
+      "peak": 0.497,
+      "samples": [
+       "EnkiduWarriorAttackFoot.wav"
+      ],
+      "t": 0.2397
+     },
+     {
+      "onset_s": 0.4372,
+      "peak": 0.961,
+      "samples": [
+       "EnkiduWarriorAttackStab.wav"
+      ],
+      "t": 0.4206
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4372
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1849,
+      "peak": 1.0,
+      "samples": [
+       "EnkiduWarriorDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1849
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3122,
+      "peak": 1.0,
+      "samples": [
+       "EnkiduWarriorVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3122
+   },
+   "art": "Enkidu Warrior"
+  },
+  "PRTO_Enslaved_Worker": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0371,
+      "peak": 0.028,
+      "samples": [
+       "EnslavedWorkerAttackClothes.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.4429,
+      "peak": 0.654,
+      "samples": [
+       "EnslavedWorkerAttackVox.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.3938,
+      "peak": 0.966,
+      "samples": [
+       "EnslavedWorkerAttackHit.wav"
+      ],
+      "t": 0.3
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3938
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0677,
+      "peak": 0.917,
+      "samples": [
+       "EnslavedWorkerDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0677
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1384,
+      "peak": 0.231,
+      "samples": [
+       "EnslavedWorkerVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1384
+   },
+   "art": "Enslaved Worker"
+  },
+  "PRTO_Explorer": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0519,
+      "peak": 0.117,
+      "samples": [
+       "ExplorerAttackArmour1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0844,
+      "peak": 0.274,
+      "samples": [
+       "ExplorerAttackSword1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.5407,
+      "peak": 0.135,
+      "samples": [
+       "ExplorerAttackFoot1.wav"
+      ],
+      "t": 0.5271
+     },
+     {
+      "onset_s": 0.5666,
+      "peak": 0.252,
+      "samples": [
+       "ExplorerAttackPunch.wav"
+      ],
+      "t": 0.5437
+     },
+     {
+      "onset_s": 0.5556,
+      "peak": 0.2,
+      "samples": [
+       "ExplorerAttackSword2.wav"
+      ],
+      "t": 0.55
+     },
+     {
+      "onset_s": 0.568,
+      "peak": 0.147,
+      "samples": [
+       "ExplorerAttackArmour2.wav"
+      ],
+      "t": 0.5563
+     },
+     {
+      "onset_s": 0.6284,
+      "peak": 0.07,
+      "samples": [
+       "ExplorerAttackGrunt.wav"
+      ],
+      "t": 0.5604
+     },
+     {
+      "onset_s": 0.8716,
+      "peak": 0.14,
+      "samples": [
+       "ExplorerAttackFoot2.wav"
+      ],
+      "t": 0.8562
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0844
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0285,
+      "peak": 0.74,
+      "samples": [
+       "ExplorerDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0285
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0223,
+      "peak": 0.466,
+      "samples": [
+       "ExplorerVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0223
+   },
+   "art": "Explorer"
+  },
+  "PRTO_Fighter": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0028,
+      "peak": 0.671,
+      "samples": [
+       "FighterAtck.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.62,
+    "frame_ms": 62,
+    "frames": 10,
+    "sync_s": 0.0028
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.044,
+      "peak": 0.678,
+      "samples": [
+       "FighterDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.064,
+    "frame_ms": 76,
+    "frames": 14,
+    "sync_s": 0.044
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.4532,
+      "peak": 1.0,
+      "samples": [
+       "FighterBomb.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.162,
+    "frame_ms": 83,
+    "frames": 14,
+    "sync_s": 0.4532
+   },
+   "art": "Fighter"
+  },
+  "PRTO_Flak": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1126,
+      "peak": 1.0,
+      "samples": [
+       "QuadFlakAttackGuns.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.8948,
+      "peak": 0.128,
+      "samples": [
+       "QuadFlakAttackRecoil.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0894,
+      "peak": 0.481,
+      "samples": [
+       "QuadFlakAttackVox.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1126
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.009,
+      "peak": 0.839,
+      "samples": [
+       "QuadFlakDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.009
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.226,
+      "peak": 0.203,
+      "samples": [
+       "QuadFlakVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.226
+   },
+   "art": "Flak"
+  },
+  "PRTO_Frigate": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.5293,
+      "peak": 0.249,
+      "samples": [
+       "FrigAtckCreak2.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2233,
+      "peak": 0.345,
+      "samples": [
+       "FrigAtckSplash.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1531,
+      "peak": 0.316,
+      "samples": [
+       "FrigAtckWater.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0771,
+      "peak": 0.967,
+      "samples": [
+       "FrigAtckCannon1.wav"
+      ],
+      "t": 0.0563
+     },
+     {
+      "onset_s": 0.1824,
+      "peak": 0.802,
+      "samples": [
+       "FrigAtckCannon2.wav"
+      ],
+      "t": 0.1646
+     },
+     {
+      "onset_s": 0.3096,
+      "peak": 0.824,
+      "samples": [
+       "FrigAtckCannon3.wav"
+      ],
+      "t": 0.2833
+     },
+     {
+      "onset_s": 0.4496,
+      "peak": 0.783,
+      "samples": [
+       "FrigAtckCannon4.wav"
+      ],
+      "t": 0.4292
+     },
+     {
+      "onset_s": 0.6683,
+      "peak": 0.381,
+      "samples": [
+       "FrigAtckCreak1.wav"
+      ],
+      "t": 0.65
+     }
+    ],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": 0.0771
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1134,
+      "peak": 1.0,
+      "samples": [
+       "FrigateDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": 0.1134
+   },
+   "art": "Frigate"
+  },
+  "PRTO_Galleon": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1382,
+      "peak": 0.276,
+      "samples": [
+       "GalleonAttackCreak1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.5293,
+      "peak": 0.105,
+      "samples": [
+       "GalleonAttackCreak2.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1339,
+      "peak": 0.118,
+      "samples": [
+       "GalleonAttackWater.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1992,
+      "peak": 0.676,
+      "samples": [
+       "GalleonAttackCannon1.wav"
+      ],
+      "t": 0.1625
+     },
+     {
+      "onset_s": 0.4452,
+      "peak": 0.304,
+      "samples": [
+       "GalleonAttackSplash.wav"
+      ],
+      "t": 0.225
+     },
+     {
+      "onset_s": 0.2594,
+      "peak": 0.845,
+      "samples": [
+       "GalleonAttackCannon2.wav"
+      ],
+      "t": 0.2354
+     },
+     {
+      "onset_s": 0.4596,
+      "peak": 0.845,
+      "samples": [
+       "GalleonAttackCannon3.wav"
+      ],
+      "t": 0.4229
+     },
+     {
+      "onset_s": 0.5167,
+      "peak": 0.622,
+      "samples": [
+       "GalleonAttackCannon4.wav"
+      ],
+      "t": 0.5167
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.2594
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0912,
+      "peak": 0.976,
+      "samples": [
+       "GalleonDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.0912
+   },
+   "art": "Galleon"
+  },
+  "PRTO_Galley": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.5085,
+      "peak": 0.299,
+      "samples": [
+       "GalleyAttackWater.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1104,
+      "peak": null,
+      "samples": [],
+      "t": 0.1104
+     },
+     {
+      "onset_s": 0.1354,
+      "peak": null,
+      "samples": [],
+      "t": 0.1354
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.5085
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1591,
+      "peak": 1.0,
+      "samples": [
+       "GalleyDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.1591
+   },
+   "art": "Galley"
+  },
+  "PRTO_Gallic_Swordsman": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.3444,
+      "peak": 1.0,
+      "samples": [
+       "GallicSwordmanAttackASword.wav"
+      ],
+      "t": 0.2417
+     },
+     {
+      "onset_s": 0.3726,
+      "peak": 0.267,
+      "samples": [
+       "GallicSwordmanAttackAGrunt.wav"
+      ],
+      "t": 0.2604
+     },
+     {
+      "onset_s": 0.3573,
+      "peak": 0.281,
+      "samples": [
+       "GallicSwordmanAttackAFeet.wav"
+      ],
+      "t": 0.3563
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.3444
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0201,
+      "peak": 1.0,
+      "samples": [
+       "GallicSwordmanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0201
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.6526,
+      "peak": 0.984,
+      "samples": [
+       "GallicSwordmanVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": 0.6526
+   },
+   "art": "gallic swordsman"
+  },
+  "PRTO_Gandhi": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0538,
+      "peak": 0.893,
+      "samples": [
+       "KingIndianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0538
+   },
+   "art": "King Indian"
+  },
+  "PRTO_Gilgamesh": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.3999,
+      "peak": 1.0,
+      "samples": [
+       "KingSumeriaDeath1.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.328,
+    "frame_ms": 83,
+    "frames": 16,
+    "sync_s": 0.3999
+   },
+   "art": "King Sumeria"
+  },
+  "PRTO_Guerilla": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0346,
+      "peak": 1.0,
+      "samples": [
+       "GuerillaAttackAGun.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0346
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0292,
+      "peak": 0.957,
+      "samples": [
+       "GuerillaDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0292
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3312,
+      "peak": 0.737,
+      "samples": [
+       "GuerillaVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3312
+   },
+   "art": "Guerilla"
+  },
+  "PRTO_Hammurabi": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0592,
+      "peak": 0.849,
+      "samples": [
+       "KingBabylonianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0592
+   },
+   "art": "King Babylonian"
+  },
+  "PRTO_Hannibal": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.4061,
+      "peak": 0.993,
+      "samples": [
+       "KingCarthaginianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4061
+   },
+   "art": "King Carthaginian"
+  },
+  "PRTO_Helicopter": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0282,
+      "peak": 0.696,
+      "samples": [
+       "HeliAtckGun.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.66,
+    "frame_ms": 66,
+    "frames": 10,
+    "sync_s": 0.0282
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0194,
+      "peak": 0.998,
+      "samples": [
+       "HelicopterDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.994,
+    "frame_ms": 71,
+    "frames": 14,
+    "sync_s": 0.0194
+   },
+   "art": "Helicopter"
+  },
+  "PRTO_Henry": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0235,
+      "peak": 0.684,
+      "samples": [
+       "KingPortugalDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0235
+   },
+   "art": "King Portugal"
+  },
+  "PRTO_Hiawatha": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0502,
+      "peak": 0.992,
+      "samples": [
+       "KingIroquoisDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0502
+   },
+   "art": "King Iroquois"
+  },
+  "PRTO_Holy_Relic": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0159,
+      "peak": 0.994,
+      "samples": [
+       "HolyRelicDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0159
+   },
+   "art": "Holy Relic"
+  },
+  "PRTO_Hoplite": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0,
+      "peak": null,
+      "samples": [],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2379,
+      "peak": 0.161,
+      "samples": [
+       "HopliteAttackAFoot1.wav"
+      ],
+      "t": 0.2125
+     },
+     {
+      "onset_s": 0.3602,
+      "peak": 0.224,
+      "samples": [
+       "HopliteAttackASwoosh.wav"
+      ],
+      "t": 0.3
+     },
+     {
+      "onset_s": 0.3653,
+      "peak": 0.399,
+      "samples": [
+       "HopliteAttackAPike.wav"
+      ],
+      "t": 0.3271
+     },
+     {
+      "onset_s": 0.3681,
+      "peak": 0.29,
+      "samples": [
+       "HopliteAttackAStab.wav"
+      ],
+      "t": 0.3438
+     },
+     {
+      "onset_s": 0.4067,
+      "peak": 0.187,
+      "samples": [
+       "HopliteAttackAVox.wav"
+      ],
+      "t": 0.3542
+     },
+     {
+      "onset_s": 0.8725,
+      "peak": 0.151,
+      "samples": [
+       "HopliteAttackAFoot2.wav"
+      ],
+      "t": 0.7771
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3653
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.6746,
+      "peak": 1.0,
+      "samples": [
+       "HopliteDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.6746
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.2029,
+      "peak": 1.0,
+      "samples": [
+       "HopliteVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2029
+   },
+   "art": "Hoplite"
+  },
+  "PRTO_Horseman": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.094,
+      "peak": 0.154,
+      "samples": [
+       "HorsemanAttackAHorse.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.4121,
+      "peak": 0.901,
+      "samples": [
+       "HorsemanAttackAPike1.wav"
+      ],
+      "t": 0.3958
+     },
+     {
+      "onset_s": 0.4457,
+      "peak": 0.709,
+      "samples": [
+       "HorsemanAttackAGrunt1.wav"
+      ],
+      "t": 0.4167
+     },
+     {
+      "onset_s": 0.8458,
+      "peak": 0.422,
+      "samples": [
+       "HorsemanAttackAGrunt2.wav"
+      ],
+      "t": 0.8146
+     },
+     {
+      "onset_s": 0.8275,
+      "peak": 0.831,
+      "samples": [
+       "HorsemanAttackAPike2.wav"
+      ],
+      "t": 0.8187
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.4121
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0535,
+      "peak": 1.0,
+      "samples": [
+       "HorsemanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0535
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0738,
+      "peak": 0.996,
+      "samples": [
+       "HorsemanVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0738
+   },
+   "art": "Horseman"
+  },
+  "PRTO_Hussar": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0981,
+      "peak": 0.084,
+      "samples": [
+       "HussarAttackHorse.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2681,
+      "peak": 0.48,
+      "samples": [
+       "HussarAttackVox.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.195,
+      "peak": 0.128,
+      "samples": [
+       "HussarAttackBridle.wav"
+      ],
+      "t": 0.0809
+     },
+     {
+      "onset_s": 0.3229,
+      "peak": 0.768,
+      "samples": [
+       "HussarAttackSwoosh.wav"
+      ],
+      "t": 0.2074
+     },
+     {
+      "onset_s": 0.3785,
+      "peak": 0.912,
+      "samples": [
+       "HussarAttackHit.wav"
+      ],
+      "t": 0.3338
+     },
+     {
+      "onset_s": 0.4397,
+      "peak": 1.0,
+      "samples": [
+       "HussarAttackFall.wav"
+      ],
+      "t": 0.4397
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4397
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0836,
+      "peak": 0.907,
+      "samples": [
+       "HussarDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0836
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0,
+      "peak": null,
+      "samples": [
+       "HussarVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": null
+   },
+   "art": "Hussar"
+  },
+  "PRTO_Hwacha": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0904,
+      "peak": 0.401,
+      "samples": [
+       "HwachaAttackACart.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.062,
+      "peak": 0.493,
+      "samples": [
+       "HwachaAttackAPuff.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0704,
+      "peak": 0.476,
+      "samples": [
+       "HwachaAttackAVox.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1647,
+      "peak": 0.841,
+      "samples": [
+       "HwachaAttackARocket.wav"
+      ],
+      "t": 0.025
+     },
+     {
+      "onset_s": 0.1601,
+      "peak": 0.486,
+      "samples": [
+       "HwachaAttackAFoot.wav"
+      ],
+      "t": 0.0958
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1647
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0502,
+      "peak": 1.0,
+      "samples": [
+       "HwachaDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0502
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1507,
+      "peak": 0.994,
+      "samples": [
+       "HwachaVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1507
+   },
+   "art": "Hwacha"
+  },
+  "PRTO_Immortals": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1228,
+      "peak": 0.204,
+      "samples": [
+       "ImmortalAttackAFoot1.wav"
+      ],
+      "t": 0.0979
+     },
+     {
+      "onset_s": 0.3404,
+      "peak": 0.076,
+      "samples": [
+       "ImmortalAttackAMove.wav"
+      ],
+      "t": 0.2146
+     },
+     {
+      "onset_s": 0.3986,
+      "peak": 0.67,
+      "samples": [
+       "ImmortalAttackAGrunt.wav"
+      ],
+      "t": 0.35
+     },
+     {
+      "onset_s": 0.4208,
+      "peak": 0.34,
+      "samples": [
+       "ImmortalAttackAWhoosh.wav"
+      ],
+      "t": 0.3542
+     },
+     {
+      "onset_s": 0.4333,
+      "peak": 1.0,
+      "samples": [
+       "ImmortalAttackAStab.wav"
+      ],
+      "t": 0.4
+     },
+     {
+      "onset_s": 0.4352,
+      "peak": 0.403,
+      "samples": [
+       "ImmortalAttackASword.wav"
+      ],
+      "t": 0.4167
+     },
+     {
+      "onset_s": 0.6848,
+      "peak": 0.176,
+      "samples": [
+       "ImmortalAttackAFoot2.wav"
+      ],
+      "t": 0.6583
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4333
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0193,
+      "peak": 0.984,
+      "samples": [
+       "ImmortalDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0193
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0719,
+      "peak": 0.674,
+      "samples": [
+       "ImmortalVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0719
+   },
+   "art": "Immortals"
+  },
+  "PRTO_Impi": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1279,
+      "peak": 0.229,
+      "samples": [
+       "ZuluAtckAMove.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1585,
+      "peak": 0.175,
+      "samples": [
+       "ZuluAtckAFoot.wav"
+      ],
+      "t": 0.1104
+     },
+     {
+      "onset_s": 0.4636,
+      "peak": 0.541,
+      "samples": [
+       "ZuluAtckAGrunt.wav"
+      ],
+      "t": 0.2146
+     },
+     {
+      "onset_s": 0.4894,
+      "peak": 1.0,
+      "samples": [
+       "ZuluAtckAStab.wav"
+      ],
+      "t": 0.3771
+     },
+     {
+      "onset_s": 0.4954,
+      "peak": 1.0,
+      "samples": [
+       "ZuluAtckAPunch.wav"
+      ],
+      "t": 0.4354
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.4894
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0166,
+      "peak": 0.85,
+      "samples": [
+       "ImpiDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0166
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1641,
+      "peak": 0.738,
+      "samples": [
+       "ImpiVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1641
+   },
+   "art": "Impi"
+  },
+  "PRTO_Inquisitor": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0402,
+      "peak": 0.033,
+      "samples": [
+       "InquisitorAttackClothes.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2543,
+      "peak": 0.224,
+      "samples": [
+       "InquisitorAttackVox.wav"
+      ],
+      "t": 0.0779
+     },
+     {
+      "onset_s": 0.3399,
+      "peak": 0.265,
+      "samples": [
+       "InquisitorAttackStab.wav"
+      ],
+      "t": 0.2441
+     },
+     {
+      "onset_s": 0.3169,
+      "peak": 0.999,
+      "samples": [
+       "InquisitorAttackFoot.wav"
+      ],
+      "t": 0.3015
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3169
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2535,
+      "peak": 0.959,
+      "samples": [
+       "InquisitorDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2535
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.4005,
+      "peak": 0.229,
+      "samples": [
+       "InquisitorVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.4005
+   },
+   "art": "Inquisitor"
+  },
+  "PRTO_Ironclad": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1845,
+      "peak": 0.703,
+      "samples": [
+       "IroncladAttackMetal.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0091,
+      "peak": 0.146,
+      "samples": [
+       "IroncladAttackWater.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.3119,
+      "peak": 0.394,
+      "samples": [
+       "IroncladAttackSplash.wav"
+      ],
+      "t": 0.125
+     },
+     {
+      "onset_s": 0.1921,
+      "peak": 0.894,
+      "samples": [
+       "IroncladAttackExplo1.wav"
+      ],
+      "t": 0.1437
+     },
+     {
+      "onset_s": 0.5284,
+      "peak": 0.757,
+      "samples": [
+       "IroncladAttackExplo2.wav"
+      ],
+      "t": 0.4625
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.1921
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2951,
+      "peak": 1.0,
+      "samples": [
+       "IroncladDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.2951
+   },
+   "art": "Ironclad"
+  },
+  "PRTO_Isabella": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0303,
+      "peak": 0.99,
+      "samples": [
+       "KingSpanishDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0303
+   },
+   "art": "King Spanish"
+  },
+  "PRTO_Jaguar_Warrior": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.6633,
+      "peak": 0.984,
+      "samples": [
+       "JaguarWarriorAttackASlash.wav"
+      ],
+      "t": 0.4813
+     },
+     {
+      "onset_s": 0.6368,
+      "peak": 0.678,
+      "samples": [
+       "JaguarWarriorAttackAGrunt.wav"
+      ],
+      "t": 0.4958
+     },
+     {
+      "onset_s": 0.5693,
+      "peak": 0.195,
+      "samples": [
+       "JaguarWarriorAttackAFoot1.wav"
+      ],
+      "t": 0.5354
+     },
+     {
+      "onset_s": 1.1608,
+      "peak": 0.184,
+      "samples": [
+       "JaguarwarriorAttackAFoot2.wav"
+      ],
+      "t": 1.1083
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.6633
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0483,
+      "peak": 1.0,
+      "samples": [
+       "JaguarWarriorDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0483
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1274,
+      "peak": 0.99,
+      "samples": [
+       "JaguarWarriorVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1274
+   },
+   "art": "Jaguar Warrior"
+  },
+  "PRTO_Javelin_Thrower": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.3276,
+      "peak": 0.067,
+      "samples": [
+       "JavelinThrowerAttackSpears.wav"
+      ],
+      "t": 0.1691
+     },
+     {
+      "onset_s": 0.5171,
+      "peak": 0.662,
+      "samples": [
+       "JavelinThrowerAttackVox.wav"
+      ],
+      "t": 0.3912
+     },
+     {
+      "onset_s": 0.7394,
+      "peak": 1.0,
+      "samples": [
+       "JavelinThrowerAttackSwoosh.wav"
+      ],
+      "t": 0.4926
+     },
+     {
+      "onset_s": 0.8728,
+      "peak": 1.0,
+      "samples": [
+       "JavelinThrowerAttackImpact.wav"
+      ],
+      "t": 0.7926
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.7394
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2119,
+      "peak": 1.0,
+      "samples": [
+       "JavelinThrowerDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.2119
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1767,
+      "peak": 0.746,
+      "samples": [
+       "JavelinThrowerVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1767
+   },
+   "art": "Javelin Thrower"
+  },
+  "PRTO_Jet_Fighter": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.6055,
+      "peak": 0.559,
+      "samples": [
+       "JetFighterAttackMissile.wav"
+      ],
+      "t": 0.1167
+     }
+    ],
+    "duration_s": 0.62,
+    "frame_ms": 62,
+    "frames": 10,
+    "sync_s": 0.6055
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0163,
+      "peak": 0.827,
+      "samples": [
+       "JetFighterDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.35,
+    "frame_ms": 90,
+    "frames": 15,
+    "sync_s": 0.0163
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3734,
+      "peak": 0.986,
+      "samples": [
+       "JetFighterBomb.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.26,
+    "frame_ms": 90,
+    "frames": 14,
+    "sync_s": 0.3734
+   },
+   "art": "Jet Fighter"
+  },
+  "PRTO_Joan": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0245,
+      "peak": 0.913,
+      "samples": [
+       "KingFrenchDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0245
+   },
+   "art": "King French"
+  },
+  "PRTO_Keshik": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2721,
+      "peak": 0.141,
+      "samples": [
+       "KeshikAttackAHorse.wav"
+      ],
+      "t": 0.0667
+     },
+     {
+      "onset_s": 0.3342,
+      "peak": 0.265,
+      "samples": [
+       "keshikAttackAMove.wav"
+      ],
+      "t": 0.1833
+     },
+     {
+      "onset_s": 0.4293,
+      "peak": 0.065,
+      "samples": [
+       "KeshikAttackABreath.wav"
+      ],
+      "t": 0.3688
+     },
+     {
+      "onset_s": 0.8607,
+      "peak": 0.885,
+      "samples": [
+       "KeshikAttackABow.wav"
+      ],
+      "t": 0.5896
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.8607
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0899,
+      "peak": 1.0,
+      "samples": [
+       "KeshikDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0899
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.2384,
+      "peak": 0.993,
+      "samples": [
+       "KeshikVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2384
+   },
+   "art": "Keshik"
+  },
+  "PRTO_King_American": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0373,
+      "peak": 0.971,
+      "samples": [
+       "KingAmericanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0373
+   },
+   "art": "King American"
+  },
+  "PRTO_King_Arab": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.4065,
+      "peak": 0.852,
+      "samples": [
+       "KingArabDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4065
+   },
+   "art": "King Arab"
+  },
+  "PRTO_King_Austria": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0992,
+      "peak": 0.929,
+      "samples": [
+       "KingAustriaDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0992
+   },
+   "art": "King Austria"
+  },
+  "PRTO_King_Aztec": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0579,
+      "peak": 0.998,
+      "samples": [
+       "KingAztecDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0579
+   },
+   "art": "King Aztec"
+  },
+  "PRTO_King_Babylonian": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0592,
+      "peak": 0.849,
+      "samples": [
+       "KingBabylonianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0592
+   },
+   "art": "King Babylonian"
+  },
+  "PRTO_King_Byzantines": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0356,
+      "peak": 0.693,
+      "samples": [
+       "KingByzantineDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0356
+   },
+   "art": "King Byzantines"
+  },
+  "PRTO_King_Carthaginian": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.4061,
+      "peak": 0.993,
+      "samples": [
+       "KingCarthaginianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4061
+   },
+   "art": "King Carthaginian"
+  },
+  "PRTO_King_Celtic": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0236,
+      "peak": 0.87,
+      "samples": [
+       "KingCelticDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0236
+   },
+   "art": "King Celtic"
+  },
+  "PRTO_King_Chinese": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0418,
+      "peak": 0.899,
+      "samples": [
+       "KingChineseDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0418
+   },
+   "art": "King Chinese"
+  },
+  "PRTO_King_Egyptian": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0267,
+      "peak": 0.978,
+      "samples": [
+       "KingEgyptianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0267
+   },
+   "art": "King Egyptian"
+  },
+  "PRTO_King_English": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0283,
+      "peak": 0.774,
+      "samples": [
+       "KingEnglishDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0283
+   },
+   "art": "King English"
+  },
+  "PRTO_King_French": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0245,
+      "peak": 0.913,
+      "samples": [
+       "KingFrenchDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0245
+   },
+   "art": "King French"
+  },
+  "PRTO_King_German": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0647,
+      "peak": 0.998,
+      "samples": [
+       "KingGermanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0647
+   },
+   "art": "King German"
+  },
+  "PRTO_King_Greek": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0642,
+      "peak": 0.839,
+      "samples": [
+       "KingGreekDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0642
+   },
+   "art": "King Greek"
+  },
+  "PRTO_King_Hatti": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0151,
+      "peak": 0.999,
+      "samples": [
+       "King Hatti Death .wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0151
+   },
+   "art": "King Hatti"
+  },
+  "PRTO_King_Incan": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0455,
+      "peak": 1.0,
+      "samples": [
+       "KingIncanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0455
+   },
+   "art": "King Incan"
+  },
+  "PRTO_King_Indian": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0538,
+      "peak": 0.893,
+      "samples": [
+       "KingIndianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0538
+   },
+   "art": "King Indian"
+  },
+  "PRTO_King_Iroquois": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0502,
+      "peak": 0.992,
+      "samples": [
+       "KingIroquoisDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0502
+   },
+   "art": "King Iroquois"
+  },
+  "PRTO_King_Japanese": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0898,
+      "peak": 0.974,
+      "samples": [
+       "KingJapaneseDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0898
+   },
+   "art": "King Japanese"
+  },
+  "PRTO_King_Korean": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0714,
+      "peak": 0.966,
+      "samples": [
+       "KingKoreanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0714
+   },
+   "art": "King Korean"
+  },
+  "PRTO_King_Mayan": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.3249,
+      "peak": 0.96,
+      "samples": [
+       "KingMayaDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3249
+   },
+   "art": "King Mayan"
+  },
+  "PRTO_King_Mongol": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0533,
+      "peak": 0.996,
+      "samples": [
+       "KingMongolDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0533
+   },
+   "art": "King Mongol"
+  },
+  "PRTO_King_Netherlands": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0343,
+      "peak": 0.715,
+      "samples": [
+       "NetherlandsKingDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0343
+   },
+   "art": "King Netherlands"
+  },
+  "PRTO_King_Ottoman": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0632,
+      "peak": 0.998,
+      "samples": [
+       "KingOttomanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0632
+   },
+   "art": "King Ottoman"
+  },
+  "PRTO_King_Persian": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0504,
+      "peak": 0.837,
+      "samples": [
+       "KingPersianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0504
+   },
+   "art": "King Persian"
+  },
+  "PRTO_King_Portugal": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0235,
+      "peak": 0.684,
+      "samples": [
+       "KingPortugalDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0235
+   },
+   "art": "King Portugal"
+  },
+  "PRTO_King_Roman": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0644,
+      "peak": 0.993,
+      "samples": [
+       "KingRomanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0644
+   },
+   "art": "King Roman"
+  },
+  "PRTO_King_Russian": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0293,
+      "peak": 0.826,
+      "samples": [
+       "KingRussianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0293
+   },
+   "art": "King Russian"
+  },
+  "PRTO_King_Spanish": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0303,
+      "peak": 0.99,
+      "samples": [
+       "KingSpanishDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0303
+   },
+   "art": "King Spanish"
+  },
+  "PRTO_King_Sumeria": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.3999,
+      "peak": 1.0,
+      "samples": [
+       "KingSumeriaDeath1.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.328,
+    "frame_ms": 83,
+    "frames": 16,
+    "sync_s": 0.3999
+   },
+   "art": "King Sumeria"
+  },
+  "PRTO_King_Viking": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0476,
+      "peak": 0.861,
+      "samples": [
+       "KingVikingDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0476
+   },
+   "art": "King Viking"
+  },
+  "PRTO_King_Zulu": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0506,
+      "peak": 0.745,
+      "samples": [
+       "KingZuluDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0506
+   },
+   "art": "King Zulu"
+  },
+  "PRTO_Knight": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.4552,
+      "peak": 0.276,
+      "samples": [
+       "KnightAttackArmour.wav"
+      ],
+      "t": 0.2875
+     },
+     {
+      "onset_s": 0.3885,
+      "peak": 0.336,
+      "samples": [
+       "KnightAttackWhoosh1.wav"
+      ],
+      "t": 0.3042
+     },
+     {
+      "onset_s": 0.3921,
+      "peak": 0.997,
+      "samples": [
+       "KnightAttackGrunt1.wav"
+      ],
+      "t": 0.3125
+     },
+     {
+      "onset_s": 0.4101,
+      "peak": 0.407,
+      "samples": [
+       "KnightAttackHorseUp.wav"
+      ],
+      "t": 0.3583
+     },
+     {
+      "onset_s": 0.4271,
+      "peak": 0.47,
+      "samples": [
+       "KnightAttackSword1.wav"
+      ],
+      "t": 0.4062
+     },
+     {
+      "onset_s": 0.4613,
+      "peak": 0.625,
+      "samples": [
+       "KnightAttackStab1.wav"
+      ],
+      "t": 0.4437
+     },
+     {
+      "onset_s": 0.9062,
+      "peak": 0.391,
+      "samples": [
+       "KnightAttackHorseDown.wav"
+      ],
+      "t": 0.7896
+     },
+     {
+      "onset_s": 0.9406,
+      "peak": 0.739,
+      "samples": [
+       "KnightAttackGrunt2.wav"
+      ],
+      "t": 0.8375
+     },
+     {
+      "onset_s": 0.9593,
+      "peak": 0.336,
+      "samples": [
+       "KnightAttackWhoosh2.wav"
+      ],
+      "t": 0.875
+     },
+     {
+      "onset_s": 0.9987,
+      "peak": 0.322,
+      "samples": [
+       "KnightAttackSword2.wav"
+      ],
+      "t": 0.9792
+     },
+     {
+      "onset_s": 0.9985,
+      "peak": 0.451,
+      "samples": [
+       "KnightAttackStab2.wav"
+      ],
+      "t": 0.9812
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3921
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.082,
+      "peak": 1.0,
+      "samples": [
+       "KnightDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.082
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1785,
+      "peak": 0.972,
+      "samples": [
+       "KnightVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1785
+   },
+   "art": "Knight"
+  },
+  "PRTO_Leader_Ancient_Times": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1063,
+      "peak": 0.763,
+      "samples": [
+       "LeaderAncientDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1063
+   },
+   "art": "Leader Ancient Times"
+  },
+  "PRTO_Leader_ERAS_Ancient_Times": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1063,
+      "peak": 0.763,
+      "samples": [
+       "LeaderAncientDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1063
+   },
+   "art": "Leader Ancient Times"
+  },
+  "PRTO_Leader_ERAS_Industrial_Age": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.5756,
+      "peak": 1.0,
+      "samples": [
+       "LeaderIndustrialDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.5756
+   },
+   "art": "Leader Industrial Ages"
+  },
+  "PRTO_Leader_ERAS_Middle_Ages": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.5754,
+      "peak": 1.0,
+      "samples": [
+       "LeaderMiddleAgesDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.5754
+   },
+   "art": "Leader Middle Ages"
+  },
+  "PRTO_Leader_ERAS_Modern_Era": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.4125,
+      "peak": 0.89,
+      "samples": [
+       "LeaderModernDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.4125
+   },
+   "art": "Leader Modern Times"
+  },
+  "PRTO_Leader_Industrial_Ages": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.5756,
+      "peak": 1.0,
+      "samples": [
+       "LeaderIndustrialDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.5756
+   },
+   "art": "Leader Industrial Ages"
+  },
+  "PRTO_Leader_Middle_Ages": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.5754,
+      "peak": 1.0,
+      "samples": [
+       "LeaderMiddleAgesDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.5754
+   },
+   "art": "Leader Middle Ages"
+  },
+  "PRTO_Leader_Modern_Times": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.4125,
+      "peak": 0.89,
+      "samples": [
+       "LeaderModernDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.4125
+   },
+   "art": "Leader Modern Times"
+  },
+  "PRTO_Leader_SCI": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0665,
+      "peak": 0.771,
+      "samples": [
+       "AlbertEinsteinDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0665
+   },
+   "art": "SciLeader"
+  },
+  "PRTO_Libyan_Mercenary": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.3793,
+      "peak": 0.521,
+      "samples": [
+       "LibyanMercenaryAttackAArmour.wav"
+      ],
+      "t": 0.325
+     },
+     {
+      "onset_s": 0.487,
+      "peak": 1.0,
+      "samples": [
+       "LibyanMercenaryAttackAStab.wav"
+      ],
+      "t": 0.3812
+     },
+     {
+      "onset_s": 0.4156,
+      "peak": 0.518,
+      "samples": [
+       "LibyanMercenaryAttackAGrunt.wav"
+      ],
+      "t": 0.3854
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.487
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1778,
+      "peak": 0.945,
+      "samples": [
+       "LibyanMercenaryDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.328,
+    "frame_ms": 83,
+    "frames": 16,
+    "sync_s": 0.1778
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0454,
+      "peak": 0.934,
+      "samples": [
+       "LibyanMercenaryVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.328,
+    "frame_ms": 83,
+    "frames": 16,
+    "sync_s": 0.0454
+   },
+   "art": "Libyan Mercenary"
+  },
+  "PRTO_Lincoln": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0373,
+      "peak": 0.971,
+      "samples": [
+       "KingAmericanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0373
+   },
+   "art": "King American"
+  },
+  "PRTO_Longbowman": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0429,
+      "peak": 0.188,
+      "samples": [
+       "LongAtckCreak.wav"
+      ],
+      "t": 0.0125
+     },
+     {
+      "onset_s": 0.1364,
+      "peak": 0.139,
+      "samples": [
+       "LongAtckBreath.wav"
+      ],
+      "t": 0.075
+     },
+     {
+      "onset_s": 0.3233,
+      "peak": 0.721,
+      "samples": [
+       "LongAtckTwang.wav"
+      ],
+      "t": 0.2833
+     },
+     {
+      "onset_s": 0.4759,
+      "peak": 0.592,
+      "samples": [
+       "LongAtckWhoosh.wav"
+      ],
+      "t": 0.3479
+     },
+     {
+      "onset_s": 0.7797,
+      "peak": 0.6,
+      "samples": [
+       "LongAtckQuiver.wav"
+      ],
+      "t": 0.5938
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3233
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1654,
+      "peak": 0.297,
+      "samples": [
+       "LongDethGrunt1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1297,
+      "peak": 0.43,
+      "samples": [
+       "LongDethQuiver1.wav"
+      ],
+      "t": 0.1146
+     },
+     {
+      "onset_s": 0.3894,
+      "peak": 0.709,
+      "samples": [
+       "LongDethBodyFall.wav"
+      ],
+      "t": 0.325
+     },
+     {
+      "onset_s": 0.6155,
+      "peak": 0.196,
+      "samples": [
+       "LongDethGrunt2.wav"
+      ],
+      "t": 0.5375
+     },
+     {
+      "onset_s": 0.595,
+      "peak": 0.542,
+      "samples": [
+       "LongDethQuiver2.wav"
+      ],
+      "t": 0.5563
+     },
+     {
+      "onset_s": 0.5966,
+      "peak": 0.977,
+      "samples": [
+       "LongDethBowDrop.wav"
+      ],
+      "t": 0.5583
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.5966
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1014,
+      "peak": 0.723,
+      "samples": [
+       "LongVicLaugh.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.3252,
+      "peak": 0.445,
+      "samples": [
+       "LongVicFoot1.wav"
+      ],
+      "t": 0.2979
+     },
+     {
+      "onset_s": 0.3131,
+      "peak": 0.683,
+      "samples": [
+       "LongVicQuiver1.wav"
+      ],
+      "t": 0.3
+     },
+     {
+      "onset_s": 0.6802,
+      "peak": 0.711,
+      "samples": [
+       "LongVicFoot2.wav"
+      ],
+      "t": 0.5563
+     },
+     {
+      "onset_s": 0.6823,
+      "peak": 0.573,
+      "samples": [
+       "LongVicQuiver2.wav"
+      ],
+      "t": 0.6667
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1014
+   },
+   "art": "Longbowman"
+  },
+  "PRTO_Man-O-War": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1568,
+      "peak": 0.19,
+      "samples": [
+       "ManOWarAttackCreek2.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.5293,
+      "peak": 0.198,
+      "samples": [
+       "ManOWarAttackCreek3.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1243,
+      "peak": 0.137,
+      "samples": [
+       "ManOWarAttackWater.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1992,
+      "peak": 0.895,
+      "samples": [
+       "ManOWarAttackCannon1.wav"
+      ],
+      "t": 0.1625
+     },
+     {
+      "onset_s": 0.3361,
+      "peak": 0.778,
+      "samples": [
+       "ManOWarAttackCannon2.wav"
+      ],
+      "t": 0.2938
+     },
+     {
+      "onset_s": 0.468,
+      "peak": 0.789,
+      "samples": [
+       "ManOWarAttackCannon3.wav"
+      ],
+      "t": 0.4146
+     },
+     {
+      "onset_s": 0.7098,
+      "peak": 0.169,
+      "samples": [
+       "ManOWarAttackCreek1.wav"
+      ],
+      "t": 0.4188
+     },
+     {
+      "onset_s": 0.5291,
+      "peak": 0.816,
+      "samples": [
+       "ManOWarAttackCannon4.wav"
+      ],
+      "t": 0.4875
+     },
+     {
+      "onset_s": 0.6655,
+      "peak": 0.832,
+      "samples": [
+       "ManOWarAttackCannon5.wav"
+      ],
+      "t": 0.6312
+     },
+     {
+      "onset_s": 0.7855,
+      "peak": 0.797,
+      "samples": [
+       "ManOWarAttackCannon6.wav"
+      ],
+      "t": 0.7479
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.1992
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0564,
+      "peak": 0.997,
+      "samples": [
+       "ManOWarDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.0564
+   },
+   "art": "Man-O-War"
+  },
+  "PRTO_Mao": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0418,
+      "peak": 0.899,
+      "samples": [
+       "KingChineseDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0418
+   },
+   "art": "King Chinese"
+  },
+  "PRTO_Marine": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0125,
+      "peak": 0.665,
+      "samples": [
+       "MarinesAttack.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0125
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0369,
+      "peak": 0.993,
+      "samples": [
+       "MarinesDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0369
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.2131,
+      "peak": 0.823,
+      "samples": [
+       "MarinesVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2131
+   },
+   "art": "Marine"
+  },
+  "PRTO_Mech_Infantry": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0928,
+      "peak": 0.167,
+      "samples": [
+       "MechInfantryAttackMetal.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1145,
+      "peak": 0.219,
+      "samples": [
+       "MechInfantryAttackRattle.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1372,
+      "peak": 0.112,
+      "samples": [
+       "MechInfantryAttackSqueak.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0105,
+      "peak": 0.14,
+      "samples": [
+       "MechInfantryAttackTread.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.7846,
+      "peak": 0.882,
+      "samples": [
+       "MechInfantryAttackGun.wav"
+      ],
+      "t": 0.7729
+     }
+    ],
+    "duration_s": 1.8,
+    "frame_ms": 90,
+    "frames": 20,
+    "sync_s": 0.7846
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0214,
+      "peak": 1.0,
+      "samples": [
+       "MechInfantryDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.35,
+    "frame_ms": 90,
+    "frames": 15,
+    "sync_s": 0.0214
+   },
+   "art": "Mech Infantry"
+  },
+  "PRTO_Medieval_Infantry": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.4525,
+      "peak": 0.287,
+      "samples": [
+       "MedievalInfantryAttackAMove.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.3784,
+      "peak": 0.306,
+      "samples": [
+       "MedievalInfantryAttackAGrunt.wav"
+      ],
+      "t": 0.1167
+     },
+     {
+      "onset_s": 0.5629,
+      "peak": 0.945,
+      "samples": [
+       "MedievalInfantryAttackAHit.wav"
+      ],
+      "t": 0.5146
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.5629
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0624,
+      "peak": 1.0,
+      "samples": [
+       "MedievalInfantryDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0624
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1572,
+      "peak": 0.992,
+      "samples": [
+       "MedievalInfantryVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1572
+   },
+   "art": "Medieval Infantry"
+  },
+  "PRTO_Mobile_SAM": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0198,
+      "peak": 0.139,
+      "samples": [
+       "SamAttackServo.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1634,
+      "peak": 0.963,
+      "samples": [
+       "SamAttackRattle.wav"
+      ],
+      "t": 0.0688
+     },
+     {
+      "onset_s": 0.1783,
+      "peak": 0.999,
+      "samples": [
+       "SamAttackMissile.wav"
+      ],
+      "t": 0.1375
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1783
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0812,
+      "peak": 1.0,
+      "samples": [
+       "SamDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0812
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1887,
+      "peak": 0.49,
+      "samples": [
+       "SamVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1887
+   },
+   "art": "Mobile SAM"
+  },
+  "PRTO_Modern_Armor": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0999,
+      "peak": 0.231,
+      "samples": [
+       "ModernArmourAttackMetal2.wav"
+      ],
+      "t": 0.0854
+     },
+     {
+      "onset_s": 0.3678,
+      "peak": 0.28,
+      "samples": [
+       "ModernArmourAttackSqueak.wav"
+      ],
+      "t": 0.3063
+     },
+     {
+      "onset_s": 0.3642,
+      "peak": 0.688,
+      "samples": [
+       "ModernArmourAttackGun.wav"
+      ],
+      "t": 0.3292
+     },
+     {
+      "onset_s": 0.3656,
+      "peak": 0.165,
+      "samples": [
+       "ModernArmourAttackTurret.wav"
+      ],
+      "t": 0.3292
+     },
+     {
+      "onset_s": 0.767,
+      "peak": 0.399,
+      "samples": [
+       "ModernArmourAttackMetal1.wav"
+      ],
+      "t": 0.6438
+     }
+    ],
+    "duration_s": 0.66,
+    "frame_ms": 66,
+    "frames": 10,
+    "sync_s": 0.3642
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0122,
+      "peak": 0.691,
+      "samples": [
+       "ModernArmourDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.35,
+    "frame_ms": 90,
+    "frames": 15,
+    "sync_s": 0.0122
+   },
+   "art": "Modern Armor"
+  },
+  "PRTO_Montezuma": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0579,
+      "peak": 0.998,
+      "samples": [
+       "KingAztecDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0579
+   },
+   "art": "King Aztec"
+  },
+  "PRTO_Mounted_Warrior": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1107,
+      "peak": 0.061,
+      "samples": [
+       "MountedWarriorAttackBridal.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0145,
+      "peak": 0.071,
+      "samples": [
+       "MountedWarriorAttackQuiver.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.4154,
+      "peak": 0.115,
+      "samples": [
+       "MountedWarriorAttackHorse.wav"
+      ],
+      "t": 0.1354
+     },
+     {
+      "onset_s": 0.4991,
+      "peak": 0.056,
+      "samples": [
+       "MountedWarriorAttackBreath.wav"
+      ],
+      "t": 0.4104
+     },
+     {
+      "onset_s": 0.4894,
+      "peak": 0.076,
+      "samples": [
+       "MountedWarriorAttackCreak.wav"
+      ],
+      "t": 0.4771
+     },
+     {
+      "onset_s": 0.8213,
+      "peak": 0.396,
+      "samples": [
+       "MountedWarriorAttackBow.wav"
+      ],
+      "t": 0.7896
+     },
+     {
+      "onset_s": 1.0306,
+      "peak": 0.263,
+      "samples": [
+       "MountedWarriorAttackSwoosh.wav"
+      ],
+      "t": 0.8667
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.8213
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.8208,
+      "peak": 0.999,
+      "samples": [
+       "MountedWarriorDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.8208
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.2398,
+      "peak": 0.99,
+      "samples": [
+       "MountedWarriorVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.2398
+   },
+   "art": "Mounted Warrior"
+  },
+  "PRTO_Mursilis": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0151,
+      "peak": 0.999,
+      "samples": [
+       "King Hatti Death .wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0151
+   },
+   "art": "King Hatti"
+  },
+  "PRTO_Musketeer": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.506,
+      "peak": 0.801,
+      "samples": [
+       "FrMuskAtckFlash.wav"
+      ],
+      "t": 0.3375
+     },
+     {
+      "onset_s": 0.4426,
+      "peak": 0.268,
+      "samples": [
+       "FrMuskAtckTrigger.wav"
+      ],
+      "t": 0.4125
+     },
+     {
+      "onset_s": 0.5433,
+      "peak": 1.0,
+      "samples": [
+       "FrMuskAtckBlast.wav"
+      ],
+      "t": 0.5042
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.5433
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.8109,
+      "peak": 1.0,
+      "samples": [
+       "MusketeerDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.8109
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0593,
+      "peak": 0.547,
+      "samples": [
+       "MusketeerVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0593
+   },
+   "art": "Musketeer"
+  },
+  "PRTO_Musketman": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.4705,
+      "peak": 0.655,
+      "samples": [
+       "MusketmanAttackFlash.wav"
+      ],
+      "t": 0.325
+     },
+     {
+      "onset_s": 0.3676,
+      "peak": 0.714,
+      "samples": [
+       "MusketmanAttackHammer.wav"
+      ],
+      "t": 0.3375
+     },
+     {
+      "onset_s": 0.4923,
+      "peak": 0.64,
+      "samples": [
+       "MusketmanAttackBlast.wav"
+      ],
+      "t": 0.4542
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3676
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0878,
+      "peak": 0.999,
+      "samples": [
+       "MusketmanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0878
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3132,
+      "peak": 0.714,
+      "samples": [
+       "MusketmanVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3132
+   },
+   "art": "Musketman"
+  },
+  "PRTO_Ninja": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1157,
+      "peak": 0.078,
+      "samples": [
+       "NinjaAttackAMove.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.26,
+      "peak": 0.05,
+      "samples": [
+       "NinjaAttackAFoot.wav"
+      ],
+      "t": 0.2167
+     },
+     {
+      "onset_s": 0.4338,
+      "peak": 0.608,
+      "samples": [
+       "NinjaAttackASword.wav"
+      ],
+      "t": 0.3458
+     },
+     {
+      "onset_s": 0.5161,
+      "peak": 0.515,
+      "samples": [
+       "NinjaAttackAVox.wav"
+      ],
+      "t": 0.4396
+     },
+     {
+      "onset_s": 0.496,
+      "peak": 0.589,
+      "samples": [
+       "NinjaAttackAHit.wav"
+      ],
+      "t": 0.4604
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.4338
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0407,
+      "peak": 0.979,
+      "samples": [
+       "NinjaDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0407
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3896,
+      "peak": 1.0,
+      "samples": [
+       "NinjaVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3896
+   },
+   "art": "Ninja"
+  },
+  "PRTO_Nuclear_Submarine": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.055,
+      "peak": 0.224,
+      "samples": [
+       "NucSubAtckWater1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1068,
+      "peak": 0.237,
+      "samples": [
+       "NucSubAtckWater2.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1082,
+      "peak": 0.725,
+      "samples": [
+       "NucSubAtckTorpedo1.wav"
+      ],
+      "t": 0.0021
+     },
+     {
+      "onset_s": 0.4811,
+      "peak": 0.725,
+      "samples": [
+       "NucSubAtckTorpedo2.wav"
+      ],
+      "t": 0.375
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.1082
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.2073,
+      "peak": 0.999,
+      "samples": [
+       "NuclearSubDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.2073
+   },
+   "art": "Nuclear Submarine"
+  },
+  "PRTO_Osman": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0632,
+      "peak": 0.998,
+      "samples": [
+       "KingOttomanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0632
+   },
+   "art": "King Ottoman"
+  },
+  "PRTO_Pachacuti": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0455,
+      "peak": 1.0,
+      "samples": [
+       "KingIncanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0455
+   },
+   "art": "King Incan"
+  },
+  "PRTO_Panzer": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1357,
+      "peak": 0.336,
+      "samples": [
+       "PanzerAttackMetal1.wav"
+      ],
+      "t": 0.0125
+     },
+     {
+      "onset_s": 0.0558,
+      "peak": 0.971,
+      "samples": [
+       "PanzerAttackGun.wav"
+      ],
+      "t": 0.0208
+     },
+     {
+      "onset_s": 0.192,
+      "peak": 0.231,
+      "samples": [
+       "PanzerAttackMetal2.wav"
+      ],
+      "t": 0.1583
+     },
+     {
+      "onset_s": 0.3706,
+      "peak": 0.302,
+      "samples": [
+       "PanzerAttackSqueak.wav"
+      ],
+      "t": 0.3063
+     },
+     {
+      "onset_s": 0.4495,
+      "peak": 0.164,
+      "samples": [
+       "PanzerAttackTurret.wav"
+      ],
+      "t": 0.3958
+     }
+    ],
+    "duration_s": 1.8,
+    "frame_ms": 90,
+    "frames": 20,
+    "sync_s": 0.0558
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.045,
+      "peak": 1.0,
+      "samples": [
+       "PanzerDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.35,
+    "frame_ms": 90,
+    "frames": 15,
+    "sync_s": 0.045
+   },
+   "art": "Panzer"
+  },
+  "PRTO_Pikeman": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.5602,
+      "peak": 0.306,
+      "samples": [
+       "PikemanAttackAWhoosh.wav"
+      ],
+      "t": 0.4937
+     },
+     {
+      "onset_s": 0.5579,
+      "peak": 0.317,
+      "samples": [
+       "PikemanAttackAPunch.wav"
+      ],
+      "t": 0.4979
+     },
+     {
+      "onset_s": 0.6039,
+      "peak": 0.593,
+      "samples": [
+       "PikemanAttackAPikeShield.wav"
+      ],
+      "t": 0.5479
+     },
+     {
+      "onset_s": 0.6022,
+      "peak": 0.28,
+      "samples": [
+       "PikemanAttackAGrunt.wav"
+      ],
+      "t": 0.5667
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.6039
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1253,
+      "peak": 1.0,
+      "samples": [
+       "PikemanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1253
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1044,
+      "peak": 1.0,
+      "samples": [
+       "PikemanVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1044
+   },
+   "art": "Pikeman"
+  },
+  "PRTO_Princess": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.069,
+      "peak": 0.983,
+      "samples": [
+       "PrincessDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.069
+   },
+   "art": "Princess"
+  },
+  "PRTO_Privateer": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.056,
+      "peak": 0.15,
+      "samples": [
+       "PrivateerAttackCreak2.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0363,
+      "peak": 0.153,
+      "samples": [
+       "PrivateerAttackCreek1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2233,
+      "peak": 0.154,
+      "samples": [
+       "PrivateerAttackSplash1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1827,
+      "peak": 0.163,
+      "samples": [
+       "PrivateerAttackWater.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0983,
+      "peak": 0.823,
+      "samples": [
+       "PrivateerAttackCannon1.wav"
+      ],
+      "t": 0.0604
+     },
+     {
+      "onset_s": 0.1917,
+      "peak": 0.812,
+      "samples": [
+       "PrivateerAttackCannon2.wav"
+      ],
+      "t": 0.1458
+     },
+     {
+      "onset_s": 0.2908,
+      "peak": 0.121,
+      "samples": [
+       "PrivateerAttackCreak3.wav"
+      ],
+      "t": 0.2417
+     }
+    ],
+    "duration_s": 2.0,
+    "frame_ms": 100,
+    "frames": 20,
+    "sync_s": 0.0983
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0131,
+      "peak": 0.663,
+      "samples": [
+       "PrivateerDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.8,
+    "frame_ms": 90,
+    "frames": 20,
+    "sync_s": 0.0131
+   },
+   "art": "Privateer"
+  },
+  "PRTO_Radar_Artillery": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2364,
+      "peak": 0.753,
+      "samples": [
+       "RadarArtilleryAttackMissile.wav"
+      ],
+      "t": 0.2062
+     },
+     {
+      "onset_s": 0.3,
+      "peak": 0.148,
+      "samples": [
+       "RadarArtilleryAttackTread.wav"
+      ],
+      "t": 0.2292
+     },
+     {
+      "onset_s": 0.2974,
+      "peak": 0.122,
+      "samples": [
+       "RadarArtilleryAttackSqueak.wav"
+      ],
+      "t": 0.2396
+     },
+     {
+      "onset_s": 0.2569,
+      "peak": 0.109,
+      "samples": [
+       "RadarArtilleryAttackMetal3.wav"
+      ],
+      "t": 0.2417
+     },
+     {
+      "onset_s": 0.2795,
+      "peak": 0.183,
+      "samples": [
+       "RadarArtilleryAttackMetal2.wav"
+      ],
+      "t": 0.2458
+     },
+     {
+      "onset_s": 0.2866,
+      "peak": 0.188,
+      "samples": [
+       "RadarArtilleryAttackMetal1.wav"
+      ],
+      "t": 0.2479
+     },
+     {
+      "onset_s": 0.2863,
+      "peak": 0.403,
+      "samples": [
+       "RadarArtilleryAttackBlast.wav"
+      ],
+      "t": 0.2562
+     }
+    ],
+    "duration_s": 0.8,
+    "frame_ms": 40,
+    "frames": 20,
+    "sync_s": 0.2364
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0945,
+      "peak": 0.997,
+      "samples": [
+       "RadarArtilleryDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0945
+   },
+   "art": "Radar Artillery"
+  },
+  "PRTO_Ragnar": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0476,
+      "peak": 0.861,
+      "samples": [
+       "KingVikingDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0476
+   },
+   "art": "King Viking"
+  },
+  "PRTO_Rider": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1125,
+      "peak": 0.128,
+      "samples": [
+       "ChinAtckWhinny.wav"
+      ],
+      "t": 0.1125
+     },
+     {
+      "onset_s": 0.3702,
+      "peak": 0.893,
+      "samples": [
+       "ChinAtckGrunt1.wav"
+      ],
+      "t": 0.2938
+     },
+     {
+      "onset_s": 0.3937,
+      "peak": 0.32,
+      "samples": [
+       "ChinAtckWhoosh.wav"
+      ],
+      "t": 0.3271
+     },
+     {
+      "onset_s": 0.4071,
+      "peak": 1.0,
+      "samples": [
+       "ChinAtckSword1.wav"
+      ],
+      "t": 0.3688
+     },
+     {
+      "onset_s": 0.4669,
+      "peak": 0.387,
+      "samples": [
+       "ChinAtckHorseUp.wav"
+      ],
+      "t": 0.3979
+     },
+     {
+      "onset_s": 0.6309,
+      "peak": 0.515,
+      "samples": [
+       "ChinAtckHorseDown.wav"
+      ],
+      "t": 0.5792
+     },
+     {
+      "onset_s": 0.8669,
+      "peak": 0.161,
+      "samples": [
+       "ChinAtckSnort.wav"
+      ],
+      "t": 0.7708
+     },
+     {
+      "onset_s": 0.9977,
+      "peak": 0.95,
+      "samples": [
+       "ChinAtckSword2.wav"
+      ],
+      "t": 0.9562
+     },
+     {
+      "onset_s": 1.0111,
+      "peak": 0.449,
+      "samples": [
+       "ChinAtckGrunt2.wav"
+      ],
+      "t": 0.9729
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.4071
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1159,
+      "peak": 0.885,
+      "samples": [
+       "RiderDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1159
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.5863,
+      "peak": 0.818,
+      "samples": [
+       "RiderVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.5863
+   },
+   "art": "Rider"
+  },
+  "PRTO_Rifleman": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.4825,
+      "peak": 0.867,
+      "samples": [
+       "RiflemanAttackBlast.wav"
+      ],
+      "t": 0.3979
+     },
+     {
+      "onset_s": 0.4468,
+      "peak": 0.401,
+      "samples": [
+       "RiflemanAttackTrigger.wav"
+      ],
+      "t": 0.4167
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.4825
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0502,
+      "peak": 0.996,
+      "samples": [
+       "RiflemanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0502
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.828,
+      "peak": 0.999,
+      "samples": [
+       "RiflemanVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.828
+   },
+   "art": "Rifleman"
+  },
+  "PRTO_Samurai": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2382,
+      "peak": 0.562,
+      "samples": [
+       "SamuraiAttackAWhoosh.wav"
+      ],
+      "t": 0.1292
+     },
+     {
+      "onset_s": 0.2357,
+      "peak": 0.836,
+      "samples": [
+       "SamuraiAttackAGrunt1.wav"
+      ],
+      "t": 0.175
+     },
+     {
+      "onset_s": 0.2623,
+      "peak": 0.972,
+      "samples": [
+       "SamuraiAttackASlash.wav"
+      ],
+      "t": 0.2
+     },
+     {
+      "onset_s": 0.6588,
+      "peak": 1.0,
+      "samples": [
+       "SamuraiAttackAStab.wav"
+      ],
+      "t": 0.6312
+     },
+     {
+      "onset_s": 0.6907,
+      "peak": 0.496,
+      "samples": [
+       "SamuraiAttackAGrunt2.wav"
+      ],
+      "t": 0.6625
+     },
+     {
+      "onset_s": 0.8256,
+      "peak": 0.369,
+      "samples": [
+       "SamuraiAttackAFoot1.wav"
+      ],
+      "t": 0.7958
+     },
+     {
+      "onset_s": 1.159,
+      "peak": 0.51,
+      "samples": [
+       "SamuraiAttackAFoot2.wav"
+      ],
+      "t": 1.1208
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.6588
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1819,
+      "peak": 1.0,
+      "samples": [
+       "SamuraiDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1819
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1211,
+      "peak": 0.996,
+      "samples": [
+       "SamuraiVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1211
+   },
+   "art": "Samurai"
+  },
+  "PRTO_SciLeader": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0665,
+      "peak": 0.771,
+      "samples": [
+       "AlbertEinsteinDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0665
+   },
+   "art": "SciLeader"
+  },
+  "PRTO_Scout": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1219,
+      "peak": 0.99,
+      "samples": [
+       "ScoutDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1219
+   },
+   "art": "Scout"
+  },
+  "PRTO_Settler": {
+   "DEATH": {
+    "cues": [],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": null
+   },
+   "art": "Settler"
+  },
+  "PRTO_Settler_ERAS_Industrial_Age": {
+   "DEATH": {
+    "cues": [],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": null
+   },
+   "art": "Settler Modern Times"
+  },
+  "PRTO_Settler_ERAS_Modern_Era": {
+   "DEATH": {
+    "cues": [],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": null
+   },
+   "art": "Settler Modern Times"
+  },
+  "PRTO_Settler_Modern_Times": {
+   "DEATH": {
+    "cues": [],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": null
+   },
+   "art": "Settler Modern Times"
+  },
+  "PRTO_Shaka": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0506,
+      "peak": 0.745,
+      "samples": [
+       "KingZuluDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0506
+   },
+   "art": "King Zulu"
+  },
+  "PRTO_Shogun": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0438,
+      "peak": 0.026,
+      "samples": [
+       "ShogunAttackAFoot1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.4396,
+      "peak": 0.867,
+      "samples": [
+       "ShogunAttackAVox.wav"
+      ],
+      "t": 0.0897
+     },
+     {
+      "onset_s": 0.3357,
+      "peak": 0.086,
+      "samples": [
+       "ShogunAttackAClothes.wav"
+      ],
+      "t": 0.0926
+     },
+     {
+      "onset_s": 0.303,
+      "peak": 0.887,
+      "samples": [
+       "ShogunAttackAStab.wav"
+      ],
+      "t": 0.2735
+     },
+     {
+      "onset_s": 0.6882,
+      "peak": 0.352,
+      "samples": [
+       "ShogunAttackAFoot2.wav"
+      ],
+      "t": 0.675
+     }
+    ],
+    "duration_s": 7.92,
+    "frame_ms": 66,
+    "frames": 120,
+    "sync_s": 0.303
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0709,
+      "peak": 1.0,
+      "samples": [
+       "ShogunDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0709
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1729,
+      "peak": 0.736,
+      "samples": [
+       "ShogunVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1729
+   },
+   "art": "Shogun"
+  },
+  "PRTO_Sipahi": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1802,
+      "peak": 0.555,
+      "samples": [
+       "SipahiAttackAGrunt.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0162,
+      "peak": 0.966,
+      "samples": [
+       "SipahiAttackAGun.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0939,
+      "peak": 0.213,
+      "samples": [
+       "SipahiAttackAMove.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.6987,
+      "peak": 0.291,
+      "samples": [
+       "SipahiAttackAHorse.wav"
+      ],
+      "t": 0.6146
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0162
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0171,
+      "peak": 0.947,
+      "samples": [
+       "SipahiDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.056,
+    "frame_ms": 66,
+    "frames": 16,
+    "sync_s": 0.0171
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3195,
+      "peak": 1.0,
+      "samples": [
+       "SipahiVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3195
+   },
+   "art": "Sipahi"
+  },
+  "PRTO_Smoke-Jaguar": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.3249,
+      "peak": 0.96,
+      "samples": [
+       "KingMayaDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3249
+   },
+   "art": "King Mayan"
+  },
+  "PRTO_Spearman": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.9902,
+      "peak": 0.079,
+      "samples": [
+       "SpearmanAttackAMove.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.242,
+      "peak": 0.164,
+      "samples": [
+       "spearmanAttackAFoot1.wav"
+      ],
+      "t": 0.2167
+     },
+     {
+      "onset_s": 0.3252,
+      "peak": 0.196,
+      "samples": [
+       "SpearmanAttackAVox.wav"
+      ],
+      "t": 0.2854
+     },
+     {
+      "onset_s": 0.3742,
+      "peak": 0.227,
+      "samples": [
+       "SpearmanAttackASwoosh.wav"
+      ],
+      "t": 0.3063
+     },
+     {
+      "onset_s": 0.3657,
+      "peak": 0.632,
+      "samples": [
+       "SpearmanAttackAPike.wav"
+      ],
+      "t": 0.3312
+     },
+     {
+      "onset_s": 0.3745,
+      "peak": 0.29,
+      "samples": [
+       "SpearmanAttackAStab.wav"
+      ],
+      "t": 0.3396
+     },
+     {
+      "onset_s": 0.7429,
+      "peak": 0.245,
+      "samples": [
+       "SpearmanAttackAFoot2.wav"
+      ],
+      "t": 0.6917
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3657
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.4268,
+      "peak": 0.956,
+      "samples": [
+       "SpearmanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4268
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0312,
+      "peak": 0.892,
+      "samples": [
+       "SpearmanVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0312
+   },
+   "art": "Spearman"
+  },
+  "PRTO_Stealth_Bomber": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.151,
+      "peak": 0.697,
+      "samples": [
+       "StealthBomberAttackMissile.wav"
+      ],
+      "t": 0.0583
+     }
+    ],
+    "duration_s": 0.66,
+    "frame_ms": 66,
+    "frames": 10,
+    "sync_s": 0.151
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0278,
+      "peak": 1.0,
+      "samples": [
+       "StealthBomberDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0278
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.5653,
+      "peak": 1.0,
+      "samples": [
+       "StealthBomberBomb.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.5653
+   },
+   "art": "Stealth Bomber"
+  },
+  "PRTO_Stealth_Fighter": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2366,
+      "peak": 0.992,
+      "samples": [
+       "StealthFighterAttackMissile.wav"
+      ],
+      "t": 0.1062
+     }
+    ],
+    "duration_s": 0.83,
+    "frame_ms": 83,
+    "frames": 10,
+    "sync_s": 0.2366
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0344,
+      "peak": 1.0,
+      "samples": [
+       "StealthFighterDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.064,
+    "frame_ms": 76,
+    "frames": 14,
+    "sync_s": 0.0344
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.42,
+      "peak": 1.0,
+      "samples": [
+       "StealthFighterBomb.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.26,
+    "frame_ms": 90,
+    "frames": 14,
+    "sync_s": 0.42
+   },
+   "art": "Stealth Fighter"
+  },
+  "PRTO_Submarine": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0108,
+      "peak": 0.153,
+      "samples": [
+       "SubAtckEngine.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.055,
+      "peak": 0.317,
+      "samples": [
+       "SubAtckWater1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1068,
+      "peak": 0.474,
+      "samples": [
+       "SubAtckWater2.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1082,
+      "peak": 0.95,
+      "samples": [
+       "SubAtckTorpedo.wav"
+      ],
+      "t": 0.0021
+     },
+     {
+      "onset_s": 0.1259,
+      "peak": 0.946,
+      "samples": [
+       "SubAtckExplosion.wav"
+      ],
+      "t": 0.0917
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.1082
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0441,
+      "peak": 1.0,
+      "samples": [
+       "SubmarineDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.66,
+    "frame_ms": 83,
+    "frames": 20,
+    "sync_s": 0.0441
+   },
+   "art": "Submarine"
+  },
+  "PRTO_Swiss_Mercenary": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0735,
+      "peak": 0.915,
+      "samples": [
+       "SwissMercenaryAttackVox.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2863,
+      "peak": 1.0,
+      "samples": [
+       "SwissMercenaryAttackStab.wav"
+      ],
+      "t": 0.05
+     },
+     {
+      "onset_s": 0.7142,
+      "peak": 0.241,
+      "samples": [
+       "SwissMercenaryAttackClothes.wav"
+      ],
+      "t": 0.4309
+     },
+     {
+      "onset_s": 0.6875,
+      "peak": 0.994,
+      "samples": [
+       "SwissMercenaryAttackFoot.wav"
+      ],
+      "t": 0.6721
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.2863
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0213,
+      "peak": 1.0,
+      "samples": [
+       "SwissMercenaryDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0213
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1532,
+      "peak": 1.0,
+      "samples": [
+       "SwissMercenaryVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1532
+   },
+   "art": "Swiss Mercenary"
+  },
+  "PRTO_TOW_Infantry": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1261,
+      "peak": 0.084,
+      "samples": [
+       "AntiTankAttackJingle.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0711,
+      "peak": 0.95,
+      "samples": [
+       "AntiTankAttackShot.wav"
+      ],
+      "t": 0.0662
+     },
+     {
+      "onset_s": 0.1167,
+      "peak": 0.95,
+      "samples": [
+       "AntiTankAttackShot.wav"
+      ],
+      "t": 0.1118
+     },
+     {
+      "onset_s": 0.2705,
+      "peak": 0.41,
+      "samples": [
+       "AntiTankAttackVox.wav"
+      ],
+      "t": 0.1397
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0711
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0392,
+      "peak": 1.0,
+      "samples": [
+       "AntiTankDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0392
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1621,
+      "peak": 0.99,
+      "samples": [
+       "AntiTankVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1621
+   },
+   "art": "TOW Infantry"
+  },
+  "PRTO_Tank": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.302,
+      "peak": 0.111,
+      "samples": [
+       "TankAttackTread.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2974,
+      "peak": 0.081,
+      "samples": [
+       "TankAttackSqueak.wav"
+      ],
+      "t": 0.2396
+     },
+     {
+      "onset_s": 0.2569,
+      "peak": 0.082,
+      "samples": [
+       "TankAttackMetal3.wav"
+      ],
+      "t": 0.2417
+     },
+     {
+      "onset_s": 0.2795,
+      "peak": 0.326,
+      "samples": [
+       "TankAttackMetal2.wav"
+      ],
+      "t": 0.2458
+     },
+     {
+      "onset_s": 0.2866,
+      "peak": 0.355,
+      "samples": [
+       "TankAttackMetal1.wav"
+      ],
+      "t": 0.2479
+     },
+     {
+      "onset_s": 0.2863,
+      "peak": 0.955,
+      "samples": [
+       "TankAttackGun.wav"
+      ],
+      "t": 0.2562
+     }
+    ],
+    "duration_s": 1.8,
+    "frame_ms": 90,
+    "frames": 20,
+    "sync_s": 0.2863
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1395,
+      "peak": 1.0,
+      "samples": [
+       "TankDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1395
+   },
+   "art": "Tank"
+  },
+  "PRTO_Temujin": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0533,
+      "peak": 0.996,
+      "samples": [
+       "KingMongolDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0533
+   },
+   "art": "King Mongol"
+  },
+  "PRTO_The_King": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0371,
+      "peak": 0.989,
+      "samples": [
+       "TheKingDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0371
+   },
+   "art": "The King"
+  },
+  "PRTO_Theodora": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0356,
+      "peak": 0.693,
+      "samples": [
+       "KingByzantineDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0356
+   },
+   "art": "King Byzantines"
+  },
+  "PRTO_Three_Man_Chariot": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1135,
+      "peak": 0.102,
+      "samples": [
+       "ThreeManChariotAttackBridle.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.1478,
+      "peak": 0.067,
+      "samples": [
+       "ThreeManChariotAttackHorse.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2029,
+      "peak": 0.522,
+      "samples": [
+       "ThreeManChariotAttackVox1.wav"
+      ],
+      "t": 0.1235
+     },
+     {
+      "onset_s": 0.2925,
+      "peak": 1.0,
+      "samples": [
+       "ThreeManChariotAttackBow.wav"
+      ],
+      "t": 0.2603
+     },
+     {
+      "onset_s": 0.5077,
+      "peak": 0.631,
+      "samples": [
+       "ThreeManChariotAttackVox3.wav"
+      ],
+      "t": 0.3559
+     },
+     {
+      "onset_s": 0.3904,
+      "peak": 0.893,
+      "samples": [
+       "ThreeManChariotAttackSpear.wav"
+      ],
+      "t": 0.3735
+     },
+     {
+      "onset_s": 0.5923,
+      "peak": 0.646,
+      "samples": [
+       "ThreeManChariotAttackVox2.wav"
+      ],
+      "t": 0.4574
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.2925
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.193,
+      "peak": 0.895,
+      "samples": [
+       "ThreeManChariotDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.193
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.537,
+      "peak": 0.996,
+      "samples": [
+       "ThreeManChariotVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.537
+   },
+   "art": "Three Man Chariot"
+  },
+  "PRTO_Tokugawa": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0898,
+      "peak": 0.974,
+      "samples": [
+       "KingJapaneseDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0898
+   },
+   "art": "King Japanese"
+  },
+  "PRTO_Transport": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0106,
+      "peak": 0.721,
+      "samples": [
+       "TransportAttackGun.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0,
+      "peak": 0.202,
+      "samples": [
+       "TransportAttackMetal.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0,
+      "peak": 0.195,
+      "samples": [
+       "TransportAttackWater.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.6196,
+      "peak": 0.081,
+      "samples": [
+       "TransportAttackEnd.wav"
+      ],
+      "t": 0.5479
+     }
+    ],
+    "duration_s": 0.66,
+    "frame_ms": 66,
+    "frames": 10,
+    "sync_s": 0.0106
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0672,
+      "peak": 1.0,
+      "samples": [
+       "TransportDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.8,
+    "frame_ms": 90,
+    "frames": 20,
+    "sync_s": 0.0672
+   },
+   "art": "Transport"
+  },
+  "PRTO_Trebuchet": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.064,
+      "peak": 0.86,
+      "samples": [
+       "TrebuchetAttackRattle.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.126,
+      "peak": 0.595,
+      "samples": [
+       "TrebuchetAttackVox.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.3927,
+      "peak": 1.0,
+      "samples": [
+       "TrebuchetAttackSwoosh.wav"
+      ],
+      "t": 0.3074
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.3927
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0177,
+      "peak": 0.963,
+      "samples": [
+       "TrebuchetDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.32,
+    "frame_ms": 66,
+    "frames": 20,
+    "sync_s": 0.0177
+   },
+   "VICTORY": {
+    "cues": [],
+    "duration_s": 1.056,
+    "frame_ms": 66,
+    "frames": 16,
+    "sync_s": null
+   },
+   "art": "Trebuchet"
+  },
+  "PRTO_WWII_Paratrooper": {
+   "ATTACK1": {
+    "cues": [],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": null
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0556,
+      "peak": 0.975,
+      "samples": [
+       "WWIIParatrooperDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0556
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3167,
+      "peak": 0.895,
+      "samples": [
+       "WWIIParatrooperVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3167
+   },
+   "art": "WWII Paratrooper"
+  },
+  "PRTO_Wang": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0714,
+      "peak": 0.966,
+      "samples": [
+       "KingKoreanDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0714
+   },
+   "art": "King Korean"
+  },
+  "PRTO_War_Chariot": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.2146,
+      "peak": null,
+      "samples": [],
+      "t": 0.2146
+     },
+     {
+      "onset_s": 0.2414,
+      "peak": 0.178,
+      "samples": [
+       "WarChariotAttackCreak.wav"
+      ],
+      "t": 0.2271
+     },
+     {
+      "onset_s": 0.3442,
+      "peak": 0.041,
+      "samples": [
+       "WarChariotAttackBridal.wav"
+      ],
+      "t": 0.2583
+     },
+     {
+      "onset_s": 0.3494,
+      "peak": 0.325,
+      "samples": [
+       "WarChariotAttackHooves.wav"
+      ],
+      "t": 0.2875
+     },
+     {
+      "onset_s": 0.3771,
+      "peak": 0.144,
+      "samples": [
+       "WarChariotAttackWhinny.wav"
+      ],
+      "t": 0.3771
+     },
+     {
+      "onset_s": 0.4795,
+      "peak": 0.374,
+      "samples": [
+       "WarChariotAttackBowTwang.wav"
+      ],
+      "t": 0.4417
+     },
+     {
+      "onset_s": 0.6879,
+      "peak": 0.247,
+      "samples": [
+       "WarChariotAttackWhoosh.wav"
+      ],
+      "t": 0.5875
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.4795
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0416,
+      "peak": 1.0,
+      "samples": [
+       "WarChariotDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0416
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0235,
+      "peak": 0.624,
+      "samples": [
+       "WarChariotVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0235
+   },
+   "art": "War Chariot"
+  },
+  "PRTO_War_Elephant": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.1341,
+      "peak": 0.117,
+      "samples": [
+       "WarElephantAttackMove.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.0659,
+      "peak": 0.231,
+      "samples": [
+       "WarElephantAttackTrumpet.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.3839,
+      "peak": 0.811,
+      "samples": [
+       "warElephantAttackStab.wav"
+      ],
+      "t": 0.2729
+     },
+     {
+      "onset_s": 0.402,
+      "peak": 0.497,
+      "samples": [
+       "WarElephantAttackSpear.wav"
+      ],
+      "t": 0.3812
+     },
+     {
+      "onset_s": 0.451,
+      "peak": 0.204,
+      "samples": [
+       "WarElephantAttackSnort.wav"
+      ],
+      "t": 0.4042
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3839
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.6443,
+      "peak": 1.0,
+      "samples": [
+       "WarElephantDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.6443
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.0434,
+      "peak": 0.564,
+      "samples": [
+       "WarElephantVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0434
+   },
+   "art": "War Elephant"
+  },
+  "PRTO_Warrior": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0793,
+      "peak": 0.099,
+      "samples": [
+       "WarriorAttackAGrunt1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.4854,
+      "peak": 0.308,
+      "samples": [
+       "WarriorAttackAGrunt2.wav"
+      ],
+      "t": 0.2
+     },
+     {
+      "onset_s": 0.4898,
+      "peak": 0.174,
+      "samples": [
+       "WarriorAttackAFoot1.wav"
+      ],
+      "t": 0.4417
+     },
+     {
+      "onset_s": 0.5424,
+      "peak": 0.438,
+      "samples": [
+       "WarriorAttackASlash.wav"
+      ],
+      "t": 0.4417
+     },
+     {
+      "onset_s": 1.0857,
+      "peak": 0.164,
+      "samples": [
+       "WarriorAttackAFoot2.wav"
+      ],
+      "t": 0.9583
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.5424
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.3211,
+      "peak": 0.99,
+      "samples": [
+       "WarriorDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3211
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.503,
+      "peak": 0.986,
+      "samples": [
+       "WarriorVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.503
+   },
+   "art": "Warrior"
+  },
+  "PRTO_William_of_Orange": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0343,
+      "peak": 0.715,
+      "samples": [
+       "NetherlandsKingDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0343
+   },
+   "art": "King Netherlands"
+  },
+  "PRTO_Worker": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.1329,
+      "peak": 0.718,
+      "samples": [
+       "WorkerDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.1329
+   },
+   "art": "Worker"
+  },
+  "PRTO_Worker_SLAVE": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0371,
+      "peak": 0.028,
+      "samples": [
+       "EnslavedWorkerAttackClothes.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.4429,
+      "peak": 0.654,
+      "samples": [
+       "EnslavedWorkerAttackVox.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.3938,
+      "peak": 0.966,
+      "samples": [
+       "EnslavedWorkerAttackHit.wav"
+      ],
+      "t": 0.3
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.3938
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0677,
+      "peak": 0.917,
+      "samples": [
+       "EnslavedWorkerDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0677
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.1384,
+      "peak": 0.231,
+      "samples": [
+       "EnslavedWorkerVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.1384
+   },
+   "art": "Enslaved Worker"
+  },
+  "PRTO_Xerxes": {
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0504,
+      "peak": 0.837,
+      "samples": [
+       "KingPersianDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 0.99,
+    "frame_ms": 66,
+    "frames": 15,
+    "sync_s": 0.0504
+   },
+   "art": "King Persian"
+  },
+  "PRTO_chariot": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0859,
+      "peak": 0.07,
+      "samples": [
+       "CharAtckHorseMove1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.2562,
+      "peak": null,
+      "samples": [],
+      "t": 0.2562
+     },
+     {
+      "onset_s": 0.6886,
+      "peak": 0.121,
+      "samples": [
+       "CharAtckWhinny.wav"
+      ],
+      "t": 0.5146
+     },
+     {
+      "onset_s": 0.6602,
+      "peak": 0.914,
+      "samples": [
+       "CharAtckPunch.wav"
+      ],
+      "t": 0.6375
+     },
+     {
+      "onset_s": 0.6567,
+      "peak": 0.919,
+      "samples": [
+       "CharAtckStab.wav"
+      ],
+      "t": 0.6479
+     },
+     {
+      "onset_s": 0.7221,
+      "peak": 0.581,
+      "samples": [
+       "CharAtckGrunt.wav"
+      ],
+      "t": 0.6521
+     },
+     {
+      "onset_s": 0.6613,
+      "peak": 0.758,
+      "samples": [
+       "CharAtckMetal.wav"
+      ],
+      "t": 0.6542
+     },
+     {
+      "onset_s": 1.1336,
+      "peak": 0.171,
+      "samples": [
+       "CharAtckSnort.wav"
+      ],
+      "t": 1.0479
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.6567
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.0495,
+      "peak": 0.666,
+      "samples": [
+       "ChariotDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.0495
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.3528,
+      "peak": 0.505,
+      "samples": [
+       "ChariotVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3528
+   },
+   "art": "chariot"
+  },
+  "PRTO_warrior": {
+   "ATTACK1": {
+    "cues": [
+     {
+      "onset_s": 0.0793,
+      "peak": 0.099,
+      "samples": [
+       "WarriorAttackAGrunt1.wav"
+      ],
+      "t": 0.0
+     },
+     {
+      "onset_s": 0.4854,
+      "peak": 0.308,
+      "samples": [
+       "WarriorAttackAGrunt2.wav"
+      ],
+      "t": 0.2
+     },
+     {
+      "onset_s": 0.4898,
+      "peak": 0.174,
+      "samples": [
+       "WarriorAttackAFoot1.wav"
+      ],
+      "t": 0.4417
+     },
+     {
+      "onset_s": 0.5424,
+      "peak": 0.438,
+      "samples": [
+       "WarriorAttackASlash.wav"
+      ],
+      "t": 0.4417
+     },
+     {
+      "onset_s": 1.0857,
+      "peak": 0.164,
+      "samples": [
+       "WarriorAttackAFoot2.wav"
+      ],
+      "t": 0.9583
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.5424
+   },
+   "DEATH": {
+    "cues": [
+     {
+      "onset_s": 0.3211,
+      "peak": 0.99,
+      "samples": [
+       "WarriorDeath.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.245,
+    "frame_ms": 83,
+    "frames": 15,
+    "sync_s": 0.3211
+   },
+   "VICTORY": {
+    "cues": [
+     {
+      "onset_s": 0.503,
+      "peak": 0.986,
+      "samples": [
+       "WarriorVictory.wav"
+      ],
+      "t": 0.0
+     }
+    ],
+    "duration_s": 1.5,
+    "frame_ms": 100,
+    "frames": 15,
+    "sync_s": 0.503
+   },
+   "art": "warrior"
+  }
+ }
+}

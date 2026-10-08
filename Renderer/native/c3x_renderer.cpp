@@ -47,10 +47,12 @@ bool c3x_renderer64_static_refinement_pending(float zoom);
 #include "animation_runtime.h"
 #include "unit_asset_content.h"
 #include "render_core/unit_source_plan.h"
+#include "render_core/combat_effects.h"
 #include "benchmark_oracle.h"
 #include "environment_runtime.h"
 #include "terrain_definition_runtime.h"
 #include "renderer_trace.h"
+#include "game_thread_sampler.h"
 #include "gpu_frame_api.h"
 #include "gpu_tactical_overlay.h"
 #include "gpu_composition_session.h"
@@ -684,6 +686,7 @@ public:
     c3x_renderer::environment_refresh::Reflection reflection;
     c3x_renderer::environment_refresh::Reflection region_reflection;
     std::string fidelity_root,shader_root,natural_pack_root;
+    std::string combat_effects_root; // CombatEffectsRuntime beside the unit pack
     c3x_renderer::fidelity::Natural natural;
     c3x_renderer::fidelity::TerrainPreparation terrain_preparation;
     c3x_renderer::fidelity::GroundTask::Queue ground_preparation;
@@ -996,9 +999,12 @@ public:
     ID3D11BlendState * blend_state = nullptr;
     // Mirror passes draw ground (terrain, hills, farm fields) color only: the
     // mirror's alpha then counts standing objects and mountains, which rivers
-    // reflect. The coverage state adds a mountain's alpha to that color.
+    // reflect. The coverage state adds a mountain's alpha to that color,
+    // scaled by its blend factor: rivers mirror mountains at half strength,
+    // since a tall peak beside a narrow river broke into pale patches.
     ID3D11BlendState * reflection_terrain_blend = nullptr;
     ID3D11BlendState * reflection_coverage_blend = nullptr;
+    static constexpr float mountain_mirror_coverage[4] = {.5f, .5f, .5f, .5f};
     ID3D11DepthStencilState * depth_state = nullptr;
     ID3D11RasterizerState * rasterizer_state = nullptr;
     ID3D11SamplerState * natural_wrap = nullptr, *natural_clamp = nullptr;
@@ -1844,6 +1850,7 @@ public:
         if (SUCCEEDED(hr))
             hr = device->CreateBlendState(&blend, &reflection_terrain_blend);
         blend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
+        blend.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_BLEND_FACTOR;
         if (SUCCEEDED(hr))
             hr = device->CreateBlendState(&blend, &reflection_coverage_blend);
 
@@ -2669,6 +2676,7 @@ public:
             !load_unit_animations(unit_root))) {
             unit_bodies.clear();trace.write("unit-bind","complete unit pack rejected; native bodies retained",true);
         }
+        combat_effects_root=unit_rendering_enabled&&!unit_bodies.units.empty()?packs_root+"\\CombatEffectsRuntime":"";
         if (pickup_profile) {
             std::string root = packs_root + "\\ResourceAnimationRuntime";
             std::vector<std::uint8_t> definitions;
@@ -2719,7 +2727,12 @@ public:
         // The former CityComponents/CityAdjuncts runtime bundles are retired.
         city_assets_ready = true;
 
-        std::string site_root = packs_root + "\\TileSitesRuntime";
+        // A Lab study may select a candidate site pack, as it can for resources.
+        char site_pack[128]="TileSitesRuntime",site_path[4*MAX_PATH];
+        if(GetEnvironmentVariableA("C3X_RENDERER_SITE_PACK",site_pack,sizeof(site_pack))>=sizeof(site_pack) ||
+           !site_pack[0] || !pack_path(packs_root.c_str(),site_pack,site_path,std::size(site_path)))
+            strcpy_s(site_pack,"TileSitesRuntime");
+        std::string site_root = packs_root + "\\" + site_pack;
         std::vector<std::uint8_t> site_bytes;
         site_assets_ready=read_file((site_root+"\\sites.bin").c_str(),site_bytes) &&
             load_feature_bundle(site_root+"\\sites.bin",site_bundle) && site_bundle.texture_paths.size()==8;
@@ -3738,6 +3751,21 @@ public:
                !json_number_after(data,"scale",location,unit.scale) || unit.scale<=0 || unit.scale>10 ||
                !json_number_after(data,"yaw_offset",location,unit.yaw_offset) ||
                !json_number_after(data,"offset_z",location,unit.offset_z))return false;
+            // Optional combat metadata: munition, line of fire, native sync,
+            // bomb timing, flight lift, turn rate and domain. Out-of-range
+            // values keep the neutral default.
+            if(!json_string_after(data,"impact_set",location,unit.arms.impact_set)||unit.arms.impact_set.size()>31)
+                unit.arms.impact_set.clear();
+            float combat_number=0;
+            if(json_number_after(data,"attack_bearing",location,combat_number)&&std::abs(combat_number)<=180)unit.arms.bearing=combat_number;
+            if(json_number_after(data,"attack_sync",location,combat_number)&&combat_number>0&&combat_number<1)unit.arms.sync=combat_number;
+            if(json_number_after(data,"attack_first_release",location,combat_number)&&combat_number>=0&&combat_number<=1)unit.arms.first=combat_number;
+            if(json_number_after(data,"bomb_blast_s",location,combat_number)&&combat_number>=0&&combat_number<=10)unit.arms.bomb_blast_s=combat_number;
+            if(json_number_after(data,"flight_lift",location,combat_number)&&combat_number>=0&&combat_number<=4)unit.arms.flight_lift=combat_number;
+            if(json_number_after(data,"turn_scale",location,combat_number)&&combat_number>=.25f&&combat_number<=8)unit.arms.turn_scale=combat_number;
+            std::string combat_policy;
+            unit.arms.sea=json_string_after(data,"ground_policy",location,combat_policy)&&combat_policy.find("waterline")!=std::string::npos;
+            unit.arms.air=json_string_after(data,"hover_policy",location,combat_policy);
             for(int key=0;key<int(keys);++key) {
                 std::string value;
                 if(!json_string_after(data,("key"+std::to_string(key)).c_str(),location,value) || value.size()>63)return false;
@@ -3764,6 +3792,17 @@ public:
                 if(json_number_after(data,"allow_exit_clip",action_location,exit_clip) &&
                    (exit_clip!=0 && (exit_clip!=1 || action.name!="death")))return false;
                 action.allow_exit_clip=exit_clip==1;
+                float release_count=0;
+                if(action.name=="attack"&&json_number_after(data,"release_count",action_location,release_count)&&
+                   release_count>=1&&release_count<=16&&release_count==int(release_count))
+                    for(int marker_index=0;marker_index<int(release_count);++marker_index){
+                        auto marker=json_member_position(data,("release"+std::to_string(marker_index)).c_str(),action_location);
+                        c3x_renderer::effects::Release release;
+                        if(json_number_after(data,"phase",marker,release.phase)&&release.phase>=0&&release.phase<=1&&
+                           json_string_after(data,"profile",marker,release.profile)&&release.profile.size()<64&&
+                           json_number_after(data,"x",marker,release.x)&&json_number_after(data,"y",marker,release.y)&&
+                           json_number_after(data,"z",marker,release.z))unit.arms.releases.push_back(release);
+                    }
                 for(int part_index=0;part_index<int(parts);++part_index) {
                     auto record=json_member_position(data,("part"+std::to_string(part_index)).c_str(),action_location);
                     c3x_renderer::UnitBodyRenderer::Part part;
@@ -7877,11 +7916,18 @@ public:
                     layer<=geometry_natural_decal?2:layer==geometry_natural_mountain?3:4;
                 context->VSSetShader(active_reflection.vs[provider],nullptr,0);
                 context->PSSetShader(active_reflection.ps[provider],nullptr,0);
-                // Mountains stay reflectable: a peak mirrored in the water reads well.
+                // Mountains add color like ground, then half coverage (as in
+                // the game): a peak mirrored in the water reads well.
+                bool mountain=layer==geometry_natural_mountain && reflection_coverage_blend;
                 bool ground=layer==geometry_land || layer==geometry_farm || layer==geometry_natural_terrain ||
-                    layer==geometry_natural_decal;
+                    layer==geometry_natural_decal || mountain;
                 context->OMSetBlendState(ground && reflection_terrain_blend?reflection_terrain_blend:blend_state,
                     nullptr,0xffffffffu);
+                if(mountain && reflection_terrain_blend){
+                    if(!draw_cached_geometry(layer, draw_inputs, rectangles, settings, cancellation,reflection_pass))
+                        return false;
+                    context->OMSetBlendState(reflection_coverage_blend,mountain_mirror_coverage,0xffffffffu);
+                }
             }
             return draw_cached_geometry(layer, draw_inputs, rectangles, settings, cancellation,reflection_pass);
         };
@@ -11511,7 +11557,10 @@ public:
                         [&](int x,int y){return ground_observations.current(observed_coordinate_key(x,y));},routes);
                     plan.farm_route_lines=unsigned(routes.patterns.size()+routes.routes.size());
                 }
-                if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags,
+                // Ground states draw from the site pack but own no native replacement.
+                unsigned ground_states=site_assets_ready?tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_POLLUTION|
+                    C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS):0u;
+                if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags|ground_states,
                         mine_assets_ready,farm_assets_ready,plan))return false;
                 if(farmed){
                     c3x_renderer::objects::clear_farm(plan,routes,object_assets,farm_resource_boxes(tile));
@@ -13263,11 +13312,11 @@ public:
             return C3X_RENDERER_RESULT_BUSY;
         }
         // Without a retained renderable view, camera-job presents only repeat
-        // native UI. Throttle those offers; a retained view, zoom or pan keeps
+        // native UI. Throttle those offers; a retained view or zoom keeps
         // its normal animation cadence between preparation chunks.
         bool zooming=std::abs(double(c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed))*65536.-
             double(presented_zoom_q16.load(std::memory_order_acquire)))>1.;
-        if(!consumer_pid&&camera_active&&!renderer_state.completed_scene_retained.load(std::memory_order_relaxed)&&!zooming&&!trial_panning.load(std::memory_order_relaxed)&&
+        if(!consumer_pid&&camera_active&&!renderer_state.completed_scene_retained.load(std::memory_order_relaxed)&&!zooming&&
            trial_job_presented&&ticks-trial_job_presented<frequency/8)
             return C3X_RENDERER_RESULT_BUSY;
         drain_facts_locked(); // the frame samples every fact received before it
@@ -13470,7 +13519,6 @@ public:
             std::memory_order_release,std::memory_order_relaxed)){}
     }
     unsigned presented_zoom()const{return presented_zoom_q16.load(std::memory_order_acquire);}
-    int presented_pan()const{return presented_pan_packed.load(std::memory_order_acquire);}
     int images_gpu(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* readback,unsigned capacity){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         start_locked();
@@ -14509,7 +14557,19 @@ public:
         return C3X_RENDERER_RESULT_OK;
     }
 
-    int accept_unit_state(c3x_renderer_unit_state_v1 const& value){return ingest_unit_fact(value);}
+    int accept_unit_state(c3x_renderer_unit_state_v1 const& value){
+        // Combat presentation facts: once effects are loaded the renderer
+        // draws every one, so the native effect's pixels may be hidden.
+        if(value.kind==C3X_RENDERER_UNIT_STATE_IMPACT||value.kind==C3X_RENDERER_UNIT_STATE_BOMB_RELEASE||
+           value.kind==C3X_RENDERER_UNIT_STATE_STANDALONE_EFFECT){
+            auto& director=c3x_renderer::effects::combat_director();
+            if(!director.ready())return C3X_RENDERER_RESULT_SUPERSEDED;
+            director.push({value.kind,value.unit_id,value.tile_x,value.tile_y,value.action,
+                value.presentation_time_ticks,value.presentation_frequency});
+            return C3X_RENDERER_RESULT_OK;
+        }
+        return ingest_unit_fact(value);
+    }
     int apply_unit_fact_locked(c3x_renderer_unit_state_v1 const& value){
         auto state=scene_changes.state();
         if(!state||state->identity.map_epoch!=value.map_epoch||
@@ -14528,6 +14588,11 @@ public:
         auto prior=unit_instances.state_of(value.unit_id);
         bool changed=prior&&(prior->action!=value.action||prior->damage!=value.damage||
             prior->max_hp!=value.max_hp||prior->kind!=value.kind);
+        // HP lost while visible is a combat round's outcome for its effects.
+        if(prior&&value.kind==C3X_RENDERER_UNIT_STATE_OBSERVE&&value.visible&&
+           prior->max_hp==value.max_hp&&value.damage>prior->damage)
+            c3x_renderer::effects::combat_director().push({c3x_renderer::effects::fact_round_hit,value.unit_id,
+                value.tile_x,value.tile_y,0,value.presentation_time_ticks,value.presentation_frequency});
         if(!unit_instances.state(value))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(changed){char detail[192];std::snprintf(detail,sizeof(detail),
             "id=%d tile=%d,%d action=%d kind=%u visible=%u segments=%zu",
@@ -14817,9 +14882,6 @@ private:
     bool visual_delivery=false,visual_present_pending=false,visual_allowed=true;
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
     std::atomic<unsigned> presented_zoom_q16{65536};
-    std::atomic<int> presented_pan_packed{0};
-    std::atomic<bool> trial_panning{false}; // a camera-step slide keeps every ambient frame
-    int pan_origin_x=0,pan_origin_y=0;bool pan_origin=false; // last published map origin (1x basis)
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     int last_visual_ready=-1;
 #ifdef C3X_HELPER_TRIAL
@@ -15422,8 +15484,20 @@ private:
             renderer_state.wave_chunks.capacity()*sizeof(CachedVertexChunk)+renderer_state.wave_geometry_bytes+
             renderer_state.fresh_unit_poses.capacity()*sizeof(renderer_state.fresh_unit_poses[0])+
             renderer_state.visibility_coverage.input_tiles.size()*256;
-        if(bytes>32u*1024u*1024u)return;
+        char cap_option[16]={};
+        std::size_t cap_mib=c3x_renderer::render_core::cached_environment("C3X_RENDERER_RETAIN_VIEW_MIB",cap_option,sizeof(cap_option))?
+            std::size_t(std::max(0,std::atoi(cap_option))):32u;
+        if(bytes>cap_mib*1024u*1024u){
+            if(renderer_state.trace.level>=1){char detail[192];sprintf_s(detail,"bytes=%zu geometry=%zu contributors=%zu waves=%zu cap_mib=%zu",
+                bytes,renderer_state.geometry_vertex_buffers.bytes(),renderer_state.region_contributors.bytes,renderer_state.wave_geometry_bytes,cap_mib);
+                renderer_state.trace.write("completed-scene-refused",detail,true);}
+            return;
+        }
+        auto fork_begin=std::chrono::steady_clock::now();
         completed_scene=std::make_unique<CompletedSceneView>(renderer_state,bytes);
+        if(renderer_state.trace.level>=2){char detail[96];sprintf_s(detail,"bytes=%zu ms=%.3f",bytes,
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-fork_begin).count());
+            renderer_state.trace.write("completed-scene-retained",detail,true);}
         // PreparedMapFrame owns the displayed ping-pong textures. Allocate a
         // separate target for the pending camera's first completed draw.
         renderer_state.release(renderer_state.gpu_map_texture);renderer_state.gpu_map_valid=false;
@@ -15520,7 +15594,7 @@ private:
                             a.display_id==b.display_id&&a.travelling==b.travelling;
                     });
                 bool animated=(renderer_state.ambient_count()!=0&&renderer_state.frame_has_resource_animation(frame))||
-                    renderer_state.visible_city_effects!=0||
+                    renderer_state.visible_city_effects!=0||c3x_renderer::effects::combat_director().animating()||
                     std::any_of(poses.begin(),poses.end(),
                     [](auto const& pose){return pose.animated||pose.travelling;});
                 // Keep the sampler reachable for later ordered unit events,
@@ -15857,19 +15931,6 @@ private:
                                     id.map_epoch,id.viewer_epoch,id.visibility_epoch,id.scene_epoch);
                                 renderer_state.trace.write("route-publication",detail,true);
                             }
-                            // A small camera step slides into place (screen pixels at the
-                            // settled presented zoom); jumps and zoom transitions cut.
-                            if(auto const& f=gpu_publication.frame;f.tile_count&&f.tiles){
-                                int ox=f.tiles[0].anchor_x-f.tiles[0].tile_x*int(f.tile_width)/2;
-                                int oy=f.tiles[0].anchor_y-f.tiles[0].tile_y*int(f.tile_height)/2;
-                                auto presented=double(presented_zoom_q16.load(std::memory_order_acquire));
-                                bool settled=std::abs(double(c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed))*65536.-presented)<=1.;
-                                int dx=int(std::lround(-double(ox-pan_origin_x)*presented/65536.));
-                                int dy=int(std::lround(-double(oy-pan_origin_y)*presented/65536.));
-                                bool step=pan_origin&&settled&&std::abs(dx)<=int(f.target_width)/2&&std::abs(dy)<=int(f.target_height)/2;
-                                session.camera_step(step?dx:0,step?dy:0);
-                                pan_origin_x=ox;pan_origin_y=oy;pan_origin=true;
-                            }
                             gpu_replacements=gpu_publication.replacements;gpu_fallbacks=gpu_publication.fallback;
                             gpu_metadata.replacement_tile_flags=gpu_replacements.empty()?nullptr:gpu_replacements.data();
                             gpu_metadata.fallback_tile_indices=gpu_fallbacks.empty()?nullptr:gpu_fallbacks.data();
@@ -16160,7 +16221,6 @@ private:
                         trial_surface_permit.presented();
                         renderer_state.gpu_composition->did_present();
                         presented_zoom_q16.store(renderer_state.gpu_composition->presented_zoom(),std::memory_order_release);
-                        presented_pan_packed.store(renderer_state.gpu_composition->presented_pan(),std::memory_order_release);
                         if(route_witness){
                             auto proof=renderer_state.gpu_composition->visual_publication();
                             char detail[768];sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu zoom_q16=%u result=1 mixed=%u frequency=%lld present_qpc=%lld",
@@ -16482,7 +16542,6 @@ private:
                 output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
                 result = C3X_RENDERER_RESULT_ERROR;
             }
-        trial_panning.store(renderer_state.gpu_composition&&renderer_state.gpu_composition->panning(),std::memory_order_relaxed);
         return result;
     }
 
@@ -17047,7 +17106,53 @@ c3x_remote_scene::Backend* remote_renderer_backend();
 int remote_world_capture_register(c3x_renderer_world_capture_fn callback);
 int remote_seed_world(c3x_renderer_camera_request_v1 const& request,bool preserve_units=false,bool loading=false);
 void remote_world_capture_tick(UINT_PTR id);
+// Game-thread time inside bridge entries, by entry and native operation
+// (C3X_RENDERER_TRACE_INPUT=1). Every 2 s, `native-entry-profile` lists the
+// costliest keys as name:ms/calls/max_ms: opN = native image operation,
+// observeN/lifetimeN = JGL observation/lifetime operation, then named unit,
+// map, navigation and world-timer entries (policy-read = op116 reads).
+namespace c3x_entry_profile {
+enum Key:unsigned {observe=256,lifetime=512,named=768,unit_animation=named,unit_visual,unit_motion,unit_move,unit_spawn,
+    unit_state,gpu_unit,map_view,navigation,camera_request,camera_poll,world_timer,policy_read,count};
+inline char const* name(unsigned key,char* buffer,std::size_t size){
+    static char const* names[]={"unit-animation","unit-visual","unit-motion","unit-move","unit-spawn","unit-state","gpu-unit",
+        "map-view","navigation","camera-request","camera-poll","world-timer","policy-read"};
+    if(key>=named)return names[key-named];
+    std::snprintf(buffer,size,"%s%u",key>=lifetime?"lifetime":key>=observe?"observe":"op",key%256);return buffer;
+}
+struct Profile {
+    bool enabled=false;DWORD thread=GetCurrentThreadId();LARGE_INTEGER frequency{},reported{};
+    std::array<double,count> ms{},longest{};std::array<unsigned,count> calls{};
+    Profile(){char value[4]={};enabled=GetEnvironmentVariableA("C3X_RENDERER_TRACE_INPUT",value,sizeof(value))==1&&value[0]=='1';
+        QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&reported);c3x_game_sampler::start(thread);}
+    void add(unsigned key,LARGE_INTEGER begin){
+        LARGE_INTEGER end;QueryPerformanceCounter(&end);
+        double spent=1000.*double(end.QuadPart-begin.QuadPart)/double(frequency.QuadPart);ms[key]+=spent;++calls[key];longest[key]=std::max(longest[key],spent);
+        double window=1000.*double(end.QuadPart-reported.QuadPart)/double(frequency.QuadPart);
+        if(window<2000.)return;
+        std::array<unsigned,count> order;for(unsigned k=0;k<count;++k)order[k]=k;
+        std::partial_sort(order.begin(),order.begin()+8,order.end(),[&](unsigned a,unsigned b){return ms[a]>ms[b];});
+        double total=0;for(double v:ms)total+=v;
+        char line[768];int used=std::snprintf(line,sizeof(line),"[C3X renderer] qpc=%lld stage=native-entry-profile window_ms=%.0f total_ms=%.1f top=",
+            static_cast<long long>(end.QuadPart),window,total);
+        for(unsigned n=0;n<8&&ms[order[n]]>0&&used>0&&used<int(sizeof(line))-64;++n){char label[24];
+            used+=std::snprintf(line+used,sizeof(line)-used,"%s%s:%.1f/%u/%.1f",n?",":"",name(order[n],label,sizeof(label)),ms[order[n]],calls[order[n]],longest[order[n]]);}
+        if(used>0&&used<int(sizeof(line))-1){line[used]='\n';line[used+1]=0;}
+        OutputDebugStringA(line);ms.fill(0);longest.fill(0);calls.fill(0);reported=end;
+    }
+};
+inline Profile& profile(){static Profile value;return value;}
+struct Scope {
+    unsigned key;LARGE_INTEGER begin{};bool on;
+    // Only the first profiled thread (Civ III's) is counted.
+    explicit Scope(unsigned k):key(k<count?k:count-1),on(profile().enabled&&GetCurrentThreadId()==profile().thread){if(on)QueryPerformanceCounter(&begin);}
+    ~Scope(){if(on)profile().add(key,begin);}
+    Scope(Scope const&)=delete;Scope& operator=(Scope const&)=delete;
+};
+}
+
 void CALLBACK renderer_world_timer(HWND,UINT,UINT_PTR id,DWORD){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::world_timer);
     try{if(remote_renderer_requested())remote_world_capture_tick(id);
         else if(renderer_worker)renderer_worker->capture_world_tick(id);}
     catch(...){OutputDebugStringA("[C3X renderer] world capture page unavailable\n");}
@@ -17703,6 +17808,7 @@ extern "C" __declspec(dllexport) void c3x_renderer_unit_forget(int unit_id) {
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_unit_animation(c3x_renderer_unit_animation_v1 const* animation){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::unit_animation);
     if(!animation||animation->struct_size!=sizeof(*animation))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_inputs::Call input(c3x_inputs::Kind::unit_visual,1,[&](auto& out){auto value=*animation;c3x_inputs::unit_animation_fields(out,value);});
     try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_animation(*animation):
@@ -17711,6 +17817,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_animation(c3x_renderer_un
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_unit_visual(c3x_renderer_unit_visual_v1 const* visual){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::unit_visual);
     if(!visual||visual->struct_size!=sizeof(*visual))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_inputs::Call input(c3x_inputs::Kind::unit_visual,0,[&](auto& out){auto value=*visual;c3x_inputs::unit_visual_fields(out,value);});
     try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_visual(*visual):
@@ -17721,6 +17828,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_visual(c3x_renderer_unit_
 // The same copied tile pair has a separate event for visual travel admission.
 // Commit remains authoritative state; this entry never changes world contents.
 extern "C" __declspec(dllexport) int c3x_renderer_unit_motion(c3x_renderer_unit_move_v1 const* move){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::unit_motion);
     if(!move||move->struct_size!=sizeof(*move))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_inputs::Call input(c3x_inputs::Kind::unit_move,1,[&](auto& out){auto value=*move;c3x_inputs::unit_move_fields(out,value);});
     try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_motion(*move):
@@ -17729,6 +17837,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_motion(c3x_renderer_unit_
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_unit_move(c3x_renderer_unit_move_v1 const* move){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::unit_move);
     if(!move||move->struct_size!=sizeof(*move))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_inputs::Call input(c3x_inputs::Kind::unit_move,0,[&](auto& out){auto value=*move;c3x_inputs::unit_move_fields(out,value);});
     try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_move(*move):
@@ -17737,6 +17846,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_move(c3x_renderer_unit_mo
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_unit_spawn(c3x_renderer_unit_spawn_v1 const* spawn){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::unit_spawn);
     if(!spawn||spawn->struct_size!=sizeof(*spawn))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_inputs::Call input(c3x_inputs::Kind::unit_spawn,0,[&](auto& out){auto value=*spawn;c3x_inputs::unit_spawn_fields(out,value);});
     try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_spawn(*spawn):
@@ -17745,6 +17855,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_spawn(c3x_renderer_unit_s
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_unit_state(c3x_renderer_unit_state_v1 const* state){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::unit_state);
     if(!state||state->struct_size!=sizeof(*state))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     try{
         if(remote_renderer_requested())return remote_renderer_backend()->unit_state(*state);
@@ -17798,6 +17909,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_schedule_idle(
 
 // Optional ABI extension: invoked synchronously by native pass-through hooks.
 extern "C" __declspec(dllexport) int c3x_renderer_native_observe(c3x_renderer_native_observation const* event) {
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::observe+(event?unsigned(event->operation)&255u:255u));
     static c3x_native_observation::Capture capture;
     try { return capture.observe(event); }
     catch (...) { capture.ended=true; return 0; }
@@ -18077,8 +18189,6 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
     }
     if(operation==C3X_NATIVE_ZOOM_PRESENTED)return remote_renderer_requested()?int(remote_renderer_backend()->presented_zoom()):
         renderer_worker?int(renderer_worker->presented_zoom()):65536;
-    if(operation==C3X_NATIVE_PAN_PRESENTED)return remote_renderer_requested()?remote_renderer_backend()->presented_pan():
-        renderer_worker?renderer_worker->presented_pan():0;
     if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
     if(operation==C3X_NATIVE_VISUAL_POLICY)return remote_renderer_requested()?remote_renderer_backend()->visual_policy(color):
         renderer_worker?renderer_worker->visual_policy(color):0;
@@ -18136,6 +18246,7 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
+    c3x_entry_profile::Scope profiled(operation==C3X_NATIVE_VISUAL_POLICY&&color>=2?unsigned(c3x_entry_profile::policy_read):unsigned(operation)&255u);
     c3x_inputs::NativeCall input(1,[&](auto& out){c3x_inputs::native_operation_input(out,operation,image,source,from,to,color);});
     // Record the window dependency at every final native handoff. The CPU
     // snapshot and cross-process surface routes may ask for it at different
@@ -18172,6 +18283,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
 
 // Existing unit playback and pose cache, with GPU-native destination ownership.
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 const* unit,c3x_renderer_gpu_unit_v1 const* target,int* bounds){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::gpu_unit);
     bool const capture=target&&target->ticket==0&&target->destination==0&&target->background==0&&
         target->detail==0&&target->background_detail==0&&target->clip[0]==0&&target->clip[1]==0&&target->clip[2]==0&&target->clip[3]==0;
     if(!unit||unit->struct_size!=sizeof(*unit)||unit->unit_key[63]!=0||!target||target->struct_size!=sizeof(*target)||!bounds||
@@ -18189,6 +18301,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 
 // cannot render, request work, or infer that an older image has no CPU aliases.
 int& native_lifetime_outcome(){thread_local int value=0;return value;}
 extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,void* image,int context){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::lifetime+(unsigned(operation)&255u));
     static c3x_native_images::Lifetimes lifetimes;
     c3x_inputs::Call input(c3x_inputs::Kind::native_operation,1,[&](auto& out){out(std::int32_t(operation));out.u32(c3x_inputs::runtime().object(image));out(std::int32_t(context));out.u32(c3x_inputs::runtime().thread());});
     bool revoked=false,early_escape=false;
@@ -18287,6 +18400,7 @@ bool ensure_native_composition(void* image){
 }
 extern "C" __declspec(dllexport) int c3x_renderer_native_camera_request(void* image,
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_i64* ticket){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::camera_request);
     c3x_renderer_output_v1 check={C3X_RENDERER_API_VERSION,sizeof(check)};
     if(!ticket || !request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || request->struct_size!=sizeof(*request) ||
         !valid_frame(request->frame,&check))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
@@ -18299,6 +18413,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_camera_request(void* im
 }
 extern "C" __declspec(dllexport) int c3x_renderer_native_camera_poll(void* image,
     c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1* view){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::camera_poll);
     if(!view || view->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || view->struct_size!=sizeof(*view))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_inputs::NativeCall input(4,[&](auto& out){out.u32(c3x_inputs::native_id(image));out(ticket);});
     auto finish=[&](int code){return input.result(code,[&](auto& out){c3x_inputs::adoption_witness(out,view->camera,code);});};
@@ -18309,6 +18424,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_camera_poll(void* image
 }
 extern "C" __declspec(dllexport) int c3x_renderer_native_navigation(int action,void* image,
     custom_renderer_native_view* view,c3x_renderer_camera_request_v1 const* request){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::navigation);
     bool requesting=action==C3X_NAV_REQUEST || action==C3X_NAV_REQUEST_SCROLL;
     c3x_renderer_output_v1 check={C3X_RENDERER_API_VERSION,sizeof(check)};
     if(!view || action<C3X_NAV_REQUEST || action>C3X_NAV_PENDING ||
@@ -18354,6 +18470,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_map(int action,void* im
 // metadata-only export remains available to explicit integration controls.
 extern "C" __declspec(dllexport) int c3x_renderer_native_map_view(int action,void* image,
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_camera_view_v1* view){
+    c3x_entry_profile::Scope profiled(c3x_entry_profile::map_view);
     if(action==C3X_NATIVE_MAP_PREPARE && (!view || view->version!=C3X_RENDERER_CAMERA_VIEW_VERSION ||
        view->struct_size!=sizeof(*view)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_renderer_output_v1 metadata={C3X_RENDERER_API_VERSION,sizeof(metadata)};

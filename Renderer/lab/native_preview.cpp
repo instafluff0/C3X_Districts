@@ -25,9 +25,19 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
     bool sites=std::strcmp(category,"huts-camps")==0 || huts || camps;
     // Forest/jungle cases: C3C BIQ bonus/overlay bits carried in the scene CSV
     // and a "dx,dy,Name;..." resource list, both supplied by the dispatcher.
-    char overlays[4]={},listed[1024]={},city_list[2048]={};
+    char overlays[4]={},listed[1024]={},city_list[2048]={},ruin_list[512]={};
     if(GetEnvironmentVariableA("C3X_LAB_TILE_OVERLAYS",overlays,sizeof(overlays)) && overlays[0]) {
         GetEnvironmentVariableA("C3X_LAB_TILE_RESOURCES",listed,sizeof(listed));
+        // City ruins (a Tile field, not an overlay bit): "dx,dy;..." from the view centre.
+        GetEnvironmentVariableA("C3X_LAB_TILE_RUINS",ruin_list,sizeof(ruin_list));
+        for(char const* entry=ruin_list;entry && *entry;) {
+            int dx=0,dy=0;
+            if(sscanf_s(entry,"%d,%d",&dx,&dy)==2)
+                for(auto& tile:tiles)
+                    if(((tile.tile_x%map_width)+map_width)%map_width-center_x==dx && tile.tile_y-center_y==dy)
+                        tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_RUINS;
+            entry=std::strchr(entry,';');if(entry)++entry;
+        }
         // City cases: "dx,dy,culture,era,size,capital,walled;..." from the view centre.
         GetEnvironmentVariableA("C3X_LAB_TILE_CITIES",city_list,sizeof(city_list));
         int city_index=0;
@@ -51,6 +61,8 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
             if(bits&8u){tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_IRRIGATION;tile.irrigation_mask=15;}
             if(bits&0x20u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
             if(bits&0x80u){tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;tile.barbarian_tribe_id=7;}
+            if(bits&0x40u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_POLLUTION;
+            if(bits&0x100u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_CRATER;
             if((tile.square_parts&0x20u) && tile.real_terrain_type==7)tile.feature_flags|=C3X_RENDERER_FEATURE_PINE;
             int x=((tile.tile_x%map_width)+map_width)%map_width-center_x, y=tile.tile_y-center_y, index=0;
             for(char const* entry=listed;entry && *entry;++index) {

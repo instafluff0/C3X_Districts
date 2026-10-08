@@ -41,7 +41,9 @@
     "Renderer.native.test_scene_depth",
     "Renderer.native.test_object_compiler",
     "Renderer.native.test_farm_kit",
-    "Renderer.native.test_mine_placement"
+    "Renderer.native.test_mine_placement",
+    "Renderer.native.test_bridge_natural_depth",
+    "Renderer.tools.asset_compiler.test_build_route_bridge_runtime"
   ],
   "references": {
     "d3d11": [

@@ -3,7 +3,7 @@
 #include "../camera_completion.h"
 
 namespace c3x_helper_trial {
-constexpr unsigned wire_magic=0x32483343,wire_version=15,wire_capacity=16*1024*1024;
+constexpr unsigned wire_magic=0x32483343,wire_version=16,wire_capacity=16*1024*1024;
 struct Wire {
     unsigned magic,version,sequence,kind,subtype,size,reply_size,status,code,shared_raw,expected_code,executed,live;
     unsigned width,height,rendered,fallback,hash[4],gpu_hash[4],gpu_hash_valid;
@@ -17,7 +17,6 @@ struct Wire {
     unsigned consumer_pid;
     alignas(4) volatile std::int32_t visual_frames;
     alignas(4) volatile std::int32_t presented_zoom_q16;
-    alignas(4) volatile std::int32_t presented_pan; // C3X_NATIVE_PAN_PRESENTED packing
     // Advisory admission pressure, independent of the ordered command payload.
     alignas(4) volatile std::int32_t native_queue_records;
     // Receipt-only cancellation mailbox. No reliable resource/action command

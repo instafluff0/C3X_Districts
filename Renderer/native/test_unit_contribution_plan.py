@@ -35,6 +35,7 @@ BASE = r'''
 #include "Renderer/native/render_core/unit_contribution_plan.h"
 #include "Renderer/native/render_core/unit_pose_transition.h"
 #include "Renderer/native/unit_animation_runtime.h"
+#include "Renderer/native/render_core/combat_effects.h"
 #include <cassert>
 #include <memory>
 #include <string>
@@ -83,6 +84,7 @@ def direct_stub():
 #include "Renderer/native/source_fidelity/light_frame.h"
 #include "Renderer/native/render_core/frame_sample_cache.h"
 #include "Renderer/native/render_core/skin_shadow_bounds.h"
+#include "Renderer/native/render_core/combat_effects.h"
 #include <climits>
 #include <cfloat>
 #define FALSE 0
@@ -99,7 +101,8 @@ struct D3D11_SUBRESOURCE_DATA{void const* pSysMem=nullptr;};
 struct D3D11_SHADER_RESOURCE_VIEW_DESC{int ViewDimension=0;struct{unsigned NumElements=0;}Buffer;};
 enum {D3D11_BIND_SHADER_RESOURCE=1,D3D11_RESOURCE_MISC_BUFFER_STRUCTURED=2,D3D11_SRV_DIMENSION_BUFFER=3,
  D3D11_CLEAR_DEPTH=16,D3D11_CLEAR_STENCIL=4,D3D11_COMPARISON_ALWAYS=5,D3D11_STENCIL_OP_KEEP=6,D3D11_STENCIL_OP_REPLACE=7,
- D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST=8,DXGI_FORMAT_R32_UINT=9,D3D11_USAGE_DEFAULT=10,D3D11_BIND_CONSTANT_BUFFER=11};
+ D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST=8,DXGI_FORMAT_R32_UINT=9,D3D11_USAGE_DEFAULT=10,D3D11_BIND_CONSTANT_BUFFER=11,
+ D3D11_STENCIL_OP_INCR_SAT=12,D3D11_COMPARISON_EQUAL=13};
 struct ID3D11Buffer{unsigned references=1;bool heap=false,immutable=false;std::array<float,32> values{};
  static inline unsigned live_heap=0;
  void retain(){++references;}void release(){if(!--references&&heap){--live_heap;delete this;}}};
@@ -149,19 +152,23 @@ struct Context{
  template<class... A>void IASetIndexBuffer(A&&...){}
  void DrawIndexed(unsigned,unsigned,int){if(shader==shadow_shader)++shadows;else{++bodies;assert(bound_material);body_materials.push_back(bound_material->values);}}
 };
-struct ScenePose{c3x_renderer_unit_v1 draw{};unsigned unit=0,action=0;std::uint64_t pose_identity=1;int tile_x=0,tile_y=0;bool cursor=false;};
+struct ScenePose{c3x_renderer_unit_v1 draw{};unsigned unit=0,action=0;std::uint64_t pose_identity=1;int tile_x=0,tile_y=0;bool cursor=false;
+ long long pose_ticks=-1;bool travelling=false,owner_ring=false;};
+inline unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
+template<class... A>int sscanf_s(A&&...){return 0;}
 namespace c3x_renderer{namespace tactical{
-struct Input{std::vector<int> primitives;void ring(float,float,float,bool){primitives.push_back(1);}};
+struct Input{std::vector<int> primitives;void ring(float,float,float,bool){primitives.push_back(1);}
+ void owner_disc(float,float,float,std::array<float,4>){primitives.push_back(2);}};
 }}
 struct Tactical{struct Rect{int left,top,right,bottom;};void draw_into(Device*,Context*,c3x_renderer::tactical::Input const&,Rect,double,ID3D11RenderTargetView*,unsigned,unsigned,float,float){}};
 namespace c3x_renderer{struct UnitBodyRenderer{
 ''' + declarations + r'''
- std::vector<Mesh> meshes;std::vector<Texture> textures;std::vector<Unit> units;
+ std::vector<Mesh> meshes;std::vector<Texture> textures;std::vector<Unit> units;float look[3]={};
 ''' + metadata + r'''
 };}
 struct Renderer{
  Device device_value;Context context_value;Device* device=&device_value;Context* context=&context_value;
- c3x_renderer::UnitBodyRenderer unit_bodies;unsigned content_view_width=1000,content_view_height=800;
+ c3x_renderer::UnitBodyRenderer unit_bodies;std::array<float,3> unit_look{};unsigned content_view_width=1000,content_view_height=800;
  struct{bool enabled=true;}reflection;
  struct{struct Field{std::vector<unsigned char> pixels;float amplitude=0;};struct{std::array<Field,2> fields;}low_relief;
  ID3D11DepthStencilState depth;ID3D11DepthStencilState* decal_depth=&depth;}natural;
@@ -182,7 +189,8 @@ struct Direct{
  Microsoft::WRL::ComPtr<ID3D11RenderTargetView> self_shadow_target;
  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> self_shadow_view;
  std::vector<UnitShadow::Point> shadow_points;unsigned draws=0,ground_queries=0,self_maps=0;
- ID3D11DepthStencilState* visible_depth=nullptr;void* layout=nullptr;void* vertex=nullptr;int pixel_value=0,shadow_value=1;
+ ID3D11DepthStencilState* visible_depth=nullptr;ID3D11DepthStencilState* shadow_once=nullptr;void* layout=nullptr;
+ float look[3]={};bool look_read=false,look_override=false;int owner_rings=-1;void* vertex=nullptr;int pixel_value=0,shadow_value=1;
  int* pixel=&pixel_value;int* shadow_pixel=&shadow_value;ID3D11Buffer placement_value,material_value,beauty_value;
  ID3D11Buffer* placement=&placement_value;ID3D11Buffer* material=&material_value;ID3D11Buffer* beauty=&beauty_value;
  ID3D11ShaderResourceView srv;ID3D11ShaderResourceView* unshadowed_view=&srv;void* samplers[4]={};

@@ -273,7 +273,13 @@ def decode_decal_mesh(
     vertex_count: int,
     index_count: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Recover exact shared decal triangles and their atlas UVs."""
+    """Recover exact shared decal triangles and their atlas UVs.
+
+    A decal draws `draw_count` consecutive vertices from `first_index +
+    base_vertex` of its shared vertex buffer, non-indexed. The index buffer in
+    the same slot belongs to other geometry: its indices exceed this buffer's
+    vertex count, and reading through it warps the quads (2026-10-07 audit of
+    33 Base, Civ Royale, Gathering Storm and Gran Colombia decals)."""
     if len(raw) != DECAL_BYTES or len(footprint_bounds) != 4:
         raise ValueError("Decal mesh input is malformed")
     buffer_index, topology, first_index, base_vertex, draw_count = struct.unpack_from(
@@ -281,19 +287,21 @@ def decode_decal_mesh(
     )
     if topology != 0:
         raise ValueError(f"Unsupported decal topology {topology}")
-    if draw_count < 3 or draw_count % 3 or first_index + draw_count > index_count:
+    if draw_count < 3 or draw_count % 3 or first_index + base_vertex + draw_count > vertex_count:
         raise ValueError("Decal descriptor has an invalid triangle range")
     if len(vertex_bytes) != vertex_count * DECAL_VERTEX_STRIDE:
         raise ValueError("Decal vertex payload has an unexpected layout")
     if len(index_bytes) != index_count * 2:
         raise ValueError("Decal index payload has an unexpected layout")
 
-    source_indices = struct.unpack_from(f"<{draw_count}H", index_bytes, first_index * 2)
-    source_indices = tuple(index + base_vertex for index in source_indices)
-    if min(source_indices) < 0 or max(source_indices) >= vertex_count:
-        raise ValueError("Decal triangle references an out-of-range vertex")
-    ordered = list(dict.fromkeys(source_indices))
-    remap = {source: index for index, source in enumerate(ordered)}
+    first = first_index + base_vertex
+    packed = [vertex_bytes[(first + k) * DECAL_VERTEX_STRIDE:(first + k + 1) * DECAL_VERTEX_STRIDE]
+               for k in range(draw_count)]
+    # Shared corners repeat byte for byte; keep one vertex for each.
+    unique = list(dict.fromkeys(packed))
+    remap = {value: index for index, value in enumerate(unique)}
+    source_indices = tuple(first + unique.index(value) for value in packed)
+    ordered = [first + packed.index(value) for value in unique]
     left, top, right, bottom = footprint_bounds
     vertices = []
     for source in ordered:
@@ -316,7 +324,7 @@ def decode_decal_mesh(
         })
     return {
         "vertices": vertices,
-        "indices": [remap[index] for index in source_indices],
+        "indices": [remap[value] for value in packed],
     }, {
         "buffer_index": buffer_index,
         "topology": "triangles",

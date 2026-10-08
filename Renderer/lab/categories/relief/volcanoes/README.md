@@ -1,50 +1,45 @@
 # Volcanoes
 
-Ordinary Civ III volcano terrain (`real_terrain_type == 10`) now has a
-current-code Renderer64 candidate with sixteen stable visual forms. Slot 00
-keeps the previous cone; the others combine the ordinary authored crater with
-the five existing mountain height fields, including the raised broad and eroded
-forms and their corrected B facings. The form is selected from canonical tile
-coordinates, independently of Civ III's four-neighbor PCX sprite mask. Wrapped
-occurrences keep the same form and rock orientation.
+Accepted 2026-10-07 (Lab), replacing the sixteen hashed forms. Ordinary Civ III
+volcano terrain (`real_terrain_type == 10`) is a stamp of the shared mountain
+relief (`lab/shared/natural/mountain_shape.h`), so it joins neighbouring
+mountains and volcanoes through the same saddles and routes and resources sit
+on the rendered surface.
 
-The staged evaluation build uses dormant rock without inner lava or smoke.
-When the four diagonal neighbors select forest or jungle, the fidelity
-renderer places four small natural trees toward the lower edge of the same
-rock mesh. Raised tiles receive no vegetation-floor decals. The fixed
-references have not been replaced. Snow-specific art and natural-wonder
-volcanoes remain deferred.
+- Shape: one clean stratovolcano cone (concave flanks, shallow crater, foot
+  easing into the ground about 0.64 tiles out), rim about 84 (mountains 112):
+  at 1x the summit sits about 39 px above the tile centre, just past the tile
+  diamond's top corner (accepted follow-up: "shouldn't extend much beyond the
+  height of the tile"),
+  carrying 55% of Civ VI's terrain-element gullies about their radial mean and
+  its authored footprint. Each tile turns and mirrors it; height varies ±4%.
+- Material: Civ VI's ash colour at element scale over ground (not grey stone);
+  the ash meets the ground through a rise blend like mountain rock.
+- Activity: world-topology bit 24 (an active tile effect) lights a crusted
+  crater pool and its inner wall; bit 27 (eruption, `V[2] == AE_Eruption`)
+  brightens it and adds narrow lava flows down the authored channels. With
+  custom rendering on, the injected spawn patch hides Civ III's own volcano
+  smoke/lava animation; the effect keeps its state.
+- The retired ground provider (`render_core/relief_query.h`) contributes
+  nothing for volcanoes under separate natural relief; one slot family used to
+  raise a second cone there.
+- Smoke: an active volcano carries a plume in the city effect layer
+  (`city_fidelity::volcano_plume`, kind 93): a narrow, tall camera-facing quad
+  over the crater, drawn by `q8_effect_plume` (shared with chimney smoke) as a
+  darker, slower ash column, larger and lit orange from the crater during an
+  eruption. It animates through the city effect pass and needs the city pack's
+  effect material. Snow-specific art and natural-wonder volcanoes remain
+  deferred.
 
-The repeatable current-code [Lab capture script](../../../studies/volcanoes/current_port.py)
-produces [sixteen isolated grassland examples](../../../out/volcanoes/current-port/grassland-16-current.png),
-[forest context](../../../out/volcanoes/current-port/05-forest/preview.png) and
-[jungle context](../../../out/volcanoes/current-port/05-jungle/preview.png).
-Each capture records the exact DLL, preview, scene and image hashes and requires
-zero fallback tiles. The active-state check uses the same bare rock appearance.
-
-The current native bridge and 64-bit Renderer64 companion compile with
-`BUILD_RENDERER64.bat no-stage`. The private candidate shader bundle is built
-with `Renderer/tools/prepare_renderer64_materials.py terrain mountain` and
-keeps all other pinned shaders byte-identical. The connected asynchronous
-bridge witness ran against that bundle before staging. The matching bridge,
-64-bit renderer and helper plus the two changed shader sources are now staged
-for an in-game evaluation. Windows-side hashes match the checked candidate,
-and the staged startup probe is healthy. A small task-local backup under
-`Renderer/native/build/volcano-port/pre-stage-backup/` retains the five
-previous files for rollback. No injected code or fixed reference was changed
-for this stage. Source art is reused; the generic runtime pack format is
-unchanged.
+Study, tools and review sheets: [mountain study notes](../../../studies/mountains/README.md)
+(`ranges.py --layout volcanoes`). Game pack: `Renderer/tools/overlay_volcano_shading.py`
+copies the volcano shader regions into the Renderer64 runtime pack.
 
 Portable checks:
 
 ```sh
-python3 -m unittest Renderer.native.test_render_core Renderer.native.source_fidelity.test_contract Renderer.lab.test_volcano_fixture Renderer.lab.test_natural
+python3 -m unittest Renderer.lab.test_natural Renderer.lab.test_volcano_fixture Renderer.native.source_fidelity.test_contract Renderer.native.test_volcano_effect_suppression Renderer.native.test_native_view_identity Renderer.native.test_city_site Renderer.native.test_world_object_identity
 ```
 
-The ordinary category dispatcher remains available for routine category
-checks. It currently cannot complete its all-source preparation because an
-unrelated ignored city-study input is missing; the focused native captures
-above use the built candidate directly and do not reconstruct that input.
-Installed source evidence and older isolated studies remain in the
-[volcano study notes](../../../studies/volcanoes/README.md). Their images are
-exploration history, not this Renderer64 candidate or a live-game check.
+Older isolated studies remain in the [volcano study notes](../../../studies/volcanoes/README.md);
+their images are exploration history.

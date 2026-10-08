@@ -142,6 +142,17 @@ int main(){
    city_fidelity::ContinueCompilation{},false,city_fidelity::site_filter(library.compositions[0],10,12,land,shore,river,flat)));
  auto const* w=effect_chunk(wet);assert(w && w->vertices.size()==12);
  for(auto const& v:w->vertices)assert(v.base_terrain<91.5f);
+ // An active volcano's plume: one quad rising from just above its crater,
+ // kind 93, thickened (strength 1.6) by an eruption; none without the material.
+ city_fidelity::Surfaces plume;
+ assert(city_fidelity::volcano_plume(library,10,12,40.f,true,projection,false,plume) && plume.chunks.size()==1);
+ auto const* pv=effect_chunk(plume);assert(pv && pv->vertices.size()==6 && pv->effect && pv->terrain_conforming);
+ for(auto const& v:pv->vertices)assert(v.base_terrain==93 && v.macro_v==1.6f && v.macro_u>=0 && v.macro_u<64);
+ assert(std::abs(pv->vertices[0].world_z-43.f/112)<1e-5f && pv->vertices[2].world_z>pv->vertices[1].world_z+1);
+ city_fidelity::Surfaces smoldering;assert(city_fidelity::volcano_plume(library,10,12,40.f,false,projection,false,smoldering));
+ assert(effect_chunk(smoldering)->vertices[0].macro_v==1);
+ library.effect_material=7;city_fidelity::Surfaces none;
+ assert(!city_fidelity::volcano_plume(library,10,12,40.f,true,projection,false,none) && none.chunks.empty());
  std::puts("PASS city effects: upright screen-aligned quads after bodies, site-aware, gated by material");
 }
 ''')

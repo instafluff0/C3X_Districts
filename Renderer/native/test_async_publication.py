@@ -87,6 +87,80 @@ int main(){
 }
 ''')
 
+    def test_repeated_visual_permission_posts_once_until_reset(self):
+        # Civ III sends the same ambient permission on every present. Each post
+        # cost two helper round trips on the saturated busy-map transport.
+        run_cpp(r'''
+#include "Renderer/sandbox/async_scene_client.h"
+#include <cassert>
+#include <vector>
+struct State {std::vector<unsigned> sets;int resets=0;};
+struct Fake {
+ State& state;explicit Fake(State& value):state(value){}
+ bool alive()const{return true;}
+ void publication_pressure(std::size_t){}
+ int stats(){return 0;}
+ int reset(){++state.resets;return C3X_RENDERER_RESULT_OK;}
+ int visual_policy(unsigned value){if(value<2)state.sets.push_back(value);return 1;}
+};
+int main(){
+ State state;c3x_remote_scene::AsyncSceneClient<Fake> client(true,[](char const*){assert(false);},state);
+ for(int n=0;n<5;++n)assert(client.visual_policy(1)==C3X_RENDERER_RESULT_OK);
+ client.stats();assert((state.sets==std::vector<unsigned>{1})&&client.visual_policy(2)==1);
+ client.visual_policy(0);client.visual_policy(0);client.visual_policy(1);client.stats();
+ assert((state.sets==std::vector<unsigned>{1,0,1}));
+ // A reset clears the helper's state, so the same permission is sent again.
+ assert(client.reset()==C3X_RENDERER_RESULT_OK&&state.resets==1);
+ client.visual_policy(1);client.visual_policy(1);client.stats();
+ assert((state.sets==std::vector<unsigned>{1,0,1,1}));
+}
+''')
+
+    def test_consecutive_tactical_strokes_join_one_ordered_record(self):
+        # Every native line was its own helper round trip (~150 a second on the
+        # busy map). Lines into the same canvas that queue back to back now
+        # share one record; anything else between them keeps its place.
+        run_cpp(r'''
+#include "Renderer/sandbox/async_scene_client.h"
+#include <cassert>
+#include <future>
+#include <vector>
+struct Draw {std::vector<float> xs;long long destination;bool animated;};
+struct State {std::promise<void> entered,release;std::shared_future<void> held=release.get_future().share();
+ bool stalled=false;std::vector<Draw> draws;std::vector<int> units;};
+struct Fake {
+ State& state;explicit Fake(State& value):state(value){}
+ bool alive()const{return true;}
+ void publication_pressure(std::size_t){}
+ int stats(){return 0;}
+ int visual_policy(unsigned value){if(value<2&&!state.stalled){state.stalled=true;state.entered.set_value();state.held.wait();}return 1;}
+ int set_units(int value){state.units.push_back(value);state.draws.push_back({{},-1,false});return C3X_RENDERER_RESULT_OK;}
+ int tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
+  Draw draw{{},target.destination,capture.animated};for(auto const& p:capture.primitives)draw.xs.push_back(p.shape[0]);
+  state.draws.push_back(draw);return C3X_RENDERER_RESULT_OK;}
+};
+int main(){
+ State state;c3x_remote_scene::AsyncSceneClient<Fake> client(true,[](char const*){assert(false);},state);
+ client.visual_policy(1);state.entered.get_future().get(); // the consumer is busy
+ auto line=[&](long long destination,float x,bool animated=false){
+  c3x_renderer::tactical::Input capture;capture.line(x,0,x+4,0);capture.animated=animated;
+  c3x_renderer_gpu_unit_v1 target={sizeof(target)};target.destination=destination;target.clip[2]=640;target.clip[3]=480;
+  assert(client.tactical(capture,target)==C3X_RENDERER_RESULT_OK);};
+ line(1,0);line(1,1);line(1,2);line(2,10);line(1,3);
+ assert(client.set_units(1)==C3X_RENDERER_RESULT_OK);
+ line(1,4);line(1,5,true);line(1,6);
+ state.release.set_value();client.stats();
+ auto& d=state.draws;assert(d.size()==7);
+ assert((d[0].xs==std::vector<float>{0.f,1.f,2.f})&&d[0].destination==1&&!d[0].animated);
+ assert((d[1].xs==std::vector<float>{10.f})&&d[1].destination==2);
+ assert((d[2].xs==std::vector<float>{3.f})&&d[2].destination==1);
+ assert(d[3].destination==-1&&(state.units==std::vector<int>{1}));
+ assert((d[4].xs==std::vector<float>{4.f})&&!d[4].animated);
+ assert((d[5].xs==std::vector<float>{5.f})&&d[5].animated);
+ assert((d[6].xs==std::vector<float>{6.f})&&!d[6].animated);
+}
+''')
+
     def test_busy_native_burst_has_independent_work_and_packet_bounds(self):
         run_cpp(r'''
 #include "Renderer/sandbox/async_publication.h"

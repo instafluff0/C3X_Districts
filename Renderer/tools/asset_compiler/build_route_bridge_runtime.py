@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import colorsys
 import json
 import struct
 from pathlib import Path
@@ -40,8 +41,79 @@ def _group(name: str, placements: list[tuple[int, float]]) -> bytes:
     return bytes(group)
 
 
-DEFAULT_TUNNEL_PACK = Path("Renderer/packs/RouteTunnelsNormalized")
+# Railroad tunnels are out of the game (the user's call, 2026-10-07, after
+# portals crowded the 1498 save's ranges): the bundle carries them only when
+# --tunnel-pack names this pack explicitly, for Lab study.
+TUNNEL_PACK = Path("Renderer/packs/RouteTunnelsNormalized")
+# A tunnel portal's block reaches back into its mountain: the runtime picks
+# the shortest of these lengths (behind the facade) that the rock covers.
+TUNNEL_LENGTHS = (1.0, 1.5, 2.0, 3.0, 4.0)
+TUNNEL_FACADE_Y = -0.025
+TUNNEL_AXIS_X = -0.00705
 
+
+def grey_rgb(r: float, g: float, b: float) -> tuple[float, float, float]:
+    """The tunnel's brown rock as the mountains' grey rock: its luminance
+    (slightly lifted), without its colour. Strong colours (the red signal
+    stripes) keep theirs."""
+    _, saturation, _ = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    if saturation > .6:
+        return r, g, b
+    grey = min(255.0, (.2126 * r + .7152 * g + .0722 * b) * 1.12)
+    return grey * .98, grey, grey
+
+
+def _rgb565(rgb: tuple[float, float, float]) -> int:
+    r, g, b = (min(255, max(0, round(c))) for c in rgb)
+    return (r * 31 + 127) // 255 << 11 | (g * 63 + 127) // 255 << 5 | (b * 31 + 127) // 255
+
+
+def _unpack565(c: int) -> tuple[int, int, int]:
+    return (c >> 11) * 255 // 31, (c >> 5 & 63) * 255 // 63, (c & 31) * 255 // 31
+
+
+def grey_texture(data: bytes) -> bytes:
+    """A BC1 texture (DX10 header, every mip) recoloured by grey_rgb. Only
+    block endpoints change; where their order flips, they swap and the
+    indices follow, so each block keeps its colour mode."""
+    if data[:4] != b"DDS " or data[84:88] != b"DX10" or struct.unpack_from("<I", data, 128)[0] not in (71, 72):
+        raise ValueError("tunnel texture is not a DX10 BC1 DDS")
+    out = bytearray(data)
+    for at in range(148, len(out) - 7, 8):
+        c0, c1, indices = struct.unpack_from("<HHI", out, at)
+        n0, n1 = (_rgb565(grey_rgb(*_unpack565(c))) for c in (c0, c1))
+        if (c0 > c1) != (n0 > n1) and n0 != n1:
+            n0, n1 = n1, n0
+            if c0 > c1:  # four colours: 0<->1, 2<->3
+                indices ^= 0x55555555
+            else:  # three colours: 0<->1, 2 and 3 stay
+                indices = sum((((indices >> 2 * k & 3) ^ (1 if (indices >> 2 * k & 3) < 2 else 0)) << 2 * k)
+                              for k in range(16))
+        elif (c0 > c1) and n0 == n1:
+            indices = 0  # a flat block
+        struct.pack_into("<HHI", out, at, n0, n1, indices)
+    return bytes(out)
+
+
+def stretch_block(mesh: dict, length: float) -> dict:
+    """The portal with its block and bore behind the facade `length` times as
+    deep; the facade, its wing walls and cutting stay as they are."""
+    vertices = []
+    for vertex in mesh["vertices"]:
+        x, y, z = vertex["position"]
+        if y > TUNNEL_FACADE_Y:
+            y = TUNNEL_FACADE_Y + (y - TUNNEL_FACADE_Y) * length
+        vertices.append({**vertex, "position": [x, y, z]})
+    return {**mesh, "vertices": vertices}
+
+
+def centre_on_cutting(mesh: dict) -> dict:
+    """The tunnel's cutting between its wing walls (inner faces at x -0.0393
+    and 0.0252) and its arch opening centre on TUNNEL_AXIS_X, not on the mesh
+    axis; moved onto it, the rail runs down their middle."""
+    return {**mesh, "vertices": [{**vertex, "position": [vertex["position"][0] - TUNNEL_AXIS_X,
+                                                         *vertex["position"][1:]]}
+                                 for vertex in mesh["vertices"]]}
 
 def build(pack: Path, tunnel_pack: Path | None = None) -> Path:
     """Write bridge_runtime.bin. The feature shader has eight bridge texture
@@ -49,11 +121,13 @@ def build(pack: Path, tunnel_pack: Path | None = None) -> Path:
     and 6 (medieval, industrial, modern, railroad) and 5 and 7 (the modern and
     railroad pillaged bridges). Civ III never shows the medieval and industrial
     pillaged bridges, so with the railroad tunnel's normalized pack (see
-    route_tunnel_sets.json) slots 1 and 3 carry its portal and rock cap; without
-    it they keep those pillaged bridges."""
-    if tunnel_pack is None:
-        tunnel_pack = DEFAULT_TUNNEL_PACK
-    tunnel = tunnel_pack if (tunnel_pack / "meshes" / "compound" / "route_tunnel_railroad_00.json").is_file() else None
+    route_tunnel_sets.json) slots 1 and 3 carry its portal and rock cap, their
+    rock greyed to the mountains'; without it they keep those pillaged
+    bridges. The tunnel group's placements are the cap, then the portal at
+    each of TUNNEL_LENGTHS. Without a tunnel pack (the default) the bundle
+    has no tunnel group, and the runtime draws no tunnels."""
+    tunnel = tunnel_pack if tunnel_pack is not None and \
+        (tunnel_pack / "meshes" / "compound" / "route_tunnel_railroad_00.json").is_file() else None
     textures: list[str | None] = [None] * 8
     assets: list[bytes] = []
     groups: list[bytes] = []
@@ -76,22 +150,26 @@ def build(pack: Path, tunnel_pack: Path | None = None) -> Path:
             groups.append(_group(f"bridge_{style}_{state}", [(len(assets) - 1, scales[style])]))
     if tunnel:
         # The portal (with its cutting and the block behind it) and its rock
-        # cap, each with its own texture, copied into this pack. They share the
+        # cap, each with its own greyed texture in this pack. They share the
         # bridges' Civ VI source units, so they take the railroad bridge's
         # calibrated scale.
         placements = []
-        for part, (mesh_index, material_index, slot) in {"portal": (0, 0, 1), "cap": (1, 2, 3)}.items():
-            mesh = json.loads((tunnel / "meshes" / "compound" / f"route_tunnel_railroad_{mesh_index:02d}.json").read_text())
+        for part, (mesh_index, material_index, slot) in {"cap": (1, 2, 3), "portal": (0, 0, 1)}.items():
+            mesh = centre_on_cutting(json.loads(
+                (tunnel / "meshes" / "compound" / f"route_tunnel_railroad_{mesh_index:02d}.json").read_text()))
             material = json.loads((tunnel / "materials" / "compound" / f"route_tunnel_railroad_{material_index:02d}.json").read_text())
             source = tunnel / material["channels"]["base_color"]["texture"]
-            target = Path("textures") / "tunnel" / source.name
+            target = Path("textures") / "tunnel" / ("grey_" + source.name)
             (pack / target).parent.mkdir(parents=True, exist_ok=True)
-            data = source.read_bytes()
+            data = grey_texture(source.read_bytes())
             if not (pack / target).is_file() or (pack / target).read_bytes() != data:
                 (pack / target).write_bytes(data)
             textures[slot] = target.as_posix()
-            assets.append(_asset_payload(f"route/tunnel/railroad/{part}", slot, mesh))
-            placements.append((len(assets) - 1, scales["railroad"]))
+            for length in (TUNNEL_LENGTHS if part == "portal" else (None,)):
+                name = part if length in (None, 1.0) else f"{part}_x{length:g}"
+                assets.append(_asset_payload(f"route/tunnel/railroad/{name}", slot,
+                                             stretch_block(mesh, length) if length else mesh))
+                placements.append((len(assets) - 1, scales["railroad"]))
         groups.append(_group("tunnel_railroad", placements))
     if any(texture is None for texture in textures):
         raise ValueError("bridge runtime texture slots are incomplete")
@@ -114,9 +192,10 @@ def main() -> int:
     parser.add_argument(
         "--pack", type=Path, default=Path("Renderer/packs/RouteDoodadsNormalized")
     )
-    parser.add_argument("--tunnel-pack", type=Path, default=DEFAULT_TUNNEL_PACK)
+    parser.add_argument("--tunnel-pack", type=Path, default=None,
+                        help=f"add railroad tunnels from this pack (Lab study only; e.g. {TUNNEL_PACK})")
     args = parser.parse_args()
-    target = build(args.pack.resolve(), args.tunnel_pack.resolve())
+    target = build(args.pack.resolve(), args.tunnel_pack.resolve() if args.tunnel_pack else None)
     print(f"wrote {target} ({target.stat().st_size} bytes)")
     return 0
 

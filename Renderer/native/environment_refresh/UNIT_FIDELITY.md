@@ -79,13 +79,33 @@ missing normal authority; that absence is a tracked build dependency.
 
 ## Readability metadata
 
-`unit_quality.json` may carry `sizing` and `look`. Sizing sets each binding's
-uniform scale from native sprite areas (`fit_policy` records the rule); look
-publishes `look_gain`, `look_saturation` and `look_owner`, which the shared unit
-shader applies after its authored response (zeros are neutral). Live ground
-shadows darken once per pixel at the shared dynamic-shadow strength. Bodies
-flagged `C3X_RENDERER_UNIT_TEAM_DISC` get a soft owner disc in the tactical pass,
-coloured so the shared output transfer shows the exact owner colour.
+`unit_quality.json` may carry `sizing`, `look`, `waterline`, `hover`,
+`owner_marks` and `owner_garments`; each binding records the rule it took.
+
+- `waterline`: units of a listed recipe domain (`sea`) float at the authored
+  model origin, so the shader's z<0 clip hides the hull below the water;
+  hulls without an authored draft take their shape peers' waterline
+  (`ground_policy`). Sizing then matches only the visible, above-water area.
+- `sizing`: uniform scale from native sprite areas (`fit_policy`).
+- `hover`: a unit whose native sprite shows its shadow below its lowest body
+  pixel (`lift` in the sprite table) keeps its lowest idle point `factor` x
+  that many pixels above the ground (`hover_policy`); the shadow follows the
+  shared light.
+- `owner_marks`: hulls (`sea`) get a side stripe plus accents at their highest
+  points; aircraft (`air`, or units with a hover policy) get wing and tail
+  tips. Their broad authored tint is cleared (`owner_marks`).
+- `owner_garments`: other low-coverage units tint one garment or a vehicle
+  side stripe (`owner_garment`).
+- `look`: `look_gain`, `look_saturation` and `look_owner`, applied by the
+  shared unit shader after its authored response (zeros are neutral). The owner
+  ramp follows surface luminance but never exceeds the owner colour itself,
+  and the extra saturation skips owner colour, so red and blue read as paint.
+
+Live ground shadows darken once per pixel at the shared dynamic-shadow
+strength; vertices below the ground/water plane shade their own footprint.
+Bodies flagged `C3X_RENDERER_UNIT_TEAM_DISC` get a soft owner disc in the
+tactical pass, coloured so the shared output transfer shows the exact owner
+colour.
 
 ## Verification and limits
 

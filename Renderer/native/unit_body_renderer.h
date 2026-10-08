@@ -3,6 +3,7 @@
 
 #include "unit_animation_runtime.h"
 #include "render_core/unit_contribution_plan.h"
+#include "render_core/combat_effects.h"
 #include "navigation_options.h"
 #include "unit_shadow.h"
 #include "unit_pose_content.h"
@@ -43,7 +44,8 @@ public:
     struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[4]={UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX}; float material_model=0; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
     struct Action { std::string name; bool loop=false,ambient=false,allow_exit_clip=false;
         float duration=0;unsigned frames=0;std::vector<Part> parts; };
-    struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; int sample_scale=1,minimum_canvas=0; std::vector<Action> actions; mutable render_core::UnitContributionBounds contribution_bounds; mutable std::uint64_t contribution_sequence=0; };
+    struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; int sample_scale=1,minimum_canvas=0; std::vector<Action> actions; mutable render_core::UnitContributionBounds contribution_bounds; mutable std::uint64_t contribution_sequence=0;
+        c3x_renderer::effects::Armament arms; }; // optional pack combat metadata
     std::vector<Mesh> meshes;
     std::vector<Texture> textures;
     std::vector<Unit> units;

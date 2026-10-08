@@ -48,6 +48,7 @@ typedef struct TileVtable {
     int (*m45_Get_City_ID)(Tile*);
     int (*m25_Check_Roads)(Tile*,int,int);
     int (*m23_Check_Railroads)(Tile*,int,int);
+    int (*m12_Check_Forest_Pines)(Tile*);
 } TileVtable;
 struct Tile {
     TileVtable* vtable;
@@ -130,14 +131,17 @@ static int overlay_bit(Tile* tile,int unused,int viewer,int bit){
 static bool irrigation(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,3)!=0;}
 static int mine(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,2)!=0;}
 static int pollution(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,6)!=0;}
-static int crater(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,4)!=0;}
+// Craters are Overlays bit 0x100 (bombard and editor writers), outside the
+// remembered byte, so native fog never shows them.
+static int crater(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,8)!=0;}
 static int hut(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,5)!=0;}
 static int camp(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,7)!=0;}
 static int roads(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,0)!=0;}
 static int rail(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,1)!=0;}
 static int tribe(Tile* tile){++tribe_reads;return tile->tribe;}
 static int city_id(Tile* tile){++city_reads;return tile->city_id;}
-static TileVtable tile_vtable={irrigation,mine,pollution,crater,hut,camp,tribe,city_id,roads,rail};
+static int pines(Tile* tile){(void)tile;return 0;}
+static TileVtable tile_vtable={irrigation,mine,pollution,crater,hut,camp,tribe,city_id,roads,rail,pines};
 static void reset(void){
     memset(tiles,0,sizeof tiles);memset(topology,0,sizeof topology);
     memset(&bic_data,0,sizeof bic_data);memset(leaders,0,sizeof leaders);
@@ -202,19 +206,22 @@ static void remembered(void){
     tile_at(1,1)->Body.Visibile_Overlays[1]=8;tile_at(3,3)->Body.Visibile_Overlays[1]=8;
     c3x_renderer_tile_v1 record=read_record();omitted(&record);
     assert(record.road_mask==1&&record.railroad_mask==1&&record.irrigation_mask==9&&record.route_style==1);
-    assert((record.improvement_flags&(C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_IRRIGATION|C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_CRATER))==
-       (C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_IRRIGATION|C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_CRATER));
+    assert((record.improvement_flags&(C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_IRRIGATION|C3X_RENDERER_IMPROVEMENT_GOODY_HUT))==
+       (C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_IRRIGATION|C3X_RENDERER_IMPROVEMENT_GOODY_HUT));
+    assert(!(record.improvement_flags&C3X_RENDERER_IMPROVEMENT_CRATER));
     tile->Overlays=0xff;tile->Body.Visibile_Overlays[1]=0;record=read_record();
     assert(!record.road_mask&&!record.railroad_mask&&!record.irrigation_mask&&!record.improvement_flags&&!tribe_reads);
     // Overlay removals replace only their admitted subset when used on an
-    // existing body; the tile-building and other record fields survive.
-    record.improvement_flags=127;record.tile_building_id=12;record.resource_id=13;record.has_effect=1;
+    // existing body; the tile-building, ruins and other record fields survive.
+    record.improvement_flags=255;record.tile_building_id=12;record.resource_id=13;record.has_effect=1;
     capture_custom_renderer_overlay_body(&record,tile,1,2,2);
-    assert(record.improvement_flags==C3X_RENDERER_IMPROVEMENT_TILE_BUILDING);
+    assert(record.improvement_flags==(C3X_RENDERER_IMPROVEMENT_TILE_BUILDING|C3X_RENDERER_IMPROVEMENT_RUINS));
     assert(record.tile_building_id==12&&record.resource_id==13&&record.has_effect==1);
     // Native m42 changes to current overlays only when that viewer is visible.
     tile->Body.Visibility=2;record=read_record();assert(record.road_mask==1&&record.railroad_mask==1);
     assert(record.improvement_flags&C3X_RENDERER_IMPROVEMENT_POLLUTION);
+    assert(!(record.improvement_flags&C3X_RENDERER_IMPROVEMENT_CRATER));
+    tile->Overlays|=0x100;record=read_record();assert(record.improvement_flags&C3X_RENDERER_IMPROVEMENT_CRATER);
 }
 static void camp_admission(void){
     reset();Tile* tile=tile_at(2,2);tile->tribe=5;

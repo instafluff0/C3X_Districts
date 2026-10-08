@@ -3014,7 +3014,8 @@ struct SandboxFreshPipeline {
         // no coverage: rivers reflect only the standing objects and mountains
         // that do. The cached-terrain mirror adds mountain coverage separately.
         if(mirrored && mirror_mountain_coverage && renderer.reflection_coverage_blend)
-            context->OMSetBlendState(renderer.reflection_coverage_blend,nullptr,0xffffffffu);
+            context->OMSetBlendState(renderer.reflection_coverage_blend,
+                renderer.mountain_mirror_coverage,0xffffffffu);
         else if(mirrored && renderer.reflection_terrain_blend &&
            (layer==geometry_farm || layer==geometry_natural_terrain ||
             layer==geometry_natural_decal))
@@ -4999,6 +5000,11 @@ struct SandboxFreshPipeline {
 #ifdef C3X_RENDERER64_FRESH
         if(!sandbox_direct_units.draw_real(frame,unit_contribution_candidates,glow.linear,
                 float(scene_scale),visual_hour,false,projection_zoom))return fail("real_units");
+        // Combat effects over and under the bodies they touch (depth only).
+        // A failed effect draw never costs the frame.
+        sandbox_combat_effects.update(frame,sandbox_direct_units);
+        if(!sandbox_combat_effects.draw(frame,sandbox_direct_units,glow.linear,float(scene_scale),visual_hour,projection_zoom))
+            renderer.trace.write("combat-effects","draw failed",true);
 #endif
         if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
             incarnation,viewer,unit_visible,camera_x,camera_y,glow.linear,

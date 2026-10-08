@@ -24,7 +24,7 @@
     },
     {
       "path": "generated/shaders/hydrology/water_natural.hlsl",
-      "sha256": "2973e907e33289384c7c8ee256849567a7c5123b6e2995a6f3dd4f84c03018bd"
+      "sha256": "f62b24d82b7787a45f44450b60af863f7737c7573f60da4b051d0864cda2c3b8"
     },
     {
       "path": "generated/shaders/lighting/city_environment.hlsl",
@@ -64,7 +64,7 @@
     },
     {
       "path": "generated/shaders/objects/city_scene_material.hlsl",
-      "sha256": "ae3950cb7c16405463909f5f3c9b7edf3e1f3b64813a55f4bc54af19cefdc8aa"
+      "sha256": "a336434a7bdc05cb8550871580a40793ec2a4af48730d2947aa75f359f6b4fb9"
     },
     {
       "path": "generated/shaders/objects/instance_geometry.hlsl",
@@ -88,7 +88,7 @@
     },
     {
       "path": "generated/shaders/relief/beauty_mountain.hlsl",
-      "sha256": "eaade92af9da42c282bf6da5ff439ff5c9c7c12aa61eafab5e6fae8cd83a3322"
+      "sha256": "086250e3e4392d8e9b20454c3c6a05a77c51be02c88c552ee4a8fb9cff4b1244"
     },
     {
       "path": "generated/shaders/relief/beauty_terrain.hlsl",
@@ -104,7 +104,7 @@
     },
     {
       "path": "generated/shaders/relief/volcano_material.hlsl",
-      "sha256": "fe1927f9d61b794d4284a04b1e8a75c1b8137370ca8c0ef2d70bf54f5f85a053"
+      "sha256": "f3def0fbbcf74b1db31f2d195875529f14f966b436af5b5bb8d337de1d6e3b08"
     },
     {
       "path": "generated/shaders/sampling/reconstruction_v1.hlsl",

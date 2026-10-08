@@ -47,7 +47,17 @@
     "Renderer/tools/asset_compiler/civ3_flc.py",
     "Renderer/native/tactical_overlay.h",
     "Renderer/native/gpu_tactical_overlay.h",
-    "Renderer/tools/asset_compiler/unit_owner_coverage.py"
+    "Renderer/tools/asset_compiler/unit_owner_coverage.py",
+    "Renderer/native/render_core/combat_effects.h",
+    "Renderer/native/render_core/effect_pack.h",
+    "Renderer/native/render_core/effect_sampler.h",
+    "Renderer/sandbox/direct_effects.h",
+    "Renderer/tools/asset_compiler/unit_combat_bindings.py",
+    "Renderer/tools/asset_compiler/effect_graph_compiler.py",
+    "Renderer/tools/asset_compiler/effect_graph_profiles.json",
+    "Renderer/tools/asset_compiler/civ6_combat_effect_map.json",
+    "Renderer/tools/asset_compiler/civ3_unit_action_timing.py",
+    "Renderer/inventory/civ3_unit_action_timing.json"
   ],
   "recipe": {
     "terrain": 2,
@@ -108,7 +118,13 @@
     "Renderer.native.test_unit_shadow_union",
     "Renderer.native.test_unit_owner_look",
     "Renderer.native.test_tactical_overlay",
-    "Renderer.tools.asset_compiler.test_unit_owner_coverage"
+    "Renderer.tools.asset_compiler.test_unit_owner_coverage",
+    "Renderer.native.test_combat_effect_director",
+    "Renderer.native.test_combat_effect_bridge",
+    "Renderer.native.test_effect_sampler",
+    "Renderer.tools.asset_compiler.test_unit_combat_bindings",
+    "Renderer.tools.asset_compiler.test_effect_graph_compiler",
+    "Renderer.tools.asset_compiler.test_civ3_unit_action_timing"
   ],
   "references": {
     "d3d11": [

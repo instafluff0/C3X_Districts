@@ -876,6 +876,15 @@ int main(){
    auto rigid=objects::prepare_rigid(plan.instances[0],projection,with,banks,zero);
    assert(std::abs(rigid.instance.place[7])<.01f);
   }
+  // A tunnel portal stands where the rail is drawn, 6.5 over its ground
+  // (route strips' world z +9 against the features' +2.5): seated on the
+  // ground, its cutting's floor lay under the rail, which ran into a wall.
+  {
+   FeatureAsset portal_part=span;portal_part.id="route/tunnel/railroad/portal";own[objects::bridge_family].assets={portal_part};
+   auto flat_banks=[&](float,float){return std::array<float,3>{0.f,0,0};};
+   assert(std::abs(objects::prepare_rigid(plan.instances[0],projection,with,flat_banks,zero).instance.place[7]-6.5f)<.01f);
+   own[objects::bridge_family].assets={span};
+  }
   // A railroad bridge (a flat truss deck at its base) rests the same way.
   span.id="route/bridge/railroad/normal";own[objects::bridge_family].assets={span};
   auto high_far=[&](float,float v){return std::array<float,3>{v>tile_v+1.f?40.f:0.f,0,0};};
@@ -1043,8 +1052,8 @@ int main(){
    objects::RoutePatterns through;
    through.lines.push_back({0u,5u,std::int8_t(0),std::int8_t(4)});
    through.points={{.5f,0.f},{.5f,.25f},{.5f,.5f},{.5f,.75f},{.5f,1.f}};
-   objects::Assets straight_through=with;straight_through.road_patterns=&through;
-   objects::PatternRoute line{0u,0u,1u,{},{},{},0u};
+   objects::Assets straight_through=with;straight_through.road_patterns=straight_through.rail_patterns=&through;
+   objects::PatternRoute line{0u,4u,1u,{},{},{},0u};
    line.joins={0.f,-1.f,0.f,1.f};line.bridge_half=.156f;
    objects::Plan one;one.patterns.push_back(line);objects::Surfaces out;
    objects::compile(one,projection,straight_through,valley_relief,valley,out);auto const& v=out.layers[objects::route_layer];assert(!v.empty());
@@ -1058,11 +1067,102 @@ int main(){
     worst=std::max(worst,std::abs((s[0]-a[0])*dy-(s[1]-a[1])*dx)/length);++measured;
    }
    assert(measured>3 && worst<.35f);
+   // A road's arch bridge has little stonework below its deck: raised, its
+   // ends hung in the air over deep valleys (the 1498 save), so it rests on
+   // its lower end instead, on the valley's slope.
+   FeatureAsset arch=truss;arch.id="route/bridge/medieval/normal";own[objects::bridge_family].assets={arch};
+   float arch_level=objects::prepare_rigid(bridge,projection,with,valley_relief,valley).instance.place[7];
+   assert(std::abs(arch_level-(valley(0.f,tile_v+1.f-.156f)-2.5f))<.01f);
   }
   // On the edge itself nothing moves.
   objects::Plan centered=bridged;centered.instances[0].asset=0;
   objects::promote_river_crossings(tile,[&](float,float v){return std::abs(v-(tile_v+1.f))*64.f;},centered,&with);
   assert(std::abs(centered.instances[0].v)<1e-4f && std::abs(centered.patterns[0].crossing[1])<1e-4f);
+ }
+ // A railroad runs through a mountain in a tunnel: hidden in rock (depth
+ // >= 0) and from an edge two mountain tiles share until it reaches rock. A
+ // portal stands where hidden rail meets shown rail, at depth zero, turned
+ // toward the shown side: a climb gets one, a ridge one on each side, a rail
+ // past a mountain's foot none, a range's saddle none (it got two, the rail
+ // surfacing between peaks), and a range's tunnel reaching an open edge one
+ // at that edge.
+ {
+  objects::RoutePatterns through;
+  through.lines.push_back({0u,5u,std::int8_t(4),std::int8_t(0)});
+  through.points={{.5f,1.f},{.5f,.75f},{.5f,.5f},{.5f,.25f},{.5f,0.f}};
+  FeatureGroup tunnel;tunnel.name="tunnel_railroad";
+  for(unsigned part:{0u,1u}){FeaturePlacement p{};p.asset_index=part;p.scale=2;tunnel.placements.push_back(p);}
+  objects::PatternRoute rail;std::vector<float> fade;
+  auto run=[&](std::vector<float> depth,std::array<bool,2> inside){
+   objects::Plan plan;rail=objects::PatternRoute{0u,4u,0u,{},{},{},0u};fade.assign(5,.5f);
+   objects::tunnel_route(rail,through,depth,inside,tunnel,plan,fade);return plan;};
+  // A climb from the start edge (v=1) toward the end edge.
+  auto plan=run({-4.f,11.f,26.f,41.f,56.f},{false,false});
+  assert(plan.instances.size()==2);
+  float face=1.f-.25f*4.f/15.f;
+  for(auto const& instance:plan.instances){
+   assert(instance.family==objects::bridge_family && std::abs(instance.u-.5f)<1e-4f && std::abs(instance.v-face)<1e-4f);
+   assert(std::abs(std::abs(instance.rotation)-3.1415927f)<1e-4f && std::abs(instance.scale-1.f)<1e-4f);
+   assert(std::abs(instance.material-13.0035f)<1e-6f); // sorts with the rock, without the bridges' bias
+  }
+  assert(std::abs(rail.points[1][1]-face)<1e-4f);   // the rail ends at the face
+  // ...fully shown up to it: it faded over the last stretch before the arch.
+  assert(fade==std::vector<float>({0.f,0.f,1.f,1.f,1.f}));
+  // The cutting lines up with the rail coming to it over the stretch its
+  // walls flank (about .15 tile), not with a curving line's last segment,
+  // which turned it across the rail.
+  {
+   objects::RoutePatterns bend;
+   bend.lines.push_back({0u,5u,std::int8_t(4),std::int8_t(0)});
+   bend.points={{.2f,1.f},{.4f,.9f},{.5f,.85f},{.5f,.6f},{.5f,.3f}};
+   objects::Plan bent;objects::PatternRoute line{0u,4u,0u,{},{},{},0u};std::vector<float> faded(5,.5f);
+   objects::tunnel_route(line,bend,{-4.f,-4.f,-2.f,10.f,20.f},{false,false},tunnel,bent,faded);
+   assert(bent.instances.size()==2);
+   float fv=.85f-.25f*2.f/12.f;
+   assert(std::abs(bent.instances[0].u-.5f)<1e-4f && std::abs(bent.instances[0].v-fv)<1e-4f);
+   assert(std::abs(bent.instances[0].rotation-std::atan2(-.1f,-(.9f-fv)))<1e-3f);
+  }
+  // A dip in the rock along the climb keeps it hidden: one portal (stacked
+  // portals stood where a climb's depth dipped and rose again).
+  plan=run({-4.f,10.f,-2.f,10.f,20.f},{false,false});
+  assert(plan.instances.size()==2 && fade==std::vector<float>({0.f,0.f,1.f,1.f,1.f}));
+  // Past a mountain's foot, out of rock: shown.
+  plan=run({-4.f,-1.f,-2.f,-1.f,-4.f},{false,false});
+  assert(plan.instances.empty() && fade==std::vector<float>(5,0.f));
+  // Over a ridge, a portal on each side.
+  plan=run({-4.f,26.f,56.f,26.f,-4.f},{false,false});
+  assert(plan.instances.size()==4);
+  assert(std::abs(plan.instances[0].v-(1.f-.25f*4.f/30.f))<1e-4f && std::abs(plan.instances[2].v-.25f*4.f/30.f)<1e-4f);
+  assert(fade==std::vector<float>({0.f,0.f,1.f,0.f,0.f}));
+  // Between two range neighbors through a low saddle: hidden, no portal.
+  plan=run({16.f,36.f,-2.f,36.f,16.f},{true,true});
+  assert(plan.instances.empty() && fade==std::vector<float>(5,1.f));
+  // From a range neighbor over a peak and down to an open edge.
+  plan=run({16.f,26.f,56.f,26.f,-4.f},{true,false});
+  assert(plan.instances.size()==2 && std::abs(plan.instances[0].v-.25f*4.f/30.f)<1e-4f);
+  assert(std::abs(plan.instances[0].rotation)<1e-4f); // turned toward the end edge (v=0)
+  assert(fade==std::vector<float>({1.f,1.f,1.f,0.f,0.f}));
+  // A low tile at a range's end: the tunnel reaches the open edge.
+  plan=run({-2.f,-2.f,-2.f,-2.f,-2.f},{true,false});
+  assert(plan.instances.size()==2 && std::abs(plan.instances[0].v)<1e-4f && fade==std::vector<float>(5,1.f));
+ }
+ // A portal's grey block reaches back into its mountain: the shortest of its
+ // lengths the rock covers (its top here .05 tile units). If none reaches
+ // covering rock (a valley through the range) it stays shortest; the longest
+ // lay bare.
+ {
+  FeatureBundle bundle;
+  auto add=[&](float back){FeatureAsset a{};a.id="route/tunnel/railroad/portal";
+   a.vertices={{{-.05f,-.025f,0},{0,0,1},{0,0}},{{.05f,back,0},{0,0,1},{0,0}},{{0,back,.05f},{0,0,1},{0,0}}};
+   a.indices={0,1,2};bundle.assets.push_back(a);
+   FeaturePlacement p{};p.asset_index=unsigned(bundle.assets.size()-1);p.scale=1;return p;};
+  FeatureGroup group;group.placements={add(.05f),add(.12f),add(.3f)}; // the cap, then two portal lengths
+  float top=.05f*150.f/.82f;
+  assert(objects::tunnel_portal_length(bundle,group,1.f,[&](float s){return s*top/.08f;})==1u);
+  assert(objects::tunnel_portal_length(bundle,group,1.f,[&](float s){return s*top/.2f;})==2u);
+  assert(objects::tunnel_portal_length(bundle,group,1.f,[&](float s){return s*top/2.f;})==1u);
+  // Covered only past the longest length: shortest too.
+  assert(objects::tunnel_portal_length(bundle,group,1.f,[&](float s){return s*top/.4f;})==1u);
  }
  // Without a pattern pack the existing segment roads remain unchanged.
  objects::Assets legacy=assets;legacy.road_patterns=nullptr;
@@ -1250,8 +1350,9 @@ class RouteRegressionContractTests(unittest.TestCase):
         self.assertIsNotNone(fade)
         self.assertTrue(20.0 <= float(fade.group(1)) < float(fade.group(2)) <= 90.0)
         self.assertNotIn("pattern_route_mountain_cap", source)
-        self.assertRegex(source, r"float rise=route_height\(x,y\)-height_natural\(x,y\);")
-        self.assertRegex(source, r"if\(input\.projection\.tile\.road_mask \|\| input\.projection\.tile\.railroad_mask\)\n")
+        self.assertRegex(source, r"rise\[index\]=route_height\(x,y\)-height_natural\(x,y\);")
+        # Built for route tiles (and volcano tiles, which are mountain shapes).
+        self.assertRegex(source, r"if\(input\.projection\.tile\.road_mask \|\| input\.projection\.tile\.railroad_mask( \|\| volcano)?\)\n")
 
     def test_route_strips_never_write_depth(self):
         # Overlapping translucent road fringes once wrote depth and rejected

@@ -84,6 +84,9 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];out.u=sample.u;out.v=sample.v;
                     out.material_grass=std::max(0.f,(elevation-2.5f)/112)*(1-flat_blend)+sample.height*flat_blend;
                     out.material_plains=2+.5f*sample.snow*flat_blend;
+                    out.relief_owner_u=sample.volcano_u-.5f;out.relief_owner_v=sample.volcano_v-.5f;
+                    out.relief_owner_coverage=sample.volcano;
+                    out.relief_owner_state=2.f*float(sample.activity)+sample.channel;
                     out.material_desert=surface_hill_support[at]*hill_material(world_x-float(nc),
                         float(nr)+1-world_y);
                     auto weights=material_weights_for(world_x,world_y);

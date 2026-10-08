@@ -86,7 +86,10 @@ enum c3x_renderer_improvement_flags {
     C3X_RENDERER_IMPROVEMENT_POLLUTION = 8u,
     C3X_RENDERER_IMPROVEMENT_CRATER = 16u,
     C3X_RENDERER_IMPROVEMENT_GOODY_HUT = 32u,
-    C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP = 64u
+    C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP = 64u,
+    /* Civ III city ruins (Tile::m36_Get_Ruins). Native ruins carry no viewer
+       memory; the native fog pass alone masks unexplored tiles. */
+    C3X_RENDERER_IMPROVEMENT_RUINS = 128u
 };
 
 enum c3x_renderer_city_flags {
@@ -184,7 +187,18 @@ struct c3x_renderer_unit_spawn_v1 {
 
 enum c3x_renderer_unit_state_kind {
     C3X_RENDERER_UNIT_STATE_OBSERVE = 1u,
-    C3X_RENDERER_UNIT_STATE_RETIRE = 2u
+    C3X_RENDERER_UNIT_STATE_RETIRE = 2u,
+    // Combat presentation facts. unit_id is the source unit (-1 unknown),
+    // tile_x/tile_y the target tile. IMPACT: Civ III loaded a bombard hit or
+    // miss effect, action = its AnimatedEffect id (3-8). BOMB_RELEASE: a
+    // bombing run revealed its bomb FLC, action = the flight direction.
+    // STANDALONE_EFFECT: a standalone effect FLC appeared in the Animator's
+    // effect list (SAM shoot-down, SDI interception) at that tile.
+    // RESULT_OK means the renderer draws the effect and the native pixels
+    // may be suppressed (sound and timing stay native).
+    C3X_RENDERER_UNIT_STATE_IMPACT = 3u,
+    C3X_RENDERER_UNIT_STATE_BOMB_RELEASE = 4u,
+    C3X_RENDERER_UNIT_STATE_STANDALONE_EFFECT = 5u
 };
 // Authoritative action/HP and removal facts, copied on Civ III's game thread.
 // They share the ordered input journal and IPC sequence with move and spawn.
@@ -553,6 +567,10 @@ enum { C3X_NATIVE_IMAGE_KEYED_REGION = 125 };
 // Read-only form input query: from=int[2] local point, to=unsigned result.
 // Returns 1 for owned input coverage, 0 for ordinary native CPU UI.
 enum { C3X_NATIVE_HIT_PIXEL = 126 };
+/* image and source are canvases Civ III's form hit test never reads: the screen
+   canvas and the unit overlay canvas while its form skips the canvas read.
+   The renderer keeps no input coverage for them. */
+enum { C3X_NATIVE_HIT_EXEMPT = 137 };
 /* Ordered display-only world composition; native working canvases stay canonical.
    WORLD_* carry destination/source JGL images. ZOOM_TARGET color is Q16 scale;
    ZOOM_PRESENTED returns the last successful display scale without an RPC. */
@@ -560,9 +578,7 @@ enum { C3X_NATIVE_WORLD_BEGIN = 127, C3X_NATIVE_WORLD_END = 128,
        C3X_NATIVE_ZOOM_TARGET = 129, C3X_NATIVE_ZOOM_PRESENTED = 130,
        C3X_NATIVE_FIXED_UI_BEGIN = 131, C3X_NATIVE_FIXED_UI_END = 132,
        C3X_NATIVE_HUD_BEGIN = 133, C3X_NATIVE_HUD_END = 134,
-       /* Last presented camera-step slide in screen pixels: (short)low = x,
-          (short)high = y. Picking subtracts it before the zoom inverse. */
-       C3X_NATIVE_PAN_PRESENTED = 135,
+       /* 135 was the presented camera-step slide, retired with vanilla scroll. */
        C3X_NATIVE_UNIT_HUD_BEGIN = 136 };
 /* HUD_BEGIN: image=canonical canvas, from=int[2] canonical map attachment,
    color=opaque native item identity. The scoped native draws keep pixel size.

@@ -8,6 +8,14 @@ team-colour disc preference.
 
 ## Findings
 
+Naval and air (accepted 2026-10-07): ships float at their authored waterline
+(hull below it clipped; sized on the visible area); aircraft hover at half of
+Civ III's body-to-shadow gap (23-36 px at full). Whole-vessel tint looked
+silly, so hulls carry a side stripe and pennants and aircraft their wing and
+tail tips. The owner ramp no longer brightens a civ colour past itself. Sea
+reflections stay at the shared water's noon Fresnel (about 4%), so unit
+reflections are faint; any boost belongs to the sea's object-reflection weight.
+
 Measured at 128-pixel tiles, idle, median over eight directions.
 
 - Shadow: every part (and face) of a unit drew its own 0.28 ground shadow, so
@@ -31,6 +39,12 @@ python3 Renderer/lab/studies/unit_readability/sheet.py build     # x64 live-path
 python3 Renderer/lab/studies/unit_readability/sheet.py render LABEL [--pack P] [--owner HEX] [--env K=V ...]
 python3 Renderer/lab/studies/unit_readability/sheet.py compose OUT.png LABEL ... --civ3 1
 ```
+
+`sheet.py render --reflect` also writes the production reflected pass and
+`compose --sea` places sheets on an in-game ocean patch with the water shader's
+reflection weight. `prepare_units.py --quality FILE --output PACK` builds a
+candidate pack; `run_scripted_game_test.ps1 -Scenario units -UnitPack PACK`
+captures it in the 1498 AD save without installing it (staged renderer).
 
 `unit_sheet.cpp` loads a unit pack and calls the production `prepare_real` and
 `draw_real` into the transparent unit layer; `sheet.py` composites it and applies

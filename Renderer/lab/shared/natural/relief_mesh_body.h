@@ -2,7 +2,7 @@
 // Included by the native tile compiler and the portable typed adapter in mesh.h.
     {
         // One shared shape for the mesh, route surfaces and resource seating.
-        MountainShape const mountain_shape(natural,nc,nr,lookup_natural,mountain_snow);
+        MountainShape const mountain_shape(natural,nc,nr,lookup_natural,mountain_flags);
         auto mountain_at=[&](float world_x,float world_y){return mountain_shape.sample(natural,world_x,world_y);};
         if(mountain_shape.count){
             unsigned const count=patch_detail.mountain+1,span=count+2;
@@ -81,6 +81,11 @@
                     out.material_grass=std::max(0.f,(elevation-2.5f)/112)*(1-flat_blend)+sample.height*flat_blend;
                     // 2..2.5 carries the dominant stamp's Civ III snow cap.
                     out.material_plains=2+.5f*sample.snow*flat_blend;
+                    // Volcano material: texture offset from the stamp centre,
+                    // coverage, and 2 x activity + authored lava channel.
+                    out.relief_owner_u=sample.volcano_u-.5f;out.relief_owner_v=sample.volcano_v-.5f;
+                    out.relief_owner_coverage=sample.volcano;
+                    out.relief_owner_state=2.f*float(sample.activity)+sample.channel;
                     // Mountain stone follows mountain rise in the shader;
                     // this channel exclusively marks hill-owned ground.
                     out.material_desert=surface_hill_support[at]*hill_material(world_x-float(nc),

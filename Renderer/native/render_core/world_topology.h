@@ -117,7 +117,7 @@ public:
     Tile tile(int column,int row) const {
         auto value=at(index(column,row));
         return value==0xffffffffu ? Tile{} : Tile{int(value&255),int((value>>8)&255),true,(value&(1u<<25))!=0,
-            (value&(1u<<26))!=0};
+            (value&(1u<<26))!=0,(value&(1u<<24))!=0,(value&(1u<<27))!=0};
     }
 };
 } }

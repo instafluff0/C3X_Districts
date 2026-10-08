@@ -6,7 +6,7 @@
     bool unified_mountain_surface=false,hill_surface=false;
     for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++){
         int real=lookup_natural(nc+dc,nr+dr).real;
-        unified_mountain_surface|=real==6;
+        unified_mountain_surface|=real==6 || real==10;
         hill_surface|=real==5;
     }
     if(!unified_mountain_surface &&
@@ -34,37 +34,7 @@
         auto indices=index_natural_grids?&natural_grid_indices[unified_mountain_surface?1:0]:nullptr;
         if(!emit_hill_decal_surface(owner,nc,nr,natural_vertices[layer],indices,natural_vertices[1]))return false;
     }
-    // Carry local volcano ownership on both replacement surface families.
-    // Lookup uses the authoritative dependency observer, including wrapped tiles.
-    // The rock lookup must follow the same rigid orientation as the height.
-    struct VolcanoCenter {float x,y;unsigned orientation;};
-    std::vector<VolcanoCenter> volcano_centers;
-    auto dimensions=world_coast.world().dimensions();
-    for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++) {
-        int pc=nc+dc,pr=nr+dr;
-        if(lookup_natural(pc,pr).real!=10)continue;
-        int raw_x=pc+pr,raw_y=pc-pr;
-        if(dimensions.wrap_x)raw_x=c3x_renderer::render_core::mod(raw_x,dimensions.width);
-        if(dimensions.wrap_y)raw_y=c3x_renderer::render_core::mod(raw_y,dimensions.height);
-        unsigned slot=c3x_renderer::render_core::volcano_slot(raw_x,raw_y);
-        volcano_centers.push_back({float(pc)+.5f,float(pr)+.5f,
-            c3x_renderer::render_core::volcano_orientation(slot)});
-    }
-    if(!volcano_centers.empty())for(unsigned layer:{0u,2u})
-        for(auto&v:natural_vertices[layer]) {
-            float nearest=1e9f;
-            for(auto const&center:volcano_centers) {
-                float dx=v.world_x-center.x,dy=v.world_y-center.y;
-                float distance=dx*dx+dy*dy;
-                if(distance<nearest) {
-                    nearest=distance;
-                    auto oriented=c3x_renderer::render_core::volcano_source_offset(
-                        dx,-dy,center.orientation);
-                    v.relief_owner_u=oriented[0];v.relief_owner_v=-oriented[1];
-                    v.relief_owner_coverage=1;v.relief_owner_state=0;
-                }
-            }
-        }
+    // Volcano ownership travels with the relief grid (relief_mesh_body.h).
 
     record_natural_phase(2);
     #include "../../lab/shared/natural/vegetation_floor_mesh_body.h"

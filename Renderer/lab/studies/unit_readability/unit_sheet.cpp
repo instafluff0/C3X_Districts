@@ -9,7 +9,11 @@
 // OUTPUT.env.json.
 //
 //   unit_sheet.exe PACK_ROOT UNITS_FILE OUTPUT.f16 OWNER_RGB_HEX [reflect]
-// UNITS_FILE lines: "PRTO_Key direction" in sheet order (6 columns).
+// UNITS_FILE lines: "PRTO_Key direction" in sheet order (6 columns), optionally
+// followed by "native_action phase x y": the native action number, the clip
+// phase in [0,1) and an explicit anchor in sheet pixels (attack sequences),
+// optionally "dz": a height added to that unit type's offset (model units; a
+// bomb run's altitude).
 #ifndef C3X_HELPER_TRIAL
 #define C3X_HELPER_TRIAL
 #endif
@@ -33,12 +37,18 @@ int main(int argc,char** argv){
     try{
         require(argc==5||(argc==6&&std::string(argv[5])=="reflect"),"usage: unit_sheet PACK_ROOT UNITS_FILE OUTPUT.f16 OWNER_RGB_HEX [reflect]");
         bool reflect=argc==6;
-        std::vector<std::pair<std::string,int>> wanted;
-        {std::ifstream file(argv[2]);std::string key;int direction;
-         while(file>>key>>direction)wanted.push_back({key,direction});}
+        struct Wanted{std::string key;int direction=5,action=1;double phase=0;int x=-1,y=-1;double dz=0;};
+        std::vector<Wanted> wanted;
+        {std::ifstream file(argv[2]);std::string line;
+         while(std::getline(file,line)){std::istringstream fields(line);Wanted w;
+            if(!(fields>>w.key>>w.direction))continue;
+            if(!(fields>>w.action>>w.phase>>w.x>>w.y)){w.action=1;w.phase=0;w.x=w.y=-1;}
+            else if(!(fields>>w.dz))w.dz=0;
+            wanted.push_back(w);}}
         require(!wanted.empty()&&wanted.size()<=36,"unit list");
         unsigned owner=unsigned(std::strtoul(argv[4],nullptr,16));
         int rows=int(wanted.size()+columns-1)/columns,width=columns*cell_w,height=rows*cell_h+20;
+        for(auto const& w:wanted)if(w.x>=0){width=std::max(width,w.x+120);height=std::max(height,w.y+90);}
 
         D3D_FEATURE_LEVEL level;
         checked(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,
@@ -61,6 +71,11 @@ int main(int argc,char** argv){
         renderer.reflection.enabled=false;
         require(renderer.load_unit_animations(argv[1]),"unit pack");
         auto& bodies=renderer.unit_bodies;
+        for(auto& unit:bodies.units){
+            auto lifted=std::find_if(wanted.begin(),wanted.end(),[&](auto const& w){
+                return w.dz!=0&&std::find(unit.keys.begin(),unit.keys.end(),w.key)!=unit.keys.end();});
+            if(lifted!=wanted.end())unit.offset_z+=float(lifted->dz);
+        }
 
         c3x_renderer_frame_v1 frame={};frame.struct_size=sizeof(frame);
         frame.target_width=width;frame.target_height=height;frame.tile_width=128;frame.tile_height=64;
@@ -68,17 +83,20 @@ int main(int argc,char** argv){
         std::vector<SandboxDirectUnits::ScenePose> poses;c3x_renderer::render_core::UnitContributionPlan plan;
         for(unsigned i=0;i<wanted.size();++i){
             auto unit=std::find_if(bodies.units.begin(),bodies.units.end(),[&](auto const& item){
-                return std::find(item.keys.begin(),item.keys.end(),wanted[i].first)!=item.keys.end();});
-            if(unit==bodies.units.end()){std::printf("MISSING %s\n",wanted[i].first.c_str());continue;}
-            auto idle=std::find_if(unit->actions.begin(),unit->actions.end(),[](auto const& a){return a.name=="idle";});
-            require(idle!=unit->actions.end(),"idle action");
+                return std::find(item.keys.begin(),item.keys.end(),wanted[i].key)!=item.keys.end();});
+            if(unit==bodies.units.end()){std::printf("MISSING %s\n",wanted[i].key.c_str());continue;}
+            char const* action_name=c3x_renderer::native_unit_action(wanted[i].action);
+            require(action_name!=nullptr,"native action");
+            auto idle=std::find_if(unit->actions.begin(),unit->actions.end(),[&](auto const& a){return a.name==action_name;});
+            require(idle!=unit->actions.end(),"unit action");
             SandboxDirectUnits::ScenePose pose;pose.unit=std::size_t(unit-bodies.units.begin());
             pose.action=std::size_t(idle-unit->actions.begin());pose.pose_identity=i+1;pose.pose_ticks=0;
             int cx=int(i%columns)*cell_w+cell_w/2,cy=int(i/columns)*cell_h+cell_h/2+25;
-            auto& d=pose.draw;d.struct_size=sizeof(d);d.unit_id=int(i+1);d.action=1;d.direction=wanted[i].second;
-            d.frame_count=16;d.sprite_width=d.sprite_height=191;d.projection_scale_milli=1000;
+            if(wanted[i].x>=0){cx=wanted[i].x;cy=wanted[i].y;}
+            auto& d=pose.draw;d.struct_size=sizeof(d);d.unit_id=int(i+1);d.action=wanted[i].action;d.direction=wanted[i].direction;
+            d.frame_count=1000;d.action_cursor=int(wanted[i].phase*1000+.5)%1000;d.sprite_width=d.sprite_height=191;d.projection_scale_milli=1000;
             d.body_x=cx-95;d.body_y=cy-95;d.hour=12;d.display_color_rgb=owner;
-            d.presentation_frequency=1000;d.presentation_time_ticks=0;strcpy_s(d.unit_key,wanted[i].first.c_str());
+            d.presentation_frequency=1000;d.presentation_time_ticks=0;strcpy_s(d.unit_key,wanted[i].key.c_str());
             pose.tile_y=int(i/columns)*2;
             plan.entries.push_back({unsigned(poses.size()),
                 c3x_renderer::render_core::unit_main_body|c3x_renderer::render_core::unit_ground_shadow|

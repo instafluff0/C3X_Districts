@@ -40,7 +40,12 @@ Readability (user-accepted 2026-10-07, see the
   a sprite take the median change of similar shapes. Regenerate the table for a
   scenario's own art with `python3 -m Renderer.tools.asset_compiler.civ3_unit_sprites --scenario-root PATH`.
 - Look: `unit_quality.json` `look` (gain, saturation, owner ramp) is published
-  as `look_*` pack metadata and applied by the shared unit shader.
+  as `look_*` pack metadata and applied by the shared unit shader. Owner colour
+  never exceeds the civ colour itself and skips the extra saturation, so it
+  reads as paint rather than glowing (`Renderer/native/test_unit_owner_look.py`).
+- Ships and aircraft: ships float at their authored waterline and aircraft
+  hover at half their Civ III sprite's lift. Both carry small civ marks: a hull
+  stripe plus pennants, or wing and tail tips. See `UNIT_FIDELITY.md`.
 - Shadow: one ground shadow per unit (stencil), at the shared dynamic-shadow
   strength animated resources use.
 - Owner disc: Civ III's team-colour disc preference draws a soft owner-coloured

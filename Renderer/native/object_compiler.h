@@ -255,11 +255,19 @@ inline void append_shadow(Projection const& input,FeatureAsset const& asset,floa
 // the land, and on the map's fixed oblique view a straight path descending to
 // it is drawn bent into the deck's side. The deck stands at the top of the
 // lower bank instead (the highest route ground out to .75 on each side, the
-// lower of the two sides, at most 20 over its own ends' ground), and its
+// lower of the two sides, at most `raise` over its own ends' ground), and its
 // paths are carried level to it (see append_pattern_route), so they are
-// drawn straight through it. See seat_route_bridge.
+// drawn straight through it. Only a railroad's truss is raised: a road's
+// arch bridge has little stonework below its deck, and on deep valleys its
+// ends hung in the air, so it rests on its lower end (the user's choice,
+// 2026-10-07). See seat_route_bridge.
+inline float route_bridge_raise(bool railroad){return railroad?20.f:0.f;}
+// Route strips draw 6.5 units over their ground (world z +9 against the
+// features' +2.5): a tunnel portal stands that much higher, so its cutting's
+// floor meets the drawn rail (its wing walls reach 6 units below their base).
+constexpr float tunnel_rail_lift=9.f;
 template<class Ground>
-float route_bridge_level(float world_u,float world_v,float axis_u,float axis_v,float reach,Ground ground){
+float route_bridge_level(float world_u,float world_v,float axis_u,float axis_v,float reach,float raise,Ground ground){
     float ends=1e9f,banks=1e9f;
     for(float sign:{-1.f,1.f}){
         auto at=[&](float out){return ground(world_u+axis_u*sign*out,world_v+axis_v*sign*out);};
@@ -267,13 +275,13 @@ float route_bridge_level(float world_u,float world_v,float axis_u,float axis_v,f
         for(float out:{.45f,.6f,.75f})if(out>reach)bank=std::max(bank,at(out));
         ends=std::min(ends,end);banks=std::min(banks,bank);
     }
-    return std::min(banks,ends+20.f);
+    return std::min(banks,ends+raise);
 }
-// A road or railroad bridge rests at the top of the lower of its two banks
-// (see route_bridge_level). The authored meshes put their deck ends at the
-// base (z=0), so that end meets its bank and the other end settles into a
-// higher bank instead of floating over a lower one. One seat keeps the shared
-// rigid transform.
+// A railroad bridge rests at the top of the lower of its two banks, a road
+// bridge on its lower end (see route_bridge_level). The authored meshes put
+// their deck ends at the base (z=0), so that end meets its bank and the other
+// end settles into a higher bank instead of floating over a lower one. One
+// seat keeps the shared rigid transform.
 template<class Relief,class Height>
 bool seat_route_bridge(Projection const& input,FeatureAsset const& asset,float scale,float rotation,
         float world_u,float world_v,Relief relief_at_world,Height natural_height_at,float& ground){
@@ -281,7 +289,7 @@ bool seat_route_bridge(Projection const& input,FeatureAsset const& asset,float s
     float reach=0.f;
     for(auto const& source:asset.vertices)reach=std::max(reach,std::abs(source.position[0])*scale);
     ground=route_bridge_level(world_u,world_v,std::cos(rotation),-std::sin(rotation),reach,
-        [&](float u,float v){return std::max(relief_at_world(u,v)[0],natural_height_at(u,v)-2.5f);});
+        route_bridge_raise(asset.id.rfind("route/bridge/railroad/",0)==0),[&](float u,float v){return std::max(relief_at_world(u,v)[0],natural_height_at(u,v)-2.5f);});
     return true;
 }
 template<class Relief,class Height>
@@ -306,6 +314,8 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
     bool farm_asset=asset.id.rfind("farm_",0)==0;
     // Pipeline-baked flat ground decal (soft alpha, terrain-conforming, no shadow).
     bool ground_decal=asset.id.rfind("decal/",0)==0;
+    // Ground states (pollution, craters, ruins) cover their whole tile.
+    bool ground_state=asset.id.rfind("decal/ground/",0)==0;
     bool terrain_wall=pickup_profile && asset.id.rfind("city/walls/",0)==0;
     float wall_source_floor=0.f;
     if(terrain_wall){
@@ -325,7 +335,8 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
         return;
     if(pickup_profile && site){
         ground_sample[0]=natural_height_at(
-            tile_world_u+local_u,tile_world_v+1.f-local_v)-2.5f;
+            tile_world_u+local_u,tile_world_v+1.f-local_v)-2.5f+
+            (asset.id.rfind("route/tunnel/",0)==0?tunnel_rail_lift:0.f);
         // Baked ground fit: settle on the lowest ground under the footprint, so
         // a body on a slope sinks uphill rather than floating downhill.
         if(ground_fit>0.f)for(int corner=0;corner<4;++corner)ground_sample[0]=std::min(ground_sample[0],
@@ -334,7 +345,9 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
         // A resource ground decal centred up a steep face (a mountainside) would
         // stretch down to the ground falling away below it; it is left out. One at
         // the foot stays, and decal_ground keeps its edge from climbing the face.
-        if(ground_decal){
+        // Ground states (pollution, craters, ruins) cover their whole tile and
+        // stay, draped over hills, mountains and volcanoes alike.
+        if(ground_decal && !ground_state){
             float low=ground_sample[0];
             for(int side=0;side<4;++side)low=std::min(low,natural_height_at(
                 tile_world_u+local_u+(side==0?scale:side==1?-scale:0.f),
@@ -389,7 +402,9 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
             tile_world_u+local_u+local_x,tile_world_v+1.f-local_v-local_y)-
             2.5f-wall_source_floor*(150.f/.82f)+.02f;
         if (farm_decal) {
-            farm_shore[vertex_index] = vertex_ground[2];
+            // A farm's clearance (water, a mountain's foot) shapes its fields,
+            // not a ground state lying on the same tile.
+            farm_shore[vertex_index] = ground_state ? 1.0f : vertex_ground[2];
             farm_world[vertex_index] = {tile_world_u+local_u+local_x,
                                         tile_world_v+1.0f-local_v-local_y};
         }
@@ -1259,6 +1274,99 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
         previous=next;previous_pair=next_pair;
     }
 }
+// A railroad runs through a mountain in a tunnel. It is hidden where it
+// lies in rock (depth >= 0: per point of the route's line, a world-surface
+// field, so neighboring tiles agree at their edges) and, on a mountain tile,
+// from an edge it shares with a mountain neighbor (inside: the line's start
+// and end) until it reaches rock, so it never surfaces in a saddle of a
+// range; a line inside a range at both ends stays hidden, and no line
+// surfaces between two hidden stretches of its own. Where hidden rail
+// meets shown rail, a portal (the group's first two placements: Civ VI's
+// rock cap and its shortest portal, see tunnel_portal_length) stands where
+// depth crosses zero,
+// turned toward the shown side, or at an open tile edge where a range's
+// tunnel ends. The shown rail ends there, inside the arch.
+inline void tunnel_route(PatternRoute& route,RoutePatterns const& patterns,std::vector<float> const& depth,
+        std::array<bool,2> inside,FeatureGroup const& tunnel,Plan& plan,std::vector<float>& fade){
+    // Half the pack's calibrated (railroad bridge) scale, smaller than pattern
+    // bridges, so a mountain's foot can hold the block behind the portal.
+    constexpr float tunnel_scale=.5f;
+    if(route.line>=patterns.lines.size() || tunnel.placements.empty())return;
+    auto const& line=patterns.lines[route.line];
+    unsigned count=line.count;
+    if(count<2 || depth.size()!=count || fade.size()!=count)return;
+    if(route.points.size()!=count)
+        route.points.assign(patterns.points.begin()+line.first,patterns.points.begin()+line.first+count);
+    std::vector<std::uint8_t> hidden(count),moved(count,0u);
+    for(unsigned index=0;index<count;++index)hidden[index]=depth[index]>=0.f;
+    bool through=inside[0] && inside[1];
+    for(unsigned side=0;side<2;++side)if(inside[side] && (side?line.end:line.start)>=0)
+        for(unsigned k=0;k<count;++k){unsigned index=side?count-1u-k:k;if(depth[index]>=0.f && !through)break;hidden[index]=1u;}
+    // Nor does it surface between two hidden stretches of the line.
+    unsigned first=count,last=0;
+    for(unsigned index=0;index<count;++index)if(hidden[index]){first=std::min(first,index);last=index;}
+    for(unsigned index=first+1;index<last;++index)hidden[index]=1u;
+    auto const source=route.points;
+    // The meshes' facade stands just before their origin, their open end
+    // facing -y: (du,dv) points toward the shown side. Their bridge material
+    // is marked .0035 so they sort with the mountain's rock without the
+    // river's bias (rigid_feature.hlsl).
+    auto portal=[&](std::array<float,2> face,float du,float dv){
+        float rotation=std::atan2(du,-dv);
+        for(std::size_t p=0;p<std::min<std::size_t>(2,tunnel.placements.size());++p)
+            plan.instances.push_back({bridge_family,tunnel.placements[p].asset_index,feature_layer,
+                face[0],face[1],rotation,tunnel.placements[p].scale*tunnel_scale,13.0035f,0.f,true});
+    };
+    // The portal's cutting lines up with the rail coming to it: its direction
+    // over the stretch the wing walls flank (about .15 tile), not only the
+    // last short segment of a curving line, which turned the cutting across it.
+    auto approach=[&](unsigned from,int step,std::array<float,2> face){
+        std::array<float,2> back=source[from];
+        float walked=std::hypot(back[0]-face[0],back[1]-face[1]);
+        for(int k=int(from);walked<.15f && k+step>=0 && k+step<int(count);k+=step){
+            auto const& next=source[k+step];
+            walked+=std::hypot(next[0]-source[k][0],next[1]-source[k][1]);back=next;
+        }
+        return std::array<float,2>{back[0]-face[0],back[1]-face[1]};
+    };
+    for(unsigned index=0;index+1<count;++index)if(hidden[index]!=hidden[index+1]){
+        unsigned shown=hidden[index]?index+1:index,covered=hidden[index]?index:index+1;
+        float t=std::clamp(-depth[shown]/std::max(depth[covered]-depth[shown],1e-3f),0.f,1.f);
+        auto const& a=source[shown];auto const& b=source[covered];
+        std::array<float,2> face{a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t};
+        auto toward=approach(shown,shown<covered?-1:1,face);
+        portal(face,toward[0],toward[1]);
+        // Where two portals cross the same stretch, it keeps its own point.
+        if(!moved[covered])route.points[covered]=face;
+        moved[covered]=1u;
+    }
+    for(unsigned side=0;side<2;++side){
+        unsigned edge=side?count-1u:0u,next=side?count-2u:1u;
+        if((side?line.end:line.start)>=0 && !inside[side] && hidden[edge] && depth[edge]<0.f)
+            portal(source[edge],source[edge][0]-source[next][0],source[edge][1]-source[next][1]);
+    }
+    // The shown rail runs at full strength right up to the face (its fade
+    // into the hidden rail lies inside the portal); fading over the last
+    // stretch outside, it seemed to stop short of the arch.
+    for(unsigned index=0;index<count;++index)fade[index]=hidden[index] && !moved[index]?1.f:0.f;
+}
+// A tunnel portal's grey block reaches back into its mountain. Of the
+// group's portal lengths (placements 1 on, shortest first), the shortest
+// whose block ends where the rock covers its top (cover(s): the rock over the
+// portal's base s tiles behind its face, in height units). Where no length
+// reaches covering rock (a rail along a valley through a range) it stays
+// shortest: the longest lay along the valley as a bare grey bar (1498 save).
+template<class Cover>
+unsigned tunnel_portal_length(FeatureBundle const& bundle,FeatureGroup const& group,float scale,Cover cover){
+    if(group.placements.size()<2)return 0u;
+    auto reach=[&](unsigned p,int axis){float most=0.f;
+        for(auto const& vertex:bundle.assets[group.placements[p].asset_index].vertices)most=std::max(most,vertex.position[axis]);
+        return most;};
+    float top=reach(1u,2)*scale*150.f/.82f,need=-1.f;
+    for(int k=1;k<=30;++k){float s=float(k)*.05f;if(cover(s)>=top){need=s;break;}}
+    for(unsigned p=1;need>=0.f && p<group.placements.size();++p)if(reach(p,1)*scale>=need)return p;
+    return 1u;
+}
 template<class Lookup>
 void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool route_assets_ready,
         bool routes_enabled,Lookup lookup,Plan& plan){
@@ -1720,6 +1828,31 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 if(placement.asset_index>=site_bundle.assets.size())return false;
                 append_feature_instance(site_bundle,placement,.5f,.5f,rotation,
                     1.55f,21.f,.18f,false,site_vertices);
+            }
+        }
+        // Ground states (user choice 2026-10-07) follow Civ III's tile state:
+        // pollution of every source in one ash-and-char look, blast craters
+        // over it, and a razed city's rubble, which a later city covers as
+        // Civ III draws it. Variants are the pack's numbered groups; a pack
+        // without them draws nothing new. Pollution turns freely; craters and
+        // ruins never, since their relief is baked sunlit.
+        constexpr unsigned ground_states[3]={C3X_RENDERER_IMPROVEMENT_POLLUTION,
+            C3X_RENDERER_IMPROVEMENT_CRATER,C3X_RENDERER_IMPROVEMENT_RUINS};
+        char const* ground_prefixes[3]={"pollution_","crater_","ruins_"};
+        for(unsigned state=0;state<3;++state) {
+            if(!(site_flags&ground_states[state]) || ground>=11)continue;
+            std::string prefix=ground_prefixes[state];
+            unsigned count=0;
+            while(count<8 && c3x_renderer::find_feature_group(site_bundle,(prefix+std::to_string(count)).c_str()))++count;
+            if(!count)continue;
+            unsigned seed=c3x_renderer::stable_hash(tile.variant_seed^(0x51ed27u*(state+1u)));
+            auto group=c3x_renderer::find_feature_group(site_bundle,(prefix+std::to_string(seed%count)).c_str());
+            float rotation=state==0?float((seed>>8)%4u)*1.57079632679f:0.f;
+            for(auto const& placement:group->placements) {
+                if(placement.asset_index>=site_bundle.assets.size())continue;
+                bool decal=site_bundle.assets[placement.asset_index].id.rfind("decal/",0)==0;
+                append_feature_instance(site_bundle,placement,.5f,.5f,rotation,
+                    placement.scale,21.f,decal?0.f:.18f,false,site_vertices);
             }
         }
     }
@@ -2611,7 +2744,7 @@ void compile(Plan const& plan,Projection const& input,Assets const& assets,Relie
             float bu=-route.joins[side*2],bv=-route.joins[side*2+1],c=route.crossing[side];
             float tu=float(input.tile.tile_x+input.tile.tile_y)*.5f,tv=float(input.tile.tile_x-input.tile.tile_y)*.5f;
             float deck_level=route_bridge_level(tu+join[0]-bu*c,tv+1.f-(join[1]-bv*c),-bu,bv,route.half_length(),
-                [&](float u,float v){return std::max(relief(u,v)[0],height(u,v)-2.5f);});
+                route_bridge_raise(route.style>=4u),[&](float u,float v){return std::max(relief(u,v)[0],height(u,v)-2.5f);});
             for(std::size_t i=0;i<total;++i)if(in_network(i) && std::min({walk[i][0],walk[i][1],walk[i][2]})<std::max(run,held+fade))
                 for(auto& slot:approached[i].approach)if(slot[2]==0.f && slot[3]==0.f){
                     slot={join[0],join[1],-route.joins[side*2],-route.joins[side*2+1],walk[i][0],walk[i][1],inside[i],walk[i][2],run,deck_level,held,fade};

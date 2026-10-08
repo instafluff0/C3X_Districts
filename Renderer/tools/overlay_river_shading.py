@@ -51,6 +51,9 @@ REGIONS = (
      "        reflected = lerp(reflected, object.rgb, object_alpha);", "terrain_present"),
     ("natural_sea_ground_coverage", " float object_coverage=saturate(object.a)*inside;\n",
      " sky=sky*(1-object_coverage)+object.rgb*inside;", "step(1e-6"),
+    # A mountain's grassy foot mirrors like ground, so its coverage eases in
+    # up the slope (mountain.hlsl only; the marker keeps other files out).
+    ("mountain_mirror_foot", "float4 PSReflection(P input):SV_Target {\n", "\n}\n", "smoothstep(10,30"),
 )
 
 

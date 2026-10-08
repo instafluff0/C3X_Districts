@@ -1,10 +1,11 @@
 # Mountain material diagnosis
 
-## Volcano workover (2026-10-07, Lab candidate, not accepted)
+## Volcano workover (2026-10-07, accepted)
 
 The user found volcanoes odd, too tall and missing lava, and accepted more
-uniform volcanoes in exchange for a Civ VI-like look. Work lives in the private
-tree `tree-volcano`; the checkout's volcano look is unchanged.
+uniform volcanoes in exchange for a Civ VI-like look. They approved the review
+sheets for the game; the private tree `tree-volcano` was copied into the
+checkout (no checkout edits had landed on its files meanwhile).
 
 - Volcanoes are stamps of `mountain_shape.h`, joined to neighbouring mountains
   and volcanoes by the same saddles. The shape is a clean cone (concave flanks,
@@ -26,6 +27,18 @@ tree `tree-volcano`; the checkout's volcano look is unchanged.
 - Still to do: the smoke plume (reusing the city session's procedural plume once
   it is shared) and, in the game, the eruption bit and hiding Civ III's own
   smoke and lava animation.
+- Follow-up (accepted 2026-10-07, "Volcanoes look fantastic! Approved"): the
+  user found the volcanoes too tall ("shouldn't extend much beyond the height
+  of the tile") and asked for smoke. The rim drops from 124 to 84 units and the
+  span from 2.6 to 2.2, putting the summit about 39 px above the tile centre at
+  1x, just past the diamond's 32 px top corner. Active volcanoes get a plume in
+  the city effect layer: `city_fidelity::volcano_plume` builds a narrow, tall
+  camera-facing quad over the crater (kind 93), and `q8_effect_plume`
+  (`city_scene_material.hlsl`) now draws both the chimney smoke (unchanged
+  constants; pixel-identical in a pinned-time city render) and the darker,
+  slower ash column, lit orange from the crater during an eruption. The world
+  backing codec now keeps the effect flag (version 5), so restored tiles keep
+  animating. Sheets: `volcano-review-{4-lower-smoke,5-overview}.jpg`.
 - Review sheets: `volcanoes/volcano-review-{1-dormant,2-overview,3-lava}.jpg`
   (labels `before`, `v3-dormant`, `v4-smoldering`, `v4-erupting`).
 - `sync` copies the checkout's generated shaders over the tree's, so `build`

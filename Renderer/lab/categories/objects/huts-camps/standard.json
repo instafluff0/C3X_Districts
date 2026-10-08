@@ -10,7 +10,11 @@
     "Renderer/native/c3x_renderer_api.h",
     "Renderer/native/terrain_scene_runtime.cpp",
     "Renderer/tools/asset_compiler/build_site_runtime.py",
-    "Renderer/native/environment_refresh/prepare.py"
+    "Renderer/native/environment_refresh/prepare.py",
+    "Renderer/native/object_compiler.h",
+    "Renderer/tools/asset_compiler/ground_state_composer.py",
+    "Renderer/tools/asset_compiler/tile_site_looks.json",
+    "Renderer/tools/asset_compiler/ground_state_asset_importer.py"
   ],
   "recipe": {
     "terrain": 2,
@@ -35,12 +39,14 @@
     "Renderer.native.test_scene_lighting",
     "Renderer.native.test_tile_sites",
     "Renderer.native.test_native_bridge_contract",
-    "Renderer.native.test_render_core"
+    "Renderer.native.test_render_core",
+    "Renderer.native.test_ground_states"
   ],
   "references": {
     "d3d11": []
   },
   "limitations": [
-    "Native rewards, camp guards and resource visibility remain authoritative. Source ground decals and animated attachments are omitted."
+    "Native rewards, camp guards and resource visibility remain authoritative. Source ground decals and animated attachments are omitted.",
+    "Pollution has one look for every source; Civ III stores no eruption marker."
   ]
 }

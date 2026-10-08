@@ -3441,6 +3441,11 @@ float4 q3_natural_water(PixelInput input) {
   +environment_moon_color*environment_moon_intensity*q3_water_glint(glint_normal,view,environment_moon_direction))
   *3*environment_water_specular*q6_receiver_visibility(input,normal,1);
  float reflection=saturate(fresnel);
+#ifdef Q3_OBJECT_REFLECTION
+ // Standing objects mirror offshore at a .25 floor (alpha only, as in the
+ // game's sea surface); the coast keeps the plain Fresnel response.
+ reflection=max(reflection,.25*saturate(object.a)*inside*smoothstep(.30,.39,depth));
+#endif
  float coverage=1-exp(-depth*lerp(2.3,3.2,smoothstep(.10,.32,depth)));
  float alpha=coverage+(1-coverage)*reflection;
  float3 premult=body*coverage*(1-reflection)+sky*reflection+glint;

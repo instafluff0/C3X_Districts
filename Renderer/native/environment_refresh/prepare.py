@@ -101,6 +101,13 @@ float4 PSReflection(P input):SV_Target {
  return PSMain(input).color;
 }
 '''
+        if name=='mountain':
+            # Rivers reflect mountains but not their grassy foot, which sits
+            # just above the ground and mirrors like it. Premultiplied, so
+            # the mirror's color and coverage ease in up the slope.
+            assert source.count(' return PSMain(input).color;\n}\n')==1
+            source=source.replace(' return PSMain(input).color;\n}\n',
+                ' return PSMain(input).color*smoothstep(10,30,(input.world.z-NativeReflection.z)*112);\n}\n')
         if name=='objects':
             source+='''
 // Mirror the same shared source geometry used by color and shadow consumers.

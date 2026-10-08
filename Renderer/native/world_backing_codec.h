@@ -73,16 +73,16 @@ class WorldBackingCodec {
         }return proof;
     }
     static void write_part(Writer& w,objects::PreparedPart const& p){
-        write_mesh(w,p.mesh);w.pod(p.material);w.pod(p.environment);w.pod(p.terrain_conforming);w.pod(p.atlas);
+        write_mesh(w,p.mesh);w.pod(p.material);w.pod(p.environment);w.pod(p.terrain_conforming);w.pod(p.effect);w.pod(p.atlas);
     }
     static void read_part(Reader& r,objects::PreparedPart& p){
-        read_mesh(r,p.mesh);r.pod(p.material);r.pod(p.environment);r.pod(p.terrain_conforming);r.pod(p.atlas);
+        read_mesh(r,p.mesh);r.pod(p.material);r.pod(p.environment);r.pod(p.terrain_conforming);r.pod(p.effect);r.pod(p.atlas);
     }
 public:
     static std::vector<unsigned char> encode(PreparedWorld const& source){
         if(!source.complete())return {};
         try {
-            Writer w;w.pod(std::uint32_t(4));w.pod(source.kind);
+            Writer w;w.pod(std::uint32_t(5));w.pod(source.kind);
             if(world_preparation_needs_ground(source.kind)){
                 auto const& g=*source.ground;auto const& t=*source.terrain;
                 if(!g.pending_grids.empty() || !g.legacy_shadow.empty())return {};
@@ -108,7 +108,7 @@ public:
             WorldPreparationKind expected=WorldPreparationKind::combined){
         if(bytes.empty() || bytes.size()>limit || !world_preparation_kind_valid(expected))return {};
         try {
-            Reader r{bytes.data(),bytes.size()};std::uint32_t version=0;r.pod(version);if(version!=4)return {};
+            Reader r{bytes.data(),bytes.size()};std::uint32_t version=0;r.pod(version);if(version!=5)return {}; // 5: city effect parts stay animated
             auto result=std::make_unique<PreparedWorld>();
             r.pod(result->kind);if(result->kind!=expected)return {};
             fidelity::NaturalWorld accounting;

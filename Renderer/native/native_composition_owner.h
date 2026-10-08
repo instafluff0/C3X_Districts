@@ -313,6 +313,13 @@ public:
                 op,result,unsigned(adapter->owns(source)),unsigned(adapter->owns(image)));OutputDebugStringA(line);}
             return result;
         }
+        if(op==C3X_NATIVE_HIT_EXEMPT){
+            // Civ III's form hit test never reads these canvases (injected
+            // code states why). An unowned one has no coverage to drop yet;
+            // the next declaration finds it once owned.
+            for(void* p:{image,source})if(p&&adapter->owns(p))client->hit_exempt(adapter->image(p));
+            return 1;
+        }
         if(op==C3X_NATIVE_HIT_PIXEL){
             if(!scene_units||!adapter->owns(image))return 0;
             if(!from||!to)throw std::runtime_error("missing form input query");

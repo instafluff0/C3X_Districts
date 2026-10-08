@@ -34,7 +34,8 @@ struct Lighting {
 constexpr unsigned instance_site_optional=1u,instance_accent=2u,instance_tree=4u;
 // Version-five attached effect: a flame, smoke source or night light at a
 // model-space point. Width is in tile widths, height in world height units.
-enum EffectKind:unsigned {effect_flame=0,effect_smoke=1,effect_night_light=2,effect_kind_count};
+// Volcano plumes come from the terrain, not the pack (city_fidelity::volcano_plume).
+enum EffectKind:unsigned {effect_flame=0,effect_smoke=1,effect_night_light=2,effect_volcano_plume=3,effect_kind_count};
 struct Effect {float position[3],kind,width,height,seed,intensity;};
 static_assert(sizeof(Effect)==32,"city effect wire contract");
 struct Instance {

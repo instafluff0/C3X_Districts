@@ -313,8 +313,6 @@ struct Core {
             if(code==C3X_RENDERER_RESULT_OK&&telemetry){
                 InterlockedExchange(reinterpret_cast<volatile LONG*>(&telemetry->presented_zoom_q16),
                     native_image(C3X_NATIVE_ZOOM_PRESENTED,nullptr,nullptr,nullptr,nullptr,0));
-                InterlockedExchange(reinterpret_cast<volatile LONG*>(&telemetry->presented_pan),
-                    native_image(C3X_NATIVE_PAN_PRESENTED,nullptr,nullptr,nullptr,nullptr,0));
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&telemetry->visual_frames));
             }
             if(code==C3X_RENDERER_RESULT_ERROR||code==C3X_RENDERER_RESULT_DEVICE_ERROR){

@@ -127,6 +127,11 @@ float4 PS(Output i):SV_Target {
  if(Quality.y>0||Quality.z>0) {
   float l=dot(radiance,float3(.2126,.7152,.0722));
   radiance=max(0,lerp(float3(l,l,l),radiance,1+Quality.z*(1-owned)))*(1+Quality.y);
+  // Units are lit objects, not lights: the extra gain rolls highlights off
+  // below the shared bloom knee (2.5) so sunlit metal and white paint do not
+  // halo. Below 1.6 the response is unchanged; the shoulder tends to 2.4.
+  float peak=max(radiance.r,max(radiance.g,radiance.b));
+  if(peak>1.6)radiance*=(1.6+(peak-1.6)/(1+(peak-1.6)/.8))/peak;
  }
  return float4(radiance,1);
 }
