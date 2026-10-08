@@ -135,12 +135,13 @@ int main(){
  p=c.pose(origin+900000);assert(p.draw.body_x==1208&&p.draw.action_cursor==922);
  // A next step arriving after a long native confirmation wait starts at
  // the shared endpoint, faces its own direction and displays its full travel.
+ // It moves at once: the facing turn runs during travel, as natively.
  Fixture late;late.begin();late.pose(origin);
  p=late.pose(origin+800000);assert(p.draw.body_x==1128&&p.draw.action==1&&p.draw.direction==2);
  late.commit();late.event.old_x=6;late.event.new_x=6;late.event.new_y=2;
  late.event.presentation_time_ticks=200;late.begin();late.commit();
- p=late.pose(origin+1600000);assert(p.draw.body_x==1128&&p.draw.body_y==500&&p.draw.direction==8&&p.draw.action==1);
- p=late.pose(origin+1980000);assert(p.draw.body_x==1128&&p.draw.body_y==470&&p.draw.direction==8);
+ p=late.pose(origin+1600000);assert(p.draw.body_x==1128&&p.draw.body_y==500&&p.draw.direction==8&&p.draw.action==2);
+ p=late.pose(origin+1980000);assert(p.draw.body_x==1128&&p.draw.body_y==454&&p.draw.direction==8);
  // A visibility refresh freezes the same camera. A turn accepted during
  // that refresh must retain its entire visible travel through adoption.
  Fixture reveal;reveal.begin();reveal.pose(0);reveal.pose(800000);
@@ -149,7 +150,7 @@ int main(){
  reveal.event.presentation_time_ticks=200;reveal.begin();reveal.commit();
  p=reveal.pose(1600000);assert(p.draw.body_x==1128&&p.draw.body_y==500&&p.draw.direction==8);
  reveal.world.resume_motion(1800000,1000000);
- p=reveal.pose(2180000);assert(p.draw.body_y==470&&p.draw.action==2);
+ p=reveal.pose(2180000);assert(p.draw.body_y==454&&p.draw.action==2);
  // Horizontal and vertical seam crossings choose a neighboring copy.
  Fixture w(10,4);w.begin();w.pose(0);p=w.pose(300000);assert(p.draw.body_x==1071);
  w.commit();w.event.old_x=0;w.event.new_x=2;w.event.presentation_time_ticks=200;w.begin();w.pose(400000);
@@ -174,6 +175,107 @@ int main(){
  assert(correction.pose(300000).draw.body_x==1000); // no stale travel after teleport
  Fixture invalid;invalid.event.new_x=12;assert(!invalid.world.begin_motion(invalid.event,12,12,true,true));
  invalid.event.new_x=8;assert(!invalid.world.begin_motion(invalid.event,12,12,true,true));
+}
+''')
+
+    def test_travel_keeps_native_start_and_duration(self):
+        # Moves must take exactly native Civ III's time: a step starts at its
+        # move event (QPC), not at the first displayed sample after transport.
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_instances.h"
+#include <cassert>
+#include <string>
+using namespace c3x_renderer::render_core;
+struct Clip {std::string name;bool ambient=true,loop=true;double duration=1;unsigned frames=31;};
+struct Unit {std::vector<std::string> keys={"settler"};std::vector<Clip> actions={{"idle"},{"move",false,true}};};
+struct Fixture {
+ UnitInstances world;std::vector<Unit> catalog{Unit{}};
+ c3x_renderer_unit_state_v1 state{};c3x_renderer_unit_v1 body{};
+ c3x_renderer_unit_move_v1 event{};c3x_renderer_tile_v1 tiles[2]{};
+ c3x_renderer_frame_v1 frame{};
+ Fixture(int x=4,int y=4){
+  state.struct_size=sizeof(state);state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;
+  state.unit_id=7;state.tile_x=x;state.tile_y=y;state.max_hp=3;
+  state.visible=1;state.action=1;state.presentation_frequency=1000000;
+  body.struct_size=sizeof(body);body.unit_id=7;body.action=1;body.frame_count=15;
+  body.body_x=1000;body.body_y=500;body.sprite_width=body.sprite_height=191;
+  body.projection_scale_milli=1000;body.presentation_frequency=1000000;
+  std::strcpy(body.unit_key,"settler");
+  frame.tile_count=2;frame.tiles=tiles;frame.tile_width=128;frame.tile_height=64;
+  frame.world_width_tiles=frame.world_height_tiles=12;frame.world_wrap_x=frame.world_wrap_y=1;
+  tiles[0].tile_x=x;tiles[0].tile_y=y;tiles[0].anchor_x=1031;tiles[0].anchor_y=563;
+  tiles[0].tile_flags=C3X_RENDERER_TILE_VISIBLE|C3X_RENDERER_TILE_RENDER;
+  tiles[1]=tiles[0];tiles[1].tile_x=(x+2)%12;tiles[1].anchor_x+=128;
+  capture();
+  event.struct_size=sizeof(event);event.unit_id=7;event.old_x=x;event.old_y=y;
+  event.new_x=(x+2)%12;event.new_y=y;event.action=2;
+  event.source_visible=event.target_visible=1;event.presentation_time_ticks=1;
+  event.presentation_frequency=1000000;
+ }
+ void capture(){
+  assert(world.state(state));UnitInstances::Selection selection;
+  assert(world.capture(body,11,catalog,[](int a){return a==2?"move":"idle";},selection));
+ }
+ void begin(){assert(world.begin_motion(event,12,12,true,true));}
+ UnitInstances::ScenePose pose(long long ticks){auto p=world.scene_poses(frame,ticks,1000000,catalog);assert(p.size()==1);return p[0];}
+ void commit(){event.presentation_time_ticks+=100;assert(world.move(event));}
+};
+int main(){
+ constexpr long long q=1000000,offset=5*q; // scene clock = QPC - offset
+ double duration=128/225.;long long ticks=static_cast<long long>(duration*q);
+ // Native start 80 ms before the first sample: arrival stays native.
+ Fixture a;a.world.native_clock(100*q,100*q-offset);
+ a.event.presentation_time_ticks=10*q+offset;a.begin();
+ auto p=a.pose(10*q+80000);assert(p.draw.action==2&&p.draw.body_x>1000);
+ a.commit();a.state.tile_x=6;a.state.presentation_time_ticks=a.event.presentation_time_ticks;
+ a.body.presentation_time_ticks=a.event.presentation_time_ticks;a.capture();
+ p=a.pose(10*q+ticks-50000);assert(p.draw.action==2&&p.draw.body_x<1128); // decelerating, not yet there
+ p=a.pose(10*q+ticks+5000);assert(p.draw.action==1&&p.draw.body_x==1128);
+ assert(a.world.arrivals.size()==1);auto r=a.world.arrivals[0];
+ assert(r.native_start==10*q&&r.visual_start==10*q&&r.visual_end==10*q+ticks);
+ // A very late first sample skips at most a quarter of the travel.
+ Fixture b;b.world.native_clock(100*q,100*q-offset);
+ b.event.presentation_time_ticks=10*q+offset;b.begin();
+ p=b.pose(20*q);assert(p.draw.action==2&&p.draw.body_x>1000&&p.draw.body_x<1128);
+ p=b.pose(20*q+static_cast<long long>(.74*ticks));assert(p.draw.action==2);
+ // A queued step keeps native time: it starts where the previous one ended.
+ Fixture c;c.world.native_clock(100*q,100*q-offset);
+ c.event.presentation_time_ticks=10*q+offset;c.begin();c.pose(10*q);c.commit();
+ c.event.old_x=6;c.event.new_x=8;c.event.presentation_time_ticks=10*q+offset+ticks;c.begin();c.commit();
+ c.pose(10*q+ticks+30000);
+ c.world.scene_poses(c.frame,10*q+2*ticks+5000,q,c.catalog); // its endpoint is outside this frame
+ assert(c.world.arrivals.size()==2&&c.world.arrivals[1].visual_start==10*q+ticks&&
+        c.world.arrivals[1].visual_end==10*q+2*ticks);
+ // A frozen view holds travel (nothing unseen is skipped); afterwards the step
+ // runs at double speed until the held time is recovered, then arrives natively.
+ Fixture h;h.world.native_clock(100*q,100*q-offset);
+ h.event.presentation_time_ticks=10*q+offset;h.begin();h.pose(10*q);
+ p=h.pose(10*q+100000);int before=p.draw.body_x;h.world.pause_motion(10*q+100000);
+ h.world.resume_motion(10*q+250000,q); // 150 ms frozen
+ p=h.pose(10*q+250000);assert(p.draw.body_x==before); // no jump at resume
+ h.commit();h.state.tile_x=6;h.state.presentation_time_ticks=h.event.presentation_time_ticks;
+ h.body.presentation_time_ticks=h.event.presentation_time_ticks;h.capture();
+ for(long long t=10*q+260000;t<=10*q+ticks+5000;t+=10000)h.pose(t);
+ p=h.pose(10*q+ticks+5000);assert(p.draw.action==1&&p.draw.body_x==1128); // native arrival despite the hold
+ assert(h.world.arrivals.size()==1&&h.world.arrivals[0].visual_end==10*q+ticks);
+ // Civ III confirms a step one or two animator ticks after the travel time.
+ // The measured overhead stretches later steps, so they arrive when Civ III
+ // confirms them and a path never stops between tiles.
+ Fixture e;e.world.native_clock(100*q,100*q-offset);
+ e.event.presentation_time_ticks=10*q+offset;e.begin();e.pose(10*q);
+ e.event.presentation_time_ticks=10*q+offset+ticks+130000;assert(e.world.move(e.event)); // confirmed 130 ms late
+ e.state.tile_x=6;e.state.presentation_time_ticks=e.event.presentation_time_ticks;assert(e.world.state(e.state));
+ e.pose(10*q+ticks+5000);
+ long long second=10*q+ticks+130000;
+ e.event.old_x=6;e.event.new_x=8;e.event.presentation_time_ticks=second+offset;e.begin();
+ e.world.scene_poses(e.frame,second,q,e.catalog);
+ e.event.presentation_time_ticks=second+offset+ticks+130000;assert(e.world.move(e.event));
+ e.world.scene_poses(e.frame,second+ticks+60000,q,e.catalog);assert(e.world.arrivals.size()==1); // still travelling
+ e.world.scene_poses(e.frame,second+ticks+135000,q,e.catalog);
+ assert(e.world.arrivals.size()==2&&e.world.arrivals[1].visual_end==second+ticks+130000&&e.world.arrivals[1].committed==second+ticks+130000);
+ // Without the native clock (replay), the first displayed sample starts travel.
+ Fixture d;d.event.presentation_time_ticks=10*q;d.begin();d.pose(12*q);
+ p=d.pose(12*q+ticks-5000);assert(p.draw.action==2);
 }
 ''')
 

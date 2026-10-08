@@ -524,6 +524,13 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     // to this publication target, preserving the reusable HDR scene underneath.
     if(presented && renderer.visibility_pass){
         auto visible=renderer.arrival_visibility.sample(frame,renderer.topology_cache.scope_sequence());
+        // Newly shown sight, timed from Civ III's visibility capture (QPC).
+        if(renderer.arrival_visibility.revealed&&renderer.trace.level&&renderer.arrival_visibility.revealed_frequency>0){
+            LARGE_INTEGER now={};QueryPerformanceCounter(&now);char detail[160];
+            std::snprintf(detail,sizeof(detail),"cells=%u capture_age_ms=%.1f",renderer.arrival_visibility.revealed,
+                1000.*double(now.QuadPart-renderer.arrival_visibility.revealed_capture)/double(renderer.arrival_visibility.revealed_frequency));
+            renderer.trace.write("reveal-shown",detail,true);
+        }
         presented=renderer.arrival_coverage.capture(visible,renderer.topology_cache.scope_sequence(),
             renderer.topology_cache.visibility_sequence(),renderer.content_revision,renderer.device_generation);
         Microsoft::WRL::ComPtr<ID3D11Resource> resource;

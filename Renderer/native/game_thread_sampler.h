@@ -2,9 +2,9 @@
 // Diagnostic sampling of Civ III's thread (C3X_RENDERER_SAMPLE_GAME=1 with
 // C3X_RENDERER_TRACE_FILE): about every millisecond the sampler suspends that
 // thread and records the QPC time, its instruction pointer, the nearest
-// validated call site in another module (with the import slot it calls
-// through, if any) and up to eight return addresses inside the game
-// executable, to <trace file>.samples. Module snapshots and the import tables
+// validated call sites in up to four successive modules (with the import slot
+// the first calls through, if any) and up to eight return addresses inside the
+// game executable, to <trace file>.samples. Module snapshots and the import tables
 // of the executable and jgl.dll let the report name modules and the imported
 // APIs being waited in. Renderer/tools/game_samples_report.py reads the file.
 // x86 bridge only: Renderer64's own threads are never sampled.
@@ -86,7 +86,7 @@ inline void run(DWORD game_thread,std::FILE* out){
         CONTEXT context={};context.ContextFlags=CONTEXT_CONTROL|CONTEXT_INTEGER;
         LARGE_INTEGER now={};QueryPerformanceCounter(&now);
         // Suspended: copy registers and stack only (no allocation, no output).
-        std::uint32_t record[14]={0};unsigned found=0,words=0;
+        std::uint32_t record[17]={0};unsigned found=0,words=0;
         if(GetThreadContext(target,&context)){
             record[3]=context.Eip;
             // Read the stack in 1 KB pieces; it may end within the window.
@@ -94,20 +94,22 @@ inline void run(DWORD game_thread,std::FILE* out){
                 if(!readable(context.Esp+words*4,stack+words,256*4))break;
         }
         ResumeThread(target);
-        // The nearest call site outside the sampled module, and the import
-        // slot it calls through (FF 15 disp32), name the API being executed.
-        auto own=module_of(modules,record[3]);
-        for(unsigned n=0;n<words&&!record[4];++n){
+        // Call sites in successive modules (e.g. ntdll <- win32u <- gdi32 <-
+        // C3XRenderer.dll) and the import slot the first one calls through
+        // (FF 15 disp32) name the work being executed.
+        auto previous=module_of(modules,record[3]);unsigned chain=0;
+        for(unsigned n=0;n<words&&chain<4;++n){
             auto m=module_of(modules,stack[n]);
-            if(m.base&&m.base!=own.base&&call_site(stack[n],m)){
-                record[4]=stack[n];auto at=reinterpret_cast<unsigned char const*>(std::uintptr_t(stack[n]-6));
-                if(at[0]==0xFF&&at[1]==0x15)std::memcpy(&record[5],at+2,4);
+            if(m.base&&m.base!=previous.base&&call_site(stack[n],m)){
+                if(!chain){auto at=reinterpret_cast<unsigned char const*>(std::uintptr_t(stack[n]-6));
+                    if(at[0]==0xFF&&at[1]==0x15)std::memcpy(&record[8],at+2,4);}
+                record[4+chain++]=stack[n];previous=m;
             }
         }
         for(unsigned n=0;n<words&&found<8;++n)
-            if(call_site(stack[n],exe))record[6+found++]=stack[n];
-        record[0]=3;std::memcpy(&record[1],&now.QuadPart,8);
-        std::fwrite(record,4,14,out);
+            if(call_site(stack[n],exe))record[9+found++]=stack[n];
+        record[0]=4;std::memcpy(&record[1],&now.QuadPart,8);
+        std::fwrite(record,4,17,out);
         if(sample%10000==9999){modules.clear();write_modules(out,&modules);std::fflush(out);}
         else if(sample%1000==999)std::fflush(out);
     }

@@ -1,7 +1,8 @@
 """Map unit frame sprites are rebuilt only when their animation changes.
 
 Civ III's map animator ticks every animating unit (`FUN_004f08f0` calls
-`FLC_Animation::tick`, 0x402620, at 0x4F0AA2). Each tick destroys and
+`FLC_Animation::tick`, 0x402620, at 0x4F0AA2, and for the unit each one refers
+to at +0x1D0 at 0x4F0AF0). Each tick destroys and
 re-creates the unit's JGL frame sprite. Under the game's compatibility layers
 each JGL destroy/create costs a shimmed critical-section call, which filled
 Civ III's thread on the busy 1498 AD save (performance review, October 7,
@@ -25,7 +26,7 @@ class UnitFrameRebuildTests(unittest.TestCase):
 #include <cassert>
 #include <cstddef>
 #define __fastcall
-struct Flic_Anim_Info {int unused;};
+struct Flic_Anim_Info {void* Flic_Anim_Data;};
 struct Animation_Info {Flic_Anim_Info** Animations;};
 struct Unit {int id;};
 struct FLC_Frame_Image {Flic_Anim_Info* Flic_Info;};
@@ -37,7 +38,8 @@ int ticks=0;
 void FLC_Animation_tick(FLC_Animation*,int edx,int direction,int frame){assert(edx==7&&direction==0&&frame==-1);++ticks;}
 ''' + patch + r'''
 int main(){
- Flic_Anim_Info run={},idle={};Flic_Anim_Info* animations[2]={&idle,&run};Animation_Info info={animations};
+ int data=0;Flic_Anim_Info run={&data},idle={&data},fidget={nullptr};
+ Flic_Anim_Info* animations[4]={&idle,&run,&fidget,nullptr};Animation_Info info={animations};
  Unit unit={1},selected={2};FLC_Animation animation={{1},{&run},&info,&unit};
  // Config-off: vanilla runs every time, with unchanged arguments.
  patch_FLC_Animation_tick_map_unit(&animation,7,0,-1);patch_FLC_Animation_tick_map_unit(&animation,7,0,-1);
@@ -50,17 +52,24 @@ int main(){
  // The selected unit always ticks: the unit panel shows its frame.
  animation.summary.current_anim_type=1;screen.Current_Unit=&unit;
  patch_FLC_Animation_tick_map_unit(&animation,7,0,-1);assert(ticks==4);
+ // Like vanilla, an animation without loaded data (or none) draws the default
+ // one (index 1); a frame already holding it is current.
+ screen.Current_Unit=&selected;animation.summary.current_anim_type=2;
+ patch_FLC_Animation_tick_map_unit(&animation,7,0,-1);assert(ticks==4);
+ animation.summary.current_anim_type=3;patch_FLC_Animation_tick_map_unit(&animation,7,0,-1);assert(ticks==4);
+ animation.Frame_1.Flic_Info=&idle;patch_FLC_Animation_tick_map_unit(&animation,7,0,-1);assert(ticks==5);
  // Missing animation data falls back to vanilla.
- screen.Current_Unit=&selected;animation.Animation_Info=nullptr;
- patch_FLC_Animation_tick_map_unit(&animation,7,0,-1);assert(ticks==5);
+ animation.Animation_Info=nullptr;
+ patch_FLC_Animation_tick_map_unit(&animation,7,0,-1);assert(ticks==6);
 }
 ''')
 
     def test_patch_table_targets_only_the_map_animator_unit_tick(self):
         rows = [line for line in (ROOT / 'civ_prog_objects.csv').read_text().splitlines() if 'FLC_Animation_tick' in line]
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 3)
         self.assertTrue(rows[0].startswith('define, 0x402620,'))
-        self.assertTrue(rows[1].startswith('repl call, 0x4F0AA2,') and '"FLC_Animation_tick_map_unit"' in rows[1])
+        for row, site in zip(rows[1:], ('0x4F0AA2', '0x4F0AF0')):
+            self.assertTrue(row.startswith(f'repl call, {site},') and '"FLC_Animation_tick_map_unit"' in row)
 
 
 if __name__ == '__main__':

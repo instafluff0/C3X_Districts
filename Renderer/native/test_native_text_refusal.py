@@ -207,6 +207,40 @@ class NativeTextRefusal(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             self.assertIn("PASS real text refusal", run.stdout)
 
+    def test_busy_map_label_set_stays_cached(self):
+        # A busy map draws a few hundred distinct strings per pass. A 32-entry
+        # cache rebuilt every label raster (17 GDI renders and four GPU
+        # operations) on each redraw of the 1498 AD save.
+        compiler = shutil.which("clang++") or shutil.which("c++")
+        if not compiler:
+            self.skipTest("host C++ compiler unavailable; native fixture remains required")
+        source = (NATIVE / "native_image_adapter.h").read_text()
+        cache = source[source.index("    struct Text {"):source.index("    void text_record(")]
+        draw = source[source.index("    bool draw_text("):source.index("    using Get=")]
+        harness = ADAPTER_PROGRAM.split("int main(){", 1)[0]
+        program = harness.replace("// REAL_CACHE", cache).replace("// REAL_DRAW", draw) + r"""
+int main(){
+ Harness a;Harness::Image destination;RECT anchor={400,300,0,0};
+ width=60;height=12;align=TA_BASELINE;shaped=false;
+ for(int pass=0;pass<2;++pass)for(int n=0;n<200;++n){std::string label="City "+std::to_string(n);
+  check(a.draw_text(destination,label.data(),&anchor,unsigned(label.size())),"label submitted");}
+ check(a.counters.text_builds==200&&a.counters.text_hits==200,"a redrawn busy label set is served from the cache");
+ std::cout<<"PASS busy label set cached\n";
+}
+"""
+        with tempfile.TemporaryDirectory(prefix="c3x-text-labels-") as directory:
+            temp = Path(directory)
+            (temp / "windows.h").write_text(WINDOWS)
+            (temp / "test.cpp").write_text(program)
+            built = subprocess.run(
+                [compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-isystem",
+                 str(temp), "-I", str(NATIVE), str(temp / "test.cpp"), "-o", str(temp / "test")],
+                capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(temp / "test")], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn("PASS busy label set cached", run.stdout)
+
     def test_actual_adapter_cache_submission_and_failure_retirement(self):
         compiler = shutil.which("clang++") or shutil.which("c++")
         if not compiler:

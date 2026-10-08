@@ -17,6 +17,7 @@ struct SandboxCombatEffects {
     ID3D11Buffer* vertices=nullptr;unsigned capacity=0;
     ID3D11BlendState* blend=nullptr;ID3D11DepthStencilState* depth=nullptr;ID3D11SamplerState* sampler=nullptr;
     std::vector<c3x_renderer::effects::UnitView> units;
+    std::vector<c3x_renderer::effects::Site> sites;
     std::vector<c3x_renderer::effects::Particle> particles;
     struct Vertex{float x,y,z,u,v,r,g,b,a;unsigned mode;};
     struct Sprite{float depth;unsigned texture,alpha;bool additive;Vertex corners[4];};
@@ -123,7 +124,16 @@ float4 PS(Output i):SV_Target{
         };
         auto& director=c3x_renderer::effects::combat_director();
         director.update(pack,units,frame.presentation_time_ticks,frame.presentation_frequency,water);
+        // Civ III's city disorder and plague animations, shown in 3D while they last.
+        sites.clear();
+        for(unsigned i=0;i<frame.tile_count;++i){auto const& t=frame.tiles[i];
+            if(t.city_id<0)continue;
+            if(t.city_flags&C3X_RENDERER_CITY_DISORDER)sites.push_back({t.tile_x,t.tile_y,"city/disorder",0.f});
+            if(t.city_flags&C3X_RENDERER_CITY_PLAGUE)sites.push_back({t.tile_x,t.tile_y,"city/plague",0.f});}
+        director.status(pack,sites,frame.presentation_time_ticks,frame.presentation_frequency);
         live=unsigned(director.live().size());
+        for(auto const& spawned:director.spawned_now())
+            renderer.trace.write("combat-effect",(spawned+" live="+std::to_string(live)).c_str(),true);
     }
 
     template<class Target>bool draw(c3x_renderer_frame_v1 const& frame,SandboxDirectUnits& source,Target& scene,

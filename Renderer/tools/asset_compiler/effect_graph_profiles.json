@@ -4100,6 +4100,245 @@
       },
       "activation": "authoritative_impact_event",
       "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "city/disorder": {
+      "loop": true,
+      "duration_ms": 3200,
+      "bounds_tile": [
+        -0.5,
+        -0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.9
+      ],
+      "emitters": [
+        {
+          "id": "flame",
+          "texture": "effect/fire/four_flames",
+          "blend": "additive",
+          "layout": {
+            "columns": 2,
+            "rows": 2,
+            "frames": 4,
+            "order": "row_major"
+          },
+          "rate_per_second": 11.0,
+          "particle_lifetime_ms": 620,
+          "max_particles": 12,
+          "size_tile": [
+            0.14400000000000002,
+            0.28800000000000003
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.12
+          ],
+          "spawn_radius_tile": 0.32,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.15,
+              1.0
+            ],
+            [
+              0.72,
+              0.8
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "id": "glow",
+          "texture": "effect/glow/flame_soft",
+          "blend": "additive",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 2.2,
+          "particle_lifetime_ms": 1600,
+          "max_particles": 3,
+          "size_tile": [
+            0.324,
+            0.324
+          ],
+          "velocity_tile_per_second": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "spawn_radius_tile": 0.32,
+          "opacity_curve": [
+            [
+              0.0,
+              0.55
+            ],
+            [
+              0.5,
+              0.75
+            ],
+            [
+              1.0,
+              0.55
+            ]
+          ]
+        },
+        {
+          "id": "smoke",
+          "texture": "effect/smoke/cloud",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 2.6,
+          "particle_lifetime_ms": 3000,
+          "max_particles": 12,
+          "size_tile": [
+            0.3458,
+            0.5851999999999999
+          ],
+          "velocity_tile_per_second": [
+            0.03,
+            0.0,
+            0.32
+          ],
+          "spawn_radius_tile": 0.3,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.2,
+              0.55
+            ],
+            [
+              0.65,
+              0.38
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "tint": [
+            0.36,
+            0.33,
+            0.31
+          ],
+          "spread_tile_per_second": [
+            0.0,
+            0.04,
+            0.05,
+            0.12
+          ],
+          "size_curve": [
+            [
+              0.0,
+              0.5
+            ],
+            [
+              1.0,
+              1.8
+            ]
+          ]
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.15
+        }
+      },
+      "activation": "city_status",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "city/plague": {
+      "loop": true,
+      "duration_ms": 4000,
+      "bounds_tile": [
+        -0.6,
+        -0.6,
+        0.0,
+        0.6,
+        0.6,
+        0.5
+      ],
+      "emitters": [
+        {
+          "id": "haze",
+          "texture": "effect/smoke/cloud",
+          "blend": "alpha",
+          "layout": {
+            "columns": 1,
+            "rows": 1,
+            "frames": 1,
+            "order": "row_major"
+          },
+          "rate_per_second": 3.2,
+          "particle_lifetime_ms": 2200,
+          "max_particles": 24,
+          "size_tile": [
+            0.37440000000000007,
+            0.6336
+          ],
+          "velocity_tile_per_second": [
+            0.02,
+            0.01,
+            0.05
+          ],
+          "spawn_radius_tile": 0.5,
+          "opacity_curve": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              0.25,
+              0.55
+            ],
+            [
+              1.0,
+              0.0
+            ]
+          ],
+          "tint": [
+            0.66,
+            0.72,
+            0.42
+          ],
+          "intensity": 0.8
+        }
+      ],
+      "zoom": {
+        "normal": {
+          "density": 1.0,
+          "size": 1.0
+        },
+        "reduced": {
+          "density": 0.55,
+          "size": 1.15
+        }
+      },
+      "activation": "city_status",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
     }
   },
   "runtime_activation": "not_enabled",

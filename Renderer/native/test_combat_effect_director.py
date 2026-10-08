@@ -15,7 +15,14 @@ units and facts:
   bombard impact; an aircraft takes the air outcome;
 - once effects load every fact is drawn (no native 2D effect remains): an
   unknown shooter uses the default munition, a standalone native effect FLC
-  (SAM, SDI) an interception burst in the air; effects expire with their profile.
+  (SAM, SDI) an interception burst in the air; effects expire with their profile;
+- captured in-game timing: a lethal round lands as the winner already left its
+  attack clip, and an interception applies damage before the fighter's clip;
+  strikes accept a recent attacker, and a death without a strike shows the
+  killing blow (an aircraft also bursts in the air), never twice;
+- a city status (disorder, plague) loops while it lasts and stops at once when
+  the city leaves the view or the state ends; one-shot status profiles replay
+  every cycle with a new seed.
 """
 import subprocess
 import unittest
@@ -37,8 +44,10 @@ int main(){
     for(char const* id:{"combat/muzzle_cannon","impact/shell/hit","impact/shell/miss","impact/shell/water",
                         "impact/shell/ship","impact/shell/air","impact/bomb/hit","impact/bomb_drop/hit",
                         "impact/bomb_drop/water","impact/melee/miss","impact/melee/hit","impact/default/hit",
-                        "impact/default_drop/hit","impact/intercept/air"}){
+                        "impact/default_drop/hit","impact/intercept/air","impact/bullet/air","impact/shell/miss2"}){
         Profile p;p.id=id;p.duration_ms=1000;pack.profiles.push_back(p);}
+    {Profile loop;loop.id="city/disorder";loop.duration_ms=3200;loop.loop=true;pack.profiles.push_back(loop);
+     Profile once;once.id="city/burst";once.duration_ms=500;pack.profiles.push_back(once);}
     auto water=[](int x,int y){return x>=20&&y>=0;};
     long long f=1000;
     Armament gun;gun.impact_set="shell";gun.bearing=90;
@@ -110,6 +119,33 @@ int main(){
     CHECK(by_profile(air,"impact/shell/air")&&near(by_profile(air,"impact/shell/air")->z,.3f));
     Director alone;std::vector<UnitView> solo{v};alone.update(pack,solo,0,f,water);
     alone.push({fact_round_hit,11,11,11,0,10,f});alone.update(pack,solo,11,f,water);CHECK(alone.live().empty());
+
+    // Lethal round as the winner returns to idle (Modern Armor capture): still struck, once.
+    Director lethal;UnitView tank=g;tank.unit_id=54;tank.tile_x=10;tank.tile_y=10;tank.action=3;UnitView warrior=v;warrior.unit_id=55;
+    std::vector<UnitView> duel{tank,warrior};lethal.update(pack,duel,1000,f,water);
+    duel[0].action=1;duel[1].action=6;lethal.push({fact_round_hit,55,11,11,0,1200,f});lethal.update(pack,duel,1200,f,water);
+    CHECK(count(lethal,"impact/shell/hit")==1);
+    // Interception (Bomber capture): damage before the fighter's clip, strike on the death.
+    Armament gun_air;gun_air.impact_set="bullet";
+    Director air2;UnitView fighter;fighter.unit_id=56;fighter.tile_x=11;fighter.tile_y=13;fighter.action=1;fighter.arms=&gun_air;
+    UnitView plane2=flyer;plane2.unit_id=54;plane2.action=1;
+    std::vector<UnitView> sky2{fighter,plane2};air2.update(pack,sky2,0,f,water);
+    air2.push({fact_round_hit,54,11,11,0,100,f});air2.update(pack,sky2,100,f,water);CHECK(air2.live().empty());
+    sky2[0].action=3;air2.update(pack,sky2,500,f,water);sky2[0].action=1;air2.update(pack,sky2,900,f,water);
+    sky2[1].action=6;air2.update(pack,sky2,950,f,water);
+    CHECK(count(air2,"impact/bullet/air")==1&&count(air2,"impact/intercept/air")==1);
+    air2.update(pack,sky2,960,f,water);CHECK(count(air2,"impact/bullet/air")==1);
+
+    // City status: loops while the state lasts, one-shots replay per cycle.
+    Director city;std::vector<UnitView> none;
+    std::vector<Site> sites{{5,7,"city/disorder",0.f},{5,7,"city/disorder",0.f},{9,9,"city/burst",.5f}};
+    city.update(pack,none,0,f,water);city.status(pack,sites,0,f);
+    CHECK(count(city,"city/disorder")==1&&count(city,"city/burst")==1&&city.animating());
+    city.update(pack,none,5000,f,water);city.status(pack,sites,5000,f);
+    CHECK(count(city,"city/disorder")==1);            // a loop never expires while it lasts
+    CHECK(count(city,"city/burst")==1&&by_profile(city,"city/burst")->start>=4500&&by_profile(city,"city/burst")->z>=.5f);
+    sites.resize(1);city.update(pack,none,5100,f,water);city.status(pack,{},5100,f);
+    CHECK(city.live().empty()&&!city.animating());   // ended or out of view: gone at once
 
     // Expiry and clock reset.
     i.update(pack,units,2100,f,water);CHECK(i.live().empty()&&!i.animating());

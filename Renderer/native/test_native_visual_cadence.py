@@ -9,6 +9,19 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 class NativeVisualCadenceTests(unittest.TestCase):
+    def test_three_frames_in_flight_share_one_depth(self):
+        # Parallels releases fences and back buffers about two 60 Hz ticks
+        # after submission; with two frames in flight a slightly long frame
+        # missed a tick (performance review, October 8). The swap chain, its
+        # latency limit and the CPU/GPU fence ring must all use one depth.
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        self.assertIn('static constexpr unsigned trial_frames_in_flight=3;',source)
+        self.assertIn('desc.BufferCount=trial_legacy_cadence()?2:trial_frames_in_flight+1;',source)
+        self.assertIn('SetMaximumFrameLatency(trial_legacy_cadence()?1:trial_frames_in_flight);',source)
+        self.assertIn('std::array<Microsoft::WRL::ComPtr<ID3D11Texture2D>,trial_frames_in_flight> visual_fences;',source)
+        self.assertIn('std::array<bool,trial_frames_in_flight> visual_fence_issued{};',source)
+        self.assertIn('visual_fence_index=(visual_fence_index+1)%unsigned(visual_fences.size());',source)
+
     def test_presentation_permit_is_nonblocking_and_survives_noop(self):
         run_cpp(r'''
 #include <windows.h>
@@ -354,6 +367,7 @@ struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;std::a
  std::atomic<std::uint64_t> trial_visual_call_busy{0},trial_visual_state_busy{0};
  std::uint64_t trial_handle=0;unsigned trial_width=0,trial_height=0,submits=0;
  bool visual_allowed=true,replay_clock_seeded=false;long long visual_ticks=0,visual_frequency=0,visual_last=100;int result=C3X_RENDERER_RESULT_PENDING;
+ std::atomic<long long> visual_qpc_offset{0};
  bool camera_active=false;long long trial_job_presented=0;
  struct {std::atomic<bool> completed_scene_retained{false};} renderer_state;
  enum class Command{trial_visual_shared};

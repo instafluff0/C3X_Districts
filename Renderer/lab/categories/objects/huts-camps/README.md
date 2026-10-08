@@ -31,16 +31,18 @@ executable. Installation and live-game verification are left to the user.
 Individual visual categories are `goody-huts` and `barbarian-camps`.
 
 Ground states share the site pack (user choices 2026-10-07; see
-`Renderer/docs/city_ruins_and_crater_art.md`):
+`Renderer/docs/city_ruins_and_crater_art.md`). They follow Civ III's tile
+state exactly; nothing native is hidden for them:
 - Pollution of every source (cities, eruptions, meltdowns, nukes) has one
   ash-and-char look. Civ III stores no eruption marker.
 - Blast craters are drawn over the ash.
-- A razed city leaves a light rubble field and low stones, in one of Civ III's
-  three sizes. A later city covers the ruins.
+- A razed city leaves a dark rubble field, in one of Civ III's three sizes.
+- All three lie over a farm's crops and the routes, as Civ III draws them over
+  irrigation and roads. The site layer follows farms.
 
 `ground_state_asset_importer.py` imports the Civ VI sources into the ignored
 `GroundStatesNormalized` pack. `build_site_runtime.py` (with
 `ground_state_composer.py`) bakes each look into one draped decal per tile.
-Craters carry baked sunlit relief, so they never turn.
+Craters and rubble carry baked sunlit relief, so they never turn.
 `Renderer/lab/studies/ground_states/study.py` renders the 1498 AD save with a
 candidate pack (`C3X_RENDERER_SITE_PACK`). Tests: `Renderer.native.test_ground_states`.

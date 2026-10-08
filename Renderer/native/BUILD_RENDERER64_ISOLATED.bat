@@ -19,7 +19,7 @@ if not exist "%OUT%\x86" mkdir "%OUT%\x86"
 if not exist "%OUT%\x64" mkdir "%OUT%\x64"
 call "%C3X_VS_PATH%\VC\Auxiliary\Build\vcvars32.bat" >nul
 if errorlevel 1 goto fail
-cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /bigobj /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:%OUT%\x86\ /Fe:%OUT%\C3XRenderer.dll /link /DEF:c3x_renderer.def /IMPLIB:%OUT%\x86\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /bigobj /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:%OUT%\x86\ /Fe:%OUT%\C3XRenderer.dll /link /DEF:c3x_renderer.def /MAP:%OUT%\x86\C3XRenderer.map /IMPLIB:%OUT%\x86\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
 if errorlevel 1 goto fail
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX renderer64_startup_probe.cpp /Fo:%OUT%\x86\renderer64_startup_probe.obj /Fe:%OUT%\renderer64_startup_probe.exe
 if errorlevel 1 goto fail

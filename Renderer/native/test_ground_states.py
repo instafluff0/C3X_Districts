@@ -1,4 +1,5 @@
-"""Ground states (pollution, craters, city ruins) and site sizes: selection, draping and pack."""
+"""Ground states (pollution, craters, city ruins) and site sizes: selection, draping and pack.
+They follow Civ III's tile state exactly (user, 2026-10-07): no art is hidden for them."""
 import struct
 import tempfile
 import unittest
@@ -10,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class GroundStateTests(unittest.TestCase):
-    def test_selection_order_city_cover_and_steep_ground(self):
+    def test_selection_order_tile_state_and_steep_ground(self):
         run_cpp(r'''
 #include "Renderer/native/rigid_object_instance.h"
 #include <cassert>
@@ -32,28 +33,25 @@ int main(){
  tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS;
  {objects::Plan plan;assert(objects::select_improvements(tile,assets,2,tile.improvement_flags,false,false,plan));
   assert(plan.instances.empty());}
- sites.assets={flat("decal/ground/pollution_0:e0"),flat("decal/ground/crater_0:e0"),flat("decal/ground/ruins_0:e0"),flat("ground/ruins_0:e0")};
- sites.assets[3].vertices[4].position[2]=.05f;  // a stone: not a flat decal
+ sites.assets={flat("decal/ground/pollution_0:e0"),flat("decal/ground/crater_0:e0"),flat("decal/ground/ruins_0:e0")};
  auto group=[&](char const* name,std::initializer_list<unsigned> parts){
   FeatureGroup g;g.name=name;for(unsigned p:parts){FeaturePlacement placement{};placement.asset_index=p;placement.scale=1;g.placements.push_back(placement);}
   sites.groups.push_back(g);};
- group("pollution_0",{0});group("crater_0",{1});group("ruins_0",{2,3});
+ group("pollution_0",{0});group("crater_0",{1});group("ruins_0",{2});
  for(unsigned seed=0;seed<16;++seed){
   tile.variant_seed=seed*977u;
   objects::Plan plan;assert(objects::select_improvements(tile,assets,2,tile.improvement_flags,false,false,plan));
-  // Pollution, then craters over it, then the ruins' rubble and stones.
-  assert(plan.instances.size()==4);
-  for(unsigned i=0;i<4;++i)assert(plan.instances[i].family==objects::site_family && plan.instances[i].asset==i);
-  // Decals light as ground (owner 0 -> resource-decal material); stones as sites.
-  assert(plan.instances[0].owner==0.f && plan.instances[1].owner==0.f && plan.instances[2].owner==0.f);
-  assert(std::abs(plan.instances[3].owner-.18f)<1e-6f);
-  // Crater relief is baked sunlit: never turned. Ruins turn only by 180 degrees.
-  assert(plan.instances[1].rotation==0.f);
-  float r=plan.instances[2].rotation;assert(r==0.f || std::abs(r-3.14159265f)<1e-5f);
+  // Pollution, then craters over it, then the ruins' rubble.
+  assert(plan.instances.size()==3);
+  for(unsigned i=0;i<3;++i)assert(plan.instances[i].family==objects::site_family && plan.instances[i].asset==i);
+  // Decals light as ground (owner 0 -> resource-decal material).
+  for(unsigned i=0;i<3;++i)assert(plan.instances[i].owner==0.f);
+  // Crater and rubble relief is baked sunlit: never turned.
+  assert(plan.instances[1].rotation==0.f && plan.instances[2].rotation==0.f);
  }
- // A later city covers the ruins; water tiles carry no ground state.
+ // The tile's ruins flag alone decides: a city on the tile draws over them, as in Civ III.
  tile.city_id=3;{objects::Plan plan;assert(objects::select_improvements(tile,assets,2,tile.improvement_flags,false,false,plan));
-  assert(plan.instances.size()==2);}
+  assert(plan.instances.size()==3);}
  tile.city_id=-1;{objects::Plan plan;assert(objects::select_improvements(tile,assets,11,tile.improvement_flags,false,false,plan));
   assert(plan.instances.empty());}
  // On a peak a resource decal is left out (steep_decal); a ground state stays.
@@ -68,14 +66,13 @@ int main(){
   objects::Surfaces out;objects::compile(plan,p,assets,relief,peak,out);
   assert(out.layers[objects::site_layer].empty()==(a==4u));
  }
- // Pollution blights a farm: an irrigated, polluted tile asks for no farm art
- // (the empty farm pack would otherwise fail the selection).
- tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
- {objects::Plan plan;assert(!objects::select_improvements(tile,assets,2,0,false,true,plan));}
- for(unsigned state:{C3X_RENDERER_IMPROVEMENT_POLLUTION,C3X_RENDERER_IMPROVEMENT_CRATER,C3X_RENDERER_IMPROVEMENT_RUINS}){
+ // An irrigated tile keeps its farm under any ground state: the farm pack is
+ // still asked for (the empty one fails the selection), as Civ III keeps irrigation.
+ unsigned const states[]={0u,unsigned(C3X_RENDERER_IMPROVEMENT_POLLUTION),unsigned(C3X_RENDERER_IMPROVEMENT_CRATER),
+  unsigned(C3X_RENDERER_IMPROVEMENT_RUINS)};
+ for(unsigned state:states){
   tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION|state;
-  objects::Plan plan;assert(objects::select_improvements(tile,assets,2,state,false,true,plan));
-  for(auto const& instance:plan.instances)assert(instance.family==objects::site_family);
+  objects::Plan plan;assert(!objects::select_improvements(tile,assets,2,state,false,true,plan));
  }
 }
 ''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
@@ -103,7 +100,7 @@ int main(){
             return value
         paths = [string() for _ in range(textures)]
         self.assertEqual(8, len(paths))
-        self.assertEqual(8, len(set(paths)), "every slot is used: site art, props and three ground textures")
+        self.assertEqual(7, len(set(paths)), "site art and three ground textures")
         ids = []
         for _ in range(assets):
             ids.append(string())
@@ -116,7 +113,8 @@ int main(){
         for prefix, count in (("pollution_", 4), ("crater_", 4), ("ruins_", 3)):
             self.assertEqual(count, sum(n.startswith(prefix) for n in names), prefix)
         self.assertTrue(all(i.startswith("decal/ground/") for i in ids if i.split(":")[0].split("/")[-1][:4] in ("poll", "crat")))
-        self.assertEqual(3, sum(i.startswith("ground/ruins_") for i in ids))
+        self.assertEqual(3, sum(i.startswith("decal/ground/ruins_") for i in ids))
+        self.assertFalse(any(i.startswith("ground/") for i in ids), "ruins are the rubble decal alone")
 
 
 if __name__ == "__main__":

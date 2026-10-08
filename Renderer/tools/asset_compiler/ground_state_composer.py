@@ -135,12 +135,17 @@ class Cell:
         self.colour = rgb * a[..., None] + self.colour * (1 - a[..., None])
         self.alpha = a + self.alpha * (1 - a)
 
-    def rgba(self, feather: float = 0.0) -> np.ndarray:
-        """Straight RGBA; empty texels take the nearby colour so filtering never fringes."""
+    def rgba(self, feather: float = 0.0, round_edge=None) -> np.ndarray:
+        """Straight RGBA; empty texels take the nearby colour so filtering never fringes.
+        `round_edge` (inner, outer radius in tiles) fades a square stamp to a round one."""
         alpha = self.alpha.copy()
         if feather:
             edge = self.span / 2 - np.maximum(np.abs(self.x), np.abs(self.y))
             alpha *= np.clip(edge / feather, 0, 1)
+        if round_edge:
+            radius = np.sqrt(self.x ** 2 + self.y ** 2)
+            t = np.clip((round_edge[1] - radius) / (round_edge[1] - round_edge[0]), 0, 1)
+            alpha *= t * t * (3 - 2 * t)
         weight = blur(self.alpha, 12)
         fill = blur(self.colour, 12) / np.maximum(weight, 1e-6)[..., None]
         colour = np.where(self.alpha[..., None] > 1e-4, self.colour / np.maximum(self.alpha, 1e-4)[..., None], fill)
@@ -247,7 +252,7 @@ def pollution_cell(sources: Sources, look: dict, seed: int) -> np.ndarray:
     cell.stamp(heavy, heavy_map, scale=look["heavy_scale"], rotation=rng.uniform(0, 6.283),
                tint=look["heavy_tint"], alpha_power=look["heavy_alpha_power"],
                shade=occlusion(heavy_height, look["relief"]) if heavy_height is not None else None)
-    return cell.rgba(feather=look["feather"])
+    return cell.rgba(feather=look["feather"], round_edge=look.get("round_edge"))
 
 
 def crater_cell(sources: Sources, look: dict, seed: int) -> np.ndarray:

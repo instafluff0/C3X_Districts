@@ -105,12 +105,13 @@ then comes 150–200 ms later because its thread is busy.
 
 ## 4. Findings in progress
 
-- **Retained view refused on the busy save.** During a camera job, ambient
-  frames draw the retained completed view. `retain_completed_scene` refuses
-  it when its metadata charge exceeds 32 MB; frames then fall to the 125 ms
-  in-job throttle (~8 fps), which matches busy-save scroll. A trace now
-  reports refusals (`completed-scene-refused`) and fork cost, with a test
-  override `C3X_RENDERER_RETAIN_VIEW_MIB`.
+- **Retained view during scroll jobs (hypothesis rejected).** During a
+  camera job, ambient frames draw the retained completed view only when the
+  job keeps the same camera origin. A scroll step never does, so its frames
+  fall to the 125 ms in-job throttle (~8 fps) by design: the job shifts the
+  static slots the old view would need. `retain_completed_scene` never
+  refused (b04/b05: one 6.8 MB retention per run). The `completed-scene-refused`
+  trace and the `C3X_RENDERER_RETAIN_VIEW_MIB` override remain for diagnosis.
 - **Input-coverage backlog blocks the game thread.** During busy 1× scroll,
   native calls of ≥2 ms (tiny fills and lines that wait for the coverage
   worker's 512-operation backlog to halve) total ~107 ms per step: most of
@@ -239,10 +240,13 @@ The stacks come from Civ III's per-unit animation tick inside
 **The shim layers.** HKLM and HKCU both run
 `Conquests\Civ3Conquests.exe` with
 `DWM8And16BitMitigation DISABLETHEMES DISABLEDWM HIGHDPIAWARE WINXPSP2`, as set
-by the GOG installation, so players' machines carry the same layers. The
-8/16-bit mitigation is the likeliest owner of a per-call loop. Changing these
-layers is an environment setting for the user to decide; this pass has not
-changed them.
+by the GOG installation, so players' machines carry the same layers. In this
+VM, Windows has also applied the Fault Tolerant Heap shim to the game after
+earlier development crashes (performance review, October 4, environment notes).
+That part, including the `HeapValidate` and `HeapFree` costs, is VM-specific,
+so the measured cost is pessimistic for players. The per-tick sprite churn the
+fix removes is real everywhere. Changing either shim setting is an environment
+decision for the VM owner; this pass has not changed them.
 
 **Next.** The sampler now also records the nearest calling module and the
 import slot it calls through, so the next capture names the shimmed API.
@@ -255,3 +259,191 @@ per-tick FLC frame rebuild produces pixels nobody shows. Candidate fixes:
   `m32`, destroy `m37`). Runtime vtable hooks need no patch-table entry, but
   only help if the shimmed call is in create or destroy rather than in the
   sprite's own buffer setup.
+
+**Shimmed call identified.** The JGL sprite destructor (`jgl.dll`,
+`0x10007ed0`) calls `DeleteCriticalSection` through its import slot
+(`0x100680b8`). Every JGL object owns a critical section;
+`InitializeCriticalSection` and `DeleteCriticalSection` are called from 11 and
+10 places in `jgl.dll`. Graphsy slot 32 creates a sprite (`operator new(0x50)`
+plus constructor), and slots 34–37 all point to the same virtual delete.
+
+**Fix: map unit frames rebuild only on animation change.**
+`patch_FLC_Animation_tick_map_unit` replaces the call at `0x4F0AA2` in the
+map animator's unit walk. Two patch-table rows were added with the user's
+permission (`FLC_Animation_tick` define, `FLC_Animation_tick_map_unit` repl
+call; see the [patch ledger](civ3_patch_dependency_ledger.md)). With custom
+rendering on, the original runs only when the unit's frame holds a different
+FLC than its current animation, or for the selected unit, whose frame the unit
+panel shows. Tests: `test_unit_frame_rebuild.py` (config-off delegation,
+unchanged frames skipped, animation change and selected unit rebuilt).
+
+**First in-game run (b12) failed.** The tactical record joining (section 5)
+counted each primitive as queue work. Behind a 2,776-packet backlog, route and
+grid captures exhausted the publication's 65,536-unit work budget
+(`async-publication-failed reason=renderer publication pressure`), and the GPU
+image session stopped. Each tactical record counts one unit again; the 256 KB
+join bound still caps a joined capture at about 4,000 primitives.
+`test_large_tactical_captures_keep_one_work_unit_each` fails with
+per-primitive units.
+
+**Results (busy 1498, trace 0; b08 before, b13 after).**
+
+| Segment | b08 | b13 |
+| --- | --- | --- |
+| 1× scroll x | 6 steps, 797 ms apart | 14 steps, 354 ms apart |
+| 1× scroll y | 8 steps, 547 ms; 9 fps | 15 steps, 228 ms; 28 fps |
+| 2× scroll | 4 steps, 1,229 ms | 8 steps, 609 ms |
+| 3× scroll | 5 steps, 1,037 ms | 10 steps, 535 ms |
+| 1× / 3× idle | 41 / 44 fps | 42 / 49 fps |
+| Minimap jumps | 1.3 / 1.1 s | 1.7 / 1.7 s |
+
+Civ III's CPU fell from about one full core (p50 97%) to p50 23% (b12
+`typeperf`). A busy step now breaks down (b14, trace 2, p50) into: queued
+90 ms, job 96 ms, native pass 101 ms, request to adoption 260 ms (from 162,
+172, 90 and 451). The light save is unchanged or slightly better (l02:
+1× scroll 53 fps, 3× scroll 51 fps, idle 60). Jumps on the busy save are slower
+in this build, which also carries other sessions' new content. That is still
+being checked.
+
+**Where Civ III's thread goes now (b14).** In 1× scroll about half its samples
+wait in its message loop. AcLayers fell to 15%: the remaining sprite
+destroys (selected unit, one-shot animations), `jgl.dll`'s `HeapValidate`
+calls, and calls from the bridge. During native map passes two-thirds of the
+samples are inside system calls and 22% in the bridge. Native text (op 107,
+~1 ms a call, ~67 calls a second while scrolling) is the costliest bridge
+entry.
+
+**Second unit walk call and drawn-FLC rule.** The b14 samples showed two
+remaining rebuild paths: the walk's second call (`0x4F0AF0`, now patched too),
+and units whose current animation has no loaded FLC data. For those Civ III
+draws `Animations[1]` instead, so comparing with the current animation never
+matched. The patch now compares with the FLC the original would draw.
+
+## 8. Native text cache (32 entries thrashed)
+
+The sampler's module chains (v3, with the bridge's linker map) showed native
+text time inside `c3x_native_text::compile`. Every draw was rebuilding its
+raster: 17 GDI renders, two GPU images and two uploads per label. The adapter
+cached only 32 strings, while a busy map draws a few hundred distinct strings
+(city names, sizes and production, each with colour variants). The cache now
+holds 512 entries within 16 MB; a label raster is about 20 KB.
+`test_busy_map_label_set_stays_cached` fails with 32 entries.
+
+Native text dropped from 1.66 s per 1× scroll window (1,567 calls, ~1 ms each)
+to below the four costliest bridge entries (b15 → b17). The busy native map
+pass (passes over 10 ms) fell with it:
+
+| Build | p50 | p90 |
+| --- | --- | --- |
+| b08 (hit exemption) | 104 ms | 253 ms |
+| b13 (unit frame fix) | 81 ms | 158 ms |
+| b16 / b18 (text cache) | 18–19 ms | 89–154 ms | Transport busy time
+during 1× scroll fell from 87% (b14) to 72% (b17) of the window.
+
+## 9. Where things stand (October 8, early morning)
+
+Busy 1498 AD save, trace 0:
+
+| Segment | b01 (start) | b16 (now) |
+| --- | --- | --- |
+| 1× idle | 45 fps | 42 fps |
+| 1× scroll x | 8 steps, 669 ms apart | 10–14 steps, 354–601 ms apart |
+| 1× scroll y | — | 15 steps, 228–236 ms apart; 20–28 fps |
+| 2× scroll | 773 ms | 470–609 ms |
+| 3× scroll | 587 ms | 316–535 ms |
+| 3× idle | 51 fps | 49–53 fps |
+| Minimap jumps | 1.5 / 1.1 s | 1.4–2.1 s |
+
+The build carries other sessions' new content (volcano smoke, combat effects,
+ground states, tunnels removed), so idle and jump rows are not pure A/B.
+Civ III's thread is no longer the limit: in busy 1× scroll it waits in its
+message loop about half the time. What limits now:
+- **Transport** (still 72% busy during busy scroll): native UI image batches
+  (~7 ms each), synchronous camera-begin (~28 ms) and camera-adopt (~37 ms).
+- **Camera job** (~100 ms per step): shadows, preparation, statics.
+- **Busy idle frames** (~20 ms each): about 10 ms of CPU and 6–13 ms waiting
+  for the GPU fence. The fence wait is not GPU throughput (see below).
+- **Far jumps:** the native pass waits for a 500–1,000-tile camera job
+  (~1.4 s).
+
+Light saves keep pace with vanilla: steps 79 ms apart at 50–53 fps scroll, and
+60 fps idle.
+
+**GPU timeline at busy idle (b20, `C3X_RENDERER_PROFILE=1`).** The readback
+timeline serializes CPU and GPU, so only its phase times count, not its frame
+rate.
+
+| Segment | GPU work per frame | of which scene preparation | Collection wait |
+| --- | --- | --- | --- |
+| 1× idle | 3.5–4.6 ms | 2.9–3.9 ms | 30–35 ms |
+| Scroll and zoom | 3.2–6.6 ms | up to 8 ms | 20–86 ms |
+| Zoomed out, static | 0.7 ms | 0.1 ms | 31–34 ms |
+
+Scene preparation (shadow, instance and unit preparation before the first
+draw) is about 80% of the GPU work, and every pass after it is under 0.2 ms.
+The wait for a readback stays near 32 ms whether a frame holds 0.7 ms or
+4.6 ms of GPU work: about two 60 Hz host intervals. Parallels completes
+readbacks at its presentation cadence. So the busy idle fence wait is
+translation-layer pacing, not GPU throughput. Busy idle gains must come from
+the helper's ~10 ms CPU frame. A frame that misses a host interval waits for
+the next one; a mix of 60 and 30 fps frames would average the measured 42 fps (inferred, not traced per frame).
+
+## 10. Unit movement at native speed (user request, October 8)
+
+Goal: from releasing the input to the unit arriving, moves, reveals and combat
+take exactly as long as in native Civ III, keeping the renderer's turning and
+easing.
+
+**What was slower.** A step's clock started at its first displayed sample, so
+transport and camera delays came first. A 60–180 ms idle turn then preceded
+travel, and holds during camera preparation added their whole length. Each
+queued step started after the previous visual step, so lag accumulated along a
+path.
+
+**Changes** (`render_core/unit_instances.h`, `unit_locomotion.h`; contract in
+[scene and motion](renderer64_scene_and_motion.md)):
+- **Start.** A step starts at its move event's QPC time. The worker reports the
+  offset between QPC and the scene clock, live only, never during replay. A late
+  first sample skips at most a quarter of the travel.
+- **Turn.** The facing turn runs during travel.
+- **Native overhead.** Civ III confirms a step after its animator snaps the
+  unit onto the tile, 90–160 ms after start plus travel in the VM. The smoothed
+  measured overhead stretches later steps' easing, so they arrive when Civ III
+  confirms them, and a path never pauses between tiles.
+- **Holds.** After a frozen view, a step runs at double speed until the held
+  time is recovered.
+- **Diagnostics.** `unit-arrival` and `reveal-shown` helper traces (trace
+  level 1 or higher).
+
+**Tests.** `test_unit_motion.py` `test_travel_keeps_native_start_and_duration`
+covers native start, the quarter-skip bound, queued steps, hold recovery, the
+learned overhead and replay fallback. Each part was mutation-checked: removing
+anchoring, catch-up or the stretch fails it. The late-turn expectations changed
+from an idle hold to immediate travel. `test_unit_arrival_visibility.py` covers
+the reveal count.
+
+**In game (`unit-turn`, user 3350 BC save, trace 2).**
+
+| Run | Step | start_lag | travel | arrival vs Civ III's confirmation |
+| --- | --- | --- | --- | --- |
+| m01 (native start, no turn hold) | 1 / 2 | 0 / 0 ms | 569 / 569 ms | −156 / −113 ms |
+| m03 (plus learned overhead) | 1 / 2 | 0 / 0 ms | 569 / 729 ms | −160 / +27 ms |
+
+The first step of a session arrives up to the overhead early, never late;
+later steps land within one animator tick of Civ III's confirmation.
+
+**Reveals (still slower than native).** Newly explored tiles appear 98–362 ms
+after Civ III's visibility capture (m04). Native redraws them on its next
+update. A one-cell reveal ran a camera job that rebuilt 31 tiles (21 without
+geometry, 10 neighbours whose appearance changed): cliffs 81 ms, terrain
+preparation 45 ms, features 22 ms, then waves and shadows. The world change
+reached the helper 66 ms after the capture. Hidden tiles keep masked topology
+(`ViewerTopology`) and no geometry, so a reveal must build them. The real fix is
+speculative preparation of the destination's sight area during travel, which
+needs a post-reveal topology view for the world preparation. It has not been
+started.
+
+**Not measured.** Input-to-move latency (key or click to Civ III's move event):
+the scripted harness does not timestamp posted keys. Combat clips already follow
+Civ III's own cycle durations and waits, and the half-tile approach uses native
+travel speed. Combat was not re-measured in this pass.

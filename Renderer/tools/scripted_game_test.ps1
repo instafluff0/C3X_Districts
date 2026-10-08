@@ -171,6 +171,8 @@ try {
     $cursorParked=$false
     $navigationReadyAt=$null; $navigationCheck=20.0
     $mouseIndex=0; $mouseHeld=$false; $mouseEvents=@()
+    # Posted keys with QPC stamps: input-to-move latency starts here.
+    $keyEvents=@()
     $mouseSteps=@(@(30,0,0,0x800,240),@(36,0,0,2),@(38,32,0,0),@(39,64,0,0),@(40,96,0,0),@(41,128,0,0),@(43,128,0,4))
     if ($Scenario -eq 'zoom') {
         $mouseSteps=@(@(30,0,0,0x800,120),@(32,0,0,0x800,120),@(34,0,0,0x800,-120),@(36,0,0,0x800,-120),@(38,0,0,0x800,240),@(38.15,0,0,0x800,-120),@(40,0,0,0x800,-240),@(42,0,0,0x800,40),@(42.2,0,0,0x800,40),@(42.4,0,0,0x800,40))
@@ -521,8 +523,10 @@ try {
                 # letter's native unit order before the full shortcut exists.
                 [void][RendererGameCommand]::PostMessage($window,0x101,[IntPtr]$key,[IntPtr](-1073741823))
             } else {
+                $keyTicks=[System.Diagnostics.Stopwatch]::GetTimestamp()
                 if (-not [RendererGameCommand]::PostMessage($window,0x100,[IntPtr]$key,[IntPtr]1)) { throw 'Cannot post diagnostic command.' }
                 [void][RendererGameCommand]::PostMessage($window,0x101,[IntPtr]$key,[IntPtr](-1073741823))
+                $keyEvents += [ordered]@{ qpc=$keyTicks; key=$key }
             }
             ++$sent
         }
@@ -565,6 +569,10 @@ $log=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
 if ($Scenario -in @('mouse','zoom','zoom-out','near','units','route-city','city-builds','navigation','camera','reveal-scroll')) {
     [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; events=$mouseEvents } |
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'mouse-events.json')
+}
+if ($keyEvents.Count) {
+    [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; events=$keyEvents } |
+        ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'key-events.json')
 }
 $steps=@([regex]::Matches($log,'stage=scripted-game-scroll step=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
 $turns=@([regex]::Matches($log,'stage=scripted-turn-end turn=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})

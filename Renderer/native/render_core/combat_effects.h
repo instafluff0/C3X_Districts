@@ -60,7 +60,12 @@ struct Live {
     float x=0,y=0,z=0,yaw=0;
     float bias=0;                    // depth bias toward the camera, tile units
     double duration_ms=0;
+    bool loop=false;                 // a status loop lasts until its site ends
 };
+
+// A persistent native state shown as an effect at a tile (a city's disorder,
+// plague or celebration), drawn while the state lasts.
+struct Site { int tile_x=0,tile_y=0; std::string profile; float z=0; };
 
 // Civ III doubled tile coordinates -> tile-frame vector.
 inline void tile_delta(int dx,int dy,float& u,float& v){u=(dx+dy)*.5f;v=(dy-dx)*.5f;}
@@ -84,7 +89,10 @@ public:
     // Live effects or pending facts keep frames coming (any thread).
     bool animating() const{return active.load(std::memory_order_acquire)!=0;}
     std::vector<Live> const& live() const{return effects;}
-    void clear(){std::lock_guard<std::mutex> lock(mutex);inbox.clear();effects.clear();memory.clear();recent.clear();
+    // Keys and profiles spawned by the last update() or status() (diagnostics).
+    std::vector<std::string> const& spawned_now() const{return spawned;}
+    void clear(){std::lock_guard<std::mutex> lock(mutex);inbox.clear();effects.clear();memory.clear();recent.clear();statuses.clear();
+        attacked.clear();actions.clear();struck.clear();
         active.store(0,std::memory_order_release);}
 
     // Render thread, once per frame. `water(tile_x,tile_y)` answers terrain.
@@ -96,14 +104,41 @@ public:
         if(now<last_now)effects.clear();
         last_now=now;
         auto age=[&](Live const& e){return double(now-e.start)*1000./double(e.frequency);};
-        effects.erase(std::remove_if(effects.begin(),effects.end(),[&](Live const& e){return age(e)>=e.duration_ms;}),effects.end());
+        effects.erase(std::remove_if(effects.begin(),effects.end(),[&](Live const& e){return !e.loop&&age(e)>=e.duration_ms;}),effects.end());
         for(auto const& unit:units)releases(pack,unit,now,frequency);
+        // Attack and death history: Civ III may apply a round's damage before
+        // the winner's attack clip (interception) or end the clip as the loser
+        // dies, so strikes accept an opponent that attacked a moment ago.
+        std::unordered_map<int,int> drawn;std::vector<int> deaths;
+        for(auto const& unit:units){
+            if(unit.action>=3&&unit.action<=5)attacked[unit.unit_id]=now;
+            auto previous=actions.find(unit.unit_id);
+            // First drawn dying, or turned to its death: a strike needs a recent attacker.
+            if(unit.action==6&&(previous==actions.end()||previous->second!=6))deaths.push_back(unit.unit_id);
+            drawn[unit.unit_id]=unit.action;
+        }
+        actions.swap(drawn);
+        // Facts carry the game's capture time; a frame may lag or lead it.
+        // An effect starts no later than the frame that sees it and skips at
+        // most a tenth of a second of its start.
+        for(auto& fact:facts)fact.ticks=std::clamp(fact.ticks,now-frequency/10,now);
+        spawned.clear();
         for(auto const& fact:facts){
             if(fact.kind==fact_impact)impact(pack,fact,units,water);
             else if(fact.kind==fact_bomb_release)bomb(pack,fact,units,water);
             else if(fact.kind==fact_standalone)standalone(pack,fact);
-            else if(fact.kind==fact_round_hit)combat_round(pack,fact,units,water);
+            else if(fact.kind==fact_round_hit)combat_round(pack,fact,units,water,false);
         }
+        // A death without a strike (interception, a lethal first round) shows the killing blow.
+        for(int id:deaths){
+            auto const* victim=find(units,id);
+            Fact fact{fact_round_hit,id,victim->tile_x,victim->tile_y,0,now,frequency};
+            combat_round(pack,fact,units,water,true);
+        }
+        for(auto it=attacked.begin();it!=attacked.end();)
+            if(now-it->second>frequency*2)it=attacked.erase(it);else ++it;
+        for(auto it=struck.begin();it!=struck.end();)
+            if(now-it->second>frequency*2)it=struck.erase(it);else ++it;
         for(auto it=memory.begin();it!=memory.end();)
             if(now-it->second.ticks>frequency*4)it=memory.erase(it);else ++it;
         for(auto it=recent.begin();it!=recent.end();)
@@ -112,8 +147,58 @@ public:
         active.store(unsigned(effects.size()+inbox.size()),std::memory_order_release);
     }
 
+    // Render thread, after update(): the visible sites with a native status.
+    // A looping profile plays while its site lasts; a one-shot profile
+    // (fireworks) replays every cycle with a new seed and a small offset.
+    // Sites that ended or left the view stop at once.
+    void status(Pack const& pack,std::vector<Site> const& sites,long long now,long long frequency){
+        if(frequency<=0)return;
+        std::unordered_map<std::string,bool> seen;
+        for(auto const& site:sites){
+            auto const* profile=pack.find(site.profile);
+            if(!profile)continue;
+            std::string key="c/"+std::to_string(site.tile_x)+","+std::to_string(site.tile_y)+"/"+site.profile;
+            if(seen.count(key))continue;
+            seen[key]=true;
+            auto found=statuses.find(key);
+            if(found==statuses.end())found=statuses.emplace(key,Status{now,now,0}).first;
+            auto& state=found->second;
+            long long cycle=static_cast<long long>(profile->duration_ms*double(frequency)/1000.);
+            if(profile->loop){
+                if(state.cycle==0){Live live;live.key=key;live.profile=site.profile;live.start=state.start;live.frequency=frequency;
+                    live.tile_x=site.tile_x;live.tile_y=site.tile_y;live.z=site.z;live.loop=true;
+                    if(spawn(pack,std::move(live)))state.cycle=1;}
+                continue;
+            }
+            if(cycle<=0)continue;
+            if(now-state.next>cycle)state.next=now;
+            while(now>=state.next){
+                Live live;live.key=key+"/"+std::to_string(state.cycle);live.profile=site.profile;
+                live.start=state.next;live.frequency=frequency;live.tile_x=site.tile_x;live.tile_y=site.tile_y;
+                std::uint32_t seed=fnv1a(live.key);
+                live.x=float(random01(seed,0,0)-.5)*.5f;live.y=float(random01(seed,0,1)-.5)*.5f;
+                live.z=site.z+float(random01(seed,0,2))*.25f;
+                spawn(pack,std::move(live));
+                state.next+=cycle;++state.cycle;
+            }
+        }
+        for(auto it=statuses.begin();it!=statuses.end();){
+            if(seen.count(it->first)){++it;continue;}
+            std::string ended=it->first,cycles=it->first+"/";
+            effects.erase(std::remove_if(effects.begin(),effects.end(),[&](Live const& e){
+                return e.key==ended||e.key.compare(0,cycles.size(),cycles)==0;}),effects.end());
+            it=statuses.erase(it);
+        }
+        std::lock_guard<std::mutex> lock(mutex);
+        active.store(unsigned(effects.size()+inbox.size()),std::memory_order_release);
+    }
+
 private:
     struct Memory { int action=-1;float phase=0;long long ticks=0;unsigned serial=0; };
+    struct Status { long long start=0,next=0;unsigned cycle=0; };
+    std::unordered_map<std::string,Status> statuses;
+    std::unordered_map<int,long long> attacked,struck;  // last attack clip / strike received
+    std::unordered_map<int,int> actions;                // last drawn action
     mutable std::mutex mutex;
     std::vector<Fact> inbox;
     bool enabled=false;
@@ -121,6 +206,7 @@ private:
     std::unordered_map<int,Memory> memory;
     std::unordered_map<long long,long long> recent;   // tile -> last native impact ticks
     std::vector<Live> effects;
+    std::vector<std::string> spawned;
     long long last_now=0;
 
     static long long tile_key(int x,int y){return (static_cast<long long>(x)<<32)^static_cast<unsigned>(y);}
@@ -132,7 +218,8 @@ private:
         auto const* profile=pack.find(live.profile);
         if(!profile||effects.size()>=max_live)return false;
         for(auto const& e:effects)if(e.key==live.key)return false;
-        live.duration_ms=profile->duration_ms;effects.push_back(std::move(live));return true;
+        live.duration_ms=profile->duration_ms;spawned.push_back(live.key+" "+live.profile);
+        effects.push_back(std::move(live));return true;
     }
     static std::string outcome_profile(Pack const& pack,std::string const& set,std::string const& outcome){
         std::string id="impact/"+set+"/"+outcome;
@@ -220,18 +307,26 @@ private:
     // HP lost in a combat round: the opponent's munition strikes the loser
     // and the loser's misses land beyond the winner. Bombard damage is the
     // native impact's, so a tile with a recent native impact is skipped.
-    void combat_round(Pack const& pack,Fact const& fact,std::vector<UnitView> const& units,std::function<bool(int,int)> const& water){
+    void combat_round(Pack const& pack,Fact const& fact,std::vector<UnitView> const& units,
+                      std::function<bool(int,int)> const& water,bool lethal){
         auto const* victim=find(units,fact.unit_id);
         if(!victim)return;
         auto hit=recent.find(tile_key(victim->tile_x,victim->tile_y));
         if(hit!=recent.end()&&std::llabs(fact.ticks-hit->second)<fact.frequency*3/2)return;
+        auto previous=struck.find(victim->unit_id);
+        if(lethal&&previous!=struck.end()&&fact.ticks-previous->second<fact.frequency)return;
+        long long window=lethal?fact.frequency*3/2:fact.frequency*3/4;
         UnitView const* opponent=nullptr;int best=1<<30;
         for(auto const& other:units){
-            if(other.unit_id==victim->unit_id||other.action<3||other.action>5||!other.arms)continue;
+            if(other.unit_id==victim->unit_id||!other.arms)continue;
+            auto last=attacked.find(other.unit_id);
+            bool attacking=(other.action>=3&&other.action<=5)||(last!=attacked.end()&&std::llabs(fact.ticks-last->second)<=window);
+            if(!attacking)continue;
             int d=std::abs(other.tile_x-victim->tile_x)+std::abs(other.tile_y-victim->tile_y);
             if(d<=4&&d<best){best=d;opponent=&other;}
         }
         if(!opponent)return;
+        struck[victim->unit_id]=fact.ticks;
         float u=0,v=0;tile_delta(victim->tile_x-opponent->tile_x,victim->tile_y-opponent->tile_y,u,v);
         float length=std::sqrt(u*u+v*v);
         if(length>0){u/=length;v/=length;}else{u=std::cos(opponent->yaw);v=std::sin(opponent->yaw);}
@@ -242,6 +337,11 @@ private:
         strike.start=fact.ticks;strike.frequency=fact.frequency;strike.tile_x=victim->tile_x;strike.tile_y=victim->tile_y;
         strike.x=victim->x;strike.y=victim->y;strike.yaw=std::atan2(v,u);strike.bias=impact_bias;
         if(victim->arms&&victim->arms->air)strike.z=std::max(0.f,victim->offset_z*victim->scale);
+        if(lethal&&victim->arms&&victim->arms->air){
+            // An aircraft destroyed in the air bursts where it flew.
+            Live burst=strike;burst.key="k/"+serial;burst.profile=outcome_profile(pack,"intercept","air");
+            if(!burst.profile.empty())spawn(pack,std::move(burst));
+        }
         if(!strike.profile.empty())spawn(pack,std::move(strike));
         if(!victim->arms||victim->arms->impact_set.empty()||(opponent->arms&&opponent->arms->air))return;
         bool winner_wet=opponent->arms->sea||water(opponent->tile_x,opponent->tile_y);

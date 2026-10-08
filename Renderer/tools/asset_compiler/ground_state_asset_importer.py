@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Import local Civ VI art for Civ III ground states (pollution, craters, ruins).
 
-Writes the ignored GroundStatesNormalized pack: the ruin props through the
-compound-landmark importer, each clutter decal's exact quad (non-indexed, see
-generic_decal_compiler.decode_decal_mesh) with its textures, and standalone
-textures. The runtime never reads this pack; build_site_runtime composes it.
+Writes the ignored GroundStatesNormalized pack: each clutter decal's exact quad
+(non-indexed, see generic_decal_compiler.decode_decal_mesh) with its textures,
+and standalone textures. The runtime never reads this pack; build_site_runtime composes it.
 """
 from __future__ import annotations
 
@@ -12,14 +11,13 @@ import argparse
 import json
 import struct
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from Renderer.tools.asset_compiler.clutter_blp_extractor import (
     TYPE_INDEX_BUFFER, TYPE_TEXTURE, TYPE_VERTEX_BUFFER, decode_buffer_entry, decode_texture_entry,
     extract_civbig_texture, landmark_base_model)
-from Renderer.tools.asset_compiler.compound_landmark_importer import compile_compound_landmarks, default_assets_root
+from Renderer.tools.asset_compiler.compound_landmark_importer import default_assets_root
 from Renderer.tools.asset_compiler.generic_decal_compiler import (
     TYPE_DECAL, TYPE_DECAL_VECTOR, decode_decal_descriptor, decode_decal_mesh)
 from Renderer.tools.asset_compiler.indexed_static_package import IndexedStaticPackage
@@ -80,13 +78,7 @@ def build(assets_root: Path, mapping_path: Path, pack: Path) -> dict:
     if mapping.get("schema") != "c3x.source_ground_state_mapping.v0":
         raise ValueError("Unsupported ground-state mapping")
     pack.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as folder:
-        props_mapping = Path(folder) / "props.json"
-        props_mapping.write_text(json.dumps(mapping["props"]))
-        compile_compound_landmarks(assets_root, props_mapping, pack / "props", pack / "props_report.json",
-                                   False, "reject")
-    manifest = {"schema": "c3x.ground_state_sources.v0", "props": "props/manifest.json",
-                "decals": {}, "textures": {}, "runtime_source_dependency": None}
+    manifest = {"schema": "c3x.ground_state_sources.v0", "decals": {}, "textures": {}, "runtime_source_dependency": None}
     for item in mapping["decals"]:
         decals = decal_quads(assets_root, item["source_package"], item["source_entry"])
         roots = shared_data_for(item["source_package"])

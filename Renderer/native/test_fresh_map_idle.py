@@ -64,6 +64,9 @@ int main(){
 #include "Renderer/native/input_recording/codec.h"
 #include "Renderer/native/render_core/dynamic_scene_input.h"
 #include "Renderer/native/render_core/unit_instances.h"
+#include "Renderer/native/render_core/combat_effects.h"
+#include <atomic>
+#include <climits>
 #include "Renderer/native/render_core/unit_hud_anchors.h"
 #include "Renderer/native/render_core/unit_arrival_visibility.h"
 #include "Renderer/native/render_core/water_material_frame.h"
@@ -152,6 +155,7 @@ struct RendererState {
 };
 struct Worker {
  RendererState renderer_state;UnitInstances unit_instances;DynamicSceneInputs dynamic_inputs;
+ std::atomic<long long> visual_qpc_offset{LLONG_MIN};void trace_unit_arrivals(){unit_instances.arrivals.clear();}
  bool camera_active=false,camera_scene_complete=true;
  using View=RetainedSceneView<decltype(RendererState::cached_signature),std::uint64_t>;
  std::optional<View> completed_scene;

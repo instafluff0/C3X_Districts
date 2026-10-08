@@ -63,9 +63,18 @@ int main() {
         old.fields.resize(1);old.fields[0].width=old.fields[0].height=2;
         old.fields[0].pixels={0,64,128,255};shared.fields=old.fields;
         for(int revision=0;revision<2;revision++) {
+            std::vector<std::shared_ptr<river::Corridor>> before;
+            for(auto const& page:shared.river_pages)before.push_back(page.field);
             if(revision)bits[(16*64+16)/2]&=~(255u<<16);
             world.update(dims,bits.data(),bits.size());old.update_rivers(world,revision);shared.update_rivers(world,revision);
-            assert(old.river_pages.empty() && shared.river_pages.empty());
+            assert(old.river_pages.empty());
+            if(revision){
+                // Removing one river cell rebuilds only pages that read it (or
+                // its changed flow); the rest keep their built corridors.
+                assert(!shared.river_pages.empty() && shared.river_pages.size()<before.size());
+                for(auto const& page:shared.river_pages)
+                    assert(std::find(before.begin(),before.end(),page.field)!=before.end());
+            }else assert(shared.river_pages.empty());
             // Nearby channels and a hill, then >16 pages to exercise LRU eviction.
             for(unsigned i=0;i<26;i++) {
                 double x=i<5?double(8+i*2)+.5:double(int(i%6)-2)*8+.5;
@@ -74,12 +83,14 @@ int main() {
                     auto a=old.river_sample({x+d,y-d}),b=shared.river_sample({x+d,y-d});
                     assert(a.distance==b.distance && a.source==b.source && a.mouth==b.mouth);
                     assert(old.river_affects(int(x),int(y))==shared.river_affects(int(x),int(y)));
-                    equal_pages(old,shared);samples++;if(a.distance<1000)near_rivers++;
+                    // Kept pages change LRU order, never sampled values.
+                    if(!revision)equal_pages(old,shared);
+                    samples++;if(a.distance<1000)near_rivers++;
                 }
             }
             auto epoch=shared.river_epoch;auto count=shared.river_pages.size();
             old.update_rivers(world,revision);shared.update_rivers(world,revision);
-            assert(shared.river_epoch==epoch && shared.river_pages.size()==count);equal_pages(old,shared);
+            assert(shared.river_epoch==epoch && shared.river_pages.size()==count);if(!revision)equal_pages(old,shared);
         }
         auto held=shared.retain_river_page(8.5,4.5);
         auto expected=held->sample({8.5,4.5});

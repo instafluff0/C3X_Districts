@@ -436,9 +436,12 @@ public:
             tactical_target=destination;tactical_animated=capture.animated;
             tactical_key=0x80000000u|(++tactical_serial&0x7fffffffu); // disjoint from fact/image groups
         }
-        auto units=std::max<std::size_t>(1,capture.primitives.size());
+        // One unit per record, as before joining: a route or grid capture can
+        // carry thousands of primitives, and counting each one exhausted the
+        // queue's work budget on the busy map. Joined primitives stay below the
+        // 16384-primitive capture limit through the 256 KB join bound.
         auto group=std::make_shared<TacticalGroup>(TacticalGroup{std::move(capture),destination});
-        bool accepted=publication.post_group(size,units,tactical_key,group,
+        bool accepted=publication.post_group(size,1,tactical_key,group,
             [this](TacticalGroup& value){target(value.destination);require_result(transport.tactical(value.capture,value.destination),"tactical");},
             [](TacticalGroup& into,TacticalGroup& incoming){auto& p=into.capture.primitives;
                 p.insert(p.end(),incoming.capture.primitives.begin(),incoming.capture.primitives.end());},

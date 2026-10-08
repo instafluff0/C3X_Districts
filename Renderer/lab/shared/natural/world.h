@@ -121,9 +121,14 @@ struct NaturalWorld : NaturalData {
     std::uint64_t river_epoch=0;
     std::int64_t river_revision=-1;
     void reset_world(){river_pages.clear();river_world=nullptr;river_revision=-1;}
+    // A page is built only from its recorded topology inputs (values and river
+    // flow), so a page whose inputs are unchanged would rebuild identically.
+    // A reveal elsewhere keeps it; only pages reading changed cells rebuild.
     void update_rivers(render_core::WorldTopology const&w,std::int64_t revision){
-        river_world=&w;
-        if(river_revision!=revision){river_pages.clear();river_revision=revision;}
+        if(river_world!=&w || river_revision!=revision)
+            river_pages.erase(std::remove_if(river_pages.begin(),river_pages.end(),
+                [&](RiverPage& page){return !page.cells->inputs->valid(w,revision);}),river_pages.end());
+        river_world=&w;river_revision=revision;
     }
     RiverPage& river_page_entry(double x,double y){
         int pc=int(std::floor(x/8)),pr=int(std::floor(y/8));++river_epoch;

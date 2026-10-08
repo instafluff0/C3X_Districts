@@ -351,6 +351,7 @@ int main(){
 #include "Renderer/native/render_core/unit_frame_preparation.h"
 #include "Renderer/native/render_core/unit_playback.h"
 #include "Renderer/native/render_core/unit_instances.h"
+#include "Renderer/native/render_core/combat_effects.h"
 #include "Renderer/native/render_core/dynamic_scene_input.h"
 #include "Renderer/native/render_core/scene_publication.h"
 #include "Renderer/native/render_core/world_input_capture.h"

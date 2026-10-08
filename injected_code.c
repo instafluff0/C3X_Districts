@@ -212,17 +212,21 @@ get_city_ptr (int id)
 	return NULL;
 }
 
-// Custom rendering only: We Love the King Day fireworks are a flat native
-// overlay that bursts over the 3D city. The native effect walk queues a city's
-// FLC only while field_A4 > 0, so the Animator update hides celebrating cities
-// for its call and restores their saved effect after. Disorder and plague play.
+// Custom rendering only: a city's native animation (We Love the King Day
+// fireworks, disorder, plague) is a flat 2D overlay over the 3D city. The native
+// effect walk queues a city's FLC only while field_A4 > 0, so the Animator update
+// hides these for its call and restores the saved effect after. The renderer
+// draws disorder and plague in 3D from the captured city flags; fireworks stay
+// hidden.
 void
-hide_custom_renderer_fireworks (bool hide)
+hide_custom_renderer_city_effects (bool hide)
 {
 	for (int n = 0; n <= p_cities->LastIndex; n++) {
 		City * city = get_city_ptr (n);
-		if ((city != NULL) && (city->Body.field_A4 == (hide ? AE_Fireworks : -AE_Fireworks)))
-			city->Body.field_A4 = hide ? -AE_Fireworks : AE_Fireworks;
+		if (city == NULL) continue;
+		int effect = hide ? city->Body.field_A4 : -city->Body.field_A4;
+		if ((effect == AE_Fireworks) || (effect == AE_Disorder) || (effect == AE_Plague))
+			city->Body.field_A4 = -city->Body.field_A4;
 	}
 }
 
@@ -28917,6 +28921,10 @@ capture_custom_renderer_city_body (struct c3x_renderer_tile_v1 * record, City * 
 			if ((leader->Era >= 0) && (leader->Era < p_bic_data->ErasCount))
 				strncpy (record->city_era_name, p_bic_data->Eras[leader->Era].Name.S, sizeof record->city_era_name);
 			record->city_flags = (leader->CapitalID == city->Body.ID) ? C3X_RENDERER_CITY_CAPITAL : 0;
+			// The city's native animation (negated while hidden for the Animator update).
+			int city_effect = (city->Body.field_A4 < 0) ? -city->Body.field_A4 : city->Body.field_A4;
+			if (city_effect == AE_Disorder) record->city_flags |= C3X_RENDERER_CITY_DISORDER;
+			else if (city_effect == AE_Plague) record->city_flags |= C3X_RENDERER_CITY_PLAGUE;
 			if (record->city_size == 0) {
 				for (int improvement_id = 0; improvement_id < p_bic_data->ImprovementsCount; improvement_id++) {
 					if ((p_bic_data->Improvements[improvement_id].Combat_Bombard > 0) &&
@@ -32601,9 +32609,9 @@ patch_Animator_update_display (Animator * this, int edx)
         watch_custom_renderer_effect_anims (this);
     }
     // Always run the native director and UI, including the active player turn.
-    hide_custom_renderer_fireworks (true);
+    hide_custom_renderer_city_effects (true);
     Animator_update_display (this, __);
-    hide_custom_renderer_fireworks (false);
+    hide_custom_renderer_city_effects (false);
 }
 #endif
 
@@ -49362,8 +49370,9 @@ patch_FLC_Animation_set_move_target (FLC_Animation * this, int edx, int x, int y
 #endif
 
 #ifdef FLC_Animation_tick
-// The map animator ticks every animating unit, and each tick re-creates the
-// unit's JGL frame sprite before decoding the frame. Under Civ III's
+// The map animator ticks every animating unit (and the unit each one refers to
+// at +0x1D0), and each tick re-creates the unit's JGL frame sprite before
+// decoding the frame. Under Civ III's
 // compatibility layers, each JGL sprite destroy/create costs a shimmed
 // critical-section call; on busy maps this filled Civ III's thread. Custom
 // rendering draws map unit bodies in 3D and reads only the frame's FLC and
@@ -49376,10 +49385,16 @@ patch_FLC_Animation_tick_map_unit (FLC_Animation * this, int edx, int direction,
 		FLC_Animation_tick (this, edx, direction, frame);
 		return;
 	}
+	// The FLC the original would draw: the current animation's, or, like
+	// FLC_Animation::tick, the default animation when that one has no data.
 	Animation_Info * info = this->Animation_Info;
-	bool current = info != NULL && info->Animations != NULL &&
-		this->Frame_1.Flic_Info == info->Animations[this->summary.current_anim_type];
-	if (! current || this->Unit == p_main_screen_form->Current_Unit)
+	Flic_Anim_Info * drawn = NULL;
+	if (info != NULL && info->Animations != NULL) {
+		drawn = info->Animations[this->summary.current_anim_type];
+		if (drawn == NULL || drawn->Flic_Anim_Data == NULL)
+			drawn = info->Animations[1];
+	}
+	if (drawn == NULL || this->Frame_1.Flic_Info != drawn || this->Unit == p_main_screen_form->Current_Unit)
 		FLC_Animation_tick (this, edx, direction, frame);
 }
 #endif

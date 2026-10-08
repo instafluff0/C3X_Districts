@@ -5490,7 +5490,9 @@ public:
     std::vector<unsigned> water_scene_order() const {
         std::vector<unsigned> order={geometry_water,geometry_river,geometry_shadow,geometry_route};
         for(unsigned i=0;i<cliff_bundle.assets.size();++i)order.push_back(geometry_cliff0+i);
-        for(auto layer:{geometry_feature,geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})order.push_back(unsigned(layer));
+        // Sites follow farms, as in the resident pipeline: pollution, craters and
+        // ruins (site decals) lie over a farm's crops, as Civ III draws them.
+        for(auto layer:{geometry_feature,geometry_mine,geometry_farm,geometry_site,geometry_city,geometry_wall})order.push_back(unsigned(layer));
         return order;
     }
     std::vector<unsigned> static_scene_order() const {
@@ -13316,8 +13318,13 @@ public:
         // its normal animation cadence between preparation chunks.
         bool zooming=std::abs(double(c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed))*65536.-
             double(presented_zoom_q16.load(std::memory_order_acquire)))>1.;
-        if(!consumer_pid&&camera_active&&!renderer_state.completed_scene_retained.load(std::memory_order_relaxed)&&!zooming&&
-           trial_job_presented&&ticks-trial_job_presented<frequency/8)
+        // Experiment: C3X_RENDERER_JOB_FRAME_HZ caps frames during a job that
+        // has a retained view (each frame runs inside the job's thread).
+        static unsigned const job_frame_hz=[]{char value[8]={};
+            return GetEnvironmentVariableA("C3X_RENDERER_JOB_FRAME_HZ",value,sizeof(value))?unsigned(std::atoi(value)):0u;}();
+        unsigned job_hz=renderer_state.completed_scene_retained.load(std::memory_order_relaxed)?job_frame_hz:8u;
+        if(!consumer_pid&&camera_active&&job_hz&&!zooming&&
+           trial_job_presented&&ticks-trial_job_presented<frequency/job_hz)
             return C3X_RENDERER_RESULT_BUSY;
         drain_facts_locked(); // the frame samples every fact received before it
         trial_consumer_pid=consumer_pid;trial_handle=0;trial_width=trial_height=0;
@@ -13351,6 +13358,13 @@ public:
             return GetEnvironmentVariableA("C3X_RENDERER_LEGACY_CADENCE",value,sizeof(value))&&value[0]=='1';}();
         return legacy;
     }
+    // Frames in flight. Parallels completes GPU fences and releases back
+    // buffers on its 60 Hz presentation ticks, about two ticks after
+    // submission; with two in flight, a frame slightly over budget missed a
+    // tick and waited for the next. Three cut busy scroll steps 14-36% and
+    // raised 3x idle 18% (performance review, October 8), for one frame of
+    // added display latency.
+    static constexpr unsigned trial_frames_in_flight=3;
     // Called by the helper cadence thread without the renderer gate: block
     // until DXGI grants the next presentation (1), or report 0/2 for the
     // timer fallback. Never touches the device or immediate context.
@@ -13862,6 +13876,8 @@ public:
         LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
         if(visual_last && visual_allowed && now.QuadPart>=visual_last)visual_ticks+=now.QuadPart-visual_last;
         visual_last=now.QuadPart;visual_frequency=frequency.QuadPart;
+        // Live clock only: unit travel starts at the move event's QPC time.
+        if(!c3x_inputs::realtime_replay().enabled)visual_qpc_offset.store(visual_last-visual_ticks,std::memory_order_relaxed);
         c3x_inputs::runtime().emit(c3x_inputs::Kind::visual,2,[&](auto& out){out.u64(c3x_inputs::parent_token());out(std::int64_t(visual_ticks));out(std::int64_t(visual_frequency));});
     }
     long long visual_clock(){std::lock_guard<std::mutex> calls(call_mutex);advance_visual_clock();return visual_ticks;}
@@ -14881,6 +14897,7 @@ private:
     bool replay_clock_seeded=false;
     bool visual_delivery=false,visual_present_pending=false,visual_allowed=true;
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
+    std::atomic<long long> visual_qpc_offset{LLONG_MIN}; // QPC minus visual clock, live only
     std::atomic<unsigned> presented_zoom_q16{65536};
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     int last_visual_ready=-1;
@@ -14893,15 +14910,15 @@ private:
     // blocked inside its display draw while holding the renderer gate, so
     // every image batch, fact batch and zoom command queued behind GPU work.
     // A 1x1 staging copy follows each delivered frame; an ambient frame starts
-    // only when the copy from two frames back has completed (two frames in
-    // flight keep the GPU fed), otherwise it returns BUSY with the gate free.
+    // only when the copy from trial_frames_in_flight frames back has completed,
+    // otherwise it returns BUSY with the gate free.
     // Parallels' D3D11 ignores DO_NOT_WAIT, so this map drains the GPU queue
     // inside the gate (gate_ms, 3-7 ms per frame). A D3D11.3 fence is cheap
     // but completes at submission there; the same wait then moved into the
     // display bind and closer-zoom scroll lost 2-4 fps (performance review 4u).
     Microsoft::WRL::ComPtr<ID3D11Texture2D> visual_fence_probe;
-    std::array<Microsoft::WRL::ComPtr<ID3D11Texture2D>,2> visual_fences;
-    std::array<bool,2> visual_fence_issued{};unsigned visual_fence_index=0;
+    std::array<Microsoft::WRL::ComPtr<ID3D11Texture2D>,trial_frames_in_flight> visual_fences;
+    std::array<bool,trial_frames_in_flight> visual_fence_issued{};unsigned visual_fence_index=0;
     ID3D11Device* visual_fence_device=nullptr;
     std::atomic<std::uint64_t> visual_fence_denials{0};
     void visual_fence_device_check(){
@@ -15018,10 +15035,25 @@ private:
     c3x_renderer_unit_v1 job_unit={};
     unsigned job_unit_predict=1;
     c3x_renderer::render_core::UnitInstances unit_instances;
+    // Displayed travel against native time, one line per finished step:
+    // start_lag is display start minus Civ III's start; end_vs_commit is
+    // display arrival minus Civ III's confirmation of the move.
+    void trace_unit_arrivals(){
+        for(auto const& a:unit_instances.arrivals){
+            double f=double(std::max(1ll,a.frequency));char detail[224];
+            std::snprintf(detail,sizeof(detail),"id=%d start_lag_ms=%.1f shown_lag_ms=%.1f travel_ms=%.1f end_vs_commit_ms=%.1f event_qpc=%lld",
+                a.unit_id,1000.*double(a.visual_start-a.native_start)/f,1000.*double(a.shown-a.native_start)/f,
+                1000.*double(a.visual_end-a.visual_start)/f,1000.*double(a.visual_end-a.committed)/f,a.event_qpc);
+            renderer_state.trace.write("unit-arrival",detail,true);
+        }
+        unit_instances.arrivals.clear();
+    }
     void snapshot_fresh_units(c3x_renderer_frame_v1 const& frame,long long ticks,long long frequency){
 #ifdef C3X_RENDERER64_FRESH
+        if(auto offset=visual_qpc_offset.load(std::memory_order_relaxed);offset!=LLONG_MIN)unit_instances.native_clock(offset,0);
         renderer_state.fresh_unit_poses=unit_instances.scene_poses(frame,ticks,frequency,
             renderer_state.unit_bodies.units);
+        trace_unit_arrivals();
         renderer_state.arrival_visibility.pending=unit_instances.pending_arrivals();
         auto pose=renderer_state.fresh_unit_poses.empty()?c3x_renderer::render_core::UnitInstances::ScenePose{}:renderer_state.fresh_unit_poses.front();
         char detail[256];std::snprintf(detail,sizeof(detail),"count=%zu generation=%llu first=%d tile=%d,%d body=%d,%d sprite=%d,%d projection=%d cursor=%u view_tile=%d,%d",
@@ -15576,7 +15608,9 @@ private:
                 auto unit_frame=frame;auto native_capture=job->captured->frame();
                 unit_frame.presentation_time_ticks=native_capture.presentation_time_ticks;
                 unit_frame.presentation_frequency=native_capture.presentation_frequency;
+                if(auto offset=visual_qpc_offset.load(std::memory_order_relaxed);offset!=LLONG_MIN)unit_instances.native_clock(offset,0);
                 auto candidates=unit_instances.scene_poses(unit_frame,ticks,frequency,renderer_state.unit_bodies.units);
+                trace_unit_arrivals();
                 renderer_state.arrival_visibility.pending=unit_instances.pending_arrivals();
                 QueryPerformanceCounter(&stages[1]);
                 decltype(candidates) poses;
@@ -16014,10 +16048,11 @@ private:
                     if(SUCCEEDED(hr))hr=adapter->GetParent(IID_PPV_ARGS(&factory));
                     DXGI_SWAP_CHAIN_DESC1 desc={};desc.Width=trial_surface_width;desc.Height=trial_surface_height;
                     desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.SampleDesc.Count=1;
-                    // Three buffers: with two, binding the next back buffer
-                    // blocked until the previous frame reached the screen
-                    // (OMSetRenderTargets averaged 7 ms, p90 19 ms, per frame).
-                    desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=trial_legacy_cadence()?2:3;
+                    // One buffer more than frames in flight: with too few,
+                    // binding the next back buffer blocked until an earlier
+                    // frame reached the screen (OMSetRenderTargets averaged
+                    // 7 ms, p90 19 ms, per frame with two buffers).
+                    desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=trial_legacy_cadence()?2:trial_frames_in_flight+1;
                     desc.SwapEffect=DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;desc.AlphaMode=DXGI_ALPHA_MODE_IGNORE;
                     desc.Flags=DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
                     if(SUCCEEDED(hr))hr=factory->CreateSwapChainForCompositionSurfaceHandle(
@@ -16025,10 +16060,11 @@ private:
                     if(SUCCEEDED(hr)){
                         Microsoft::WRL::ComPtr<IDXGISwapChain2> latency;
                         hr=trial_surface_swap.As(&latency);
-                        // Two queued frames let CPU preparation of frame N+1
-                        // overlap GPU work of frame N; the cadence thread waits
-                        // on this signal so frames start on vsync opportunities.
-                        if(SUCCEEDED(hr))hr=latency->SetMaximumFrameLatency(trial_legacy_cadence()?1:2);
+                        // Queued frames let CPU preparation of later frames
+                        // overlap GPU work of earlier ones; the cadence thread
+                        // waits on this signal so frames start on vsync
+                        // opportunities.
+                        if(SUCCEEDED(hr))hr=latency->SetMaximumFrameLatency(trial_legacy_cadence()?1:trial_frames_in_flight);
                         if(SUCCEEDED(hr)){
                             auto signal=latency->GetFrameLatencyWaitableObject();
                             if(signal)trial_surface_permit.reset(signal);else hr=E_FAIL;

@@ -36,7 +36,12 @@
       0.72
     ],
     "heavy_alpha_power": 0.7,
-    "relief": 1.2
+    "relief": 1.2,
+    "round_edge": [
+      0.3,
+      0.55
+    ],
+    "round_note": "The burnt-ground decals run to their square edges; over crops that read as a dark square, so the stack fades out round."
   },
   "crater": {
     "note": "Civ Royale blast craters, tuned: larger bowls, darker floors, a faint scorch. Drawn over pollution.",

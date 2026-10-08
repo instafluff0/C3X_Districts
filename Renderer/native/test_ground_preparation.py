@@ -155,7 +155,7 @@ int main(){
 }
 ''')
 
-    def test_persistent_query_pages_reset_on_dimensions_wrap_and_revision(self):
+    def test_persistent_query_pages_reset_on_dimensions_wrap_and_changed_inputs(self):
         run_cpp(r'''
 #include "Renderer/native/source_fidelity/surface_query_scratch.h"
 #include <cassert>
@@ -175,7 +175,12 @@ int main(){
  world.update({16,16,true,false},bits.data(),128,1);
  scratch.bind(assets,world.world(),1);assert(scratch.rivers.river_pages.empty());
  scratch.rivers.river_page_entry(4,4);scratch.bind(assets,world.world(),2);
- assert(scratch.rivers.river_pages.empty() && scratch.rivers.borrowed_data==&assets);
+ // A new revision (a reveal elsewhere) keeps a page whose recorded input
+ // cells are unchanged; it would rebuild identically.
+ assert(scratch.rivers.river_pages.size()==1 && scratch.rivers.borrowed_data==&assets);
+ // A changed input cell drops it.
+ bits[0]=12|(12<<8);world.update({16,16,true,false},bits.data(),128,3);
+ scratch.bind(assets,world.world(),3);assert(scratch.rivers.river_pages.empty());
 }
 ''')
 

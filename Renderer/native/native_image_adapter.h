@@ -35,7 +35,12 @@ template<class Backend> class Adapter {
     std::array<Lookup,2> lookups; // Full effects and the small native shadow table coexist.
     struct Text {c3x_native_text::State font_state;std::string text;
         Id pixels=0,curves=0;Rect area={};int advance=0,ascent=0,height=0;std::uint64_t age=0,bytes=0;};
-    std::array<Text,32> texts={};std::uint64_t text_age=0,text_bytes=0;unsigned text_refusal_reports=0,text_candidate_reports=0;
+    // A busy map shows a few hundred distinct strings (city names, sizes,
+    // production, each with its shadow/colour variants). With 32 entries every
+    // native text draw rebuilt its raster: 17 GDI renders and four GPU
+    // operations per label. A label raster is typically ~20 KB.
+    static constexpr std::size_t text_entries=512,text_budget=16u*1024u*1024u;
+    std::array<Text,text_entries> texts={};std::uint64_t text_age=0,text_bytes=0;unsigned text_refusal_reports=0,text_candidate_reports=0;
     void retire_text(Text& text){if(text.pixels)gpu.destroy(text.pixels);if(text.curves)gpu.destroy(text.curves);text_bytes-=text.bytes;text={};}
     void text_record(char const* stage,Image const& destination,void const* text,void const* target,unsigned count,c3x_native_text::Diagnostic const& diagnostic,bool capture,bool known){
         // Failure metadata stays on the native/DC owner thread. A bounded,
@@ -89,14 +94,14 @@ template<class Backend> class Adapter {
         c3x_native_text::State font_state;if(!c3x_native_text::capture(dc,font_state,&diagnostic))return text_refused(destination,text,target,count,diagnostic);
         if(font_state.align&(TA_UPDATECP|TA_RTLREADING))return refused(c3x_native_text::Refusal::alignment);
         RECT clip={};auto clip_kind=GetClipBox(dc,&clip);if(clip_kind==ERROR||clip_kind==COMPLEXREGION)return refused(c3x_native_text::Refusal::clip);if(clip_kind==NULLREGION)return true;
-        Text* cached=nullptr;for(auto& entry:texts)if(entry.age&&entry.font_state==font_state&&entry.text.size()==count&&!std::memcmp(entry.text.data(),text,count)){cached=&entry;break;}
+        Text* cached=nullptr;for(auto& entry:texts)if(entry.age&&entry.text.size()==count&&entry.font_state==font_state&&!std::memcmp(entry.text.data(),text,count)){cached=&entry;break;}
         if(cached)++counters.text_hits;
         else {
             ++counters.text_builds;c3x_native_text::Raster raster;
             if(!c3x_native_text::compile(dc,font_state,static_cast<char const*>(text),count,raster,&diagnostic))return text_refused(destination,text,target,count,diagnostic);
             auto bytes=(raster.pixels.size()+raster.curves.size())*4;
-            if(bytes>8u*1024u*1024u)return refused(c3x_native_text::Refusal::cache_bytes);
-            while(text_bytes+bytes>8u*1024u*1024u){auto oldest=std::min_element(texts.begin(),texts.end(),[](Text const& a,Text const& b){return (a.age?a.age:UINT64_MAX)<(b.age?b.age:UINT64_MAX);});retire_text(*oldest);}
+            if(bytes>text_budget)return refused(c3x_native_text::Refusal::cache_bytes);
+            while(text_bytes+bytes>text_budget){auto oldest=std::min_element(texts.begin(),texts.end(),[](Text const& a,Text const& b){return (a.age?a.age:UINT64_MAX)<(b.age?b.age:UINT64_MAX);});retire_text(*oldest);}
             cached=&*std::min_element(texts.begin(),texts.end(),[](Text const& a,Text const& b){return a.age<b.age;});retire_text(*cached);
             auto pixels=gpu.create(raster.width,raster.height,Format::bgra32);if(!pixels)return refused(c3x_native_text::Refusal::gpu_admission);
             auto curves=gpu.create(17,unsigned(raster.curves.size()/17),Format::bgra32);if(!curves){gpu.destroy(pixels);return refused(c3x_native_text::Refusal::gpu_admission);}

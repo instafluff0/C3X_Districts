@@ -10,11 +10,12 @@
 | Capability | Symbol | GOG | Steam | PCGames.de |
 | --- | --- | --- | --- | --- |
 | `define` | `FLC_Animation_tick` (`FUN_00402620`) | `0x00402620` | unverified (`0x0`) | unverified (`0x0`) |
-| `repl call` | `FLC_Animation_tick_map_unit` | `0x004F0AA2` | unverified (`0x0`) | unverified (`0x0`) |
+| `repl call` | `FLC_Animation_tick_map_unit` | `0x004F0AA2`, `0x004F0AF0` | unverified (`0x0`) | unverified (`0x0`) |
 
 ```csv
 define, 0x402620, 0x0, 0x0, "FLC_Animation_tick", "void (__fastcall *) (FLC_Animation * this, int edx, int direction, int frame)"
 repl call, 0x4F0AA2, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
+repl call, 0x4F0AF0, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
 ```
 
 - **Why:** the map animator's unit walk (`FUN_004f08f0`, under
@@ -25,15 +26,19 @@ repl call, 0x4F0AA2, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
   and under the game's compatibility layers (`DWM8And16BitMitigation …
   WINXPSP2`) the destroy path spent most of Civ III's thread in
   `AcLayers.DLL` on the busy save (performance review, October 7, section 7).
-- **What changes:** with custom rendering on, `patch_FLC_Animation_tick_map_unit`
-  calls the original only when `Frame_1.Flic_Info` differs from the current
-  animation's FLC, or for `Main_Screen_Form.Current_Unit` (the unit panel
-  draws its frame through `FUN_005cca00`). Map bodies are drawn in 3D;
+- **What changes:** the walk's second call (`0x4F0AF0`) ticks the unit each
+  walked unit refers to at `+0x1D0`, through the same `Unit + 0x27C`
+  receiver. With custom rendering on, `patch_FLC_Animation_tick_map_unit`
+  calls the original only when `Frame_1.Flic_Info` differs from the FLC the
+  original would draw. That is the current animation's FLC, or, as in
+  `FLC_Animation::tick`, `Animations[1]` when the current one is missing or has
+  no `Flic_Anim_Data`. It always calls the original for
+  `Main_Screen_Form.Current_Unit`, whose frame the unit panel draws through
+  `FUN_005cca00`. Map bodies are drawn in 3D;
   `forward_custom_unit_body` reads only the FLC, sprite size, action,
   direction and `field_FC`, none of which depend on the per-tick decode.
   One-shot, combat, cursor and effect animations use other calls and are
-  unchanged. The second call in the same walk (0x4F0AF0, the effect
-  animation selected by `+0x1D0`) is unchanged.
+  unchanged.
 - **Config-off:** the patch calls the original with unchanged arguments first.
 - **Test:** `test_unit_frame_rebuild.py`.
 
@@ -94,20 +99,27 @@ repl call, 0x4F0AA2, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
   - Making `Units_Image_Data_load_animation` an inlead. The effect-list
     watcher covers the SAM and SDI FLCs without it.
 
-## We Love the King Day fireworks under custom rendering
+## City animations (fireworks, disorder, plague) under custom rendering
 
-`required_user_action: []`.
+`required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.
 
 - **Existing symbol relied on:** `Animator_update_display` (the `inlead` at
   `Animator::update`). Its signature and supported-build addresses are unchanged.
 - **What changes:** with custom rendering on, the patch (via
-  `hide_custom_renderer_fireworks`, tested by `test_custom_renderer_fireworks`) hides each celebrating
-  city's effect (`City_Body.field_A4 == AE_Fireworks`) from the native effect
-  walk for the duration of the native call, by storing `-AE_Fireworks`, and
-  restores it afterwards. That walk (`Animator::FUN_004efb70`, called only from
-  `Animator::update`) queues a city's FLC only while `field_A4 > 0`, so the flat
-  fireworks overlay is never ticked or blitted onto the map overlay canvas.
-  Saved state and celebration logic are unchanged; disorder and plague still play.
+  `hide_custom_renderer_city_effects`, tested by `test_custom_renderer_fireworks`)
+  hides each city's native animation from the native effect walk for the
+  duration of the native call, by negating `City_Body.field_A4`, and restores it
+  afterwards. The animations covered are `AE_Fireworks`, `AE_Disorder` and
+  `AE_Plague`. That walk (`Animator::FUN_004efb70`, called only from
+  `Animator::update`) queues a city's FLC only while `field_A4 > 0`, so no flat
+  overlay is ticked or blitted onto the map overlay canvas.
+- **Replacements:** `capture_custom_renderer_city_body` publishes disorder and
+  plague as `C3X_RENDERER_CITY_DISORDER` / `C3X_RENDERER_CITY_PLAGUE` city flags
+  (it reads the absolute value, because the city may be negated mid-call). The
+  renderer draws them in 3D (`city/disorder`, `city/plague` in the effect pack,
+  `combat_effects.h` `status`). The user asked for the fireworks to be removed,
+  not replaced.
+- Saved state and celebration, disorder and plague logic are unchanged.
 - **Not added:** no patch-table entry and no injected-state field.
 - **Config-off:** the vanilla path returns before this code.
 

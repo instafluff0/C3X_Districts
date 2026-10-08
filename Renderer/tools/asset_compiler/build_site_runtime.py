@@ -107,7 +107,7 @@ def plan():
 
 
 def ground_sources(read):
-    """The ground-state art and props, when the local source pack exists."""
+    """The ground-state source art, when the local source pack exists."""
     if not (GROUND / "manifest.json").is_file():
         return None
     manifest = json.loads(read(GROUND / "manifest.json"))
@@ -117,17 +117,7 @@ def ground_sources(read):
                 read(GROUND / channel["texture"])
     for texture in manifest["textures"].values():
         read(GROUND / texture["texture"])
-    props = json.loads(read(GROUND / manifest["props"]))
-    meshes = {}
-    for asset_id, asset in props["assets"].items():
-        landmark = json.loads(read(GROUND / "props" / asset["landmark"]))
-        binding = landmark["draw_bindings"][0]
-        mesh = json.loads(read(GROUND / "props" / landmark["components"]["geometry"][binding["geometry"]]))
-        material = json.loads(read(GROUND / "props" / landmark["components"]["materials"][binding["material"]]))
-        texture = material["channels"]["base_color"]["texture"]
-        read(GROUND / "props" / texture)
-        meshes[asset_id.split("/")[-1]] = (mesh, texture)
-    return manifest, meshes
+    return manifest
 
 
 def flat_grid(span, uv_rect, lift, cells=12):
@@ -144,27 +134,13 @@ def flat_grid(span, uv_rect, lift, cells=12):
     return {"vertices": vertices, "topology": {"indices": indices}}
 
 
-def placed_prop(mesh, scale, height, rotation, offset):
-    """A ruin prop: scaled, squatter by `height`, turned and moved (tile units)."""
-    c, s = math.cos(rotation), math.sin(rotation)
-    vertices = []
-    for v in mesh["vertices"]:
-        x, y, z = (value * scale for value in v["position"])
-        n = [v["normal"][0], v["normal"][1], v["normal"][2] / height]
-        length = math.sqrt(sum(a * a for a in n)) or 1.0
-        vertices.append({**v, "position": [x * c - y * s + offset[0], x * s + y * c + offset[1], z * height],
-                         "normal": [(n[0] * c - n[1] * s) / length, (n[0] * s + n[1] * c) / length, n[2] / length]})
-    return {**mesh, "vertices": vertices}
-
-
 def ground_groups(first_texture):
     """Compose the ground-state textures and their decal/prop groups.
     Returns ([(name, rgba)], [(role, [(asset_id, texture_slot, [meshes])])]) or None."""
     from Renderer.tools.asset_compiler import ground_state_composer as composer
-    found = ground_sources(lambda path: path.read_bytes())
-    if found is None:
+    manifest = ground_sources(lambda path: path.read_bytes())
+    if manifest is None:
         return None
-    manifest, props = found
     looks = json.loads(LOOKS.read_text())
     sources = composer.Sources(GROUND, manifest)
     pollution, crater, ruins = looks["pollution"], looks["crater"], looks["ruins"]

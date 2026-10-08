@@ -33,8 +33,9 @@ typedef unsigned uint;
 typedef unsigned char byte;
 typedef unsigned short ushort;
 typedef struct Tile Tile;
+enum {AE_Disorder=1,AE_Plague=11};
 typedef struct City {
-    struct {int ID,X,Y,CivID;struct {int Size;}Population;}Body;
+    struct {int ID,X,Y,CivID;struct {int Size;}Population;int field_A4;}Body;
 } City;
 typedef struct Map_Renderer {int identity;} Map_Renderer;
 typedef struct TileVtable {
@@ -155,7 +156,7 @@ static void reset(void){
     races[0].CultureGroupID=2;races[1].CultureGroupID=4;
     strcpy(races[0].CountryName,"First");strcpy(races[1].CountryName,"Second");
     strcpy(eras[1].Name.S,"Old");strcpy(eras[3].Name.S,"New");
-    city=(City){{4,2,2,1,{3}}};
+    city=(City){{4,2,2,1,{3},0}};
     for(int n=0;n<32;++n){tiles[n].vtable=&tile_vtable;tiles[n].city_id=-1;topology[n]=2u|(7u<<8)|(9u<<16);}
     Tile* tile=tile_at(2,2);tile->city_id=4;tile->Body.Fog_Of_War=2;
     tile->live_resource=91;tile->live_building=92;tile->live_effect=1;

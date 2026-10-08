@@ -491,7 +491,7 @@ int main(){
                                   '#define Main_Screen_Form_move_camera native_move\n#define Animator_update_display native_animator\n#define Main_Screen_Form_center_camera native_center')
         enabled = enabled.replace('struct Clock {', 'struct City {struct {struct {int Status2=0;}Data;}Base;} city;auto p_city_form=&city;\nstruct Clock {')
         enabled = enabled.replace('unsigned captures=0', 'void native_center(Main_Screen_Form*,int,int,int,int,bool,bool);\nunsigned captures=0')
-        enabled = enabled.replace('void native_move(', 'void hide_custom_renderer_fireworks(bool){}\nunsigned native_calls=0,native_work=0;int overlay_x=0;\nvoid native_animator(Animator* a,int){++native_calls;if(screen.turn_end_flag || a->Units2_Count || a->fields[10] || a->fields[13]){++native_work;overlay_x=screen.camera_x;a->fields[10]=0;}}\nvoid native_move(')
+        enabled = enabled.replace('void native_move(', 'void hide_custom_renderer_city_effects(bool){}\nvoid watch_custom_renderer_effect_anims(Animator*){}\nunsigned native_calls=0,native_work=0;int overlay_x=0;\nvoid native_animator(Animator* a,int){++native_calls;if(screen.turn_end_flag || a->Units2_Count || a->fields[10] || a->fields[13]){++native_work;overlay_x=screen.camera_x;a->fields[10]=0;}}\nvoid native_move(')
         enabled = enabled.replace('s->camera_x=(x%8192', 's->animator.fields[10]=1;s->camera_x=(x%8192')
         enabled = enabled[:enabled.index('int main(){')]+r'''
 void native_center(Main_Screen_Form* s,int,int x,int y,int reason,bool bounds,bool){

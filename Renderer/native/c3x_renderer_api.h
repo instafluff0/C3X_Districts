@@ -94,7 +94,10 @@ enum c3x_renderer_improvement_flags {
 
 enum c3x_renderer_city_flags {
     C3X_RENDERER_CITY_CAPITAL = 1u,
-    C3X_RENDERER_CITY_WALLED = 2u
+    C3X_RENDERER_CITY_WALLED = 2u,
+    // Civ III's active city animation (City_Body.field_A4), shown in 3D.
+    C3X_RENDERER_CITY_DISORDER = 4u,
+    C3X_RENDERER_CITY_PLAGUE = 8u
 };
 
 enum c3x_renderer_dirty_flags {

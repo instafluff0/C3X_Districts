@@ -71,14 +71,33 @@ int main(){
 }
 ''')
 
-    def test_turn_acceleration_and_deceleration(self):
+    def test_reveal_count_reports_newly_shown_sight_once(self):
+        # Diagnostic for reveal timing (`reveal-shown`): each newly displayed
+        # cell counts once, with the native capture time that revealed it.
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_arrival_visibility.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+int main(){
+ UnitArrivalVisibility gate;c3x_renderer_tile_v1 tiles[2]{};
+ for(int i=0;i<2;++i){tiles[i].tile_x=i*2;tiles[i].tile_y=4;tiles[i].tile_flags=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_RENDER;}
+ tiles[0].tile_flags|=C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE;
+ c3x_renderer_frame_v1 frame{};frame.tiles=tiles;frame.tile_count=2;frame.presentation_frequency=1000;frame.presentation_time_ticks=10;
+ gate.capture(frame,1);gate.sample(frame,1);assert(gate.revealed==0); // first sight is not a reveal
+ tiles[1].tile_flags|=C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE;frame.presentation_time_ticks=50;
+ gate.capture(frame,1);gate.sample(frame,1);assert(gate.revealed==1&&gate.revealed_capture==50);
+ gate.sample(frame,1);assert(gate.revealed==0);
+}
+''')
+
+    def test_acceleration_and_deceleration_keep_native_duration(self):
+        # The facing turn runs during travel (unit_pose_transition), so a step
+        # takes exactly vanilla's constant-speed time.
         run_cpp(r'''
 #include "Renderer/native/render_core/unit_locomotion.h"
 #include <cassert>
 using namespace c3x_renderer::render_core;
 int main(){
- assert(UnitLocomotion::turn(6,8)>=.12); // west to north has a visible turn
- assert(UnitLocomotion::turn(8,1)<UnitLocomotion::turn(8,4)); // shortest arc
  double end=UnitLocomotion::duration(128,225); // vanilla constant-speed travel time
  assert(std::abs(end-128/225.)<1e-12&&UnitLocomotion::duration(128,450)==end/2);
  double previous=0,peak=0;

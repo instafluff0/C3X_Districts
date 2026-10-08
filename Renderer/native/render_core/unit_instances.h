@@ -36,7 +36,19 @@ private:
         Instance source{};
         int dx=0,dy=0;
         long long started=-1,available=-1,frequency=0,committed_at=-1;
-        double turn=0,cycle_distance=0,start_x=0,start_y=0,speed=UnitLocomotion::default_speed;
+        // Scene-clock time held (frozen view) since this step started, and how
+        // much of it has been recovered by running at double speed.
+        long long held=0,recovered=0,sampled=-1;
+        // Civ III confirms a step after its animator snaps the unit onto the
+        // tile; extra stretches this step's easing to that measured time.
+        double extra=0;
+        double cycle_distance=0,start_x=0,start_y=0,speed=UnitLocomotion::default_speed;
+        double duration()const{return UnitLocomotion::duration(distance(),speed)+extra;}
+        double covered(double seconds)const{
+            double travel=UnitLocomotion::duration(distance(),speed);
+            return UnitLocomotion::sample(extra>0?seconds*travel/(travel+extra):seconds,distance(),speed);
+        }
+        double seconds(long long ticks,long long clock)const{return std::max(0.,double(ticks-started+recovered)/clock);}
         double distance()const{return std::hypot(double(dx)*64.-start_x,double(dy)*64.-start_y*2.);}
         bool committed=false;
     };
@@ -63,6 +75,22 @@ private:
     std::uint64_t scene_generation=0;
     long long scene_ticks=-1,scene_frequency=0;
     long long motion_pause=-1,motion_held=0;
+    // Native travel starts at the move event's QPC time; the scene clock is
+    // QPC minus paused visual time. The worker reports their offset whenever
+    // it samples the clock (never during replay, whose clock is recorded).
+    long long native_offset=0;bool native_offset_known=false;
+    // Smoothed native step overhead: confirmation minus start, minus travel.
+    double native_overhead=0;bool native_overhead_known=false;
+public:
+    // One displayed arrival per step: native start (event), displayed start
+    // and end, and native confirmation, all on the scene clock. Diagnostic,
+    // drained by the worker; bounded.
+    // Scene-clock times, except event_qpc (Civ III's move event); shown is
+    // the first scene sample that held the step.
+    struct Arrival {int unit_id=0;long long native_start=0,visual_start=0,visual_end=0,committed=0,frequency=0,shown=0,event_qpc=0;};
+    std::vector<Arrival> arrivals;
+    void native_clock(long long qpc,long long visual){native_offset=qpc-visual;native_offset_known=true;}
+private:
     // CPU identity metadata only. Shared meshes and completed poses retain
     // their existing independent budgets. Eviction invalidates old selections.
     std::size_t capacity;
@@ -103,8 +131,7 @@ public:
             if(it->second.empty())return 0.;
             auto const& motion=it->second.front();
             if(motion.started<0||motion.frequency!=scene_frequency)return 0.;
-            double duration=motion.turn+UnitLocomotion::duration(motion.distance(),motion.speed);
-            double left=duration-double(scene_ticks-motion_held-motion.started)/scene_frequency;
+            double left=motion.duration()-motion.seconds(scene_ticks-motion_held,scene_frequency);
             remaining=it==motions.begin()?left:std::min(remaining,left);
         }
         return std::max(0.,remaining);
@@ -208,6 +235,14 @@ public:
                     m.event.new_x==value.new_x&&m.event.new_y==value.new_y;});
             if(pending!=motion->second.end()){
                 pending->committed=true;pending->committed_at=value.presentation_time_ticks;
+                if(pending->event.presentation_frequency==value.presentation_frequency){
+                    double overhead=double(value.presentation_time_ticks-pending->event.presentation_time_ticks)/
+                        value.presentation_frequency-UnitLocomotion::duration(pending->distance(),pending->speed);
+                    if(overhead>=0&&overhead<=.5){
+                        native_overhead=native_overhead_known?(native_overhead+overhead)*.5:overhead;
+                        native_overhead_known=true;
+                    }
+                }
             }
             else motions.erase(motion); // Teleport/correction cancels stale travel.
         }
@@ -257,8 +292,6 @@ public:
             motion.start_x=current.first;motion.start_y=current.second;
         }
         pose_offsets.erase(value.unit_id);
-        auto heading=queue.empty()?found->second.occurrence.direction:UnitLocomotion::direction(queue.back().dx,queue.back().dy);
-        motion.turn=UnitLocomotion::turn(heading,UnitLocomotion::direction(dx,dy));
         motion.source.tile_x=value.old_x;motion.source.tile_y=value.old_y;
         queue.push_back(motion);++scene_generation;
         return true;
@@ -384,6 +417,26 @@ public:
         long long pose_ticks=-1;
         bool travelling=false;
     };
+    // Civ III starts a step at its move event and keeps native time from there.
+    // A late first sample (transport, camera preparation) begins partway into
+    // the step instead of extending it, so arrival stays native; at most a
+    // quarter of the travel is skipped. The facing turn runs during travel.
+    long long native_start(Motion const& motion,long long shown,long long frequency)const{
+        if(!native_offset_known||motion.event.presentation_frequency!=frequency)return shown;
+        auto start=motion.event.presentation_time_ticks-native_offset-motion_held;
+        auto limit=shown-static_cast<long long>(.25*UnitLocomotion::duration(motion.distance(),motion.speed)*frequency);
+        return std::clamp(start,limit,shown);
+    }
+    // A frozen view (camera preparation) holds travel so no unseen distance
+    // is skipped. Afterwards the step runs at double speed until the held time
+    // is recovered, so arrival returns to native time without a jump.
+    void catch_up(Motion& motion,long long ticks)const{
+        if(native_offset_known&&motion_pause<0&&motion.sampled>=0){
+            auto deficit=(motion_held-motion.held)-motion.recovered;
+            if(deficit>0)motion.recovered+=std::min(deficit,std::max(0ll,ticks-motion.sampled));
+        }
+        motion.sampled=ticks;
+    }
     template<class Catalog>
     std::vector<ScenePose> scene_poses(c3x_renderer_frame_v1 const& frame,
             long long ticks,long long frequency,Catalog const& catalog){
@@ -461,10 +514,14 @@ public:
                 for(auto& next:queue)if(next.available<0){next.available=motion_ticks;next.frequency=frequency;}
                 while(!queue.empty()){
                     auto& next=queue.front();
-                    if(next.started<0){next.started=motion_ticks;next.frequency=frequency;}
+                    if(next.started<0){
+                        next.started=native_start(next,motion_ticks,frequency);next.frequency=frequency;next.held=motion_held;
+                        if(native_offset_known)next.extra=native_overhead;
+                    }
+                    catch_up(next,motion_ticks);
                     double distance=next.distance();
-                    double duration=next.turn+UnitLocomotion::duration(distance,next.speed);
-                    bool finished=next.frequency==frequency&&double(motion_ticks-next.started)/frequency>=duration;
+                    double duration=next.duration();
+                    bool finished=next.frequency==frequency&&next.seconds(motion_ticks,frequency)>=duration;
                     if(finished&&next.committed){
                         if(queue.size()==1){
                             // Native stack selection may stop drawing this
@@ -486,11 +543,17 @@ public:
                             }
                             body.revision=++serial;pose_offsets.erase(pair.first);
                         }
-                        long long continuation=next.started+static_cast<long long>(duration*frequency);
+                        long long continuation=next.started-next.recovered+static_cast<long long>(duration*frequency);
                         double cycle_distance=next.cycle_distance+distance;
+                        if(arrivals.size()<64)arrivals.push_back({pair.first,
+                            next.event.presentation_time_ticks-native_offset,next.started+next.held,
+                            continuation+motion_held,next.committed_at-native_offset,frequency,
+                            next.available+next.held,next.event.presentation_time_ticks});
                         queue.pop_front();
                         if(!queue.empty()){
-                            queue.front().started=std::max(continuation,queue.front().available);
+                            queue.front().started=std::max(continuation,native_start(queue.front(),queue.front().available,frequency));
+                            queue.front().held=motion_held;
+                            if(native_offset_known)queue.front().extra=native_overhead;
                             queue.front().cycle_distance=cycle_distance;
                             queue.front().frequency=frequency;
                         }
@@ -543,9 +606,9 @@ public:
                 auto clip=std::find_if(actions.begin(),actions.end(),[](auto const& a){return a.name=="move";});
                 if(clip==actions.end()||clip->duration<=0)continue;
                 pose.action=std::size_t(clip-actions.begin());
-                double seconds=motion->frequency==frequency?std::max(0.,double(motion_ticks-motion->started)/frequency):0.;
+                double seconds=motion->frequency==frequency?motion->seconds(motion_ticks,frequency):0.;
                 double distance=motion->distance();
-                double covered=UnitLocomotion::sample(seconds-motion->turn,distance,motion->speed);
+                double covered=motion->covered(seconds);
                 double progress=distance>0?covered/distance:1.;
                 pose.draw=item.occurrence;pose.draw.action=2;
                 pose.draw.direction=UnitLocomotion::direction(motion->dx,motion->dy);
@@ -555,7 +618,7 @@ public:
                 pose.draw.action_cursor=int(std::fmod((motion->cycle_distance+covered)/motion->speed,double(clip->duration))/clip->duration*1000.);
                 // Native confirmation may arrive after visible travel. Hold
                 // the accepted endpoint in idle instead of running in place.
-                if(progress>=1.||seconds<motion->turn){
+                if(progress>=1.){
                     auto idle=std::find_if(actions.begin(),actions.end(),[](auto const& a){return a.name=="idle";});
                     if(idle!=actions.end()){
                         pose.action=std::size_t(idle-actions.begin());pose.draw.action=1;

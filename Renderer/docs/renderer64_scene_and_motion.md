@@ -290,20 +290,42 @@ placement. Both use the copied tile center: the native target routine adds
 `(+64,+32)` at normal zoom. This avoids pairing a body captured after native
 camera recentering with a previous renderer camera. No per-unit camera binding
 is retained.
-Renderer64 starts the visual clock on its first scene sample. It allows a
-60–180 ms turn before translating. Travel then lasts exactly vanilla's
-constant-speed step: distance over the art's INI `Fast Speed`, which the move
-event copies from native `Animation_Info` (225 map units/second for every stock
-ground unit; the renderer uses 225 if an event carries none). It accelerates over the first 12% and
-decelerates over the final 20% of that time, so cruise runs about 19% faster
-than vanilla. The authored run cycle follows distance at native speed,
-including the slowdown. The catalog
-reads move timing from the 32-byte generic animation header during asset loading;
-older bindings record duration/frames only for ambient clips. Delayed
-transport therefore cannot consume the move before its first visible sample.
+**Native timing (October 8, user requirement).** A move must take exactly as
+long as in native Civ III, from input to arrival. The rules:
+- **Start.** A step starts at its move event's QPC time, the moment Civ III
+  starts it, not at the first displayed sample. The worker reports the offset
+  between QPC and the scene clock (`UnitInstances::native_clock`; live clock
+  only, never during replay). A late first sample (transport, camera
+  preparation) begins partway into the step, skipping at most a quarter of
+  its travel.
+- **Turn.** The facing turn (60–180 ms, `unit_pose_transition`) runs during
+  travel. It no longer delays it.
+- **Duration.** Travel lasts vanilla's constant-speed time, distance over the
+  art's INI `Fast Speed`, which the move event copies from native
+  `Animation_Info` (225 map units/second for every stock ground unit; 225 if an
+  event carries none). Civ III's animator snaps the unit onto the tile on its
+  next update and confirms the move after that. The measured overhead
+  (confirmation minus start, minus travel; 90–160 ms in the VM) is smoothed
+  per session and stretches later steps' easing, so they arrive when Civ III
+  confirms them. A path then never pauses between tiles. The first step of a
+  session arrives up to that overhead early.
+- **Easing.** Travel accelerates over the first 12% and decelerates over the
+  final 20% of the step, so cruise runs about 19% faster than constant
+  speed. The authored run cycle follows distance at native speed, including
+  the slowdown and any stretch.
+- **Holds.** A frozen view (camera preparation without a usable completed
+  scene) still holds travel, so no unseen distance is skipped. Afterwards
+  the step runs at double speed until the held time is recovered, then
+  arrives on native time.
+- **Diagnostics.** At trace level 1 or higher, `unit-arrival` reports each
+  displayed step: `start_lag_ms`, `travel_ms`, `end_vs_commit_ms`.
+
+The catalog reads move timing from the 32-byte generic animation header during
+asset loading; older bindings record duration/frames only for ambient clips.
+Without the native clock (replay), a step starts at its first visible sample.
 The bounded queue retains up to eight neighboring steps and carries the same
-accumulated run distance across them. A queued step records its first scene sample;
-it cannot inherit elapsed time from before it was available for presentation.
+accumulated run distance across them. A queued step starts at its native start,
+never before the previous step ends.
 An endpoint waiting for native confirmation holds an idle pose with its travel
 heading. A late continuation pauses the run phase for that wait, then starts
 at the shared endpoint. Tests use a nonzero clock origin to detect an

@@ -161,6 +161,40 @@ int main(){
 }
 ''')
 
+    def test_large_tactical_captures_keep_one_work_unit_each(self):
+        # Counting each primitive as queue work exhausted the 65536-unit budget
+        # behind a busy-map backlog (route and grid captures carry thousands).
+        run_cpp(r'''
+#include "Renderer/sandbox/async_scene_client.h"
+#include <cassert>
+#include <future>
+struct State {std::promise<void> entered,release;std::shared_future<void> held=release.get_future().share();
+ bool stalled=false;std::size_t primitives=0,records=0;float last=-1;bool ordered=true;};
+struct Fake {
+ State& state;explicit Fake(State& value):state(value){}
+ bool alive()const{return true;}
+ void publication_pressure(std::size_t){}
+ int stats(){return 0;}
+ int visual_policy(unsigned value){if(value<2&&!state.stalled){state.stalled=true;state.entered.set_value();state.held.wait();}return 1;}
+ int tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const&){
+  ++state.records;for(auto const& p:capture.primitives){state.ordered&=p.shape[0]>state.last;state.last=p.shape[0];++state.primitives;}
+  return C3X_RENDERER_RESULT_OK;}
+};
+int main(){
+ State state;bool failed=false;
+ c3x_remote_scene::AsyncSceneClient<Fake> client(true,[&](char const*){failed=true;},state);
+ client.visual_policy(1);state.entered.get_future().get();
+ c3x_renderer_gpu_unit_v1 target={sizeof(target)};target.destination=1;target.clip[2]=640;target.clip[3]=480;
+ float x=0;
+ for(int n=0;n<30;++n){c3x_renderer::tactical::Input capture;
+  for(int k=0;k<3000;++k){capture.line(x,0,x+1,0);++x;}
+  assert(client.tactical(capture,target)==C3X_RENDERER_RESULT_OK);}
+ state.release.set_value();client.stats();
+ assert(!failed&&client.alive());
+ assert(state.primitives==90000&&state.ordered&&state.records>=8&&state.records<=30);
+}
+''')
+
     def test_busy_native_burst_has_independent_work_and_packet_bounds(self):
         run_cpp(r'''
 #include "Renderer/sandbox/async_publication.h"

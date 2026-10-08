@@ -58,10 +58,15 @@ units last), standing in for the runtime's depth test of effects against units.
 - Draw: `sandbox/direct_effects.h` after the unit bodies, before tone mapping.
 - Bridge: two unit-state kinds (`IMPACT`, `BOMB_RELEASE`) from existing
   inleads; see `Renderer/docs/civ3_patch_dependency_ledger.md`.
-- Unit audit (78 pack units): arrow 6, bomb 2, bullet 12, melee 25, missile 6, naval 11, shell 6, stone 3, torpedo 2. Munitions come from
-  Civ VI evidence, else the firing weapon, else the Civ III unit class (a
-  timeline without effects, e.g. Marine). Units without source evidence keep
-  Civ III's own impact art: Settler, Cruise_Missile, Nuke, ICBM, Worker.
+- Unit audit (78 pack units): arrow 6, bomb 2, bullet 12, melee 25, missile 7, naval 11, nuclear 2, shell 6, stone 3, torpedo 2. Munitions come from
+  Civ VI evidence, else the firing weapon, else Civ III's own data: a Nuclear
+  Weapon or Cruise Missile ability, else the unit class. No attack: Settler, Worker.
+- Zero native 2D (user rule): every bombard hit/miss, bomb drop (also the
+  nuclear delivery), SAM shoot-down and SDI interception is drawn in 3D once
+  the pack loads; unknown shooters use the `default`/`default_drop` sets and
+  standalone FLCs the `intercept` set. City disorder and plague are captured
+  as city flags and drawn as `city/disorder` and `city/plague` loops; fireworks
+  are hidden without replacement (user: not suited for 3D).
 
 ## Status
 

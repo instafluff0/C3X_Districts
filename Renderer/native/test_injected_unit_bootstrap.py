@@ -172,7 +172,8 @@ static PCX_Image background;
 static PCX_Color_Table palette;
 static unsigned preferences, *p_preferences = &preferences;
 #define P_SHOW_TEAM_COLOR_DISC 0x800u
-void hide_custom_renderer_fireworks(bool hide) { (void)hide; }
+void hide_custom_renderer_city_effects(bool hide) { (void)hide; }
+void watch_custom_renderer_effect_anims(Animator *animator) { (void)animator; }
 static unsigned debug_bits, *p_debug_mode_bits = &debug_bits;
 enum { C3X_NAV_POLL_TEST_UNUSED = 0 };
 static int update_calls, update_edx, update_redraws, navigation_calls;

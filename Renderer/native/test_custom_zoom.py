@@ -388,8 +388,10 @@ unsigned capture_custom_renderer_visibility(Tile*,int,int,int){return visible?C3
 bool Unit_has_ability(Unit*,int,int){return false;}
 struct Screen {int Player_CivID=1;} screen,*p_main_screen_form=&screen;
 Unit outer,inner;PCX_Image previous,canvas;
+static unsigned preferences=0,*p_preferences=&preferences;
+#define P_SHOW_TEAM_COLOR_DISC 0x800u
 struct State {
- Unit* custom_renderer_unit_context=&outer;PCX_Image* custom_renderer_unit_canvas=&previous;
+ Unit* custom_renderer_unit_context=&outer;PCX_Image* custom_renderer_unit_canvas=&previous;bool custom_renderer_team_disc=false;
  struct {bool enable_custom_rendering=true;} current_config;
  void (*custom_renderer_unit_forget)(int)=nullptr;
  void* custom_renderer_unit_draw=&outer;int custom_renderer_init_state=IS_OK;

@@ -1,7 +1,8 @@
 # Ruins, craters, pollution and lava damage
 
 Status (2026-10-07): the user chose ash and char for all pollution, tuned blast
-craters, and rubble with low stones for ruins, and asked for them in the game.
+craters, and a dark rubble field for ruins, and asked for them in the game. The
+rule is to follow Civ III's tile state exactly: no native art is hidden.
 The implementation is described under *Integration* below.
 
 ## Current gap
@@ -26,8 +27,9 @@ City ruins:
   C3X sets ruins when an attack destroys a land district.
 - Cleared by the worker jobs mine, irrigate, fortress, road, rail, plant
   forest, airfield, radar, outpost and barricade, and when a hut or camp is
-  placed. Founding a city does not clear them; natively the city sprite covers
-  them.
+  placed. `Leader::create_city` shows no ruins write (inferred from the
+  decompile). The user's experience is that founding a city removes them, which
+  is unverified here. The renderer follows the flag either way.
 - Drawn first in `m12_Draw_Tile_Buildings`. The game picks one of the three
   `Art/Cities/DESTROY.PCX` frames (167x95 each) at random, seeded by the tile,
   not by the city's size. Their content is 84x45, 98x54 and 133x70 px:
@@ -106,16 +108,19 @@ Derived Civ VI pixels stay local and are not redistributed.
    - `build_site_runtime.py` with `ground_state_composer.py` bakes each look into
      `TileSitesRuntime`. The looks are data in `tile_site_looks.json`.
    - Groups: `pollution_0..3` and `crater_0..3` (one draped decal each, sharing a
-     2x2 atlas), and `ruins_0..2` (a rubble decal plus low stones, at Civ III's
-     three sizes).
+     2x2 atlas), and `ruins_0..2` (one rubble decal, at Civ III's three sizes).
 3. Runtime: `select_improvements` adds them after huts and camps, in the order
    pollution, craters, ruins.
    - Decals are `decal/ground/*` assets with owner code 0, so they take the
      resource-decal material: soft alpha and the natural depth basis.
-   - The steep-decal skip does not apply to them.
-   - Ruins are skipped under a city, and water tiles carry none.
-   - Crater relief is baked sunlit, so craters never turn. Pollution turns
-     freely; ruins turn only by 180 degrees.
+   - The steep-decal skip and farm clipping do not apply to them. Water
+     tiles carry none.
+   - Ruins follow the tile's flag alone, with no city special case.
+   - Decals lie at a lift of .02, over crop fields (.016) and under route
+     strips. The site layer draws after farms, as Civ III draws pollution over
+     irrigation; crops are never hidden.
+   - Crater and rubble relief is baked sunlit, so they never turn. Pollution
+     turns freely.
 4. Lab: `Renderer/lab/studies/ground_states/study.py` replays the 1498 AD save
    around the big volcano. `C3X_LAB_TILE_OVERLAYS` maps pollution (0x40) and
    crater (0x100) bits, and `C3X_LAB_TILE_RUINS` lists ruin tiles.

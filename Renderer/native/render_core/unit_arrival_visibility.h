@@ -14,8 +14,11 @@ class UnitArrivalVisibility {
 public:
     using Arrival=std::pair<int,long long>;
     std::vector<Arrival> pending;
+    // Diagnostic: cells the last sample newly displayed as visible/explored,
+    // and the native capture (QPC time) whose visibility they show.
+    unsigned revealed=0;long long revealed_capture=-1,revealed_frequency=0;
 private:
-    struct Cell {unsigned native=0,shown=0;std::vector<Arrival> waits;unsigned long long seen=0;};
+    struct Cell {unsigned native=0,shown=0,displayed=0;std::vector<Arrival> waits;unsigned long long seen=0;bool sampled=false;};
     std::map<std::pair<int,int>,Cell> cells;
     std::vector<c3x_renderer_tile_v1> tiles;
     unsigned long long scope=0,sample_id=0;
@@ -58,7 +61,7 @@ public:
     c3x_renderer_frame_v1 sample(c3x_renderer_frame_v1 const& frame,unsigned long long current_scope){
         // Standalone consumers have no ordered unit/camera admission owner.
         if(!admitted || scope!=current_scope)capture(frame,current_scope);
-        auto result=frame;
+        auto result=frame;revealed=0;
         if(!frame.tiles||frame.tile_count>8192)return result;
         tiles.assign(frame.tiles,frame.tiles+frame.tile_count);
         for(auto& tile:tiles){
@@ -71,7 +74,11 @@ public:
             if(cell.waits.empty())cell.shown=cell.native;
             // An older view cannot expose new geometry, or undo a newer loss.
             tile.tile_flags=(tile.tile_flags&~bits)|(cell.shown&tile.tile_flags&bits);
+            auto displayed=tile.tile_flags&bits;
+            if(cell.sampled&&(displayed&~cell.displayed))++revealed;
+            cell.displayed=displayed;cell.sampled=true;
         }
+        if(revealed){revealed_capture=capture_ticks;revealed_frequency=capture_frequency;}
         result.tiles=tiles.data();return result;
     }
 };
