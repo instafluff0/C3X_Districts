@@ -34,6 +34,16 @@ class NativeVisualCadenceTests(unittest.TestCase):
         self.assertIn('trial_job_presented=started.QuadPart;',block)
         self.assertLess(block.index('trial_job_presented=started.QuadPart;'),block.index('lock.unlock();'))
 
+    def test_glides_keep_the_in_job_frame_cap(self):
+        # The restored camera-step glide exempted itself from the in-job frame
+        # cap; display frames then ran inside short scroll-step jobs and light
+        # vertical steps slipped to every other tick (153 ms, October 8, l65).
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        start=source.index('bool new_front=retained&&trial_front_pending.load(std::memory_order_acquire);')
+        block=source[start:start+900]
+        condition=block[block.index('if(!consumer_pid&&camera_active'):block.index('return C3X_RENDERER_RESULT_BUSY;')]
+        self.assertNotIn('pan',condition)
+
     def test_presentation_permit_is_nonblocking_and_survives_noop(self):
         run_cpp(r'''
 #include <windows.h>

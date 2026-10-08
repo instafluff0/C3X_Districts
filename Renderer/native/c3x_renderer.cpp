@@ -13569,6 +13569,7 @@ public:
             std::memory_order_release,std::memory_order_relaxed)){}
     }
     unsigned presented_zoom()const{return presented_zoom_q16.load(std::memory_order_acquire);}
+    int presented_pan()const{return presented_pan_packed.load(std::memory_order_acquire);}
     int images_gpu(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* readback,unsigned capacity){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         start_locked();
@@ -14935,6 +14936,8 @@ private:
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
     std::atomic<long long> visual_qpc_offset{LLONG_MIN}; // QPC minus visual clock, live only
     std::atomic<unsigned> presented_zoom_q16{65536};
+    std::atomic<int> presented_pan_packed{0};
+    int pan_origin_x=0,pan_origin_y=0;bool pan_origin=false; // last published map origin (1x basis)
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     int last_visual_ready=-1;
 #ifdef C3X_HELPER_TRIAL
@@ -16010,6 +16013,23 @@ private:
                                     id.map_epoch,id.viewer_epoch,id.visibility_epoch,id.scene_epoch);
                                 renderer_state.trace.write("route-publication",detail,true);
                             }
+                            // A small camera step slides into place (screen pixels at the
+                            // settled presented zoom); jumps and zoom transitions cut.
+                            // Civ III still chooses every step and its timing; only the
+                            // display glides between them (C3X_RENDERER_GLIDE=1).
+                            if(auto const& f=gpu_publication.frame;f.tile_count&&f.tiles){
+                                char glide[4]={};
+                                bool enabled=c3x_renderer::render_core::cached_environment("C3X_RENDERER_GLIDE",glide,sizeof(glide))&&glide[0]=='1';
+                                int ox=f.tiles[0].anchor_x-f.tiles[0].tile_x*int(f.tile_width)/2;
+                                int oy=f.tiles[0].anchor_y-f.tiles[0].tile_y*int(f.tile_height)/2;
+                                auto presented=double(presented_zoom_q16.load(std::memory_order_acquire));
+                                bool settled=std::abs(double(c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed))*65536.-presented)<=1.;
+                                int dx=int(std::lround(-double(ox-pan_origin_x)*presented/65536.));
+                                int dy=int(std::lround(-double(oy-pan_origin_y)*presented/65536.));
+                                bool step=enabled&&pan_origin&&settled&&std::abs(dx)<=int(f.target_width)/2&&std::abs(dy)<=int(f.target_height)/2;
+                                session.camera_step(step?dx:0,step?dy:0);
+                                pan_origin_x=ox;pan_origin_y=oy;pan_origin=true;
+                            }
                             gpu_replacements=gpu_publication.replacements;gpu_fallbacks=gpu_publication.fallback;
                             gpu_metadata.replacement_tile_flags=gpu_replacements.empty()?nullptr:gpu_replacements.data();
                             gpu_metadata.fallback_tile_indices=gpu_fallbacks.empty()?nullptr:gpu_fallbacks.data();
@@ -16309,11 +16329,14 @@ private:
                         trial_surface_permit.presented();
                         renderer_state.gpu_composition->did_present();
                         presented_zoom_q16.store(renderer_state.gpu_composition->presented_zoom(),std::memory_order_release);
+                        presented_pan_packed.store(renderer_state.gpu_composition->presented_pan(),std::memory_order_release);
                         if(route_witness){
                             auto proof=renderer_state.gpu_composition->visual_publication();
-                            char detail[768];sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu zoom_q16=%u result=1 mixed=%u frequency=%lld present_qpc=%lld",
+                            int pan=renderer_state.gpu_composition->presented_pan();
+                            char detail[768];sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu zoom_q16=%u result=1 mixed=%u frequency=%lld present_qpc=%lld pan_x=%d pan_y=%d",
                                 static_cast<unsigned long long>(proof.first),static_cast<unsigned long long>(proof.second),
-                                static_cast<unsigned long long>(++route_present_index),renderer_state.gpu_composition->presented_zoom(),unsigned(!proof.first),renderer_state.trace.frequency.QuadPart,finished.QuadPart);
+                                static_cast<unsigned long long>(++route_present_index),renderer_state.gpu_composition->presented_zoom(),unsigned(!proof.first),renderer_state.trace.frequency.QuadPart,finished.QuadPart,
+                                int(short(pan&0xffff)),int(short(unsigned(pan)>>16)));
                             renderer_state.trace.write("route-presented",detail,true);
                             auto work=renderer_state.gpu_composition->visual_work();
                             sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu begin=%lld sampled=%lld end=%lld frequency=%lld compose_ms=%.3f present_ms=%.3f total_ms=%.3f operations=%u assemblies=%u copies=%u copied_pixels=%llu assembly_pixels=%llu selected_borrows=%u selected_owned=%u direct_native_images=%u avoided_copy_pixels=%llu",
@@ -18287,6 +18310,8 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
     }
     if(operation==C3X_NATIVE_ZOOM_PRESENTED)return remote_renderer_requested()?int(remote_renderer_backend()->presented_zoom()):
         renderer_worker?int(renderer_worker->presented_zoom()):65536;
+    if(operation==C3X_NATIVE_PAN_PRESENTED)return remote_renderer_requested()?remote_renderer_backend()->presented_pan():
+        renderer_worker?renderer_worker->presented_pan():0;
     if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
     if(operation==C3X_NATIVE_VISUAL_POLICY)return remote_renderer_requested()?remote_renderer_backend()->visual_policy(color):
         renderer_worker?renderer_worker->visual_policy(color):0;

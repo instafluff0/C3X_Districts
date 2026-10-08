@@ -45,6 +45,7 @@ public:
     bool alive()const{return transport.alive();}
     unsigned frames()const{return transport.frames();}
     unsigned presented_zoom()const{return transport.presented_zoom();}
+    int presented_pan()const{return transport.presented_pan();}
     void supersede_pending_camera(){transport.supersede_pending_camera();}
     void publication_pressure(std::size_t records){transport.publication_pressure(records);}
     void prepare_camera_receipt(){transport.prepare_camera_receipt();}

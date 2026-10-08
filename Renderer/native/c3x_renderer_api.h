@@ -581,7 +581,9 @@ enum { C3X_NATIVE_WORLD_BEGIN = 127, C3X_NATIVE_WORLD_END = 128,
        C3X_NATIVE_ZOOM_TARGET = 129, C3X_NATIVE_ZOOM_PRESENTED = 130,
        C3X_NATIVE_FIXED_UI_BEGIN = 131, C3X_NATIVE_FIXED_UI_END = 132,
        C3X_NATIVE_HUD_BEGIN = 133, C3X_NATIVE_HUD_END = 134,
-       /* 135 was the presented camera-step slide, retired with vanilla scroll. */
+       /* Last presented camera-step slide in screen pixels: (short)low = x,
+          (short)high = y. Picking subtracts it before the zoom inverse. */
+       C3X_NATIVE_PAN_PRESENTED = 135,
        C3X_NATIVE_UNIT_HUD_BEGIN = 136 };
 /* HUD_BEGIN: image=canonical canvas, from=int[2] canonical map attachment,
    color=opaque native item identity. The scoped native draws keep pixel size.

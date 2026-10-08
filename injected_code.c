@@ -24024,6 +24024,13 @@ custom_renderer_zoom_transform_point (int * x, int * y)
 void
 custom_renderer_zoom_inverse_point (int * x, int * y)
 {
+	// A camera step may still be sliding into place: the screen shows the new
+	// native camera shifted by the last presented slide offset.
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL) {
+		int pan = is->custom_renderer_native_image (C3X_NATIVE_PAN_PRESENTED, NULL, NULL, NULL, NULL, 0);
+		*x -= (short)(pan & 0xffff);
+		*y -= (short)((unsigned)pan >> 16);
+	}
 	if (! custom_renderer_zoom_enabled ()) return;
 	sync_custom_renderer_zoom_to_native ();
 	// One atomic display sample for both coordinates. This is the last

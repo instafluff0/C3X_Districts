@@ -121,6 +121,7 @@ public:
         return client.pack(path);}
     int set_units(int enabled){std::lock_guard<std::mutex> lock(gate);if(!enabled)unit_facts.clear();return client.set_units(enabled);}
     unsigned presented_zoom(){std::lock_guard<std::mutex> lock(gate);return client.presented_zoom();}
+    int presented_pan(){std::lock_guard<std::mutex> lock(gate);return client.presented_pan();}
     int visual_policy(unsigned policy){
         LARGE_INTEGER began={},locked={},done={},rate={};if(trace_input)QueryPerformanceCounter(&began);
         std::lock_guard<std::mutex> lock(gate);if(trace_input)QueryPerformanceCounter(&locked);

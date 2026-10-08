@@ -855,3 +855,34 @@ around the new camera and recomputing its dependencies) and only 33 fit the
 existing slot. The slot margin is 320 × 192 px, so a 128 px step overruns it
 every two or three steps. A scrolling (wrap-around) raster would remove
 recentering.
+
+## 17. Camera-step glide restored behind a flag (October 8)
+
+At the user's request the October 5 image-space glide (performance review
+20261004, C3) is back, on top of vanilla steps: Civ III still chooses every
+step and its timing, and the display slides between them. `C3X_RENDERER_GLIDE=1`
+turns it on (off by default). The helper wire is version 17 (the presented
+slide offset is back), and picking subtracts the presented offset
+(`C3X_NATIVE_PAN_PRESENTED`, in `injected_code.c`). Unlike October 5, a glide
+does not lift the in-job frame cap: with it lifted, light-save vertical steps
+slipped to every other tick (153 ms, l65); with the cap, 80 ms (u66).
+Test: `test_native_visual_cadence.py` `test_glides_keep_the_in_job_frame_cap`.
+
+**Results.** Scroll fps: light save 57–59 with glide, 49–56 without (l65, l64);
+3350 BC save 36–41 against 28–29 (u66, u67). Steps stay at native pace.
+
+**Motion (3350 BC save, 1× scroll, trace level 2, u68 against u69).** Without
+glide, 117 of 184 presented frames do not move and the rest jump 128 px. With
+glide, frames move 5–53 px (p10–p90, median 27), so motion is continuous. The
+display trails Civ III's camera by one to two steps (the presented offset
+stays at 55–245 px), so it coasts briefly after a scroll stops.
+
+**What still keeps it from feeling like Civ VI: frame pacing.** Frames arrive
+in bursts (several within 10 ms, then 40–60 ms gaps; gap p50 19 ms, p90
+43 ms). Stepped motion hides this; continuous motion shows it as judder. Even
+frame pacing during motion (presentation stalls and per-frame cost, G2 and
+G3) is the next requirement, not the glide itself.
+
+**Environment.** Since about 13:50 a Windows activation dialog in the VM holds
+focus, so scripted wheel input reaches no game window and zoom segments
+register no target. Scroll and click input are unaffected.
