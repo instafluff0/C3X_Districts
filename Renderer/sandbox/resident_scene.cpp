@@ -12,6 +12,7 @@
 #include "bloom.h"
 #include "fresh_pipeline.h"
 #include "world_content_receipt.h"
+#include "../native/render_core/resource_census.h"
 
 extern "C" __declspec(dllexport) int c3x_sandbox_world_content(char const* path){
     return sandbox_world_content_receipt(renderer,path,[](auto const& owner)->auto const& {return owner.mesh->layers;},
@@ -315,6 +316,62 @@ std::size_t c3x_renderer64_unit_source_mesh_bytes(){
 bool c3x_renderer64_static_refinement_pending(float zoom){
     c3x_renderer64_frame_device();
     return sandbox_fresh.static_refinement_pending(zoom);
+}
+// GPU memory by owner (performance goals, G1: Civ VI memory direction).
+// Textures and targets are sized from their descriptions, each resource once;
+// owners that keep their own byte ledgers report those. The remainder of the
+// adapter's usage is reported as unattributed.
+void c3x_renderer64_memory_census(unsigned long long dxgi_usage){
+    c3x_renderer64_frame_device();
+    c3x_renderer::render_core::ResourceCensus census;
+    auto& f=sandbox_fresh;
+    auto linear=[&](c3x_renderer::render_core::LinearTarget const& t){
+        return census.add(t.color)+census.add(t.resolved)+census.add(t.depth_texture);};
+    std::size_t slots=0,overlays=0,previews=0;
+    for(auto const& state:f.static_rasters.states)slots+=linear(state.region);
+    for(auto const& slot:f.overlay_slots)overlays+=linear(slot.layer);
+    for(auto const& image:f.bootstrap)previews+=linear(image.region);
+    std::size_t cache=linear(f.static_cache);
+    std::size_t targets=linear(f.material_albedo)+linear(f.terrain_albedo)+linear(f.reflected_terrain_albedo)+
+        census.add(f.reflection.color)+census.add(f.reflection.depth_texture)+
+        census.add(f.reflection_static.color)+census.add(f.reflection_static.depth_texture)+
+        census.add(f.bloom.color[0])+census.add(f.bloom.color[1])+
+        census.add(f.glow.color)+census.add(f.glow.validity)+census.add(f.glow.native)+linear(f.glow.linear);
+    for(auto const* channel:{&f.material_normal,&f.material_world,&f.terrain_normal,&f.terrain_world,&f.terrain_properties,
+            &f.reflected_terrain_normal,&f.reflected_terrain_world,&f.reflected_terrain_properties,&f.aquatic_scene,&f.water_lighting})
+        targets+=census.add(channel->texture);
+    std::size_t shadow=census.add(f.shadow.texture)+f.shadow.production_field_bytes;
+    auto& r=renderer;
+    std::size_t frame=linear(r.unit_scene_work)+linear(r.reflection.linear)+linear(r.region_glow.linear)+
+        census.add(r.region_glow.color)+census.add(r.region_glow.validity)+census.add(r.region_glow.native)+
+        linear(r.city_glow.linear)+census.add(r.city_glow.color)+census.add(r.city_glow.validity)+census.add(r.city_glow.native);
+    std::size_t textures=0;
+    auto terrain=[&](TerrainTexture const& t){
+        textures+=census.add(t.view)+census.add(t.material_height_view)+census.add(t.specular_view)+
+            census.add(t.elevated_view)+census.add(t.elevated_height_view)+census.add(t.elevated_specular_view);
+        for(auto* view:t.relief_layer_views)textures+=census.add(view);
+        for(auto* view:t.water_surface_views)textures+=census.add(view);};
+    for(auto const& t:r.terrain_textures)terrain(t);
+    terrain(r.dune_surface);
+    for(auto* view:r.compiled_material_views())textures+=census.add(view);
+    for(auto* view:r.feature_texture_views)textures+=census.add(view);
+    for(auto* view:r.resource_texture_views)textures+=census.add(view);
+    for(auto* view:r.terrain_extra_views)textures+=census.add(view);
+    for(auto* view:r.wave_views)textures+=census.add(view);
+    std::size_t geometry=r.tile_geometry_cache_bytes+r.retired_content->bytes.load()+r.terrain_patch_index_bytes;
+    std::size_t instances=r.shared_instances.gpu_bytes()+r.ordered_rigid_packets.gpu_bytes()+r.wave_geometry_bytes;
+    std::size_t units=sandbox_direct_units.gpu_preparation_bytes()+r.unit_bodies.gpu_content_bytes;
+    std::size_t regions=r.render_regions.gpu_bytes+r.reflection_regions.gpu_bytes;
+    std::size_t composition=r.composition_working_bytes();
+    std::size_t sum=slots+overlays+previews+cache+targets+shadow+frame+textures+geometry+instances+units+regions+composition;
+    auto mb=[](std::size_t value){return double(value)/(1024.*1024.);};
+    char detail[640];sprintf_s(detail,
+        "adapter_mb=%.1f attributed_mb=%.1f unattributed_mb=%.1f static_slots_mb=%.1f static_overlays_mb=%.1f static_previews_mb=%.1f static_cache_mb=%.1f "
+        "scene_targets_mb=%.1f shadow_mb=%.1f frame_targets_mb=%.1f textures_mb=%.1f geometry_mb=%.1f instances_mb=%.1f units_mb=%.1f "
+        "region_caches_mb=%.1f composition_mb=%.1f",
+        mb(std::size_t(dxgi_usage)),mb(sum),dxgi_usage>sum?mb(std::size_t(dxgi_usage)-sum):0.,mb(slots),mb(overlays),mb(previews),mb(cache),
+        mb(targets),mb(shadow),mb(frame),mb(textures),mb(geometry),mb(instances),mb(units),mb(regions),mb(composition));
+    renderer.trace.write("memory-census",detail,true);
 }
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         ID3D11RenderTargetView* target,float zoom) {

@@ -885,4 +885,201 @@ G3) is the next requirement, not the glide itself.
 
 **Environment.** Since about 13:50 a Windows activation dialog in the VM holds
 focus, so scripted wheel input reaches no game window and zoom segments
-register no target. Scroll and click input are unaffected.
+register no target. Scroll and click input are unaffected. (Closed at about
+16:00; l72 zoom is valid.)
+
+## 18. Where the glide's frame gaps come from (October 8)
+
+**Tried: presenting through native interface redraws while moving.** The
+helper pauses frames while a native image batch runs. With a glide or zoom
+moving, it kept presenting the last committed front instead
+(`C3X_NATIVE_VISUAL_MOTION`, op 138). No measurable change, glide on:
+- 3350 BC save, 1× scroll: 41.1 fps, 85 of 246 frame gaps over 30 ms (u70:
+  92), gap p50 19.7 ms, p90 46.8 ms (u71).
+- Light save: 1× scroll 57.2 fps, 2× 42.3, 3× 45.9 (l72).
+
+**Cause: the camera job.** Each scroll step's camera job (about 21 ms on the
+3350 BC save) runs on the helper's job thread. Frames during a job come only
+from the job's own checkpoints, at most 30 Hz (the in-job cap, section 11), and
+the first frame after the job waits for that cap. A typical gap: present at
+0 ms, job starts at 2, completes at 23, next present at 44. So scroll pacing is
+bounded by the camera job, not by interface batches. Lifting the cap is not
+the fix (it slowed light-save steps to 153 ms, section 17). Rendering every
+frame from resident content at the camera to be shown, with no camera job in
+the frame path, is: the resident-world stage in the
+[camera decoupling design](camera_decoupling_design.md).
+
+**Other results from the same runs.**
+- Light-save zoom (l72): starts 27–75 ms after the wheel, settles in
+  154–280 ms, 21–56 fps during transitions, frame gaps up to 93 ms. G2 is not
+  met.
+- Minimap jumps reach Civ III's camera in 41 and 97 ms (light) and 62 and
+  83 ms (3350 BC). The busy save took 1.6–2.4 s (section 15).
+
+## 19. What a camera step redoes, and memory (October 8)
+
+**Busy-save camera step, by phase** (b58, 74 jobs, trace level 2). The job
+takes 86 ms at the median (163 ms at p90):
+- the scene draw at the new camera: 42 ms;
+- tile uploads: 16 ms (p90 52);
+- set-up: 5 ms;
+- unit selection: 5 ms;
+- the rest: small.
+
+At an unchanged camera the same draw prepares in about 1 ms. The step-only
+costs are camera-dependent caches, rebuilt or re-checked over their whole
+area rather than only the new edge:
+- **Shadow pages: 17 ms.** About 8 of 25 pages are redrawn per step. Most of
+  the time is bookkeeping over every caster (collecting 2.8 ms, proofs
+  5.6 ms, selection 2.1 ms); the page draws are 3 ms. Pages keep the
+  maximum height, so adding casters to a page is exact without clearing it.
+- **Static layer: 11 ms.**
+  - Each step changes the resident tile set, which forces a full membership
+    proof over the whole layer.
+  - Its guard band (320 × 192 px) reaches past the resident tiles (about
+    288 × 172 px plus tall-object reach), so tiles entering it cause repairs
+    of 15–21% of the layer.
+  - It recentres every 2–3 steps (18–28 ms).
+- **Tile uploads.** The whole world is already prepared and held compressed
+  in RAM (16,900 records, 780 MB; 2.3 GB uncompressed). A step restores
+  70–180 records from it and uploads them; nothing is compiled from scratch.
+
+On the 3350 BC save every explored tile stays resident (199 reused, none
+built), yet a step still takes 21 ms, spread over many small phases. Keeping
+the world loaded removes only the upload share; the camera-dependent caches
+are the rest.
+
+**Memory census** (m1, busy save, `near`, `tools/sample_memory.ps1` every 2 s,
+`C3X_RENDERER_PROFILE=1` with `C3X_RENDERER_MEMORY_CENSUS=1`):
+
+| | Process memory | GPU memory (shared) |
+| --- | --- | --- |
+| Civ III | 304 MB median, 315 MB max | 21–41 MB |
+| Renderer64 | 6.8 GB median, 7.2 GB max | 3.0 GB median, 3.9 GB max |
+
+- **Tile geometry:** 0.8–1.35 GB resident on the GPU, out of 2.0 GB for the
+  whole world; the in-RAM world copy is 780 MB.
+- **The other ~2 GB of GPU memory** is render targets, textures and caches.
+  Not yet broken down. The static layer alone can reach about 0.5 GB:
+  - 4 slots plus 4 retained water-overlay layers, each about 55 MB at this
+    resolution;
+  - 2 preview images of the same size.
+- **Process memory** includes the driver's copies of GPU resources.
+- Civ VI asks for about 4 GB RAM and 1 GB GPU memory (minimum), 8 GB and
+  2 GB (recommended).
+- The user set Civ VI parity as a goal (performance goals, G1).
+
+## 20. Memory by owner (October 8)
+
+**Method.** `memory-census` (`C3X_RENDERER_MEMORY_CENSUS=1`) every 5 s during
+camera jobs. Textures and targets are sized from their D3D11 descriptions
+(`render_core/resource_census.h`, each resource once). Owners with their own
+ledgers report those. `tools/sample_memory.ps1` samples process and GPU
+memory every 2 s alongside. Runs: `near`, m2 (busy 1498 AD) and m3 (3350 BC).
+DXGI's adapter usage in the VM moves between 1.0 and 2.4 GB while the owners
+hold 3 GB, so totals come from Windows' per-process GPU counters.
+
+**Renderer64 GPU memory by owner (MB):**
+
+| Owner | Busy (median / max) | 3350 BC |
+| --- | --- | --- |
+| Tile geometry | 905 / 1,212 | 90 |
+| Units | 597 | 597 |
+| Static layer: slots | 105 / 209 | 209 |
+| Static layer: water overlays | 105 / 209 | 209 |
+| Static layer: previews | 52 / 105 | 52 |
+| Static layer: view copy | 31 | 31 |
+| Native UI composition | 323 / 366 | 359 / 388 |
+| Terrain textures | 261 | 261 |
+| Shadow atlas | 228 | 228 |
+| Scene targets | 93 | 93 |
+| Instances | 33 / 49 | 1 |
+| Owners total | about 3,000 at most | about 2,130 at most |
+| Windows GPU total | 2,362 / 3,947 | 2,661 / 2,758 |
+| Process memory | 6,798 / 7,062 | 4,566 / 4,731 |
+
+**Findings.**
+- **Fixed costs dominate.** On the small 3350 BC map, geometry is 90 MB, but
+  the renderer still holds 2.7 GB of GPU memory and 4.6 GB of process memory.
+- **Units: all 78 unit types are loaded at start** (626 actions, 2,648
+  meshes, 317 textures), whatever is on the map. That is 1.25 GB of process
+  memory and about 0.6 GB of GPU memory; the 3350 BC save has 5 units.
+- **The static layer** holds up to 0.55 GB: two zoom lanes with front and
+  back slots, a retained water-overlay layer per slot, and two preview images.
+- **Native UI composition** holds 0.32–0.39 GB.
+- **The shadow atlas** is 228 MB.
+- **About 0.6–0.9 GB is not yet attributed**, likely natural-world and object
+  textures, swap chains and transient uploads.
+- **Process memory** is the GPU memory plus the driver's copies, the in-RAM
+  world (780 MB busy) and the unit sources (1.25 GB).
+
+## 21. Unit types on demand (October 8)
+
+**Change.** Game load no longer pins all 78 unit types
+(`prepare_known_unit_sources({},false,…)`). Frames already loaded the units
+they draw, on 4 workers with least-recently-used eviction. Each camera job
+now also offers every captured unit's missing meshes and textures to idle
+workers (`warm_unit_assets`). The capture reaches about 2.8 views, so a type is
+decoded before its unit enters the view. `C3X_RENDERER_UNIT_PRELOAD=1`
+restores the preload for A/B runs. Test: `test_unit_assets_on_demand.py`.
+
+**Memory (3350 BC save, u4 against u5, same build).**
+
+| | Process memory (median / max) | GPU memory (median / max) | Unit assets |
+| --- | --- | --- | --- |
+| On demand | 2,641 / 4,473 MB | 1,758 / 2,420 MB | 67 MB |
+| Preload | 4,359 / 4,703 MB | 2,420 / 2,670 MB | 597 MB |
+
+All on-demand loading happened in the first frame after load (about 0.33 s
+over 12 turns), before input. None ran during scrolling, zoom or jumps.
+
+**Busy save (b6).** Unit assets fell from 597 to 94 MB, with no loading during
+play (34 turns, all before input). Process and GPU memory did not fall
+(6.3 GB and 3.4 GB median): the freed memory went to tile geometry, whose
+budget follows free memory (2.75 GB). The whole busy world (1.98 GB of
+geometry) became GPU-resident; before, about half fit.
+
+**Frame rate and steps (same build, `-MeasureCadence`, on demand against
+preload).**
+
+| Segment | Busy, run 1 (b7 / b8) | Busy, run 2 (b9 / b10) | 3350 BC (u6 / u7) |
+| --- | --- | --- | --- |
+| 1× idle fps | 45.1 / 41.8 | 45.2 / 33.5 | 60.0 / 60.0 |
+| 1× scroll x, px/s | 405 / 341 | 446 / 320 | 2,648 / 2,634 |
+| 1× scroll fps | 9.6 / 6.2 | 7.9 / 6.4 | 36.0 / 32.7 |
+| Zoom in to 2×, fps | 16.7 / 26.8 | 33.7 / 15.4 | 50.4 / 51.1 |
+| 2× scroll, px/s | 332 / 256 | 333 / 282 | 2,937 / 2,947 (35.6 / 32.0 fps) |
+| 3× scroll, px/s | 354 / 201 | 319 / 236 | 1,709 / 1,650 (34.6 / 31.5 fps) |
+| Jumps, ms | 628, 826 / 953, 985 | 559, 780 / 1,414, 964 | 104 / 96 |
+
+The zoom-in difference reversed between runs: it is noise. On the busy save,
+keeping the whole world resident speeds up scroll steps and jumps. On the
+3350 BC save, scroll runs about 10% faster and nothing else changes.
+
+## 22. Zoom-lane release and the unused shadow field (October 8)
+
+**Changes.**
+- **Zoom lane.** The static layer releases the zoom lane (slots 2 and 3 with
+  their water overlays) and both preview images after 10 s at a complete,
+  settled 1× layer (`release_zoom_lane`, traced as
+  `static-zoom-lane-released`). The next zoom re-creates them, as the first
+  zoom of a session does. Test: `test_static_zoom_lane_release.py`.
+- **Shadow field.** The production shadow page field (32 slices of
+  1024 × 1024 R32F, 128 MB) is created on first use (`ensure_field`).
+  Renderer64's scene samples its own 100 MB atlas and never draws it. Test:
+  `test_source_shadow_lazy_field.py`.
+
+**3350 BC save, all changes so far (u8 memory run, u9 frame rate):**
+
+| | Process memory (median / max) | GPU memory (median / max) |
+| --- | --- | --- |
+| Section 20 baseline (m3) | 4,566 / 4,731 MB | 2,661 / 2,758 MB |
+| Units on demand (u4) | 2,641 / 4,473 MB | 1,758 / 2,420 MB |
+| Plus zoom lane and shadow field (u8) | 2,481 / 2,811 MB | 1,631 / 1,910 MB |
+
+The shadow category fell from 228 to 100 MB. Frame rate (u9) is within run
+noise of u6:
+- 1× idle and the 1× idle end: 60 fps;
+- scroll: 31.8 fps (1×), 34.9 (2×), 35.1 (3×), at native step pace;
+- zoom in: 51.6 fps;
+- jumps: 128 and 115 ms.

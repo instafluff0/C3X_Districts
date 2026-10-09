@@ -75,7 +75,7 @@ public:
         drop(table);drop(raster);drop(maximum);clear_cached_pages();
     }
     bool ensure(ID3D11Device* device,wchar_t const* path) {
-        if(view)return true;
+        if(table)return true; // the page field itself is created on first use
         clear();ID3DBlob *code=nullptr,*errors=nullptr;
         auto compile=[&](char const* entry,char const* target){
             drop(code);drop(errors);
@@ -142,17 +142,6 @@ public:
             hr=device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&cutout);
         else hr=E_FAIL;
         drop(code);drop(errors);
-        D3D11_TEXTURE2D_DESC d={};d.Width=d.Height=1024;d.ArraySize=32;d.MipLevels=1;
-        d.Format=DXGI_FORMAT_R32_FLOAT;d.SampleDesc.Count=1;
-        d.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
-        if(SUCCEEDED(hr))hr=device->CreateTexture2D(&d,nullptr,&texture);
-        if(SUCCEEDED(hr))hr=device->CreateShaderResourceView(texture,nullptr,&view);
-        for(unsigned i=0;i<32 && SUCCEEDED(hr);++i){
-            D3D11_RENDER_TARGET_VIEW_DESC r={};r.Format=d.Format;
-            r.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
-            r.Texture2DArray.FirstArraySlice=i;r.Texture2DArray.ArraySize=1;
-            hr=device->CreateRenderTargetView(texture,&r,&targets[i]);
-        }
         D3D11_BUFFER_DESC b={};b.Usage=D3D11_USAGE_DEFAULT;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;b.ByteWidth=80;
         if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&caster_settings);
         b.ByteWidth=64*16;if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&table);
@@ -163,6 +152,26 @@ public:
         target.BlendOp=target.BlendOpAlpha=D3D11_BLEND_OP_MAX;target.RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_ALL;
         if(SUCCEEDED(hr))hr=device->CreateBlendState(&blend,&maximum);
         if(FAILED(hr)){clear();return false;}return true;
+    }
+    // The page field (32 slices of 1024 x 1024 R32F, 128 MiB) is created on
+    // first use. Renderer64's resident scene samples its own atlas and never
+    // draws this field, so it no longer holds that memory (performance goals,
+    // G1: Civ VI memory direction).
+    bool ensure_field(ID3D11Device* device){
+        if(texture)return true;
+        D3D11_TEXTURE2D_DESC d={};d.Width=d.Height=1024;d.ArraySize=32;d.MipLevels=1;
+        d.Format=DXGI_FORMAT_R32_FLOAT;d.SampleDesc.Count=1;
+        d.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+        HRESULT hr=device->CreateTexture2D(&d,nullptr,&texture);
+        if(SUCCEEDED(hr))hr=device->CreateShaderResourceView(texture,nullptr,&view);
+        for(unsigned i=0;i<32 && SUCCEEDED(hr);++i){
+            D3D11_RENDER_TARGET_VIEW_DESC r={};r.Format=d.Format;
+            r.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+            r.Texture2DArray.FirstArraySlice=i;r.Texture2DArray.ArraySize=1;
+            hr=device->CreateRenderTargetView(texture,&r,&targets[i]);
+        }
+        if(FAILED(hr)){drop(view);for(auto& t:targets)drop(t);drop(texture);pages={};return false;}
+        pages={};return true;
     }
     static std::array<float,4> project(Bounds const& b,float const* offset,std::array<float,12> const& projection) {
         std::array<float,4> out={1e9f,1e9f,-1e9f,-1e9f};
@@ -331,6 +340,8 @@ public:
                  SharedInstanceSubmission::Lease const& shared_instances={},
                  SharedInstanceSubmission* instance_selection=nullptr) {
         hits=rebuilt=draws=0;missing_instance_source={};++epoch;
+        {ID3D11Device* device=nullptr;context->GetDevice(&device);
+            bool field=device && ensure_field(device);if(device)device->Release();if(!field)return false;}
         if(basis!=next_basis){basis=next_basis;pages={};}
         // A prepared pass may share the exact receiver-page union across regions.
         // The ordinary receiver query and the same 32-page residency cap remain.

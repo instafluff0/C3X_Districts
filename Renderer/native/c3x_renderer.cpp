@@ -41,6 +41,8 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     ID3D11RenderTargetView* target,float zoom=1.f);
 // True while the retained static layer for this zoom is still being refined.
 bool c3x_renderer64_static_refinement_pending(float zoom);
+// Writes the GPU memory census trace (C3X_RENDERER_MEMORY_CENSUS=1).
+void c3x_renderer64_memory_census(unsigned long long dxgi_usage);
 #endif
 #include "terrain_scene_runtime.h"
 #include "object_compiler.h"
@@ -813,7 +815,7 @@ public:
             render_regions.gpu_limit,unit_bodies.gpu_content_limit,frame_working_bytes(),composition_working_bytes());
         trace.write("process-headroom",detail,true);
     }
-    ULONGLONG last_memory_status=0;
+    ULONGLONG last_memory_status=0,last_memory_census=0;
     void gpu_failure(char const* phase) {
         // Sample fragmentation only at an actual failure. Total free VA alone
         // cannot explain rejection of a large contiguous D3D allocation.
@@ -849,6 +851,12 @@ public:
                             static_cast<unsigned long long>(local.Budget),static_cast<unsigned long long>(local.CurrentUsage),
                             static_cast<unsigned long long>(nonlocal.Budget),static_cast<unsigned long long>(nonlocal.CurrentUsage));
                         trace.write("video-memory",status,true);
+#ifdef C3X_RENDERER64_FRESH
+                        char census[4]={};
+                        if(now-last_memory_census>=5000 && c3x_renderer::render_core::cached_environment(
+                               "C3X_RENDERER_MEMORY_CENSUS",census,sizeof(census)) && census[0]=='1'){
+                            c3x_renderer64_memory_census(static_cast<unsigned long long>(local.CurrentUsage));last_memory_census=now;}
+#endif
                     }
                 }
             }
@@ -4181,6 +4189,25 @@ public:
 
     int prepare_frame_unit_assets(std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& poses){
         return prepare_unit_asset_union(poses);
+    }
+    // Unit types load on demand (no catalogue preload, Civ VI memory
+    // direction). Decode every captured unit's missing assets on idle workers;
+    // the capture reaches about 2.8 views, so a type is usually ready before
+    // its unit enters the view. Optional work: never waits, never pins.
+    void warm_unit_assets(std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& poses){
+        auto& bodies=unit_bodies;
+        for(auto const& pose:poses){
+            if(pose.unit>=bodies.units.size() || pose.action>=bodies.units[pose.unit].actions.size())continue;
+            auto const& action=bodies.units[pose.unit].actions[pose.action];
+            for(auto const& part:action.parts){
+                if(part.mesh<bodies.meshes.size()){auto const& mesh=bodies.meshes[part.mesh];
+                    if(!mesh.animation && !mesh.failed)
+                        unit_asset_preparation.offer({std::uint64_t(part.mesh)*2,{mesh.path,true,action.name=="move",false}},64);}
+                unsigned textures[]={part.texture,part.material_textures[0],part.material_textures[1],part.material_textures[2],part.material_textures[3]};
+                for(auto id:textures)if(id<bodies.textures.size()){auto const& texture=bodies.textures[id];
+                    if(!texture.view && !texture.failed)unit_asset_preparation.offer({std::uint64_t(id)*2+1,{texture.path,false,false}},64);}
+            }
+        }
     }
 
     // Called repeatedly at a loading/control boundary, under the existing
@@ -12466,6 +12493,7 @@ public:
             if(cancelled()){target->Release();return false;}
             auto candidates=fresh_unit_poses;
             if(!select_frame_units(frame,candidates,fresh_unit_poses,1.f)){target->Release();return false;}
+            warm_unit_assets(candidates);
             for(;;){
                 if(cancelled()){target->Release();return false;}
                 auto ready=prepare_frame_unit_assets(fresh_unit_poses);
@@ -15468,7 +15496,12 @@ private:
         }
         int assets=C3X_RENDERER_RESULT_PENDING;
         while(assets==C3X_RENDERER_RESULT_PENDING && !(cancel && cancel->load(std::memory_order_relaxed))){
-            assets=renderer_state.prepare_known_unit_sources({},true,cpu_allowance,gpu_allowance,cancel);
+            // No catalogue preload: types load on demand (warm_unit_assets).
+            // C3X_RENDERER_UNIT_PRELOAD=1 restores it for A/B measurement.
+            char preload[4]={};
+            bool catalogue=c3x_renderer::render_core::cached_environment("C3X_RENDERER_UNIT_PRELOAD",preload,sizeof(preload)) && preload[0]=='1';
+            assets=catalogue?renderer_state.prepare_known_unit_sources({},true,cpu_allowance,gpu_allowance,cancel):
+                renderer_state.prepare_known_unit_sources({},false,cpu_allowance,gpu_allowance,cancel);
             if(service)service();
             if(assets==C3X_RENDERER_RESULT_PENDING)Sleep(1);
         }

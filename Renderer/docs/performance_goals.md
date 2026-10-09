@@ -49,6 +49,7 @@ Two audiences shape the trade-offs:
 | Zoom transition | 27–47 fps | 16–35 fps | 60 fps |
 | Far jump | 37–80 ms | 1–2 s | well under 1 s |
 | Reveal after a move | ~190 ms | not measured | immediate |
+| Memory (Renderer64) | not measured | up to 7.2 GB RAM, 3.0–3.9 GB GPU | about 8 GB RAM and 2 GB GPU for the whole system (Civ VI recommended) |
 
 ## Gaps, in priority order
 
@@ -92,24 +93,66 @@ from work specific to zoom frames.
 **Done when.** Busy 1× idle runs at ≥55 fps in the VM, with scene CPU at or
 below 6 ms per frame.
 
-### G1. Camera decoupled from content jobs (largest feel win)
+### G1. Close the gap with Civ VI's practices (largest feel win)
 
-**Evidence.** Every scroll step, zoom and jump waits for a camera job, then
-for Civ III's next 78 ms tick to draw its overlays. Busy steps take
-230–470 ms, jumps 1–2 s, and the first busy scroll step about 1 s.
+Started as "camera decoupled from content jobs". On October 8 the user
+widened it: keep the camera targets, and move toward Civ VI's practices
+behind them, including a memory footprint near its requirements ("if you can
+run Civ 6 you can run this"). Civ VI is a general direction, not a rulebook:
+adopt a practice where it helps C3X, never where it hurts C3X performance or
+fidelity.
+
+**Evidence.**
+- **Camera.** Every scroll step, zoom and jump waits for a camera job, then
+  for Civ III's next 78 ms tick to draw its overlays. Busy steps take
+  230–470 ms, jumps 1–2 s, and the first busy scroll step about 1 s.
+- **Per-step work** (busy save, median per step; review, sections 18–19). Each
+  job redoes camera-dependent caches:
+  - shadow pages: 17 ms, mostly bookkeeping over all casters;
+  - the static layer: 11 ms, from whole-layer re-checks, repairs and
+    recentring every 2–3 steps;
+  - tile uploads from the in-RAM world: 16 ms.
+- **Memory** (busy save, m1). Renderer64 uses up to 7.2 GB of process memory
+  and 3.0–3.9 GB of GPU memory; Civ III uses 0.3 GB.
+  - Whole-world tile geometry is 2.0 GB, baked into unique meshes per tile.
+  - The static layer's targets can reach about 0.5 GB.
+  - Civ VI asks for about 4 GB RAM and 1 GB GPU memory as a minimum, and
+    8 GB and 2 GB recommended (published requirements, approximate).
+
+**Civ VI practices to adopt.** These are inferred from Civ VI's behaviour and
+its package data, not from its engine code.
+1. The camera moves every frame from resident content; background jobs only
+   refine.
+2. One copy of each model, drawn many times (instancing), instead of unique
+   per-tile meshes.
+3. Compact terrain, so the whole explored world can stay resident.
+4. Small, bounded render targets instead of large pre-drawn layers per zoom
+   lane.
+5. A memory budget set by a hardware tier, not by however much memory is
+   free.
+6. Background streaming with level of detail for far zoom and jumps.
 
 **Work.**
-1. Write `Renderer/docs/camera_decoupling_design.md` first.
-2. Show the requested camera at once from GPU-resident content.
-3. Keep Civ III's map-attached overlays aligned by shifting their layer in
-   image space until Civ III redraws them.
-4. Let jobs only refine.
+1. Camera design: `Renderer/docs/camera_decoupling_design.md` (written).
+2. Memory census by category: GPU targets, textures, geometry, CPU caches,
+   driver copies.
+3. Static layer: bounded size, no whole-layer re-checks or recentring on
+   camera steps.
+4. Shared instanced models and compact terrain, compared in the Lab for
+   fidelity, until the whole explored world fits the budget.
+5. Show the requested camera at once from resident content. Keep Civ III's
+   map-attached overlays aligned by shifting their layer in image space until
+   Civ III redraws them. Let jobs only refine.
 
 **Done when.**
 - Busy scroll steps reach the screen within one frame of Civ III's tick.
 - Zoom responds within one frame.
 - A far jump shows its first image within 100 ms and full quality within
   500 ms.
+- Memory moves toward Civ VI's recommended tier: on the busy save at
+  1×–3×, aim for Renderer64 at about 2 GB of GPU memory and 4 GB of process
+  memory, with no visible quality loss. These are directional figures, not a
+  hard limit.
 
 ### G4. Heavy busy-map jobs
 
@@ -159,6 +202,8 @@ gate free.
 - `step_report.py`: camera job phases.
 - `unit_timing_report.py`: unit moves and reveals.
 - `game_samples_report.py`: Civ III thread samples.
+- `sample_memory.ps1` (run in the VM beside a capture): process and GPU
+  memory of Civ III and Renderer64 every 2 s.
 
 **Run settings.**
 - `-MeasureCadence` for fps.
@@ -167,6 +212,8 @@ gate free.
 - `C3X_RENDERER_ROUTE_WITNESS=1` for presentation times.
 - `C3X_RENDERER_PROFILE=2` for per-frame GPU phases.
 - `SampleHz=10` window frames for visual checks.
+- `C3X_RENDERER_PROFILE=1` with `C3X_RENDERER_MEMORY_CENSUS=1` for the
+  renderer's own geometry and cache memory traces.
 
 **Noise.** Runs vary by ±30%. Repeat before concluding, and record results in
 the current performance review.

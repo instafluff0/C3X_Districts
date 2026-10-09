@@ -142,44 +142,64 @@ preview, bootstrap and refine path is the model.
 - Civ III's captured tile set covers about 2.8 times the viewport, so the
   next step's tiles are already captured.
 
-## Proposed next stage: adopt at Civ III's pace (option A to B)
+## Civ VI model and what differs here
 
-1. Civ III adopts each scroll step on its own tick instead of waiting for the
-   job (`injected_code.c`: the step deferral in `move_camera` and the gate in
-   `scroll_at_mouse`), behind a configuration flag.
-2. The renderer draws the new camera at once from resident content. The
-   strip's shadow pages and static strip are built inline in that frame
-   (about 30–40 ms busy).
-3. Presentation keeps the previous step until the new map frame and Civ III's
-   matching native front are both ready, so overlays never misalign and no
-   stand-in is shown.
+Civ VI's internals are not confirmed; this is inferred from its behaviour.
 
-Expected: one busy step per tick (about four times today's pace), with one
-heavier frame per step (about 20–25 fps during busy scroll until G3).
+| | Civ VI (inferred) | Renderer64 (October 8) |
+|---|---|---|
+| Camera | moved by the renderer every frame, eased | Civ III's 128 px steps per 78 ms tick |
+| New camera position | a view change; the world is resident | a camera job (about 21 ms on the 3350 BC save, 79 ms busy) |
+| Frames during camera work | unaffected | only from the job's checkpoints, at most 30 Hz (review, section 18) |
+| World-anchored UI | re-projected every frame | Civ III's 2D front, redrawn on its tick for its camera |
+| Picking | against the shown camera | Civ III's camera, corrected by the presented zoom and slide |
+| Far jump | the whole map is resident | a full job at the new area (busy save 1.6–2.4 s) |
+
+Civ III keeps choosing camera targets and step timing and keeps drawing its
+overlays on its tick. The renderer side can follow the Civ VI model.
 
 ## Stages
 
 Each stage is measured back to back in the VM against the previous build
-(`near_report.py`, `step_report.py`, `zoom_report.py`) and gets a regression
-test that fails on the old behaviour.
+(`near_report.py`, `zoom_report.py`, frame-gap analysis) and gets a
+regression test that fails on the old behaviour.
 
-1. **Camera lane (A1).** Expected: most of the 121 ms queue wait disappears
-   from busy steps; zoom requests on the busy save start sooner.
-2. **Two-phase job (A2).** Expected: busy steps adopted within one tick.
-3. **Prepare ahead (A3).** Expected: steady native-pace scrolling on busy maps.
-4. **Faster adoption to screen.** The 37–45 ms from Civ III's map pass to the
-   presented frame, on both saves.
+1. **Camera lane (A1). Done** (review, section 16). Queue wait 121 to 70 ms.
+2. **Compact resident world.** The scene can be drawn at any camera near the
+   current one without a camera job, within Civ VI's memory tier
+   (performance goals, G1):
+   - camera-dependent caches update only their new edge: the static layer
+     bounded and without whole-layer re-checks or recentring, and shadow
+     pages updated by adding casters;
+   - the world is compact enough to stay resident (shared instanced models,
+     compact terrain), so steps upload nothing;
+   - units are kept resident and updated incrementally;
+   - new strips are built in bounded slices between frames.
+
+   Done when a moved camera prepares in about the time of an unchanged one
+   (1 ms against 20.7 ms) and frames keep their cadence during scrolling.
+   Loading tiles ahead within today's representation was considered and set
+   aside: it would grow memory (review, section 19).
+3. **Adopt at Civ III's pace.** Civ III adopts each step on its own tick
+   instead of waiting for the job (`injected_code.c`: the step deferral in
+   `move_camera` and the gate in `scroll_at_mouse`), behind a configuration
+   flag. Presentation keeps the previous step until the new map frame and
+   Civ III's matching front are both ready, so overlays never misalign.
+4. **A rendered glide (option C).** The presented camera eases between Civ
+   III's steps, and the scene is drawn at that position every frame instead
+   of sliding a finished image. Civ III's map-attached overlays are offset by
+   the same amount between its ticks (as zoom already places map-attached
+   HUD), screen-fixed HUD stays put, and clicks map back through the offset
+   (already done for the image glide).
 5. **Far jumps (B).** A coarse, always-resident view of the whole map for the
    first frame, then refinement within 500 ms.
-6. **Option C (user decision).** Display between Civ III's steps.
+6. **Background refinement (G4).** Shadow and static quality complete in
+   later frames, spread across cores.
 
 ## Decisions for the user
 
-- **Option C, display between steps.** Civ III scrolls in 78 ms steps (128 px
-  at 1×). Drawing intermediate camera positions between two steps that Civ III
-  has requested would make scrolling glide like Civ VI, while Civ III still
-  owns every step and its timing. Civ III still hit-tests against the last
-  step, so a click during an active scroll could land up to part of a step
-  away from what is under the cursor. It is a visible change.
+- **Option C, display between steps.** Accepted on October 8 as the image
+  glide behind `C3X_RENDERER_GLIDE` (review, section 17); stage 4 replaces it
+  with a rendered glide.
 - **First frame after a far jump.** A coarse terrain view (no units, shadows
   or detail for up to 500 ms), or today's wait.

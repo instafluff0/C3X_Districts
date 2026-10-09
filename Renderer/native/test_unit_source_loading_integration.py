@@ -27,6 +27,7 @@ struct c3x_renderer_output_v1 {unsigned version=0,size=0;};
 std::uint64_t available=4096*mib,total=8192*mib,gpu_budget=2048*mib,gpu_usage=0,gpu_owned=0;
 bool memory_ok=true,gpu_ok=true,assets_ok=true,fresh_ok=true,composition_ok=true,rigid_ok=true;
 std::vector<int> order;
+namespace c3x_renderer { namespace render_core { unsigned long cached_environment(char const*,char*,unsigned long){return 0;} } }
 struct MEMORYSTATUSEX {unsigned dwLength=0;std::uint64_t ullTotalPhys=0,ullAvailPhys=0;};
 bool GlobalMemoryStatusEx(MEMORYSTATUSEX* m){m->ullTotalPhys=total;m->ullAvailPhys=available;return memory_ok;}
 bool SUCCEEDED(int result){return result==0;}
@@ -60,7 +61,7 @@ struct State {
  bool ensure_ordered_rigid_layout(){order.push_back(7);return rigid_ok;}
  int prepare_known_unit_sources(std::vector<std::size_t> const& indices,bool all,
   std::size_t cpu,std::size_t gpu,std::atomic<bool> const*){
-  assert(indices.empty() && all);order.push_back(3);++source_calls;
+  assert(indices.empty() && !all);order.push_back(3);++source_calls; // no catalogue preload: types load on demand
   unit_source_cpu_allowance=cpu;unit_source_gpu_allowance=gpu;
   if(cpu<required_cpu || gpu<required_gpu)return C3X_RENDERER_RESULT_ERROR;
   if(source_calls==1)return C3X_RENDERER_RESULT_PENDING;

@@ -1854,6 +1854,26 @@ struct SandboxFreshPipeline {
     bool layout_reset=false;
     // Per-lane zoom motion: transactions draw lane 0 at 1x between visual frames.
     unsigned reflection_skips=0;std::array<float,2> lane_projection{};std::array<unsigned,2> lane_still{};
+    // When the zoom lane (slots 2 and 3) was last displayed or refined.
+    std::chrono::steady_clock::time_point zoom_lane_used=std::chrono::steady_clock::now();
+    // Release the zoom lane and the preview images once zoom has rested at 1x
+    // (performance goals, G1: Civ VI memory direction). They hold about 260 MB
+    // of targets at 1080p-class sizes, and are re-created by the next zoom's
+    // preview and refinement exactly as after a device reset.
+    void release_zoom_lane(){
+        std::size_t freed=0;
+        for(unsigned index:{2u,3u})freed+=static_rasters.states[index].region.bytes()+overlay_slots[index].layer.bytes();
+        for(auto const& image:bootstrap)freed+=image.region.bytes();
+        char detail[64];std::snprintf(detail,sizeof(detail),"freed_mb=%.1f",double(freed)/(1024.*1024.));
+        renderer.trace.write("static-zoom-lane-released",detail,true);
+        for(unsigned index:{2u,3u}){
+            static_rasters.discard(index,c3x_renderer::render_core::raster_explicit_reset);
+            static_rasters.states[index].region.reset();raster_inputs[index].clear();
+            overlay_slots[index].layer.reset();overlay_slots[index].revision=~0ull;
+        }
+        for(auto& image:bootstrap){image.region.reset();image.valid=false;image.covered={};}
+        bootstrap_ring={};
+    }
     std::uint64_t draw_serial=0;std::array<std::uint64_t,2> lane_drawn{};
     std::uint64_t preview_frames=0,refine_slices=0,refine_promotions=0,bootstrap_draws=0,recenter_copies=0;
     // Consecutive refinement restarts without a promotion (content changing
@@ -4132,6 +4152,14 @@ struct SandboxFreshPipeline {
         unsigned lane=StaticRasters::lane_of(zoom);
         static_rasters.select_lane(lane);
         auto key=static_key();
+        {
+            // Only a complete, settled 1x layer frees the zoom lane and previews.
+            auto now=std::chrono::steady_clock::now();
+            if(lane==1 || zoom_destination()!=1.f || static_rasters.refining() || !static_rasters.front(0).fresh(key))zoom_lane_used=now;
+            else if(now-zoom_lane_used>std::chrono::seconds(10)){zoom_lane_used=now;
+                if(static_rasters.states[2].region.color || static_rasters.states[3].region.color || bootstrap[0].region.color || bootstrap[1].region.color)
+                    release_zoom_lane();}
+        }
         float hint=zoom_destination();
         bool previewable=!options.legacy && scene_samples==1 && static_resample.ensure(renderer.device);
         bool settled=lane_still[lane]>=3;
