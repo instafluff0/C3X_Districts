@@ -122,6 +122,24 @@ int test_spatial_composition(){
     for(unsigned x=0;x<width;++x){resolved+=row[x]==1;dependent+=row[x]==2;}}
    context->Unmap(cached_mask.Get(),0);require(resolved>0&&dependent>0&&resolved+dependent==width*height,"HUD and map dependence classified once");
    std::printf("PASS HUD cache: format=%u cached_pixels=%u changing_underlays=6 exact=1\n",unsigned(format),resolved);
+   // The fused interface pass (stage 3) classifies and reuses the same cache:
+   // without it every touched pixel re-ran its whole program each frame.
+   {Compositor::SpatialPlan fused_plan;
+    require(b.compile_spatial(fused_plan,hud_commands.data(),hud_commands.size(),words,detail,64u*1024u*1024u)&&fused_plan.table_view&&fused_plan.hud,"fused plan with HUD cache");
+    auto scene=create(width,height,Format::bgra32),screen=create(width,height,format),front=create(width,height,Format::bgra32),front_words=create(width,height,format);
+    unsigned key=format==Format::rgb565?0xf81fu:0x7c1fu;
+    upload(screen,1,std::vector<unsigned>(width*height,key));
+    for(unsigned frame=1;frame<=3;++frame){
+     for(unsigned i=0;i<full_values.size();++i)full_values[i]=0xff000000u|((i*211+frame*997)&0xffffff);
+     upload(scene,4000+frame,full_values);
+     require(b.fused_spatial(fused_plan,scene,screen,0,front,front_words,key,1u),"fused HUD over a changing scene");
+    }
+    context->CopySubresourceRegion(cached_mask.Get(),0,0,0,0,fused_plan.hud.Get(),2,nullptr);
+    checked(context->Map(cached_mask.Get(),0,D3D11_MAP_READ,0,&cached_pixels));unsigned fused_resolved=0;
+    for(unsigned y=0;y<height;++y){auto row=reinterpret_cast<unsigned const*>(static_cast<char const*>(cached_pixels.pData)+y*cached_pixels.RowPitch);
+     for(unsigned x=0;x<width;++x)fused_resolved+=row[x]==1;}
+    context->Unmap(cached_mask.Get(),0);require(fused_resolved>0,"fused pass classifies map-independent HUD pixels");
+    std::printf("PASS fused HUD cache: format=%u cached_pixels=%u\n",unsigned(format),fused_resolved);}
    // A fallback writer makes its later source mutable; it cannot be
    // captured into the immutable atlas before the write actually executes.
    auto scratch=create(width,height,format);

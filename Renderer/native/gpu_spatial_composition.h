@@ -214,7 +214,19 @@ RWTexture2D<uint> front_copy:register(u5); // the displayed front, when this nod
  uint3 q=scaled/255+uint3((scaled%255)*128>(threshold*2+1)*255);
  uint native=q.x|(q.y<<5)|(q.z<<(native_mode==1?11:10));
  Tile tile=table[(uint(at.y)/32)*columns+uint(at.x)/32];
- for(uint n=0;n<tile.count;++n){Op op=commands[order[tile.offset+n]];if(all(at>=op.area.xy)&&all(at<op.area.zw))apply(op,at,native,full);}
+ // The HUD cache as in the HUD pass: pixels proven independent of the map
+ // keep their cached result; the first run classifies each touched pixel.
+ uint classification=tile.count&&padding!=0?hud[int3(at,2)]:2;
+ if(classification==1){native=hud[int3(at,0)];full=hud[int3(at,1)];}
+ else{bool dn=true,df=true;
+  for(uint n=0;n<tile.count;++n){Op op=commands[order[tile.offset+n]];if(all(at>=op.area.xy)&&all(at<op.area.zw)){
+   if(classification==0)dependencies(op,at,native,full,dn,df);
+   apply(op,at,native,full);}}
+  if(classification==0){
+   if(!dn&&!df){hud[int3(at,0)]=native;hud[int3(at,1)]=full;hud[int3(at,2)]=1;}
+   else hud[int3(at,2)]=2;
+  }
+ }
  uint value=screen_words.Load(int3(at,0))&65535;
  if(value!=key){native=value;
   if(transfer_flags&1)full=(transfer_flags&2)?((transfer_flags&32)?full:screen_detail.Load(int3(at,0))):full_color(value,native_mode);}
@@ -406,13 +418,13 @@ public:
                ID3D11UnorderedAccessView* front_copy=nullptr){
         if(!plan||!plan.table_view||plan.width!=width||plan.height!=height||!scene||!screen_words||!front||!front_words||((flags&2)&&!(flags&32)&&!screen_detail))return false;
         program();
-        unsigned params[4]={0,width,height,0},fused_params[4]={plan.columns,mode,key,(flags&~64u)|(front_copy?64u:0u)};
+        unsigned params[4]={0,width,height,plan.hud?1u:0u},fused_params[4]={plan.columns,mode,key,(flags&~64u)|(front_copy?64u:0u)};
         context->UpdateSubresource(constants.Get(),0,nullptr,params,0,0);context->UpdateSubresource(fused_constants.Get(),0,nullptr,fused_params,0,0);
         ID3D11Buffer* buffers[]={constants.Get(),fused_constants.Get()};context->CSSetConstantBuffers(0,2,buffers);
         ID3D11ShaderResourceView* reads[]={plan.atlas_view.Get(),plan.command_view.Get(),plan.tile_view.Get(),plan.order_view.Get(),
             scene,screen_words,screen_detail,plan.table_view.Get()};
         context->CSSetShaderResources(0,8,reads);
-        ID3D11UnorderedAccessView* writes[]={nullptr,nullptr,nullptr,front,front_words,front_copy};context->CSSetUnorderedAccessViews(0,6,writes,nullptr);
+        ID3D11UnorderedAccessView* writes[]={nullptr,nullptr,plan.hud_write.Get(),front,front_words,front_copy};context->CSSetUnorderedAccessViews(0,6,writes,nullptr);
         context->CSSetShader(fused_shader.Get(),nullptr,0);context->Dispatch((width+7)/8,(height+7)/8,1);
         ID3D11ShaderResourceView* none[8]={};ID3D11UnorderedAccessView* no_writes[6]={};
         context->CSSetShaderResources(0,8,none);context->CSSetUnorderedAccessViews(0,6,no_writes,nullptr);

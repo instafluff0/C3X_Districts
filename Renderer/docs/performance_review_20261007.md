@@ -1651,3 +1651,33 @@ runs vary by 3–5 fps per segment on this VM, so the effect of this change
 is within run variation, consistent with an estimated 1–2 ms of GPU copies
 per frame. Against the pre-stage-3 run (n3): 1× idle 39.0 → 43.7, 3× idle
 47.2 → 53.6, last 1× idle segment 42.0 → 42.7.
+
+## 37. Stage 3: the HUD cache in the fused pass; where stage 3 stands (October 9)
+
+**Change.** The fused pass uses the HUD program's per-pixel cache as the HUD
+pass did: the first run classifies each touched pixel, and pixels proven
+independent of the map keep their cached result instead of re-running their
+tile's program (`test_spatial_composition.py`: the fused pass classifies the
+same 28,900 pixels as the HUD pass).
+
+**Result (busy save, two runs f7a / f7b).** 1× idle 43.9 / 45.1 fps, 3× idle
+52.5 / 50.8, last 1× idle segment 47.9 / 48.0. The two runs agree within
+about 1.5 fps.
+
+**Stage 3 so far** against the pre-stage-3 run (n3) and the ceiling with the
+interface replay skipped (d1, section 34):
+
+| | now (f7, mean) | before (n3) | ceiling (d1) |
+|---|---|---|---|
+| 1× idle | 44.5 fps | 39.0 | 55.8 |
+| 3× idle | 51.7 fps | 47.2 | 51.1 |
+| last 1× idle segment | 48.0 fps | 42.0 | 59.5 |
+
+3× idle is at its ceiling. At 1× (about 2,800 interface operations against
+1,800 at 3×) 8–11 fps remain; the ceiling also skipped the scene import
+(a full-screen pass applying the CAS detail filter) and the display of a new
+composite. Moving that filter into the fused pass would save one full-screen
+pass but cannot promise bit-identical floating-point results across two
+shaders, so stage 3 stops here for now. Per frame the interface CPU is about
+1.5 ms of evaluation; about 30 small map-dependent operations remain (tiny
+copies, 74 k pixels per frame).
