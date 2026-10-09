@@ -27,6 +27,10 @@ public:
         std::string executed; // C3X_RENDERER_TRACE_EVALUATED=1: kind@area of each executed operation
     };
     bool trace_evaluated=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_TRACE_EVALUATED",value,sizeof(value))&&value[0]=='1';}();
+    // Cost attribution only (C3X_RENDERER_DIAG_UI_HOLD=1, wrong picture): the
+    // interface is recomposed on one frame in eight; the other frames render
+    // the scene and display the previous composite. Bounds stage 3's gain.
+    bool diag_ui_hold=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_DIAG_UI_HOLD",value,sizeof(value))&&value[0]=='1';}();
     void note_executed(char const* what,Rect area,unsigned count=1){
         if(!trace_evaluated||work.executed.size()>3000)return;char item[64];
         std::snprintf(item,sizeof(item)," %s%s%u@%d,%d,%d,%d",what,count>1?"x":"",count>1?count:0u,area.left,area.top,area.right-area.left,area.bottom-area.top);
@@ -380,6 +384,28 @@ private:
         for(auto const& patch:front.patches)preparation(patch.node,0,false,{});
         planned_front=front_revision;planned_topology=topology_revision;
         ++plan_counts.builds;plan_counts.nodes=collected.size();
+        if(trace_evaluated)trace_plan();
+    }
+    // Trace only (C3X_RENDERER_TRACE_EVALUATED=1): the front's node graph,
+    // one line per node: id, kind, area, map dependence, inputs by node id.
+    void trace_plan(){
+        std::map<Node const*,unsigned> ids;std::string line="[C3X renderer] stage=composition-plan front_revision="+std::to_string(front_revision)+" front=";
+        auto id=[&](Node const* n){auto found=ids.find(n);if(found!=ids.end())return found->second;auto next=unsigned(ids.size());ids[n]=next;return next;};
+        auto rect=[](Rect r){return std::to_string(r.left)+","+std::to_string(r.top)+","+std::to_string(r.right-r.left)+","+std::to_string(r.bottom-r.top);};
+        for(auto const& patch:front.patches)line+=std::to_string(id(patch.node.get()))+"@"+rect(patch.area)+";";
+        line+="\n";OutputDebugStringA(line.c_str());
+        std::vector<Node const*> pending;for(auto const& patch:front.patches)pending.push_back(patch.node.get());
+        std::unordered_set<Node const*> visited;unsigned lines=0;
+        while(!pending.empty()&&lines<400){auto n=pending.back();pending.pop_back();if(!visited.insert(n).second)continue;++lines;
+            std::string kind=n->sample?"sample":n->view?(n->projects_scene?"view-projected":"view"):!n->batch.empty()?"batch"+std::to_string(n->batch.size()):
+                n->selected_world?"selected":n->operation?"op"+std::to_string(int(n->command.kind)):n->direct.draw?"direct":n->constant?"constant":"node";
+            std::string item="[C3X renderer] stage=composition-node id="+std::to_string(id(n))+" kind="+kind+" area="+rect(n->area)+
+                " map="+std::to_string(int(n->map_dynamic))+" dynamic="+std::to_string(int(n->dynamic))+" inputs=";
+            for(unsigned i=0;i<6;++i){if(!n->inputs[i].width)continue;item+=std::to_string(i)+":";
+                for(auto const& patch:n->inputs[i].patches){item+=std::to_string(id(patch.node.get()))+"@"+rect(patch.area)+"/";pending.push_back(patch.node.get());}
+                item+=" ";}
+            item+="\n";OutputDebugStringA(item.c_str());
+        }
     }
     void prepare_front(long long ticks,long long frequency){
         if(!compiled_enabled){
@@ -851,6 +877,8 @@ private:
                 n->dependencies.clear();n->dynamic=n->view_dependent=false;n->retired=true;
                 invalidate_plan();
             }
+        }else if(n->operation&&evaluate_fused(n,ticks,frequency,depth)){
+            // Evaluated by the fused interface pass (stage 3).
         }else if(n->operation){
             auto& versions=n->pending_dependencies;versions.clear();
             if(n->direct.revision)versions.push_back(n->direct_revision);
@@ -1525,6 +1553,13 @@ public:
         auto lap=[&](double& slot){auto now=PhaseClock::now();slot=std::chrono::duration<double,std::milli>(now-phase).count();phase=now;};
         Pins pinned;pinned.add(front);
         prepare_front(ticks,frequency);lap(work.prepare_ms);render_core_mark("compose_prepare");
+        if(diag_ui_hold&&assembled_front&&assembled_revision&&frame%8){
+            auto held=replay.attach_source_unrecorded(assembled_front.Get(),front.format);
+            if(held){bool shown=false;
+                try{shown=replay.display(held,target,front.width,front.height,extent(front),&work.display_ticks);}
+                catch(...){replay.recycle(held);throw;}replay.recycle(held);
+                if(shown&&buffer)context->CopyResource(buffer,display);return shown?1:0;}
+        }
         auto& versions=pending_drawn_dependencies;versions.clear();
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}
         lap(work.evaluate_ms);render_core_mark("compose_evaluate");
@@ -1549,10 +1584,113 @@ public:
         // diagnostics); a null buffer skips a full-screen copy every frame.
         if(ok){if(buffer)context->CopyResource(buffer,display);drawn_revision=front_revision;drawn_dependencies.swap(versions);}return ok?1:0;
     }
+    // Stage 3: a keyed full-screen native image over the selected world (Civ
+    // III's interface canvas onto the screen) is evaluated in one pass when
+    // that world is one compiled HUD program over the projected view: the
+    // pass starts from the projected scene, takes the view's native word, runs
+    // the HUD program and the keyed transfer, and writes this node's two
+    // planes. It computes exactly what the general path computes, without the
+    // view, HUD pair, selection and before-image planes (review, section 35).
+    // Anything else returns false and the general path runs.
+    // C3X_RENDERER_FUSED_INTERFACE=0 turns it off.
+    bool fused_enabled=[]{char value[4]={};return !(GetEnvironmentVariableA("C3X_RENDERER_FUSED_INTERFACE",value,sizeof(value))&&value[0]=='0');}();
+    std::uint64_t fused_frames=0;unsigned fused_refusal=0; // last fallback reason (0: none)
+    bool evaluate_fused(std::shared_ptr<Node> const& F,long long ticks,long long frequency,unsigned depth){
+        if(!fused_enabled||!compiled_enabled){fused_refusal=1;return false;}
+        auto const& c=F->command;
+        auto w=unsigned(F->area.right),h=unsigned(F->area.bottom);Rect full={0,0,int(w),int(h)};
+        // Candidates: full-canvas native images (the screen-canvas transfer).
+        if(c.kind!=Kind::native_image||F->area.left||F->area.top||!w||!h||!same_rect(c.area,full)||
+           F->inputs[0].width!=w||F->inputs[0].height!=h)return false;
+        if(F->placement||F->direct.draw||F->direct.revision||F->direct.animated){fused_refusal=4;return false;}
+        if(c.background||c.program||!F->original[3]||F->original[1]==F->original[0]||F->original[1]==F->original[3]||
+           !same_rect(c.area,full)||!same_rect(intersect(c.clip,full),full)||c.source_x||c.source_y||
+           c.source_width!=int(w)||c.source_height!=int(h)||c.color>65536){fused_refusal=5;return false;}
+        auto single=[&](Picture const& picture,unsigned output)->std::shared_ptr<Node>{
+            if(picture.width!=w||picture.height!=h||picture.patches.size()!=1||!same_rect(picture.patches[0].area,full)||
+               picture.patches[0].output!=output)return {};
+            auto n=picture.patches[0].node;return n&&same_rect(n->area,full)?n:nullptr;};
+        auto SW=single(F->inputs[0],0);if(!SW||single(F->inputs[3],1)!=SW||!SW->selected_world){fused_refusal=6;return false;}
+        auto B=single(SW->inputs[0],0);
+        if(!B||single(SW->inputs[1],1)!=B||B->batch.empty()||!B->placement||!B->batch_preparation){fused_refusal=7;return false;}
+        // The view writes its full-color output as 0 and its native words as 1.
+        auto V=single(B->inputs[0],1);if(!V||single(B->inputs[1],0)!=V||!V->view||!V->projects_scene||!V->view_native_format){fused_refusal=8;return false;}
+        auto words_format=F->inputs[0].format;
+        if(words_format==Format::bgra32||B->inputs[0].format!=words_format||(V->view_native_format==2)!=(words_format==Format::rgb565)){fused_refusal=9;return false;}
+        auto const& source_words=F->inputs[1];
+        if(source_words.width!=w||source_words.height!=h||source_words.format!=words_format){fused_refusal=10;return false;}
+        bool source_detail=F->original[4]&&F->original[4]!=F->original[3];
+        if(source_detail&&(F->inputs[4].width!=w||F->inputs[4].height!=h||F->inputs[4].format!=Format::bgra32)){fused_refusal=11;return false;}
+        unsigned flags=1u|(F->original[4]?2u:0u)|(F->original[4]&&F->original[4]==F->original[3]?32u:0u);
+        // Bind the HUD program exactly as its node would (offsets, sources).
+        // A new world's HUD node has no pair yet: allocate it as its own
+        // evaluation would; it stays unevaluated (no dependencies), so the
+        // general path recomputes it if it ever runs.
+        if(!B->output[0]||!B->output[1]){
+            auto bytes=std::uint64_t(B->inputs[0].width)*B->inputs[0].height*4;
+            reserve((!B->output[0]?bytes:0)+(!B->output[1]?bytes:0),"hud-pair",B->batch_preparation.get());
+            for(unsigned i=0;i<2;++i)if(!B->output[i]){
+                auto id=replay.create(B->inputs[i].width,B->inputs[i].height,Format::bgra32,false);
+                if(!id){fused_refusal=12;return false;}
+                auto made=replay.release_import_target(id);output(*B,i,made.texture);
+            }
+        }
+        double scale=B->placement->sample(ticks,frequency);
+        Id pair[2]={};
+        for(unsigned i=0;i<2;++i){pair[i]=replay.attach_target_unrecorded(B->output[i].Get(),B->inputs[i].format);
+            if(!pair[i]){for(auto id:pair)if(id)replay.recycle(id);fused_refusal=13;return false;}}
+        bool ready=false;
+        try{ready=bind_batch(*B,ticks,frequency,depth+1,pair,scale);}catch(...){for(auto id:pair)replay.recycle(id);throw;}
+        for(auto id:pair)replay.recycle(id);
+        auto const& b=*B->batch_preparation;auto const& plan=b.spatial_plan;
+        if(!ready||!plan.table_view){fused_refusal=14;return false;}
+        float view_scale=float(V->view->sample(ticks,frequency));
+        // The presented scale is the view's, as its own evaluation would set
+        // it: picking and Civ III's zoom adoption read it (review, 35).
+        selected_view_scale=view_scale;
+        auto& versions=F->pending_dependencies;versions.clear();versions.push_back(0x5f05edull); // distinct from the general path's versions
+        for(auto const& patch:V->inputs[0].patches){
+            auto a=intersect(project(patch.area,view_scale,w,h,patch.node->map_source||patch.node->map_dynamic||patch.node->retired),full);
+            if(empty(a))continue;auto m=evaluate_projected(patch,ticks,frequency,depth+1,view_scale,w,h);
+            versions.push_back(m->revision);versions.push_back((std::uint64_t(unsigned(a.left))<<32)|unsigned(a.top));
+            versions.push_back((std::uint64_t(unsigned(a.right))<<32)|unsigned(a.bottom));
+        }
+        {std::uint32_t bits=0;std::memcpy(&bits,&view_scale,4);versions.push_back(bits);}
+        bool map_dynamic=SW->map_dynamic||B->map_dynamic||V->map_dynamic;
+        Picture const* sources[2]={&source_words,source_detail?&F->inputs[4]:nullptr};
+        for(auto picture:sources)if(picture){versions.push_back(picture->version);
+            for(auto const& patch:picture->patches){evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);
+                map_dynamic|=patch.node->map_dynamic;}}
+        versions.push_back(replay.stats().spatial_compilations);
+        for(auto const& source:b.batch_sources)versions.insert(versions.end(),source.revisions.begin(),source.revisions.end());
+        F->dynamic=true;F->map_dynamic=map_dynamic;
+        if(F->output[0]&&F->output[1]&&!F->borrowed_output[0]&&!F->borrowed_output[1]&&versions==F->dependencies){fused_refusal=0;return true;}
+        admit_owned_outputs(*F,2);
+        Id scene=0,words=0,detail=0,out_words=0,out_detail=0;
+        auto release=[&]{for(auto id:{scene,words,detail,out_words,out_detail})if(id)replay.recycle(id);};
+        try{
+            scene=assemble_projected(V->inputs[0],ticks,frequency,depth+1,view_scale,full,w,h);
+            words=assemble(source_words,ticks,frequency,depth+1,{},true);
+            if(source_detail)detail=assemble(F->inputs[4],ticks,frequency,depth+1,{},true);
+            out_words=replay.attach_target_unrecorded(F->output[0].Get(),words_format);
+            out_detail=replay.attach_target_unrecorded(F->output[1].Get(),Format::bgra32);
+            if(!out_words||!out_detail||!replay.fused_spatial(plan,scene,words,detail,out_detail,out_words,c.color,flags)){
+                release();F->dependencies.clear();fused_refusal=15;return false;}
+            render_core_detail("compose_fused");
+        }catch(...){release();F->dependencies.clear();throw;}
+        release();
+        F->dependencies.swap(versions);F->revision=++serial;++fused_frames;fused_refusal=0;
+        work.operations+=unsigned(B->batch.size())+1;note_executed("fused",full,unsigned(B->batch.size())+1);
+        return true;
+    }
     void render_core_mark(char const* name){c3x_renderer::render_core::gpu_timeline().mark(context,name);}
     void render_core_detail(char const* name){c3x_renderer::render_core::gpu_timeline().detail(context,name);}
     double view_scale()const{return selected_view_scale;}
     Work last_work()const{return work;}
+    std::uint64_t fused_draws()const{return fused_frames;}
+    // Tests compare the fused pass with the general evaluation.
+    void set_fused(bool value){fused_enabled=value;drawn_dependencies.clear();}
+    unsigned fused_fallback()const{return fused_refusal;}
     // Native completed-front identity; visual clock samples do not advance it.
     std::uint64_t committed_revision()const{return front_revision;}
     template<class Report> void describe(Report report,bool all_images=false)const{

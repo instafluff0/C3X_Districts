@@ -10,6 +10,7 @@
 #include <functional>
 #include <unordered_set>
 #include <cstring>
+#include <string>
 #include <stdexcept>
 
 namespace c3x_gpu_images {
@@ -26,15 +27,15 @@ class SpatialComposition {
     struct Source {MicrosoftTexture texture;Rect area{};unsigned x=0,y=0,page=0;};
     struct SourceKey {ID3D11Texture2D* texture=nullptr;Rect area{};unsigned x=0,y=0,page=0;};
     ID3D11Device* device;ID3D11DeviceContext* context;
-    Ptr<ID3D11ComputeShader> shader;Ptr<ID3D11Buffer> constants;
+    Ptr<ID3D11ComputeShader> shader,fused_shader;Ptr<ID3D11Buffer> constants,fused_constants;
     CompositionStorage allocations,physical;
     std::uint64_t dispatches_=0,commands_=0,compilations_=0,source_copies_=0;
     static void check(HRESULT result){if(FAILED(result))throw std::runtime_error("spatial native composition resource");}
     static bool empty(Rect r){return r.left>=r.right||r.top>=r.bottom;}
     static bool same(Rect a,Rect b){return a.left==b.left&&a.top==b.top&&a.right==b.right&&a.bottom==b.bottom;}
     void program(){
-        if(shader && constants)return;
-        char const* source=R"(
+        if(shader && constants && fused_shader && fused_constants)return;
+        char const* common=R"(
 struct Op {int4 area;int4 source;int4 auxiliary;uint kind,color,target,source_page,auxiliary_page,flags,mode,padding;};
 struct Tile {uint x,y,offset,count;};
 cbuffer Params:register(b0){uint first_tile,width,height,padding;};
@@ -173,6 +174,8 @@ void dependencies(Op op,int2 at,uint native,uint full,inout bool dn,inout bool d
  if(op.kind==1)depends=false;
  if(assigned){if(op.target)df=depends;else dn=depends;}
 }
+)";
+        char const* hud_main=R"(
 [numthreads(8,8,1)]void main(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID){
  Tile tile=tiles[first_tile+group.x];
  [loop]for(uint y=0;y<4;++y)[loop]for(uint x=0;x<4;++x){
@@ -193,12 +196,41 @@ void dependencies(Op op,int2 at,uint native,uint full,inout bool dn,inout bool d
   }
  }
 })";
-        Ptr<ID3DBlob> code,error;
-        auto hr=D3DCompile(source,std::strlen(source),"ordered spatial native composition",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error);
-        if(FAILED(hr)){if(error)OutputDebugStringA(static_cast<char const*>(error->GetBufferPointer()));check(hr);}
-        check(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&shader));
+        // The whole interface over the scene in one pass (stage 3): each pixel
+        // starts from the projected scene, takes the world view's native word
+        // (the view transform's ordered quantization), runs its tile's HUD
+        // program and the keyed screen-canvas transfer, and writes the front.
+        char const* fused_main=R"(
+cbuffer Fused:register(b1){uint columns,native_mode,key,transfer_flags;};
+Texture2D<uint> scene:register(t4);Texture2D<uint> screen_words:register(t5);Texture2D<uint> screen_detail:register(t6);
+StructuredBuffer<Tile> table:register(t7);RWTexture2D<uint> front:register(u3);RWTexture2D<uint> front_words:register(u4);
+[numthreads(8,8,1)]void fused(uint3 id:SV_DispatchThreadID){
+ int2 at=int2(id.xy);if(at.x>=int(width)||at.y>=int(height))return;
+ uint full=scene.Load(int3(at,0));
+ uint threshold=0;
+ [unroll]for(uint bit=0;bit<3;++bit){uint a=(uint(at.x)>>bit)&1,b=(uint(at.y)>>bit)&1;threshold=(threshold<<2)|((a^b)<<1)|b;}
+ uint3 c=uint3(full&255,(full>>8)&255,(full>>16)&255),levels=uint3(31,native_mode==1?63:31,31),scaled=c*levels;
+ uint3 q=scaled/255+uint3((scaled%255)*128>(threshold*2+1)*255);
+ uint native=q.x|(q.y<<5)|(q.z<<(native_mode==1?11:10));
+ Tile tile=table[(uint(at.y)/32)*columns+uint(at.x)/32];
+ for(uint n=0;n<tile.count;++n){Op op=commands[order[tile.offset+n]];if(all(at>=op.area.xy)&&all(at<op.area.zw))apply(op,at,native,full);}
+ uint value=screen_words.Load(int3(at,0))&65535;
+ if(value!=key){native=value;
+  if(transfer_flags&1)full=(transfer_flags&2)?((transfer_flags&32)?full:screen_detail.Load(int3(at,0))):full_color(value,native_mode);}
+ front[at]=full;front_words[at]=native;
+}
+)";
+        auto compile_entry=[&](char const* entry_source,char const* entry,Ptr<ID3D11ComputeShader>& target){
+            std::string source=std::string(common)+entry_source;Ptr<ID3DBlob> code,error;
+            auto hr=D3DCompile(source.c_str(),source.size(),"ordered spatial native composition",nullptr,nullptr,entry,"cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error);
+            if(FAILED(hr)){if(error)OutputDebugStringA(static_cast<char const*>(error->GetBufferPointer()));check(hr);}
+            check(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&target));
+        };
+        if(!shader)compile_entry(hud_main,"main",shader);
+        if(!fused_shader)compile_entry(fused_main,"fused",fused_shader);
         D3D11_BUFFER_DESC d={};d.ByteWidth=16;d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
-        check(device->CreateBuffer(&d,nullptr,&constants));
+        if(!constants)check(device->CreateBuffer(&d,nullptr,&constants));
+        if(!fused_constants)check(device->CreateBuffer(&d,nullptr,&fused_constants));
     }
 public:
     struct Image {ID3D11Texture2D* texture=nullptr;unsigned width=0,height=0;Format format=Format::bgra32;};
@@ -207,7 +239,10 @@ public:
         MicrosoftTexture atlas;Ptr<ID3D11ShaderResourceView> atlas_view;
         MicrosoftTexture hud;Ptr<ID3D11UnorderedAccessView> hud_write;
         Ptr<ID3D11Buffer> commands,tiles,order;Ptr<ID3D11ShaderResourceView> command_view,tile_view,order_view;
-        std::array<CompositionStorage::Lease,5> owned,physical;
+        // Every 32-pixel tile of a single spatial run, touched or not, for the
+        // fused interface pass (fused()); empty otherwise.
+        Ptr<ID3D11Buffer> table;Ptr<ID3D11ShaderResourceView> table_view;unsigned columns=0;
+        std::array<CompositionStorage::Lease,6> owned,physical;
         std::vector<SourceKey> source_keys;std::vector<ID3D11Texture2D*> external_allocations;
         std::uint64_t bytes=0;unsigned spatial_commands=0,spatial_runs=0,fallback_commands=0;
         Plan()=default;Plan(Plan&&)=default;Plan& operator=(Plan&&)=default;
@@ -309,7 +344,15 @@ public:
         auto command_bytes=unsigned(encoded.size()*sizeof(GpuCommand));
         auto tile_bytes=unsigned(std::max<std::size_t>(tiles.size(),1)*sizeof(Tile));
         auto index_bytes=unsigned(std::max<std::size_t>(indices.size(),1)*sizeof(unsigned));
-        next.bytes=std::uint64_t(pages)*page_size*page_size*4+command_bytes+tile_bytes+index_bytes;
+        std::vector<Tile> table;
+        if(next.runs.size()==1&&next.runs[0].spatial){
+            next.columns=(w.width+tile_size-1)/tile_size;unsigned rows=(w.height+tile_size-1)/tile_size;
+            table.resize(std::size_t(next.columns)*rows);
+            for(unsigned y=0;y<rows;++y)for(unsigned x=0;x<next.columns;++x)table[std::size_t(y)*next.columns+x]={x,y,0,0};
+            for(auto const& tile:tiles)table[std::size_t(tile.y)*next.columns+tile.x]=tile;
+        }
+        auto table_bytes=unsigned(table.size()*sizeof(Tile));
+        next.bytes=std::uint64_t(pages)*page_size*page_size*4+command_bytes+tile_bytes+index_bytes+table_bytes;
         bool same_sources=reuse_sources&&old.atlas&&old.source_keys.size()==sources.size();
         for(unsigned i=0;same_sources&&i<sources.size();++i){auto const& a=old.source_keys[i];auto const& b=sources[i];
             same_sources=a.texture==b.texture.Get()&&same(a.area,b.area)&&a.x==b.x&&a.y==b.y&&a.page==b.page;
@@ -336,6 +379,7 @@ public:
         buffer(encoded,sizeof(GpuCommand),command_bytes,next.commands,next.command_view,1);
         buffer(tiles,sizeof(Tile),tile_bytes,next.tiles,next.tile_view,2);
         buffer(indices,sizeof(unsigned),index_bytes,next.order,next.order_view,3);
+        if(!table.empty())buffer(table,sizeof(Tile),table_bytes,next.table,next.table_view,5);
         // Commands, placement and external operands belong to this immutable
         // plan. Recompiling any of them discards the optional resolved HUD.
         // Ordered interpreter boundaries cannot share a cache across runs.
@@ -352,6 +396,25 @@ public:
             }else{next.hud_write.Reset();next.hud.Reset();}
         }
         old=std::move(next);++compilations_;return true;
+    }
+    // The fused interface pass over a single-run plan (stage 3). mode is the
+    // native word format (0 = 555, 1 = 565); key and flags describe the keyed
+    // screen-canvas transfer exactly as the spatial program encodes kind 9.
+    bool fused(Plan const& plan,ID3D11ShaderResourceView* scene,ID3D11ShaderResourceView* screen_words,ID3D11ShaderResourceView* screen_detail,
+               ID3D11UnorderedAccessView* front,ID3D11UnorderedAccessView* front_words,unsigned width,unsigned height,unsigned mode,unsigned key,unsigned flags){
+        if(!plan||!plan.table_view||plan.width!=width||plan.height!=height||!scene||!screen_words||!front||!front_words||((flags&2)&&!(flags&32)&&!screen_detail))return false;
+        program();
+        unsigned params[4]={0,width,height,0},fused_params[4]={plan.columns,mode,key,flags};
+        context->UpdateSubresource(constants.Get(),0,nullptr,params,0,0);context->UpdateSubresource(fused_constants.Get(),0,nullptr,fused_params,0,0);
+        ID3D11Buffer* buffers[]={constants.Get(),fused_constants.Get()};context->CSSetConstantBuffers(0,2,buffers);
+        ID3D11ShaderResourceView* reads[]={plan.atlas_view.Get(),plan.command_view.Get(),plan.tile_view.Get(),plan.order_view.Get(),
+            scene,screen_words,screen_detail,plan.table_view.Get()};
+        context->CSSetShaderResources(0,8,reads);
+        ID3D11UnorderedAccessView* writes[]={nullptr,nullptr,nullptr,front,front_words};context->CSSetUnorderedAccessViews(0,5,writes,nullptr);
+        context->CSSetShader(fused_shader.Get(),nullptr,0);context->Dispatch((width+7)/8,(height+7)/8,1);
+        ID3D11ShaderResourceView* none[8]={};ID3D11UnorderedAccessView* no_writes[5]={};
+        context->CSSetShaderResources(0,8,none);context->CSSetUnorderedAccessViews(0,5,no_writes,nullptr);
+        ++dispatches_;commands_+=unsigned(plan.original.size());return true;
     }
     template<class Legacy> bool submit(Plan const& plan,Id words_id,Id detail_id,ID3D11UnorderedAccessView* words,ID3D11UnorderedAccessView* detail,Legacy legacy){
         if(!plan||!words||!detail)return false;

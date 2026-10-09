@@ -1565,3 +1565,67 @@ generation that fails on the old code.
 
 Per frame on the busy save the interface must therefore be recomposed over
 a new scene: stage 3 makes that recomposition cheap rather than rare.
+
+## 34. What stage 3 can gain (October 9)
+
+Cost attribution only: `C3X_RENDERER_DIAG_UI_HOLD=1` recomposes the
+interface on one frame in eight and otherwise renders the scene and displays
+the previous composite (a wrong picture; zoom transitions are not shown).
+Busy save, `near` at 10 Hz (d1 against n3): 1× idle 55.8 fps (39.0), last
+1× idle segment 59.5 fps (42.0), 3× idle 51.1 fps (47.2). The interface
+replay costs about 7–8 ms of a 25.6 ms busy idle frame; removing most of it
+reaches the G3 target (55 fps busy idle) without other changes. Scroll steps
+and adoption are unchanged (18 steps at 1× x), as expected: steps wait on
+camera jobs, not on frame cost alone.
+
+## 35. Stage 3, first piece: the fused interface pass (October 9)
+
+**Shape.** On the busy save the committed screen is Civ III's interface
+canvas keyed over the selected world (a full-screen native image), the world
+is one compiled HUD program (about 1,970 draws) over the projected view of
+the scene, and a few small buttons are drawn after the transfer.
+
+**Change.** That keyed transfer is evaluated in one compute pass
+(`RetainedComposition::evaluate_fused`, `SpatialComposition::fused`): each
+pixel starts from the projected scene, takes the view's native word (the view
+transform's ordered quantization), runs its 32-pixel tile's HUD program in
+registers and applies the keyed transfer, writing the node's two planes. The
+view transform, both HUD base copies, the HUD dispatch, the world selection
+and the transfer's before-image are gone. The HUD program is bound exactly as
+its node binds it; unchanged inputs keep the result; anything that does not
+match the shape (cross-position reads, interpreter runs, other formats or
+extents) takes the general path. `C3X_RENDERER_FUSED_INTERFACE=0` turns it
+off.
+
+**Exactness.** `test_retained_composition.py` (`fused interface`): equal to
+the live interpreter over six frames with a new scene each frame, with a
+40-sprite HUD, an uploaded interface canvas and a small button drawn over
+the transfer, for both native formats; equal to the general retained
+evaluation at 1.5× and 3× zoom. The case fails on the old code. All 680
+oracles, the fullscreen HUD recipe and the spatial composition tests pass.
+
+**A bug found by measurement.** The first in-game run reported zoom 1.0 in
+every segment: the presented scale (read by picking and Civ III's zoom
+adoption) came from the view node, which the fused pass no longer evaluates.
+The pass now sets it from the view; the test compares it with the general
+path and fails without the fix.
+
+**Result (busy save, f5 with the scale fix, against n3 and the d1 ceiling).**
+The first run (f4) reported a stale zoom, so its zoomed segments are not
+used.
+
+| | fused (f5) | before (n3) | ceiling (d1) |
+|---|---|---|---|
+| 1× idle | 41.7 fps | 39.0 | 55.8 |
+| 3× idle | 50.9 fps | 47.2 | 51.1 |
+| last 1× idle segment | 47.9 fps | 42.0 | 59.5 |
+| 1× scroll x | 19 steps, adoption 241 ms | 18, 227 ms | – |
+| 3× scroll | 22 steps, adoption 137 ms | 21, 193 ms | – |
+
+At 3× the native distance per step was larger than in n3 (1,989 against
+354 native px/s); not yet explained. The fused pass ran on every sampled frame (6,376 fused evaluations, no
+fallback) and no frame re-ran the interface's operations. No seam frames.
+Still per frame: the projected scene assembly, the interface canvas's
+assembly (77 parts), a full-screen quantization of the scene feeding the
+bottom-right panel's blends, the small buttons, the front assembly copy and
+display.

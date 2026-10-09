@@ -1266,6 +1266,130 @@ int test_retained_composition(){
         assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
         std::printf("PASS shared HUD immutable bases: format=%u publications=11 steady_bytes=%llu steady_nodes=%zu base_expiry=1 independent_saved_pair=1 source_rebinds=0 metadata_rebuilds=0 weak_expiry=1\n",unsigned(format),warm_bytes,warm_nodes);
     }
+    // Stage 3 fused interface: Civ III's interface canvas keyed over the
+    // screen after the world, the world a compiled HUD over the projected
+    // scene. Every frame is a new scene publication; the fused pass must equal
+    // the live interpreter's screen exactly (review, section 35).
+    for(int native_format:{C3X_GPU_RGB555,C3X_GPU_RGB565}){
+        constexpr unsigned width=96,height=64,sources=40;Rect bounds={0,0,width,height};
+        std::vector<unsigned> pixels(width*height),output;
+        auto paint=[&](unsigned frame){for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)
+            pixels[y*width+x]=0xff000000u|(((x*5+frame*13)&255)<<16)|(((y*7+frame*3)&255)<<8)|((x*y+frame*29)&255);};
+        D3D11_TEXTURE2D_DESC map_desc={};map_desc.Width=width;map_desc.Height=height;map_desc.MipLevels=map_desc.ArraySize=map_desc.SampleDesc.Count=1;
+        map_desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;map_desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        std::vector<ComPtr<ID3D11Texture2D>> maps;
+        auto owner=std::make_unique<Session>(device.Get(),context.Get());auto& session=*owner;
+        std::int64_t ticket=0;
+        // Each frame's scene is a new publication, as each adopted camera is.
+        auto publish=[&](unsigned frame){paint(frame);D3D11_SUBRESOURCE_DATA initial={pixels.data(),width*4,0};ComPtr<ID3D11Texture2D> texture;
+            checked(device->CreateTexture2D(&map_desc,&initial,&texture));maps.push_back(texture);auto map_texture=texture.Get();
+            std::uint64_t generation=frame+1;
+            RetainedComposition::Sample sample=[=](long long,long long){return RetainedComposition::SampledImage::bgra(map_texture,bounds,0.f,generation);};
+            sample.projected=[=](long long,long long,float){return RetainedComposition::SampledImage::bgra(map_texture,bounds,0.f,generation);};
+            ticket=frame+1;assert(session.publish(map_texture,ticket,0,0,width,height,std::move(sample)));};
+        publish(0);
+        c3x_renderer_gpu_images_v1 request={};c3x_renderer_gpu_result_v1 result={};
+        auto execute=[&](unsigned action,Id id,std::vector<Command> const& commands={},std::vector<unsigned> const& body={}){
+            request.struct_size=sizeof(request);request.ticket=ticket;request.action=action;request.image=std::int64_t(id);
+            assert(session.execute(request,commands,body,result,output)==1);
+        };
+        auto create=[&](unsigned x,unsigned y,int format){request={};request.width=x;request.height=y;request.format=format;
+            execute(C3X_GPU_CREATE,0);return Id(result.image);};
+        auto map_words=create(width,height,native_format),units=create(width,height,native_format),unit_detail=create(width,height,C3X_GPU_BGRA32),
+            screen=create(width,height,native_format),detail=create(width,height,C3X_GPU_BGRA32),
+            panel=create(width,height,native_format),panel_detail=create(width,height,C3X_GPU_BGRA32),
+            button=create(10,8,native_format),button_detail=create(10,8,C3X_GPU_BGRA32);
+        unsigned key=native_format==C3X_GPU_RGB555?0x7c1f:0xf81f;
+        // A small keyed button drawn after the transfer, over its output (as on
+        // the busy save's bottom bar): the front is the transfer plus this node.
+        std::vector<unsigned> button_words(80,key),button_colors(80,0xffff00ffu);
+        for(unsigned i=0;i<80;++i)if((i%10)>1&&(i%10)<8&&i/10>1&&i/10<6){button_words[i]=0x0210u+i;button_colors[i]=0xff405060u+i;}
+        request.revision=1;execute(C3X_GPU_UPLOAD,button,{},button_words);
+        request.revision=1;execute(C3X_GPU_UPLOAD,button_detail,{},button_colors);
+        // Civ III's interface canvas is an uploaded image: key everywhere
+        // except a bottom panel and a button.
+        std::vector<unsigned> panel_words(width*height,key),panel_colors(width*height,0xffff00ffu);
+        for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
+            bool bar=y>=52,button=x>=70&&x<90&&y>=4&&y<14;
+            if(bar){panel_words[y*width+x]=0x1234u^(x&7);panel_colors[y*width+x]=0xff2a4c6eu+x;}
+            if(button){panel_words[y*width+x]=0x0421u;panel_colors[y*width+x]=0xff0c1a2bu;}
+        }
+        request.revision=1;execute(C3X_GPU_UPLOAD,panel,{},panel_words);
+        request.revision=1;execute(C3X_GPU_UPLOAD,panel_detail,{},panel_colors);
+        std::vector<Command> redraw;std::vector<Id> hud_sources;
+        execute(C3X_GPU_SUBMIT,0,{{Kind::fill,units,0,bounds,bounds,0,0,key},{Kind::fill,unit_detail,0,bounds,bounds,0,0,0xffff00ff}});
+        for(unsigned index=0;index<sources;++index){auto source=create(3,3,C3X_GPU_BGRA32);hud_sources.push_back(source);
+            unsigned ink=(index*977+31)&(native_format==C3X_GPU_RGB555?32767:65535);
+            request.revision=1;execute(C3X_GPU_UPLOAD,source,{}, {ink|65536u,0,(ink^0x421u)|65536u,ink|65536u,0,ink|65536u,(ink^0x210u)|65536u,0,ink|65536u});
+            int x=1+int(index*13%90),y=1+int(index*17%46);Rect area={x,y,x+3,y+3};
+            redraw.push_back({Kind::native_sprite,units,source,area,bounds});
+            redraw.push_back({Kind::native_sprite,unit_detail,source,area,bounds,0,0,native_format==C3X_GPU_RGB555?1u:2u});
+        }
+        D3D11_TEXTURE2D_DESC desc=map_desc;desc.BindFlags=D3D11_BIND_RENDER_TARGET;ComPtr<ID3D11Texture2D> display,buffer;
+        checked(device->CreateTexture2D(&desc,nullptr,&display));checked(device->CreateTexture2D(&desc,nullptr,&buffer));
+        ComPtr<ID3D11RenderTargetView> target;checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
+        for(unsigned frame=0;frame<6;++frame){
+            if(frame)publish(frame);
+            execute(C3X_GPU_SUBMIT,0,{{Kind::hud_begin,units,0,{}, {},48,32,42,0,unit_detail,0,int(key)}});
+            execute(C3X_GPU_SUBMIT,0,redraw);execute(C3X_GPU_SUBMIT,0,{{Kind::hud_end}});
+            execute(C3X_GPU_SUBMIT,0,{{Kind::quantize,map_words,session.map_image(),bounds,bounds},
+                {Kind::copy,screen,map_words,bounds,bounds},
+                {Kind::copy,detail,session.map_image(),bounds,bounds},
+                {Kind::world_begin,screen,map_words,bounds,bounds,0,0,65536,0,detail,session.map_image(),int(width),int(height)},
+                {Kind::native_image,screen,units,bounds,bounds,0,0,key,0,detail,unit_detail,int(width),int(height)},
+                {Kind::world_end,screen,units,bounds,bounds,0,0,key,0,detail,unit_detail,int(width),int(height)},
+                {Kind::native_image,screen,panel,bounds,bounds,0,0,key,0,detail,panel_detail,int(width),int(height)},
+                {Kind::native_image,screen,button,{40,20,50,28},bounds,0,0,key,0,detail,button_detail,10,8}});
+            assert(session.commit_display(ticket,detail,width,height,bounds));
+            assert(session.visual_frame(frame+1,1000,target.Get(),display.Get(),buffer.Get())==1);
+            request.pixel_count=width*height;execute(C3X_GPU_READBACK,detail);
+            auto shown=retained_read(device.Get(),context.Get(),display.Get());
+            if(shown!=output){std::size_t first=0;while(first<shown.size()&&shown[first]==output[first])++first;
+                std::fprintf(stderr,"fused interface mismatch: format=%d frame=%u pixel=%zu,%zu shown=%08x expected=%08x fused=%llu fallback=%u\n",native_format,frame,
+                    first%width,first/width,shown[first],output[first],(unsigned long long)session.visual_fused_frames(),session.visual_fused_fallback());}
+            assert(shown==output);++checks;
+        }
+        if(session.visual_fused_frames()<5)std::fprintf(stderr,"fused interface not used: fallback=%u\n",session.visual_fused_frames()?0u:session.visual_fused_fallback());
+        assert(session.visual_fused_frames()>=5);
+        // Zoomed: the projected scene and the HUD's placement offsets change.
+        // The live canvas is not zoomed, so the oracle is the general retained
+        // evaluation of the same frame at the same settled clock.
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        for(unsigned zoomed=0;zoomed<2;++zoomed){
+            execute(C3X_GPU_SUBMIT,0,{{Kind::zoom_target,0,0,{}, {},0,0,zoomed?196608u:98304u}});
+            publish(10+zoomed);
+            execute(C3X_GPU_SUBMIT,0,{{Kind::hud_begin,units,0,{}, {},48,32,42,0,unit_detail,0,int(key)}});
+            execute(C3X_GPU_SUBMIT,0,redraw);execute(C3X_GPU_SUBMIT,0,{{Kind::hud_end}});
+            execute(C3X_GPU_SUBMIT,0,{{Kind::quantize,map_words,session.map_image(),bounds,bounds},
+                {Kind::copy,screen,map_words,bounds,bounds},{Kind::copy,detail,session.map_image(),bounds,bounds},
+                {Kind::world_begin,screen,map_words,bounds,bounds,0,0,65536,0,detail,session.map_image(),int(width),int(height)},
+                {Kind::native_image,screen,units,bounds,bounds,0,0,key,0,detail,unit_detail,int(width),int(height)},
+                {Kind::world_end,screen,units,bounds,bounds,0,0,key,0,detail,unit_detail,int(width),int(height)},
+                {Kind::native_image,screen,panel,bounds,bounds,0,0,key,0,detail,panel_detail,int(width),int(height)},
+                {Kind::native_image,screen,button,{40,20,50,28},bounds,0,0,key,0,detail,button_detail,10,8}});
+            assert(session.commit_display(ticket,detail,width,height,bounds));
+            LARGE_INTEGER now={};QueryPerformanceCounter(&now);auto settled=now.QuadPart+frequency.QuadPart*10;
+            auto fused_before=session.visual_fused_frames();
+            assert(session.visual_frame(settled,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
+            assert(session.visual_fused_frames()==fused_before+1);
+            // The presented scale follows the fused frame's view (picking and
+            // zoom adoption read it); a stale 1.0 misplaced every zoomed pick.
+            auto fused_scale=session.visual_scale();
+            auto fused=retained_read(device.Get(),context.Get(),display.Get());
+            session.set_fused_interface(false);
+            assert(session.visual_frame(settled,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
+            auto general=retained_read(device.Get(),context.Get(),display.Get());
+            if(fused_scale!=session.visual_scale()||fused_scale<=1.)std::fprintf(stderr,"fused presented scale %.6f general %.6f\n",fused_scale,session.visual_scale());
+            assert(fused_scale==session.visual_scale()&&fused_scale>1.);
+            session.set_fused_interface(true);
+            if(fused!=general){std::size_t first=0;while(first<fused.size()&&fused[first]==general[first])++first;
+                std::fprintf(stderr,"fused zoom mismatch: format=%d zoom=%u pixel=%zu,%zu fused=%08x general=%08x\n",native_format,zoomed,
+                    first%width,first/width,fused[first],general[first]);}
+            assert(fused==general);++checks;
+        }
+        for(auto id:hud_sources)execute(C3X_GPU_DESTROY,id);
+        std::printf("PASS fused interface: format=%d frames=6 new_scene_each_frame=1 exact=1 zoomed_1.5x_3x_equal_to_general=1 fused_frames=%llu\n",native_format,(unsigned long long)session.visual_fused_frames());
+    }
     // The real native world-end path creates fresh retained nodes while the
     // lexical HUD is redrawn from the same immutable sources. New snapshot
     // wrappers must reuse exact preparation, with changing unit before-images.

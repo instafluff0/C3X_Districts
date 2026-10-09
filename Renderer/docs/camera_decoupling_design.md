@@ -291,6 +291,11 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        placements; only map-dependent pixels run per frame.
    - Cross-position reads (copies between positions, sprites from other
      canvases) stay in the interpreter, as today.
+   - **Status (October 9):** 3.1 and 3.2 are in place as one fused pass
+     for the screen-canvas transfer over the HUD over the projected view
+     (review, section 35): busy idle 39.0 → 41.7 fps at 1×, 47.2 → 50.9 at
+     3×, 42.0 → 47.9 in the last idle segment. Next: the remaining full-screen work per frame (interface canvas
+     assembly, the scene quantization for panel blends, front assembly).
 4. **Zoom drawn from the scene.** Zoom transitions sample the
    world-anchored lanes, removing the edge seams (review, section 24).
    Expected: zoom responds within one frame. (Scroll steps are not

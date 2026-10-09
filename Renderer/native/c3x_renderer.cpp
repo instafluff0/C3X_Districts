@@ -16435,7 +16435,7 @@ private:
                                        result==C3X_RENDERER_RESULT_DEVICE_ERROR)){
                         auto work=renderer_state.gpu_composition->visual_work();
                         char detail[1152];int used=std::snprintf(detail,sizeof(detail),
-                            "drawn=%d result=%d prepare_ms=%.3f sample_ms=%.3f present_ms=%.3f total_ms=%.3f ready=%d nodes=%zu bytes=%llu operations=%u assemblies=%u copies=%u copied_pixels=%llu attempts=%llu assembly_pixels=%llu display_busy=%u call_gate_busy=%llu state_gate_busy=%llu dxgi_permit_denials=%llu compose_prepare_ms=%.3f compose_evaluate_ms=%.3f compose_assemble_ms=%.3f compose_display_ms=%.3f facts_deferred=%llu facts_late_rejected=%llu fence_denials=%llu",
+                            "drawn=%d result=%d prepare_ms=%.3f sample_ms=%.3f present_ms=%.3f total_ms=%.3f ready=%d nodes=%zu bytes=%llu operations=%u assemblies=%u copies=%u copied_pixels=%llu attempts=%llu assembly_pixels=%llu display_busy=%u call_gate_busy=%llu state_gate_busy=%llu dxgi_permit_denials=%llu compose_prepare_ms=%.3f compose_evaluate_ms=%.3f compose_assemble_ms=%.3f compose_display_ms=%.3f facts_deferred=%llu facts_late_rejected=%llu fence_denials=%llu fused_frames=%llu fused_fallback=%u",
                             drawn,result,renderer_state.trace.milliseconds(prepared.QuadPart-started.QuadPart),
                             renderer_state.trace.milliseconds(sampled.QuadPart-prepared.QuadPart),
                             renderer_state.trace.milliseconds(finished.QuadPart-sampled.QuadPart),
@@ -16449,7 +16449,9 @@ private:
                             static_cast<unsigned long long>(trial_visual_state_busy.load(std::memory_order_relaxed)),
                             static_cast<unsigned long long>(trial_visual_permit_denials.load(std::memory_order_relaxed)),
                             work.prepare_ms,work.evaluate_ms,work.assemble_ms,work.display_ms,facts_deferred,facts_late_rejected,
-                            static_cast<unsigned long long>(visual_fence_denials.load(std::memory_order_relaxed)));
+                            static_cast<unsigned long long>(visual_fence_denials.load(std::memory_order_relaxed)),
+                            static_cast<unsigned long long>(renderer_state.gpu_composition->visual_fused_frames()),
+                            renderer_state.gpu_composition->visual_fused_fallback());
                         if(used>0&&used<int(sizeof(detail))){
                             // assets clear viewport targets shaders resources draw clear
                             std::snprintf(detail+used,sizeof(detail)-used," display_calls_ms=");used+=int(std::strlen(detail+used));
