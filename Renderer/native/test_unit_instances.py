@@ -15,7 +15,6 @@ class UnitInstanceTests(unittest.TestCase):
 struct Remote {
  unsigned flags=0,calls=0;
  unsigned presented_zoom(){return 65536;}
- int presented_pan(){return 0;}
  int unit(c3x_renderer_unit_v1 const&,c3x_renderer_gpu_unit_v1 const& capture,int* bounds){
   flags=capture.playback_flags;++calls;bounds[0]=123;return C3X_RENDERER_RESULT_OK;
  }

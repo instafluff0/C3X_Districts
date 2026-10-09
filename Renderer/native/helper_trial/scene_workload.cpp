@@ -21,6 +21,7 @@
 #include "../benchmark_oracle.h"
 #include "../gpu_composition_session.h"
 #include "../remote_scene_output.h"
+#include "../camera_delta.h"
 #include "../ordered_image_batch.h"
 #include "../visual_cadence.h"
 #include "scene_wire.h"
@@ -46,6 +47,8 @@ struct Core {
     CameraBegin camera_begin=nullptr;CameraPoll camera_poll=nullptr,camera_ready=nullptr;CameraCancel camera_cancel=nullptr;
     c3x_renderer_observe_camera_completion_fn observe_camera_completion=nullptr;
     Wire* completion_wire=nullptr;HANDLE completion_mutex=nullptr;UINT completion_message=0;bool completion_registered=false;
+    // Tiles the bridge has sent, for incremental camera requests (subtype 6).
+    c3x_remote_scene::CameraDeltaReceiver camera_delta;
     using CameraSupersede=void(*)(std::int64_t);
     CameraSupersede camera_supersede=nullptr;
     HANDLE control_stop=nullptr;std::thread control_thread;
@@ -313,8 +316,6 @@ struct Core {
             if(code==C3X_RENDERER_RESULT_OK&&telemetry){
                 InterlockedExchange(reinterpret_cast<volatile LONG*>(&telemetry->presented_zoom_q16),
                     native_image(C3X_NATIVE_ZOOM_PRESENTED,nullptr,nullptr,nullptr,nullptr,0));
-                InterlockedExchange(reinterpret_cast<volatile LONG*>(&telemetry->presented_pan),
-                    native_image(C3X_NATIVE_PAN_PRESENTED,nullptr,nullptr,nullptr,nullptr,0));
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&telemetry->visual_frames));
             }
             if(code==C3X_RENDERER_RESULT_ERROR||code==C3X_RENDERER_RESULT_DEVICE_ERROR){
@@ -353,7 +354,7 @@ struct Core {
             // work, whose displayed ticket only a later ordered adoption retires.
             require(!image_batches->status().bytes||
                 (wire.kind==unsigned(Kind::image_commands)&&wire.subtype==2)||
-                (wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1),
+                (wire.live&&wire.kind==unsigned(Kind::camera)&&(wire.subtype==1||wire.subtype==6)),
                 "reliable prefix requires image execution receipt");
             require(wire.magic==wire_magic&&wire.version==wire_version&&wire.size<=wire_capacity&&
                 wire.live<=1&&wire.replay_clock<=1,"invalid scene wire header");
@@ -413,15 +414,25 @@ struct Core {
                 c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame_value.value,identity};
                 auto seed=wire.subtype==6?seed_loading:seed_world;require(seed!=nullptr,"helper lacks loading seed entry");
                 wire.code=unsigned(seed(&request));
-            }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1){
+            }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&(wire.subtype==1||wire.subtype==6)){
                 // Reset may have destroyed/recreated the DLL worker. Rebind
                 // before accepting a camera; no old observer owns this lifetime.
                 register_camera_completion();
                 c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
-                Frame frame_value;frame(in,frame_value);in.done();
+                Frame frame_value;
+                // Subtype 6: only changed tiles (camera_delta.h). A delta that
+                // refers to tiles this helper lacks asks the bridge for a base.
+                if(wire.subtype==6 && !camera_delta.decode(in,frame_value)){
+                    Writer response;response.u32(c3x_remote_scene::camera_delta_base_missing);
+                    wire.code=C3X_RENDERER_RESULT_ERROR;wire.reply_size=unsigned(response.bytes.size());
+                    std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
+                }else{
+                if(wire.subtype==1)frame(in,frame_value);
+                in.done();
                 c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame_value.value,identity};
                 c3x_renderer_i64 ticket=0;wire.code=unsigned(camera_begin(&request,&ticket));
                 wire.recorded_ticket=ticket;
+                }
             }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&(wire.subtype==3||wire.subtype==5)){
                 c3x_renderer_i64 ticket=0;in(ticket);in.done();
                 c3x_renderer_gpu_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};

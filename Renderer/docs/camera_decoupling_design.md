@@ -202,14 +202,16 @@ Each stage is measured back to back in the VM against the previous build
 check on 10 Hz window frames) and gets a regression test that fails on the old
 behaviour. Expected effects are estimates from per-phase traces until measured.
 
-- **Done before this plan:** the camera lane (review, section 16), the image
-  glide (sections 17, 24), unit types on demand and the zoom-lane release
-  (sections 21, 22).
+- **Done before this plan:** the camera lane (review, section 16), unit types
+  on demand and the zoom-lane release (sections 21, 22). The image glide
+  (sections 17, 24) was removed on October 9 at the user's request: each Civ
+  III camera step is shown as a jump to the camera Civ III chose (section 30).
 
 0. **Baseline. Done** (review, sections 25–26). Tracked seam and frame-gap
    checks (`seam_report.py`, `frame_gap_report.py`; an overlay-alignment check
    comes with stage 2c); `near` twice on the busy, user and light saves and one
-   busy memory run. The baseline exposed stale glide strips, now fixed.
+   busy memory run. The baseline exposed stale glide strips (fixed, then the
+   glide was removed).
 1. **Caches tied to the world, not the camera.** Partly done (review,
    sections 25–26): the shadow sampling span is fixed per receiver region and
    remembered per zoom level. The busy step job did not change beyond run
@@ -254,12 +256,10 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      shorter image queues (G5), interface memory 0.32–0.39 → about 0.1 GB.
    - Verify: bit-exact against today's interpreter over recorded native
      batches across animated frames; the existing HUD recipe oracles.
-4. **Glide and zoom drawn from the scene.** The scene is drawn at the
-   presented camera instead of sliding a finished image with a trailing strip
-   of the previous world; Civ III's map-attached layer is offset by the same
-   amount (picking already subtracts it). Zoom transitions sample the
+4. **Zoom drawn from the scene.** Zoom transitions sample the
    world-anchored lanes, removing the edge seams (review, section 24).
-   Expected: zoom responds within one frame; busy 2× scroll no longer soft.
+   Expected: zoom responds within one frame. (Scroll steps are not
+   animated: the user retired the glide on October 9.)
 5. **A compact, instanced world within a memory tier.**
    - A byte census by layer first (`world-streaming-cost`).
    - Picture-identical changes in order of bytes per risk: city building
@@ -280,7 +280,7 @@ comes next.
 ## Decisions for the user
 
 - **Option C, display between steps.** Accepted on October 8 as the image
-  glide, on by default since October 8 (`C3X_RENDERER_GLIDE=0` turns it off;
-  review, sections 17 and 24). Stage 4 replaces it with a rendered glide.
+  glide and retired by the user on October 9: Civ III's scroll steps are
+  shown as jumps, as in the vanilla game (review, section 30).
 - **First frame after a far jump** (stage 6). A coarse terrain view (no units,
   shadows or detail for up to 500 ms), or today's wait.

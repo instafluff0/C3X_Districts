@@ -230,7 +230,6 @@ public:
     ~AsyncSceneClient(){publication.stop();}
     bool asynchronous()const{return enabled;}
     unsigned presented_zoom()const{return transport.presented_zoom();}
-    int presented_pan()const{return transport.presented_pan();}
     void observe_publication(std::function<void(char const*,double,double)> observer){
         publication.observe([this,observer=std::move(observer)](char const* label,double queued,double service){
             transport.publication_pressure(publication.status().records);

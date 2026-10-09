@@ -34,15 +34,21 @@ class NativeVisualCadenceTests(unittest.TestCase):
         self.assertIn('trial_job_presented=started.QuadPart;',block)
         self.assertLess(block.index('trial_job_presented=started.QuadPart;'),block.index('lock.unlock();'))
 
-    def test_glides_keep_the_in_job_frame_cap(self):
-        # The restored camera-step glide exempted itself from the in-job frame
-        # cap; display frames then ran inside short scroll-step jobs and light
-        # vertical steps slipped to every other tick (153 ms, October 8, l65).
-        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        start=source.index('bool new_front=retained&&trial_front_pending.load(std::memory_order_acquire);')
-        block=source[start:start+900]
-        condition=block[block.index('if(!consumer_pid&&camera_active'):block.index('return C3X_RENDERER_RESULT_BUSY;')]
-        self.assertNotIn('pan',condition)
+    def test_camera_steps_are_presented_as_vanilla_jumps(self):
+        # The user retired the scroll glide (October 9): each Civ III camera
+        # step is shown at the camera Civ III chose once its image is ready.
+        # No slide state, trailing world or presented offset remains for
+        # composition to apply or for picking to undo.
+        renderer=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        session=(ROOT/'Renderer/native/gpu_composition_session.h').read_text()
+        retained=(ROOT/'Renderer/native/retained_composition.h').read_text()
+        api=(ROOT/'Renderer/native/c3x_renderer_api.h').read_text()
+        self.assertNotIn('camera_step(',renderer)
+        self.assertNotIn('C3X_RENDERER_GLIDE',renderer)
+        self.assertNotIn('presented_pan',renderer+session)
+        self.assertNotIn('pan_under',session+retained)
+        self.assertNotIn('C3X_NATIVE_PAN_PRESENTED',api)
+        self.assertFalse((ROOT/'Renderer/native/pan_transition.h').exists())
 
     def test_presentation_permit_is_nonblocking_and_survives_noop(self):
         run_cpp(r'''
@@ -256,7 +262,6 @@ struct Session{
  void did_present(){++published;}
  std::uint64_t committed_revision()const{return 9;}
  unsigned presented_zoom(){return 81920;}
- int presented_pan(){return 0;}
  std::pair<unsigned,unsigned> visual_publication(){return {7,8};}
  struct Work{unsigned operations=3,assemblies=1,copies=2,copied_pixels=64,assembly_pixels=32;
   unsigned selected_borrows=1,selected_owned=0,direct_native_images=1,avoided_copy_pixels=128;

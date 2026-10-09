@@ -1,5 +1,6 @@
 #pragma once
 #include "../c3x_renderer_api.h"
+#include <array>
 
 namespace c3x_renderer::render_core {
 // A translated camera can change the off-screen contributor set even when
@@ -8,12 +9,30 @@ namespace c3x_renderer::render_core {
 struct ForegroundSelection {
     int width=0,height=0,tile_width=0,tile_height=0,ring=0,guard=0;
     bool pickup=false,offload=false;
+    // World window (WorldWindow, stage 2a): the explored tiles with
+    // appearance whose occurrence lies in `box` (anchor minus camera, in
+    // block-aligned world pixels). The box, not the camera, is the identity:
+    // camera steps inside one block window keep the same selection.
+    bool windowed=false;
+    std::array<long long,4> box{};
+    long long camera_x=0,camera_y=0;
     bool operator==(ForegroundSelection const& other)const {
         return width==other.width&&height==other.height&&tile_width==other.tile_width&&
             tile_height==other.tile_height&&ring==other.ring&&guard==other.guard&&
-            pickup==other.pickup&&offload==other.offload;
+            pickup==other.pickup&&offload==other.offload&&windowed==other.windowed&&box==other.box;
+    }
+    // The same selection rule, whatever the window's position: a block
+    // crossing is an ordinary membership change for the incremental diff.
+    bool same_rule(ForegroundSelection const& other)const {
+        auto a=*this,b=other;a.box=b.box={};return a==b;
     }
     bool selects(c3x_renderer_tile_v1 const& tile)const {
+        if(windowed){
+            if(!(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return false;
+            if((tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) && !(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED))return false;
+            auto x=c3x_renderer_i64(tile.anchor_x)-camera_x,y=c3x_renderer_i64(tile.anchor_y)-camera_y;
+            return x>=box[0]&&x<box[2]&&y>=box[1]&&y<box[3];
+        }
         // Native anchors still describe fog coverage; body work requires
         // explored permission. Older lab inputs have no visibility contract.
         if((tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) &&

@@ -24024,13 +24024,6 @@ custom_renderer_zoom_transform_point (int * x, int * y)
 void
 custom_renderer_zoom_inverse_point (int * x, int * y)
 {
-	// A camera step may still be sliding into place: the screen shows the new
-	// native camera shifted by the last presented slide offset.
-	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL) {
-		int pan = is->custom_renderer_native_image (C3X_NATIVE_PAN_PRESENTED, NULL, NULL, NULL, NULL, 0);
-		*x -= (short)(pan & 0xffff);
-		*y -= (short)((unsigned)pan >> 16);
-	}
 	if (! custom_renderer_zoom_enabled ()) return;
 	sync_custom_renderer_zoom_to_native ();
 	// One atomic display sample for both coordinates. This is the last
@@ -29329,7 +29322,18 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 {
     if (custom_renderer_zoom_enabled ()) {
         Main_Screen_Form * screen = p_main_screen_form;
-        RECT bounds = custom_renderer_capture_bounds (screen);
+        RECT bounds = custom_renderer_capture_bounds (screen), envelope = bounds;
+        // The renderer may ask for a wider envelope past the visible tiles, in tile coordinates.
+        // Those tiles are appearance only, as in the halo: not drawn or labelled natively.
+        int margin = is->custom_renderer_native_image != NULL ?
+            is->custom_renderer_native_image (C3X_NATIVE_CAPTURE_MARGIN, NULL, NULL, NULL, NULL, 0) : 0;
+        if (margin != 0 && ! p_bic_data->is_zoomed_out) {
+            int margin_x = (short)(margin & 0xffff), margin_y = (short)((unsigned int)margin >> 16);
+            if (bounds.left > screen->TileX_Min - margin_x) bounds.left = screen->TileX_Min - margin_x;
+            if (bounds.right < screen->TileX_Max + margin_x) bounds.right = screen->TileX_Max + margin_x;
+            if (bounds.top > screen->TileY_Min - margin_y) bounds.top = screen->TileY_Min - margin_y;
+            if (bounds.bottom < screen->TileY_Max + margin_y) bounds.bottom = screen->TileY_Max + margin_y;
+        }
         Map * map = &p_bic_data->Map;
         int half_width = p_bic_data->is_zoomed_out ? 32 : 64, half_height = half_width / 2;
         // Extend the existing native m21 lattice, retaining its exact origin
@@ -29347,6 +29351,11 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
                     visibility_mask, xx, yy, tile_at (xx, yy), false)) {
                     is->custom_renderer_capture_failed = true;
                     return;
+                }
+                if (x < envelope.left || x > envelope.right || y < envelope.top || y > envelope.bottom) {
+                    struct c3x_renderer_tile_v1 * record = &is->custom_renderer_tiles[is->custom_renderer_tile_count - 1];
+                    record->tile_flags = (record->tile_flags & C3X_RENDERER_TILE_VISIBILITY_BITS) |
+                        C3X_RENDERER_TILE_TOPOLOGY_HALO | C3X_RENDERER_TILE_PREFETCH;
                 }
             }
         // The resident world already supplies topology beyond these complete

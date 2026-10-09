@@ -165,11 +165,11 @@ repl call, 0x4F0AF0, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
   injected-state field, `custom_renderer_capture_cover`.
 - **Recapture.** A no-op re-clamp now requests a same-camera recapture when
   the zoom target leaves the covered envelope, and keeps in-flight requests.
-- **Picking.** The native pick subtracts the presented camera-step slide
-  (`C3X_NATIVE_PAN_PRESENTED`). Removed with vanilla scroll on October 7 and
-  restored on October 8 with the glide, which is on by default
-  (`C3X_RENDERER_GLIDE=0` turns it off; with it off the presented slide is
-  always zero).
+- **Picking.** No camera-step slide to undo. The presented slide
+  (`C3X_NATIVE_PAN_PRESENTED`) was removed with vanilla scroll on October 7,
+  restored with the glide on October 8, and removed again with the glide on
+  October 9 at the user's request: each Civ III camera step is shown as a
+  jump to the camera Civ III chose.
 - **Not added:** no patch-table entry.
 - **Config-off:** delegation is unchanged.
 
@@ -2992,3 +2992,16 @@ the renderer through the existing `City_raze` patch. No new patch-table symbol,
 signature or supported-build address is required; config-off never reaches the
 capture. The renderer draws all three from the site pack (`TileSitesRuntime`);
 packs without ground-state groups draw nothing new.
+
+## World window capture margin
+
+`required_user_action: []`. Existing hooks only; no patch-table or
+injected-state entry is added. `capture_custom_renderer_topology` asks the
+renderer for an extra capture envelope (`C3X_NATIVE_CAPTURE_MARGIN`, tile
+coordinates past the visible tiles; 0 keeps the native envelope). The
+renderer returns a margin only with `C3X_RENDERER_WORLD_WINDOW=1` (stage 2a,
+off by default). Tiles past the zoom envelope are captured as appearance
+only, like the halo (visibility bits, `TOPOLOGY_HALO | PREFETCH`), so the
+injected HUD pass draws no unit status or city label for them, and the
+renderer reports replacement ownership only for RENDER tiles. Config-off
+delegation is unchanged: the query sits inside the custom zoom path.

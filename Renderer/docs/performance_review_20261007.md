@@ -1236,6 +1236,10 @@ seam frames in 1×–3× scroll 35 → 4. The remaining four follow a long camer
 move that was slid as one step (the view jumped from a city to unexplored
 land within one step); stage 4 removes trailing strips. Scroll fps and step
 pace unchanged within noise (1× x 39.3 fps, 2,502 px/s; 2× 36.1; 3× 36.5).
+Busy save (g6 against a0): 16 of 93 scroll frames → 12 of 110 (1× 11 → 2,
+2× 3 → 2, 3× 2 → 8). The 3× seams follow presentations at a rendered zoom of
+1.0 from inside camera jobs, interleaved with 3× frames (route-presented
+`zoom_q16`); stage 2c removes camera jobs from steps.
 
 **Stage 1a, shadow sampling span.** The span is fixed by the receiver region
 (the region of interest at the shadow zoom) and the light, grows only when a
@@ -1276,3 +1280,206 @@ The step job did not change beyond run noise. Three findings explain why:
 Also: at 2× and 3× every step's job renders the hidden canonical 1× lane, and
 its static layer is stale there (a different shadow region), costing static
 work on every zoomed step for a lane that is not displayed.
+
+## 27. Stage 2a: a block-anchored resident world (October 8, night)
+
+**Change (behind `C3X_RENDERER_WORLD_WINDOW=1`).** The camera job's resident
+geometry is selected by a world window instead of Civ III's capture
+(`render_core/world_window.h`). The window reaches 8 tile coordinates past the
+view in x and 12 in y, its origin is snapped to 8×8-coordinate blocks and its
+extent is fixed, so it changes once per block of camera motion (every four 1×
+x steps, every two y steps). Tiles the capture lacks come from the retained
+world (the record's last full copy, else a full permitted world input). The
+window is listed in row-major order, so the membership diff sees a stable
+order; Civ III still receives replacement flags in its own capture order
+(`validate_custom_renderer_replacement_ownership` requires that). A block
+crossing is an ordinary membership change (`ForegroundSelection::same_rule`),
+not a full rebuild. Tests: `test_world_window.py`.
+
+**Result (busy save, w3 against g5, trace level 2).**
+- Membership: 17 of 39 camera jobs kept the resident set unchanged ("covered"),
+  21 changed it incrementally, 1 rebuilt it. Zoomed scrolls and revisits are
+  covered at every step. At 1× each step still adds 10–90 tiles at the leading
+  edge: Civ III captures appearance only 8 coordinates ahead, and the
+  topology-only band beyond it replaces the full world input of tiles never
+  captured with appearance, so the window cannot draw them until they come
+  within the appearance halo.
+- Step job p50 84.5 ms (g5 76.1); request to adoption 242 ms (170). With
+  `C3X_RENDERER_WORLD_WINDOW=1` and no other change, busy scrolling is slower:
+  the resident set is about twice as large, and a first version that rebuilt
+  it at every block crossing took 0.8–1.1 s per step (w1).
+- **A covered step still costs about 45 ms**: scene preparation 33 ms (shadows
+  with city lights 17–18.5, visibility selection 8–10, region-of-interest body
+  requirements 4.2–4.4, setup 1.5–2) and static 12.5 ms. An unchanged camera
+  prepares in about 1 ms. So most per-step cost comes from computations keyed
+  to the camera position, not to residency: the shadow page window and its
+  caster bookkeeping, the per-view visibility selection and the 128 px
+  region of interest.
+
+The window stays off by default. Stable residency is a prerequisite for making
+those per-camera computations incremental; that is the next piece of stage 2.
+
+## 28. Water visibility from the retained world (October 9)
+
+**Cause.** Water and river records carry `water_visible`, refreshed from the
+current frame's fog coverage. Coverage spans only the captured view, so water
+off it read as hidden and flipped as the camera moved; each flip edited the
+resident set, which gave it a new revision, and everything keyed to that
+revision (shadow caster bookkeeping, static proofs, visibility selection,
+region of interest, unit plans) rebuilt. With the world window the camera job
+(window tiles) and visual frames (Civ III's capture) disagreed about the
+coverage on every step, so even an unchanged resident set got two new
+revisions per step. The flag now follows each tile's retained visibility
+(`topology_cache.retained(...)->visibility_flags`, keyed by
+`visibility_sequence()`), which both agree on. Tests: `test_world_window.py`
+(`WorldWaterVisibilityTests`), `test_visibility.py` (harness follows the
+retained record).
+
+**Result (busy save, trace level 2, w4 with the window, w5 without).**
+- With the window, an unchanged resident set now keeps its revision. On those
+  steps (25 of 65 jobs): scene preparation 6.3 ms (33 before), static 6.1 ms
+  (12.5), and the shadow atlas was reused on 22 of 25.
+- Steps that change the resident set still cost prepare 26.8 ms, static 11.6,
+  shadows with a caster refresh (5.9 ms) and proofs (6.7 ms).
+- Step job p50: 80.6 ms with the window, 83.2 ms without. At 1× each step
+  still adds about 48 tiles at the leading edge (the appearance halo limit,
+  section 27), so most 1× steps are not covered yet.
+- w5 hit the publication-pressure failure again under trace level 2 with
+  unbuffered traces (as a1); runs at trace level 0 have not.
+
+## 29. The window's leading edge needs Civ III's capture (October 9)
+
+**Why tiles kept entering.** A `world-window` trace (trace level 1) counts
+window tiles the retained world cannot supply. On the busy save 600–1,000 per
+step had no full appearance: their records hold no full copy and their world
+inputs are the seed's minimal fog records. The world seed sends full records
+only for visible tiles; explored fog gets terrain, city body, routes and
+remembered overlays, deliberately without live resources, territory or
+buildings (`read_custom_renderer_world_record`). The per-step capture reads
+those live facts for every explored tile it covers
+(`read_custom_renderer_tile`), so the two cannot stand in for each other.
+
+**The capture envelope.** With custom zoom, Civ III's per-step capture covers
+`custom_renderer_capture_bounds` (about 4 tile coordinates past the visible
+tiles at 1×) and skips the halo. Behind `C3X_RENDERER_WORLD_WINDOW=1` the
+tile capture (not the unit capture) now reaches 16 coordinates in x and 20 in
+y past the visible tiles (`injected_code.c`, `capture_custom_renderer_topology`;
+the halo path got the same per-axis reach). Installed with `INSTALL.bat`.
+
+**Result (busy save, w8 against w4).**
+- The window is complete: 0–108 tiles skipped per step, none synthesized.
+  33 of 62 jobs kept the resident set; it changes only at block crossings (one
+  band in, one out).
+- Step job p50 60.8 ms (80.6): shadow builds 0 ms at the median, scene
+  preparation 13.5 ms, static 6.0 ms.
+- But Civ III's native map pass after each step rose from 16 to 61 ms
+  (median, 1× scroll), and request to adoption from 172 to 221 ms. Not yet
+  attributed. (A first reading blamed the publication backlog; the
+  `native-call-waits backlog_ms` figure measures the bridge's input
+  hit-test queue, not tile publication.) Each step copies the full tile
+  array (512 bytes per tile) three times on Civ III's thread, compares it
+  byte for byte, re-encodes it for the helper and decodes a full-frame
+  completion reply, all of which scale with the envelope.
+
+The capture protocol is camera-anchored: each step re-sends every tile of the
+envelope, changed or not. The incremental design keeps that logic in the
+bridge and helper (injected code only asks the bridge for the capture margin,
+`C3X_NATIVE_CAPTURE_MARGIN`), after measuring where Civ III's thread spends
+the extra time.
+
+## 30. Incremental capture, off-screen HUD draws and the glide's removal (October 9)
+
+**Incremental capture.** Camera requests are now deltas
+(`camera_delta.h`, subtype 6; `C3X_RENDERER_CAMERA_DELTA=0` restores full
+frames). Each occurrence carries its coordinates and anchor; full fields only
+for tiles whose content changed, the topology array only when it changed. The
+helper keeps the tiles it has received and rebuilds the exact frame; a
+receiver missing a referenced tile asks for a base. In the test fixture a
+128 px step sends 32 KB instead of 275 KB (`test_camera_delta.py`). All of it
+lives in the bridge and helper; injected code is unchanged.
+
+**It was not the cost.** Busy save, 1× scroll in x, Civ III's native map pass
+(median): 98 ms with the window (106 before, w11 against w9), 32 ms without
+it (37, w12 against w10). Step job p50 61.5 ms with the window, 74.8 ms
+without.
+
+**The cost: off-screen HUD draws behind the bridge's hit-test queue.**
+- With the window, Civ III's thread waited on the input hit-test queue for
+  1.21 s in matched 1× windows, against 0.36 s without
+  (`native-call-waits backlog_ms`). In one 115 ms step, about 85 ms were
+  line and sprite draws stalled on that queue; the capture itself took 9 ms.
+- Traced with `C3X_RENDERER_HIT_TRACE=1` (w13 with the window, w14 without):
+  the same number of map redraws (17 against 15 in 1× y scroll), but 399
+  fills per redraw on the map canvas against 89, mostly 24×22 box outlines.
+- The capture margin was captured as RENDER tiles, so the injected HUD pass
+  (`patch_Main_Screen_Form_draw_city_hud`) drew a unit status box for every
+  off-screen unit in the margin, about 100 boxes per redraw instead of 22.
+- **Fix.** Tiles past the zoom envelope are appearance only, as in the halo
+  (visibility bits, `TOPOLOGY_HALO | PREFETCH`). The window reports
+  replacement ownership only for tiles Civ III captured as RENDER
+  (`WorldWindow::native_flags`). Tests: `test_world_window.py`
+  (`CaptureMarginTests`; prefetch tiles report no ownership).
+- `hit_trace_report.py` now stops at a record the process cut off mid-write.
+- **Result (busy save, no glide, w15 with the window, w16 without).**
+
+  | | window, before (w11) | window (w15) | no window (w16) |
+  |---|---|---|---|
+  | native map pass after a 1× x step | 98 ms | 52 ms | 31 ms |
+  | after a 1× y step | 50 ms | 16 ms | 12 ms |
+  | after a 2× / 3× step | 87 / 87 ms | 27 / 26 ms | 40 / 24 ms |
+  | native pass, step median | 83.6 ms | 24.0 ms | 23.0 ms |
+  | step job p50 | 61.5 ms | 82.8 ms | 91.5 ms |
+  | request to adoption p50 | 233 ms | 198 ms | 172 ms |
+  | resident set kept | 32 of 60 | 35 of 69 | 1 of 62 |
+
+  With the window, Civ III's per-step pass now matches the native envelope
+  except at 1× x (52 against 31 ms). Step jobs were slower in both of this
+  pair (no window: 74.8 ms in w12, 91.5 ms in w16) outside the traced
+  phases; not yet attributed (run variation or the glide's removal).
+- **Where the window stands.** Jobs that keep the resident set take
+  47.9 ms (p50; p90 101). Block crossings take 164 ms (p90 372), against
+  93.8 ms for an ordinary step without the window, because the whole
+  entering band (8 coordinates deep) is built and its shadows rebuilt inside
+  the step's job. That band lies past the guard band, outside every drawn
+  pixel, so a step need not wait for it: building it after the step is shown,
+  in bounded slices, is stage 2c. Until then the window stays off by default.
+- Nearly every tile a crossing builds is restored from the compressed RAM
+  backing (101 of 102 in one 1× crossing), not compiled. Re-queuing the
+  completed world-preparation regions of the next band (w17) changed
+  nothing: background region preparation of a compiled region returns in
+  1–3 ms with `built=0 reused=0` and does not bring its geometry back to the
+  GPU. Reverted; restoring the next band to the GPU in idle slices is part
+  of stage 2c.
+
+**The scroll glide is removed (the user, October 9).** Each Civ III camera
+step is shown at the camera Civ III chose, as in the vanilla game. Removed:
+`PanTransition`, the trailing-world composition, the presented offset in the
+helper wire (back to version 16) and `C3X_NATIVE_PAN_PRESENTED` with
+picking's subtraction of it. A step is still adopted on Civ III's next tick
+after its image is ready (the existing deferral); stage 2c is meant to make
+that the next tick. Tests: `test_native_visual_cadence.py`
+(`test_camera_steps_are_presented_as_vanilla_jumps`), and
+`test_zoom_integration.py`: picking queries only the presented zoom.
+
+User save (3350 BC), `near` at 10 Hz, n1 without the glide against g1 with
+it:
+
+| segment | steps (n1 / g1) | native px/s (n1 / g1) | adopt p50 (n1 / g1) |
+|---|---|---|---|
+| 1× scroll x | 67 / 26 | 2,625 / 1,150 | 58 / 62 ms |
+| 2× scroll | 53 / 49 | 2,789 / 2,682 | 60 / 63 ms |
+| 3× scroll | 56 / 46 | 1,670 / 1,503 | 61 / 62 ms |
+
+Civ III now steps on every 78 ms tick at 1× (with the glide, 26 steps in
+6 s; why it stepped less often was not isolated), the map scrolls 2.3× as
+far in the same time at 1×, and the
+seam check finds no seam frames in any segment (g1: 4). Jump 2 took 47 ms
+(108). Distinct-frame fps during scroll is lower (28 against 50 at 1× x)
+because the glide's slide frames no longer count as new frames.
+
+Busy save (1498 AD), n2 without the glide against g6 with it: 1× x 19 steps
+in 6 s (16), adoption p50 238 ms (305); 2× 20 steps (16), 193 ms (283); 3×
+21 steps (18), 199 ms (213); 1× y unchanged (15 steps). Idle 1× 38.8 fps
+(38.6). Jumps 673 and 881 ms (965, 868). No seam frames. Busy steps still
+come about four times a second against Civ III's 12.8 ticks: this is the
+stage 2 reference.

@@ -2,7 +2,6 @@
 #include "gpu_frame_api.h"
 #include "gpu_image_compositor.h"
 #include "retained_composition.h"
-#include "pan_transition.h"
 #include <array>
 namespace c3x_gpu_images {
 // Lives exclusively on RendererWorker, with its existing immediate context.
@@ -15,22 +14,6 @@ class Session {
     Id resident_unit=0;ID3D11Texture2D* resident_unit_texture=nullptr;
     bool map_animation_expected=false;
     std::shared_ptr<c3x_renderer::ZoomTransition> zoom=std::make_shared<c3x_renderer::ZoomTransition>();
-    // A published camera step is shown as an image-space slide once its
-    // native world arrives (see PanTransition and RetainedComposition::set_pan).
-    c3x_renderer::PanTransition pan;
-    // pan_under: the running slide's trailing image; pan_next: the next
-    // step's, prepared at its world_begin while the running slide continues.
-    ComPtr<ID3D11Texture2D> pan_under[2],pan_next[2];
-    int pan_step_x=0,pan_step_y=0,pan_under_offset_x=0,pan_under_offset_y=0;bool pan_pending=false,pan_armed=false;int presented_pan_packed=0;
-    double pan_under_scale=1.; // view scale the trailing world was copied at
-    void start_pan(){
-        if(!pan_armed)return;pan_armed=false;
-        // A trailing world copied before a zoom step is at the wrong scale.
-        if(zoom->moving()||std::abs(layers.view_scale()-pan_under_scale)>1e-6)return;
-        LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
-        pan.begin(pan_step_x,pan_step_y,now.QuadPart,frequency.QuadPart,pan_under_offset_x,pan_under_offset_y);
-        std::swap(pan_under[0],pan_next[0]);std::swap(pan_under[1],pan_next[1]);
-    }
     // Private retained IDs do not cross the image transport or own exact GPU
     // working textures. Each frame starts from the complete canonical map.
     static constexpr Id world_words=Id(1)<<63,world_detail=world_words+1,world_view_words=world_words+2,world_view_detail=world_words+3;
@@ -110,23 +93,13 @@ class Session {
            !w||!h||w>2240||h>1260)throw std::runtime_error("invalid world composition boundary");
         if(c.kind==Kind::world_begin){
             auto format=gpu.format(c.destination);
-            bool resized=world_width!=w||world_height!=h;
-            if(resized){
+            if(world_width!=w||world_height!=h){
                 layers.destroy(world_words);layers.destroy(world_detail);layers.destroy(world_view_words);layers.destroy(world_view_detail);
                 layers.create(world_words,w,h,format);layers.create(world_detail,w,h,Format::bgra32);
                 layers.create(world_view_words,w,h,format);layers.create(world_view_detail,w,h,Format::bgra32);
                 world_width=w;world_height=h;
             }
             world_destination=c.destination;
-            // Before this pass records over them, compose the world as the
-            // next frame would show it, with its slide offset, for the next
-            // slide's trailing strip.
-            if(pan_pending){pan_pending=false;pan_under_scale=layers.view_scale();
-                LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
-                auto shown=pan.sample(now.QuadPart,frequency.QuadPart);if(zoom->moving())shown={};
-                pan_under_offset_x=shown.active?shown.x:0;pan_under_offset_y=shown.active?shown.y:0;
-                pan_armed=!resized&&!zoom->moving()&&layers.copy_world_output(pan_next,pan_under_offset_x,pan_under_offset_y,
-                    shown.under_x,shown.under_y,shown.active?pan_under:nullptr);}
         }else if(world_destination!=c.destination||world_width!=w||world_height!=h)
             return; // Loading can compose the unit form before its map form.
         c.kind=Kind::native_image;c.destination=world_words;c.detail=world_detail;
@@ -222,13 +195,9 @@ public:
     // Publish an immutable native screen version. The independent cadence
     // samples it later; accepting a UI transfer does not render another map.
     // Partial transfers retain exactly the previously committed outside area.
-    // Screen-pixel camera step (new minus previous) for the next native world.
-    void camera_step(int dx,int dy){pan_pending=dx||dy;pan_step_x=dx;pan_step_y=dy;if(!pan_pending)pan_armed=false;}
-    bool panning()const{return pan.moving();}
-    int presented_pan()const{return presented_pan_packed;}
     bool commit_display(std::int64_t requested,Id image,unsigned w,unsigned h,Rect area){
         if(requested!=ticket||!gpu.displayable(image,w,h))return false;
-        layers.commit(image,area);start_pan();
+        layers.commit(image,area);
         // A discarded optional history still has valid native GPU canvases.
         // Keep transport alive while visual_ready() requests a fresh map;
         // rejecting this transfer would prevent that recovery from arriving.
@@ -238,7 +207,7 @@ public:
         if(requested!=ticket||!target||!retained||!buffer||!gpu.displayable(image,w,h))return false;
         LARGE_INTEGER mark={};
         if(phase_ticks)QueryPerformanceCounter(&mark);
-        try{layers.commit(image,area);start_pan();}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+        try{layers.commit(image,area);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
         if(phase_ticks){LARGE_INTEGER next={};QueryPerformanceCounter(&next);(*phase_ticks)[0]=next.QuadPart-mark.QuadPart;mark=next;}
         // Native draws update the scene recipe, not its visual time. Both native
         // transfers and autonomous frames sample that same committed recipe.
@@ -324,12 +293,7 @@ public:
     bool visual_active()const{return layers.ready()&&layers.animated();}
     void stop_visuals(){layers.uncommit();}
     int visual_frame(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
-        auto step=pan.sample(ticks,frequency);
-        if(zoom->moving()){pan.cancel();step={};}
-        if(!step.active){pan_under[0].Reset();pan_under[1].Reset();}
-        layers.set_pan(step.x,step.y,step.under_x,step.under_y,step.active?pan_under:nullptr);
         try{auto result=layers.draw(ticks,frequency,target,display,buffer);
-            if(result==1)presented_pan_packed=step.active?int((unsigned(step.x)&0xffffu)|(unsigned(step.y)<<16)):0;
             c3x_recording::event(c3x_recording::visual,0,[&](auto& b){using namespace c3x_recording;u64(b,std::uint64_t(ticks));u64(b,std::uint64_t(frequency));u32(b,unsigned(result));u64(b,layers.bytes());u64(b,layers.node_count());u64(b,layers.sampled_sources());u32(b,visual_ready());});
             if(result==1)rendered_zoom=layers.view_scale();
             return result;}catch(std::exception const& e){

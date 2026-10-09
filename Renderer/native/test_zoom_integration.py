@@ -249,9 +249,9 @@ int main(){state.custom_renderer_camera_cancel=cancel;bic.Map.Renderer.spotlight
 #include <cmath>
 #include <cstddef>
 #include "Renderer/native/c3x_renderer_api.h"
-bool enabled=true;int q=65536,queries=0,syncs=0,pan=0;
+bool enabled=true;int q=65536,queries=0,syncs=0;
 int native(int op,void*,void*,void const*,void const*,unsigned){
- if(op==C3X_NATIVE_PAN_PRESENTED)return pan;assert(op==C3X_NATIVE_ZOOM_PRESENTED);++queries;return q;}
+ assert(op==C3X_NATIVE_ZOOM_PRESENTED);++queries;return q;}
 struct State{struct{bool enable_custom_rendering=true;}current_config;c3x_renderer_native_image_fn custom_renderer_native_image=native;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;}state,*is=&state;
 struct Bic{int ScreenWidth=2240,ScreenHeight=1260;}bic,*p_bic_data=&bic;
@@ -265,9 +265,8 @@ int main(){for(q=32768;q<=196608;q+=137)for(int px:{-120,0,517,1120,1720,2240})f
  }
  enabled=false;int x=91,y=173,before=queries;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173&&queries==before);
  enabled=true;for(int value:{0,-1,32767,196609}){q=value;x=91;y=173;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173);}
- // A sliding camera step shifts the shown world; picks undo it first.
- q=65536;pan=int((unsigned(-37)&0xffffu)|(unsigned(52)<<16));x=500;y=400;custom_renderer_zoom_inverse_point(&x,&y);
- assert(x==537&&y==348);pan=0;
+ // Vanilla scroll presents each native camera as is: no slide to undo.
+ q=65536;x=500;y=400;before=queries;custom_renderer_zoom_inverse_point(&x,&y);assert(x==500&&y==400&&queries==before+1);
 }
 ''')
 

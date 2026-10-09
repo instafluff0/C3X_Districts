@@ -583,6 +583,9 @@ public:
     Record const* retained(std::uint64_t id) const {
         auto found=records.find(id);return found==records.end()?nullptr:&found->second;
     }
+    // The permitted world input for a tile (content, visibility and
+    // placement flags; PREFETCH marks a full copy), or null.
+    Observation const* world_input(std::uint64_t id) const {return permitted_world_input(id);}
     std::size_t size() const{return records.size();}
     std::size_t authoritative_size() const{return authoritative_records;}
     std::uint64_t appearance_sequence() const{return appearance_epoch;}

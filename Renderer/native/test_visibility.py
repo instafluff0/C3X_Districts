@@ -32,8 +32,11 @@ template<std::size_t N,class... A>void sprintf_s(char(&b)[N],char const* f,A... 
 struct RendererState {
  VisibilityCoverage visibility_coverage;bool visibility_pass=true;
  struct ResourcePreparation {''' + stats + r'''
- struct {std::uint64_t scope=1,visibility=1;
-  std::uint64_t scope_sequence()const{return scope;}std::uint64_t visibility_sequence()const{return visibility;}}topology_cache;
+ // Water visibility follows each tile's retained (world) visibility.
+ struct Record {unsigned visibility_flags=0;};
+ struct {std::uint64_t scope=1,visibility=1;Record record;
+  std::uint64_t scope_sequence()const{return scope;}std::uint64_t visibility_sequence()const{return visibility;}
+  std::uint64_t key(int,int)const{return 0;}Record const* retained(std::uint64_t)const{return &record;}}topology_cache;
  std::uint64_t content_revision=1;unsigned device_generation=1;
  struct {unsigned rows=0;void write(char const* event,char const* detail,bool){
   assert(std::string(event)=="resource-preparation" && std::string(detail).size()<512);++rows;}
@@ -61,6 +64,7 @@ int main(){
       C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED,
       C3X_RENDERER_TILE_VISIBILITY_KNOWN}){
   tile.tile_flags=C3X_RENDERER_TILE_RENDER|flags;
+  renderer.topology_cache.record.visibility_flags=flags;++renderer.topology_cache.visibility; // published with the capture
   assert(renderer.sample(frame,true));
   unsigned wanted=(flags&C3X_RENDERER_TILE_VISIBLE)?2:(flags&C3X_RENDERER_TILE_EXPLORED)?1:0;
   assert(renderer.visibility_coverage.state(0,0)==wanted);

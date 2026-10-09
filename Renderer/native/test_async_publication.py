@@ -363,7 +363,8 @@ int main(){
         helper=(root/'Renderer/native/helper_trial/scene_workload.cpp').read_text()
         rule=helper[helper.index('require(!image_batches->status().bytes||'):helper.index('"reliable prefix requires image execution receipt");')]
         self.assertIn('(wire.kind==unsigned(Kind::image_commands)&&wire.subtype==2)',rule)
-        self.assertIn('(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1)',rule)
+        # Subtype 6 is the same camera begin carried as a delta (camera_delta.h).
+        self.assertIn('(wire.live&&wire.kind==unsigned(Kind::camera)&&(wire.subtype==1||wire.subtype==6))',rule)
         self.assertEqual(rule.count('wire.kind=='),2)
         client=(root/'Renderer/sandbox/async_scene_client.h').read_text()
         self.assertIn('queue.run_passing("images","camera-begin")',client)

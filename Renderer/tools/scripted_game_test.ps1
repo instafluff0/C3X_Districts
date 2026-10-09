@@ -64,7 +64,7 @@ public static class RendererGameCommand {
 // the IPC header read-only; it never requests pixels or submits renderer work.
 public sealed class RendererCadenceReader : IDisposable {
     // Mirrored from helper_trial/scene_wire.h; executable test checks this ABI.
-    public const int WireVersion = 17, FrameOffset = 228, ZoomOffset = 232, PanOffset = 236;
+    public const int WireVersion = 16, FrameOffset = 228, ZoomOffset = 232;
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] static extern IntPtr OpenFileMapping(uint access, bool inherit, string name);
     [DllImport("kernel32.dll")] static extern IntPtr MapViewOfFile(IntPtr mapping, uint access, uint high, uint low, UIntPtr bytes);
     [DllImport("kernel32.dll")] static extern bool UnmapViewOfFile(IntPtr view);
@@ -72,19 +72,17 @@ public sealed class RendererCadenceReader : IDisposable {
     IntPtr mapping, view;
     public RendererCadenceReader(string name) {
         mapping=OpenFileMapping(4, false, name);
-        if(mapping!=IntPtr.Zero) view=MapViewOfFile(mapping,4,0,0,(UIntPtr)(PanOffset+4));
+        if(mapping!=IntPtr.Zero) view=MapViewOfFile(mapping,4,0,0,(UIntPtr)(ZoomOffset+4));
         if(view==IntPtr.Zero) { Dispose(); throw new InvalidOperationException("Cannot read diagnostic helper telemetry"); }
         // Later versions add independent mailboxes after these counters; the
         // accepted controls retain this read-only telemetry ABI.
         int version=Marshal.ReadInt32(view,4);
-        if(Marshal.ReadInt32(view)!=0x32483343 || (version!=WireVersion && version!=16 && version!=15 && version!=14 && version!=13 && version!=12 && version!=11)) {
+        if(Marshal.ReadInt32(view)!=0x32483343 || (version!=WireVersion && version!=15 && version!=14 && version!=13 && version!=12 && version!=11)) {
             Dispose(); throw new InvalidOperationException("Renderer telemetry ABI changed");
         }
     }
     public int Frames { get { return Marshal.ReadInt32(view,FrameOffset); } }
     public int ZoomQ16 { get { return Marshal.ReadInt32(view,ZoomOffset); } }
-    // Presented camera-step glide (wire 17+): (short)low = x, (short)high = y.
-    public int Pan { get { return Marshal.ReadInt32(view,4)>=17 ? Marshal.ReadInt32(view,PanOffset) : 0; } }
     public void Dispose() {
         if(view!=IntPtr.Zero) { UnmapViewOfFile(view); view=IntPtr.Zero; }
         if(mapping!=IntPtr.Zero) { CloseHandle(mapping); mapping=IntPtr.Zero; }
@@ -438,7 +436,7 @@ try {
                 if ($cadence) {
                     $child.Refresh(); $cadenceProcess.Refresh()
                     $cadenceSamples += [ordered]@{ qpc=[System.Diagnostics.Stopwatch]::GetTimestamp();
-                        helper_pid=$cadenceProcess.Id; frames=$cadence.Frames; zoom_q16=$cadence.ZoomQ16; pan=$cadence.Pan;
+                        helper_pid=$cadenceProcess.Id; frames=$cadence.Frames; zoom_q16=$cadence.ZoomQ16;
                         elapsed_seconds=$elapsed;
                         game_private_bytes=$child.PrivateMemorySize64; game_working_bytes=$child.WorkingSet64;
                         helper_private_bytes=$cadenceProcess.PrivateMemorySize64; helper_working_bytes=$cadenceProcess.WorkingSet64;

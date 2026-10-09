@@ -94,6 +94,7 @@ void c3x_renderer64_memory_census(unsigned long long dxgi_usage);
 #include "render_core/scene_membership.h"
 #include "render_core/retained_scene_view.h"
 #include "render_core/foreground_selection.h"
+#include "render_core/world_window.h"
 #include "render_core/canonical_membership_diff.h"
 #include "camera_completion.h"
 #include "render_core/draw_parameter_stream.h"
@@ -657,6 +658,12 @@ public:
     bool composition_receiver_index=false;
     bool tight_natural_bounds=false;
     int region_input_ring=2;
+    // Stage 2a: resident geometry selected by a block-anchored world window
+    // (render_core/world_window.h); C3X_RENDERER_WORLD_WINDOW=1.
+    bool world_window_control=false;
+    c3x_renderer::render_core::WorldWindow world_window;
+    c3x_renderer_frame_v1 window_frame{};unsigned window_native_count=0;
+    std::vector<c3x_renderer_u32> window_native_flags,window_native_fallback;
     std::int64_t region_origin_x=0,region_origin_y=0;
     c3x_renderer::render_core::RenderRegionCache<ID3D11Texture2D> render_regions;
     c3x_renderer::render_core::RenderRegionKey region_context;
@@ -3066,6 +3073,7 @@ public:
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
         region_input_ring=std::strcmp(control,"4")==0?4:2;
+        world_window_control=GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",control,sizeof(control)) && std::strcmp(control,"1")==0;
         GetEnvironmentVariableA("C3X_RENDERER_REGION_METADATA_MIB",control,sizeof(control));
         std::size_t metadata_limit=std::strcmp(control,"32")==0?32u*1024u*1024u:96u*1024u*1024u;
         if(render_regions.metadata_limit!=metadata_limit)render_regions.clear();
@@ -4726,14 +4734,23 @@ public:
         timing.phase(1);
         // Visibility is deliberately absent from geometry identities. Refresh
         // occurrence samples without rebuilding/reuploading immutable meshes.
+        // Each tile's retained (world) visibility decides, not the current
+        // frame's coverage: coverage spans the captured view, so water off it
+        // read as hidden and flipped visible as the camera moved, editing the
+        // resident set (a new revision, and every cache keyed by it rebuilt)
+        // at most camera steps; with the world window, camera jobs and visual
+        // frames disagreed about it on every step (review, section 28).
         if(resource_visibility_membership && resource_visibility_membership->revision==geometry_vertex_buffers.revision() &&
-           resource_visibility_revision==visibility_coverage.revision && resource_visibility_enabled==visibility_pass){
+           resource_visibility_revision==topology_cache.visibility_sequence() && resource_visibility_enabled==visibility_pass){
             resource_preparation.occurrence_reuses=1;
         }else {
             resource_visibility_membership.reset();
             for(auto layer:{geometry_water,geometry_river}){
                 auto state=[&](auto const& item){++resource_preparation.occurrence_queries;
-                    return !visibility_pass || visibility_coverage.state(item.tile_x,item.tile_y)!=0;};
+                    if(!visibility_pass)return true;
+                    auto record=topology_cache.retained(topology_cache.key(item.tile_x,item.tile_y));
+                    return record && (record->visibility_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) &&
+                        (record->visibility_flags&(C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE));};
                 bool changed=false;
                 for(auto const& item:geometry_vertex_buffers[layer]){
                     ++resource_preparation.occurrences;changed=changed || item.water_visible!=state(item);}
@@ -4741,7 +4758,7 @@ public:
                     ++resource_preparation.occurrences;item.water_visible=state(item);}
             }
             resource_visibility_membership=geometry_vertex_buffers.publish();
-            resource_visibility_revision=visibility_coverage.revision;resource_visibility_enabled=visibility_pass;
+            resource_visibility_revision=topology_cache.visibility_sequence();resource_visibility_enabled=visibility_pass;
         }
         timing.phase(3);
         if(pose_only && resource_anchors.empty()){
@@ -6008,6 +6025,14 @@ public:
         output.fallback_tile_indices = fallback_tile_indices.empty() ? nullptr : fallback_tile_indices.data();
         output.replacement_tile_flags = replacement_tile_flags.empty() ? nullptr : replacement_tile_flags.data();
         output.replacement_tile_count = static_cast<c3x_renderer_u32>(replacement_tile_flags.size());
+        if(world_window.valid && &frame==&window_frame){
+            // Civ III reads ownership in its own capture order.
+            world_window.native_flags(replacement_tile_flags,window_native_count,window_native_flags);
+            world_window.native_indices(fallback_tile_indices,window_native_count,window_native_fallback);
+            output.fallback_tile_indices=window_native_fallback.empty()?nullptr:window_native_fallback.data();
+            output.replacement_tile_flags=window_native_flags.empty()?nullptr:window_native_flags.data();
+            output.replacement_tile_count=static_cast<c3x_renderer_u32>(window_native_flags.size());
+        }
         output.frame_invalidation_flags = invalidations;
         output.cache_hits = cache_hits;
         output.cache_misses = cache_misses;
@@ -8597,12 +8622,49 @@ public:
         return true;
     }
 
-    bool render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output,
+    // A window tile Civ III did not capture with appearance: the retained
+    // world's current content (the last full copy, from a capture or the
+    // world load, else a full permitted world input) with its current
+    // visibility. Content includes terrain, routes, territory and city bodies;
+    // labels and units have their own owners. The topology-only band Civ III
+    // captures past its appearance halo keeps the record's full copy, but its
+    // world input loses it, so the record comes first.
+    // Window tiles not drawn, by reason: no record and no input, a record
+    // without a full copy, a world input without one (trace level 1).
+    mutable std::array<unsigned,4> window_skips{};
+    bool window_tile(int x,int y,c3x_renderer_tile_v1& tile)const{
+        auto id=topology_cache.key(x,y);
+        auto record=topology_cache.retained(id);
+        if(record && record->revision && (record->authoritative || (record->partial_flags&C3X_RENDERER_TILE_PREFETCH)))
+            tile=record->appearance;
+        else if(auto input=topology_cache.world_input(id);input && (input->occurrence.tile_flags&C3X_RENDERER_TILE_PREFETCH))tile=input->occurrence;
+        else{++window_skips[!record && !topology_cache.world_input(id)?0:record && !topology_cache.world_input(id)?1:2];return false;}
+        if(record){tile.tile_flags=(tile.tile_flags&~C3X_RENDERER_TILE_VISIBILITY_BITS)|record->visibility_flags;
+            tile.visibility_mask=record->visibility_mask;tile.tile_visibility=record->tile_visibility;tile.fog_status=record->fog_status;}
+        return true;
+    }
+    bool render(c3x_renderer_frame_v1 const & native_frame, c3x_renderer_output_v1 & output,
                 int prewarm_index = -1, std::atomic<bool> const * foreground_pending = nullptr,
                 std::uint64_t prewarm_signature = 0,
                 unsigned const* preparation_indices=nullptr,unsigned preparation_count=0,
                 c3x_renderer_frame_v1 const* content_view=nullptr,
                 std::function<void()> service={}) {
+        // The resident world window replaces the capture's selection before
+        // anything reads the frame's tiles; output stays in capture order.
+        world_window.valid=false;window_skips={};
+        if(world_window_control && gpu_output_mode && prewarm_index<0 && !content_view && scene_surface_requested && city_profile &&
+           world_window.build(native_frame,[&](int x,int y,c3x_renderer_tile_v1& tile){return window_tile(x,y,tile);})){
+            window_frame=native_frame;window_frame.tiles=world_window.tiles.data();
+            window_frame.tile_count=c3x_renderer_u32(world_window.tiles.size());window_native_count=native_frame.tile_count;
+        }
+        if(world_window_control && prewarm_index<0 && trace.level){char detail[256];sprintf_s(detail,
+            "valid=%u window=%u synthesized=%u native=%u box=%lld,%lld,%lld,%lld skip_none=%u skip_record=%u skip_input=%u",
+            unsigned(world_window.valid),world_window.window_count,world_window.synthesized,native_frame.tile_count,
+            static_cast<long long>(world_window.box[0]),static_cast<long long>(world_window.box[1]),
+            static_cast<long long>(world_window.box[2]),static_cast<long long>(world_window.box[3]),
+            window_skips[0],window_skips[1],window_skips[2]);
+            trace.write("world-window",detail,false);}
+        auto const& frame=world_window.valid?window_frame:native_frame;
         if(prewarm_index<0)frame_output_readbacks=0;
         if(!gpu_output_mode && cpu_output_stale){cache_valid=false;resource_pixel_signature=0;}
         if(gpu_output_mode)resource_pixel_signature=0; // finish/snapshot the demanded map, never return CPU cache bytes
@@ -8655,6 +8717,9 @@ public:
         c3x_renderer::render_core::ForegroundSelection selection{frame.target_width,frame.target_height,
             frame.tile_width,frame.tile_height,region_input_ring,std::strcmp(prefetch_foreground_control,"2")==0?2:0,
             pickup_profile,std::strcmp(prefetch_foreground_control,"1")==0||std::strcmp(prefetch_foreground_control,"2")==0};
+        if(world_window.valid){selection.windowed=true;
+            selection.box={world_window.box[0],world_window.box[1],world_window.box[2],world_window.box[3]};
+            selection.camera_x=world_window.camera_x;selection.camera_y=world_window.camera_y;}
         if (prewarming) prepared_footprint = {};
         auto const render_owner=std::this_thread::get_id();
         auto cancelled = [&] {
@@ -9065,7 +9130,7 @@ public:
         c3x_renderer::render_core::CanonicalMembershipDiff membership_diff;
         bool incremental_membership=false,covered_membership=false;
         if(!prewarming && fresh_scene_path && canonical_world_content && geometry_cache.valid &&
-           geometry_cache.selection==selection && geometry_cache.signature.camera==signature.camera &&
+           geometry_cache.selection.same_rule(selection) && geometry_cache.signature.camera==signature.camera &&
            geometry_cache.signature.environment==signature.environment && geometry_cache.signature.wrap==signature.wrap &&
            geometry_cache.tile_keys.size()==geometry_cache.tiles.size() &&
            geometry_cache.content_replacement_flags.size()==geometry_cache.tiles.size()){
@@ -13597,7 +13662,6 @@ public:
             std::memory_order_release,std::memory_order_relaxed)){}
     }
     unsigned presented_zoom()const{return presented_zoom_q16.load(std::memory_order_acquire);}
-    int presented_pan()const{return presented_pan_packed.load(std::memory_order_acquire);}
     int images_gpu(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* readback,unsigned capacity){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         start_locked();
@@ -14964,9 +15028,6 @@ private:
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
     std::atomic<long long> visual_qpc_offset{LLONG_MIN}; // QPC minus visual clock, live only
     std::atomic<unsigned> presented_zoom_q16{65536};
-    std::atomic<int> presented_pan_packed{0};
-    int pan_origin_x=0,pan_origin_y=0;bool pan_origin=false; // last published map origin (1x basis)
-    double pan_origin_zoom=65536.; // presented zoom (Q16) at that publication
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     int last_visual_ready=-1;
 #ifdef C3X_HELPER_TRIAL
@@ -16047,27 +16108,6 @@ private:
                                     id.map_epoch,id.viewer_epoch,id.visibility_epoch,id.scene_epoch);
                                 renderer_state.trace.write("route-publication",detail,true);
                             }
-                            // A small camera step slides into place (screen pixels at the
-                            // settled presented zoom); jumps and zoom transitions cut.
-                            // Civ III still chooses every step and its timing; only the
-                            // display glides between them. On by default (user, October 8);
-                            // C3X_RENDERER_GLIDE=0 restores stepped display.
-                            if(auto const& f=gpu_publication.frame;f.tile_count&&f.tiles){
-                                char glide[4]={};
-                                bool enabled=!(c3x_renderer::render_core::cached_environment("C3X_RENDERER_GLIDE",glide,sizeof(glide))&&glide[0]=='0');
-                                int ox=f.tiles[0].anchor_x-f.tiles[0].tile_x*int(f.tile_width)/2;
-                                int oy=f.tiles[0].anchor_y-f.tiles[0].tile_y*int(f.tile_height)/2;
-                                auto presented=double(presented_zoom_q16.load(std::memory_order_acquire));
-                                bool settled=std::abs(double(c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed))*65536.-presented)<=1.;
-                                int dx=int(std::lround(-double(ox-pan_origin_x)*presented/65536.));
-                                int dy=int(std::lround(-double(oy-pan_origin_y)*presented/65536.));
-                                // A zoom re-anchors Civ III's camera; that move is not a
-                                // scroll step and its previous world is at another scale.
-                                bool same_zoom=presented==pan_origin_zoom;
-                                bool step=enabled&&pan_origin&&settled&&same_zoom&&std::abs(dx)<=int(f.target_width)/2&&std::abs(dy)<=int(f.target_height)/2;
-                                session.camera_step(step?dx:0,step?dy:0);
-                                pan_origin_x=ox;pan_origin_y=oy;pan_origin=true;pan_origin_zoom=presented;
-                            }
                             gpu_replacements=gpu_publication.replacements;gpu_fallbacks=gpu_publication.fallback;
                             gpu_metadata.replacement_tile_flags=gpu_replacements.empty()?nullptr:gpu_replacements.data();
                             gpu_metadata.fallback_tile_indices=gpu_fallbacks.empty()?nullptr:gpu_fallbacks.data();
@@ -16367,14 +16407,11 @@ private:
                         trial_surface_permit.presented();
                         renderer_state.gpu_composition->did_present();
                         presented_zoom_q16.store(renderer_state.gpu_composition->presented_zoom(),std::memory_order_release);
-                        presented_pan_packed.store(renderer_state.gpu_composition->presented_pan(),std::memory_order_release);
                         if(route_witness){
                             auto proof=renderer_state.gpu_composition->visual_publication();
-                            int pan=renderer_state.gpu_composition->presented_pan();
-                            char detail[768];sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu zoom_q16=%u result=1 mixed=%u frequency=%lld present_qpc=%lld pan_x=%d pan_y=%d",
+                            char detail[768];sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu zoom_q16=%u result=1 mixed=%u frequency=%lld present_qpc=%lld",
                                 static_cast<unsigned long long>(proof.first),static_cast<unsigned long long>(proof.second),
-                                static_cast<unsigned long long>(++route_present_index),renderer_state.gpu_composition->presented_zoom(),unsigned(!proof.first),renderer_state.trace.frequency.QuadPart,finished.QuadPart,
-                                int(short(pan&0xffff)),int(short(unsigned(pan)>>16)));
+                                static_cast<unsigned long long>(++route_present_index),renderer_state.gpu_composition->presented_zoom(),unsigned(!proof.first),renderer_state.trace.frequency.QuadPart,finished.QuadPart);
                             renderer_state.trace.write("route-presented",detail,true);
                             auto work=renderer_state.gpu_composition->visual_work();
                             sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu begin=%lld sampled=%lld end=%lld frequency=%lld compose_ms=%.3f present_ms=%.3f total_ms=%.3f operations=%u assemblies=%u copies=%u copied_pixels=%llu assembly_pixels=%llu selected_borrows=%u selected_owned=%u direct_native_images=%u avoided_copy_pixels=%llu",
@@ -18348,9 +18385,15 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
     }
     if(operation==C3X_NATIVE_ZOOM_PRESENTED)return remote_renderer_requested()?int(remote_renderer_backend()->presented_zoom()):
         renderer_worker?int(renderer_worker->presented_zoom()):65536;
-    if(operation==C3X_NATIVE_PAN_PRESENTED)return remote_renderer_requested()?remote_renderer_backend()->presented_pan():
-        renderer_worker?renderer_worker->presented_pan():0;
     if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
+    if(operation==C3X_NATIVE_CAPTURE_MARGIN){
+        // The world window (render_core/world_window.h) reaches its reach
+        // plus one block past the view; Civ III captures appearance that far.
+        using Window=c3x_renderer::render_core::WorldWindow;
+        static int const margin=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",value,sizeof(value))==1&&value[0]=='1'?
+            int(unsigned(Window::reach_x+Window::block)|(unsigned(Window::reach_y+Window::block)<<16)):0;}();
+        return margin;
+    }
     if(operation==C3X_NATIVE_VISUAL_POLICY)return remote_renderer_requested()?remote_renderer_backend()->visual_policy(color):
         renderer_worker?renderer_worker->visual_policy(color):0;
     if(operation==C3X_NATIVE_STROKE && native_composition && native_composition->defer_cold_stroke(image,from))return 1;

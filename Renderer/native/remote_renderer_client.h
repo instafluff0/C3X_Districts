@@ -6,6 +6,7 @@
 #include "input_recording/journal.h"
 #include "input_recording/runtime.h"
 #include "remote_scene_output.h"
+#include "camera_delta.h"
 #include "ordered_image_batch.h"
 #include <functional>
 #include <memory>
@@ -18,6 +19,11 @@ struct SharedFrame {std::uint64_t handle=0;unsigned width=0,height=0;};
 // arrays remain valid until the next successful scene or camera adoption.
 class Client {
     c3x_helper_trial::SceneClient transport;
+    // Camera requests as deltas (camera_delta.h); C3X_RENDERER_CAMERA_DELTA=0
+    // sends whole frames for A/B runs.
+    c3x_remote_scene::CameraDeltaSender camera_delta;
+    bool const camera_delta_enabled=[]{char value[4]={};
+        return !(GetEnvironmentVariableA("C3X_RENDERER_CAMERA_DELTA",value,sizeof(value))==1&&value[0]=='0');}();
     std::function<void()> image_wait_idle;
     bool direct_surface_bound=false;
     Output scene_result;
@@ -45,7 +51,6 @@ public:
     bool alive()const{return transport.alive();}
     unsigned frames()const{return transport.frames();}
     unsigned presented_zoom()const{return transport.presented_zoom();}
-    int presented_pan()const{return transport.presented_pan();}
     void supersede_pending_camera(){transport.supersede_pending_camera();}
     void publication_pressure(std::size_t records){transport.publication_pressure(records);}
     void prepare_camera_receipt(){transport.prepare_camera_receipt();}
@@ -165,13 +170,25 @@ public:
         return int(invoke(unsigned(c3x_inputs::Kind::world_page),7,input.bytes.data(),unsigned(input.bytes.size())).code);
     }
     int camera_begin(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket){
-        c3x_inputs::Writer input;auto identity=request.identity;
-        c3x_inputs::c3x_renderer_camera_identity_v1_fields(input,identity);
-        c3x_inputs::frame(input,*request.frame);
-        auto const& response=invoke(unsigned(c3x_inputs::Kind::camera),1,input.bytes.data(),
-            unsigned(input.bytes.size()));
-        if(response.code==C3X_RENDERER_RESULT_PENDING){ticket=response.recorded_ticket;transport.remember_camera(ticket);}
-        return int(response.code);
+        auto send=[&](unsigned subtype,auto&& write)->c3x_helper_trial::Wire const&{
+            c3x_inputs::Writer input;auto identity=request.identity;
+            c3x_inputs::c3x_renderer_camera_identity_v1_fields(input,identity);write(input);
+            return invoke(unsigned(c3x_inputs::Kind::camera),subtype,input.bytes.data(),unsigned(input.bytes.size()));
+        };
+        auto base_missing=[](c3x_helper_trial::Wire const& wire){
+            if(wire.code!=C3X_RENDERER_RESULT_ERROR||wire.reply_size!=4)return false;
+            auto bytes=reply(wire);c3x_inputs::Reader in{bytes};return in.u32()==c3x_remote_scene::camera_delta_base_missing;
+        };
+        c3x_helper_trial::Wire const* response=nullptr;
+        if(camera_delta_enabled){
+            for(int attempt=0;attempt<2;++attempt){
+                response=&send(6,[&](c3x_inputs::Writer& out){camera_delta.encode(out,*request.frame);});
+                if(!base_missing(*response)){camera_delta.commit();break;}
+                camera_delta.reset(); // the helper lacks a referenced tile: send a base
+            }
+        }else response=&send(1,[&](c3x_inputs::Writer& out){c3x_inputs::frame(out,*request.frame);});
+        if(response->code==C3X_RENDERER_RESULT_PENDING){ticket=response->recorded_ticket;transport.remember_camera(ticket);}
+        return int(response->code);
     }
     int camera_query(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view,unsigned kind){
         c3x_inputs::Writer input;input(ticket);

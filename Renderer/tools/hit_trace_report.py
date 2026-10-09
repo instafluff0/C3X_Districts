@@ -41,6 +41,8 @@ def records(path):
             at += 12 + 4 * count
             yield kind, began, micros, {'id': ident, 'pixels': count}
         elif kind == 3:
+            if at + struct.calcsize('<IQQ10iIQQQiiQ') > len(data):
+                return  # the trace ends inside a record (the process exited mid-write)
             values = struct.unpack_from('<IQQ10iIQQQiiQ', data, at)
             at += struct.calcsize('<IQQ10iIQQQiiQ')
             (command, destination, source, left, top, right, bottom, cl, ct, cr, cb, sx, sy,
