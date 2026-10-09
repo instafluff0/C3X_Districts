@@ -1834,3 +1834,65 @@ A covered step spends about 13 ms before its draw and about 31 ms in it
 static placement is 5.4 against 0.03. No single item exceeds about 5 ms. A
 crossing's cost is its geometry build (52 ms) plus the shadow and static
 work in its draw.
+
+## 41. Stage 2c, bounded finish: region, proof carry, click-test backlog (October 9)
+
+The user chose a bounded finish: the two largest per-step items and Civ III's
+click-test waits, measured once.
+
+**1. The region of interest follows world-window blocks.** It had snapped
+the camera to 128 px, and every vanilla 1× step is 128 px. So each step
+rebuilt the unit body requirements, the city lights and the shadow fits keyed
+to the region. It now snaps to the window's 512 × 256 px blocks (at 1×), with
+the same padding, so any camera in a block cell stays covered.
+- Body requirements were rebuilt 0 times over 60 covered steps; before, they
+  were rebuilt at every step, at 4.3 ms each.
+- A covered step's scene prepare fell from 10.1 to 2.8–3.1 ms.
+- Test: `test_fresh_shared_submission.py` (vanilla steps inside a block keep
+  the region; a crossing rebuilds it).
+
+**2. The static proof carries across scroll strips.** Each step's strips grew
+the slot's covered rectangle, which is part of the proof's key, so every step
+re-proved the whole slot (2–4 ms). When strips are drawn from current inputs
+and nothing has changed since that frame's proof, the proof now carries to
+the extended rectangle (`RasterContributors::carry`).
+- Proof time per covered step: 0 ms. The run carried 5,602 times and ran 179
+  full proofs (27 after key changes, 21 after ledger changes).
+- Test: `test_static_dependency_reuse.py`.
+- A covered step's static stage still takes about 5 ms outside its timed
+  parts; this was not pursued.
+
+**3. Click-test backlog bound: 512 → 4096 operations.** During busy
+scrolling, Civ III's thread waited 0–318 ms per 2 s on the input-coverage
+queue. With 4096 it never waited, and the slowest query took 0.02 ms (9
+queries).
+- The queue's dominant cost is its model of the map canvas: 4.2 of 6.7 s in a
+  traced run.
+- The map canvas cannot be exempted: the queried main-screen canvas depends
+  on it through UI buttons blended over map backgrounds.
+- Test: `test_hit_scene_fast_paths.py`.
+
+**Results (busy save, window on, median step period).**
+
+| | deferral off (d7) | 2c.1 (d6) | items 1+2 (a) | + backlog 4096 (b) |
+|---|---|---|---|---|
+| 1× x | 379 ms | 229 | 193 | 234 |
+| 1× y | 221 | 200 | 158 | 157 |
+| 2× | 312 | 298 | 221 | 198 |
+| 3× | 230 | 161 | 164 | 162 |
+| deferred steps (1× x / 1× y / 2× / 3×) | — | 199 / 156 / 231 / 156 | 163 / 146 / 158 / 156 | 160 / 113 / 167 / 156 |
+| steps in the scroll segments | 63 | 70 | 78 | 80 |
+
+**Unprofiled cadence run (f3, against 2c.1's d8).**
+- Step medians: 191 / 175 / 234 / 168 ms against 223 / 234 / 232 / 234.
+- 80 steps against 74.
+- No seam frames in any segment and no native failures.
+- Idle: 42.2 fps at 1×, 54.8 at 3× and 41.2 in the last 1× segment, against
+  40.6 / 56.6 / 46.3, within run noise.
+- Jumps: 648 and 984 ms.
+
+**Where stage 2c ends.**
+- Covered steps run at a steady two ticks (about 156 ms), with some single
+  ticks at 1× y.
+- Block crossings take 270–570 ms and are 25–30% of steps. Their cost is the
+  entering band's geometry and shadow work (section 40).

@@ -269,11 +269,22 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      39). Steps are bound by the helper worker's serial work per step, not
      by where the draw runs: about 55 ms per covered step, of which about
      35 ms re-prepares an unchanged scene for the new camera.
-   - **Next, 2c.3:** a covered step as a frame-level camera update. The
-     per-camera preparation is carried across steps by translation (window
-     tiles, unit body requirements, static placement, resource coverage),
-     so a covered step costs about one display frame. Then Civ III's
-     per-tick hook time, and crossings spread across steps.
+   - **2c.3, bounded finish (the user, October 9). Done** (section 41):
+     - the region of interest follows window blocks;
+     - the static proof carries across scroll strips;
+     - the click-test backlog bound is 4096.
+
+     Median busy step period over the four segments: 286 ms with deferral
+     off, then 222 with 2c.1, now 188. Covered steps run at a steady two
+     ticks.
+   - **Left after 2c:**
+     - block crossings, 270–570 ms on 25–30% of steps (2b's wrap-around
+       slot and the entering band's work);
+     - about 13 ms of setup and 5 ms of untimed static time per covered
+       step;
+     - Civ III's own per-tick time.
+
+     Stage 4 is next.
 3. **The interface as its own layer** (the H3 design in
    [camera_follow_and_hud_layer.md](camera_follow_and_hud_layer.md)).
    - At each front commit, the interface above the map is compiled into a

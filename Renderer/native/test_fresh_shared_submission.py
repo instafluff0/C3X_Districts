@@ -51,7 +51,7 @@ struct Harness {
  bool body_requirements_valid=false;unsigned body_requirement_builds=0,body_requirement_reuses=0,body_requirement_visits=0;
  double body_requirement_ms=0;float projection_zoom=1;std::array<float,2> lane_projection{};
  int camera_x=0,camera_y=0,wrap_pixels=0;
- static constexpr int region_margin_x=320,region_margin_y=192,roi_quantum=128;
+ static constexpr int region_margin_x=320,region_margin_y=192,roi_quantum_x=512,roi_quantum_y=256;
  std::array<std::int64_t,11> roi_key{};std::uint64_t roi_revision=1,roi_receiver_check=0,static_receiver_revision=0,membership=1;
  unsigned queries=0;
  struct StaticRect {int left=0,top=0,right=0,bottom=0;} shadow_field;
@@ -84,8 +84,13 @@ int main(){
  assert(h.update_roi(settings,1000,800) && h.queries==1 && h.body_requirement_reuses==1);
  h.camera_x=100;h.camera_y=-1;h.camera_y=0;assert(h.update_roi(settings,1000,800) && h.queries==1);
  assert(h.renderer.shared_instances.bytes()==retained && h.roi_revision==2);
- // Crossing a quantum, membership or visibility changes rebuild exactly once.
- h.camera_x=130;assert(h.update_roi(settings,1000,800) && h.queries==2 && h.roi_revision==3);
+ // Vanilla scroll steps (128 px in x, 64 px in y at 1x) inside a world-window
+ // block keep the region: a 128 px quantum rebuilt it at every step (review 41).
+ for(int step=1;step<4;++step){h.camera_x=128*step;assert(h.update_roi(settings,1000,800) && h.queries==1);}
+ for(int step=1;step<4;++step){h.camera_y=64*step;assert(h.update_roi(settings,1000,800) && h.queries==1);}
+ h.camera_y=0;assert(h.update_roi(settings,1000,800) && h.queries==1 && h.roi_revision==2);
+ // Crossing a block, membership or visibility changes rebuild exactly once.
+ h.camera_x=520;assert(h.update_roi(settings,1000,800) && h.queries==2 && h.roi_revision==3);
  assert(h.update_roi(settings,1000,800) && h.queries==2);
  ++h.membership;assert(h.update_roi(settings,1000,800) && h.queries==3);
  ++h.renderer.topology_cache.sequence;assert(h.update_roi(settings,1000,800) && h.queries==4);

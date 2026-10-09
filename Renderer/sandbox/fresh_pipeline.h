@@ -1887,7 +1887,11 @@ struct SandboxFreshPipeline {
     StaticRect shadow_field{INT_MIN/4,INT_MIN/4,INT_MAX/4,INT_MAX/4};
     std::array<std::int64_t,11> roi_key{};
     std::uint64_t roi_revision=1,roi_receiver_check=0;
-    static constexpr int roi_quantum=128;
+    // The region snaps to the resident world window's blocks (8 tile
+    // coordinates: 512 x 256 px at 1x, render_core/world_window.h). A 128 px
+    // quantum was crossed by every vanilla scroll step, rebuilding body
+    // requirements, lights and shadow fits per step (review, section 41).
+    static constexpr int roi_quantum_x=512,roi_quantum_y=256;
     struct ZoomScope {
         SandboxFreshPipeline& owner;float previous;
         ZoomScope(SandboxFreshPipeline& o,float zoom):owner(o),previous(o.projection_zoom){o.projection_zoom=zoom;}
@@ -1951,6 +1955,7 @@ struct SandboxFreshPipeline {
             result.raster.full+=counts.full;result.raster.content+=counts.content;result.raster.visibility+=counts.visibility;
             result.raster.membership+=counts.membership;result.raster.regions+=counts.regions;result.raster.reused+=counts.reused;result.raster.changes+=counts.changes;
             result.raster.visibility_rejects+=counts.visibility_rejects;
+            result.raster.key_misses+=counts.key_misses;result.raster.revision_misses+=counts.revision_misses;result.raster.carried+=counts.carried;
             result.raster.proof_registrations+=counts.proof_registrations;result.raster.dependency_watch_calls+=counts.dependency_watch_calls;
             result.raster.source_expansions+=counts.source_expansions;result.raster.source_reuses+=counts.source_reuses;result.raster.append_ms+=counts.append_ms;
         }
@@ -4175,6 +4180,9 @@ struct SandboxFreshPipeline {
         float goal=lane==0?1.f:(!previewable || settled)?zoom:(hint!=1.f?hint:0.f);
         double budget=previewable?refinement_budget(lane):-1.;
         StaticRect limits={0,0,int(region_width_px),int(region_height_px)};
+        // The slot whose complete proof held this frame, and the ledger
+        // checkpoint it held at; strips drawn after it carry it (review 41).
+        unsigned proof_slot=~0u;RasterInputs::Revisions::Checkpoint proof_checkpoint{};
         auto clip_region=[&](StaticRect r){return StaticRect{std::max(r.left,limits.left),std::max(r.top,limits.top),
             std::min(r.right,limits.right),std::min(r.bottom,limits.bottom)};};
         auto visible_rect=[&](StaticState const& slot,Shift& slot_shift){
@@ -4203,6 +4211,7 @@ struct SandboxFreshPipeline {
                     ZoomScope scope_zoom(*this,displayed.projection);
                     proven=timed(static_decision.proof_ms,[&]{return raster_dependencies(raster_inputs[front_index],slot_settings(displayed,settings),
                         {displayed.covered.left,displayed.covered.top,displayed.covered.right,displayed.covered.bottom},false);});
+                    if(proven){proof_slot=front_index;proof_checkpoint=renderer.raster_dependency_revisions.checkpoint();}
                 }
                 shadow_dirty.clear();
                 StaticRect field{},ring{};
@@ -4331,6 +4340,9 @@ struct SandboxFreshPipeline {
                 if(!timed(static_decision.strip_ms,[&]{return extend_coverage(front_index,displayed,settings,limits,spend,0,1.f,true);}))return false;
                 refine_worked=true;
             }
+            if(proof_slot==front_index && !displayed.stale){ZoomScope scope_zoom(*this,displayed.projection);
+                raster_inputs[front_index].carry(renderer.raster_dependency_revisions,raster_validation_key(slot_settings(displayed,settings),
+                    {displayed.covered.left,displayed.covered.top,displayed.covered.right,displayed.covered.bottom}),proof_checkpoint);}
         }
         // Without a preview path, finish the visible raster synchronously.
         if(!shifted && (!previewable || options.bootstrap_scale<=0)){
@@ -4454,7 +4466,7 @@ struct SandboxFreshPipeline {
     float tile_half_width=0,tile_half_height=0;
     bool update_roi(ViewportShaderSettings const& settings,int w,int h){
         auto floor_to=[](int value,int quantum){return value>=0?value/quantum*quantum:-((-value+quantum-1)/quantum)*quantum;};
-        int qx=floor_to(camera_x,roi_quantum),qy=floor_to(camera_y,roi_quantum);
+        int qx=floor_to(camera_x,roi_quantum_x),qy=floor_to(camera_y,roi_quantum_y);
         static constexpr float ladder[]={.5f,.625f,.75f,.875f,1.f,1.25f,1.5f,1.75f,2.f,2.5f,3.f};
         // Keyed to the zoom destination, not the animating zoom, so the field
         // refits at most once per wheel input instead of at every ladder step
@@ -4473,16 +4485,17 @@ struct SandboxFreshPipeline {
             std::int64_t(renderer.content_revision),projection_zoom<1.f || shadow_zoom<1.f};
         auto roi=settings;
         roi.translation[0]-=float(camera_x-qx);roi.translation[1]-=float(camera_y-qy);
-        int pad=roi_quantum;
-        D3D11_RECT body_clip={-2*region_margin_x-pad,-2*region_margin_y-pad,
-            w+2*region_margin_x+pad,h+2*region_margin_y+pad};
+        // A camera anywhere in its block cell stays covered.
+        int pad_x=roi_quantum_x,pad_y=roi_quantum_y;
+        D3D11_RECT body_clip={-2*region_margin_x-pad_x,-2*region_margin_y-pad_y,
+            w+2*region_margin_x+pad_x,h+2*region_margin_y+pad_y};
         // Body/light membership must cover the complete widest supported view,
         // including both endpoints of an in-flight zoom reversal.
         if(projection_zoom<1.f || shadow_zoom<1.f)body_clip=c3x_renderer::SceneProjection(renderer.content_view_width,
             renderer.content_view_height,c3x_renderer::SceneProjection::minimum)
             .source_rect(body_clip,4.f);
-        float half_x=(float(w)*.5f+2.f*region_margin_x)/shadow_zoom+float(pad);
-        float half_y=(float(h)*.5f+2.f*region_margin_y)/shadow_zoom+float(pad);
+        float half_x=(float(w)*.5f+2.f*region_margin_x)/shadow_zoom+float(pad_x);
+        float half_y=(float(h)*.5f+2.f*region_margin_y)/shadow_zoom+float(pad_y);
         // The region in world x+y and x-y: a 1x screen pixel is 1/(tile
         // width/2) of x+y and 1/(tile height/2) of x-y. Receivers that only
         // touch the region reach up to two tiles past it.

@@ -20,6 +20,8 @@ template<class Proof,std::size_t KeyWords=14> struct RasterContributors {
     struct ValidationCounts {std::uint64_t full=0,content=0,visibility=0,membership=0,regions=0,reused=0,changes=0;
         std::uint64_t proof_registrations=0,dependency_watch_calls=0,source_expansions=0,source_reuses=0;
         std::uint64_t visibility_rejects=0;
+        // Why a complete proof ran: its key changed, or the ledger did.
+        std::uint64_t key_misses=0,revision_misses=0,carried=0;
         double append_ms=0;};
     struct Hash {std::size_t operator()(Key const& key)const{
         std::uint64_t h=14695981039346656037ull;
@@ -161,6 +163,15 @@ template<class Proof,std::size_t KeyWords=14> struct RasterContributors {
         return true;
     }
     void finish_dependencies(){dependencies_complete=complete;}
+    // Coverage just drawn from current inputs extends a proof that held this
+    // frame with no change since: the union is proven at `key` (the extended
+    // rectangle). Scroll strips grew the covered rectangle at every step, so
+    // each step re-proved the whole slot (review, section 41).
+    void carry(Revisions const& revisions,ValidationKey const& key,Revisions::Checkpoint proven){
+        auto now=revisions.checkpoint();
+        if(!complete||!dependencies_complete||proven.owner!=now.owner||proven.sequence!=now.sequence)return;
+        validated_key=key;validated_revision=now;validated=true;++validation_counts.carried;
+    }
     template<class Validate>bool validate(Revisions const& revisions,ValidationKey const& key,Validate exact){
         ++validation_counts.regions;
         // A ledger without watched keys reuses only while nothing at all
@@ -171,6 +182,8 @@ template<class Proof,std::size_t KeyWords=14> struct RasterContributors {
         if(complete&&dependencies_complete&&validated&&validated_key==key&&same()){
             validated_revision=revisions.checkpoint();++validation_counts.reused;return true;
         }
+        if(validated&&validated_key!=key)++validation_counts.key_misses;
+        else if(validated)++validation_counts.revision_misses;
         validated=false;++validation_counts.full;
         auto before=revisions.checkpoint();bool result=complete&&exact();auto after=revisions.checkpoint();
         if(result&&dependencies_complete&&before.owner==after.owner&&before.sequence==after.sequence){

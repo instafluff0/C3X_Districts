@@ -18,6 +18,43 @@ def method(source, signature):
 
 
 class StaticDependencyReuseTests(unittest.TestCase):
+    def test_scroll_strips_carry_a_held_proof_to_the_extended_rectangle(self):
+        # Scroll strips grew a slot's covered rectangle at every camera step.
+        # The rectangle is part of the proof key, so each step re-proved the
+        # whole slot (2-4 ms; review, section 41). Strips drawn from current
+        # inputs, with no change since this frame's proof, carry it.
+        run_cpp(r'''
+#include "Renderer/native/render_core/raster_contributors.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Proof {};
+int main(){
+ using Inputs=RasterContributors<Proof>;Inputs inputs;RasterDependencyRevisions ledger;
+ auto proof=std::make_shared<Proof const>();unsigned exact_runs=0;
+ auto exact=[&]{++exact_runs;return true;};
+ auto key=[](unsigned right){Inputs::ValidationKey k{};k[0]=7;k[8]=right;return k;};
+ auto draw=[&](std::uint64_t id){inputs.begin_append();Inputs::Key k{};k[0]=id;
+  assert(inputs.add(k,proof,id,1));inputs.finish_dependencies();};
+ draw(1);
+ // The first proof runs; an unchanged rectangle and ledger reuse it.
+ assert(inputs.validate(ledger,key(100),exact) && exact_runs==1);
+ assert(inputs.validate(ledger,key(100),exact) && exact_runs==1);
+ // A strip extends the rectangle: without a carry the next step re-proves.
+ auto held=ledger.checkpoint();draw(2);
+ assert(inputs.validate(ledger,key(140),exact) && exact_runs==2 && inputs.validation_counts.key_misses==0);
+ // Carried after the strip, the next step reuses the proof exactly.
+ held=ledger.checkpoint();draw(3);inputs.carry(ledger,key(180),held);
+ assert(inputs.validation_counts.carried==1);
+ assert(inputs.validate(ledger,key(180),exact) && exact_runs==2);
+ // A ledger change between the proof and the strip forbids the carry.
+ held=ledger.checkpoint();ledger.touch(RasterDependencyRevisions::Domain::appearance,9);draw(4);
+ inputs.carry(ledger,key(220),held);assert(inputs.validation_counts.carried==1);
+ assert(inputs.validate(ledger,key(220),exact) && exact_runs==3);
+ // A changed rectangle without a carry is counted as a key miss.
+ assert(inputs.validate(ledger,key(260),exact) && exact_runs==4 && inputs.validation_counts.key_misses==1);
+}
+''')
+
     def test_empty_shadow_receiver_extent_is_finite_and_can_resume(self):
         source = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
         body = method(source, '    template<class BodyInputs,class RetireCompletedPlans> bool render(')

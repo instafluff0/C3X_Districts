@@ -40,9 +40,12 @@ class WorkerClient {
         // Bounded backlog: a hit query waits for every earlier command, so an
         // unbounded queue let Civ III's end-of-load UI burst stall the first
         // hover/zoom query for ~7 s. Past the bound the producer waits until
-        // the backlog halves, which costs what inline processing did.
+        // the backlog halves, which costs what inline processing did. 512
+        // operations made Civ III's thread wait up to 318 ms per 2 s of busy
+        // scrolling (each step redraws every overlay); 4096 absorbs a step's
+        // burst with no waits and query latency under 0.1 ms (review, 41).
         // C3X_RENDERER_HIT_BACKLOG overrides the operation bound for measurement.
-        std::size_t backlog_operations=512;static constexpr std::size_t backlog_bytes=64u*1024u*1024u;
+        std::size_t backlog_operations=4096;static constexpr std::size_t backlog_bytes=64u*1024u*1024u;
         // Caller-thread staging: one lock and wake per batch instead of per
         // native command (thousands per second while scrolling).
         std::vector<Operation> staged;static constexpr std::size_t stage_operations=64;

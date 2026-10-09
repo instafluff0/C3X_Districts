@@ -156,6 +156,14 @@ int main(){
 }
 ''')
 
+    def test_backlog_bound_absorbs_a_busy_scroll_step(self):
+        # 512 operations made Civ III's thread wait up to 318 ms per 2 s of
+        # busy scrolling; 4096 removed the waits with query latency under
+        # 0.1 ms (review, section 41). The producer still waits past the bound.
+        source = (ROOT / 'Renderer/native/gpu_image_worker_client.h').read_text()
+        self.assertIn('std::size_t backlog_operations=4096;', source)
+        self.assertIn('if(queue.size()>backlog_operations||queued_bytes>backlog_bytes){', source)
+
     def test_capture_checker_bounds_game_thread_backlog_waits(self):
         spec = importlib.util.spec_from_file_location('waits', ROOT / 'Renderer/tools/check_native_call_waits.py')
         waits = importlib.util.module_from_spec(spec)
