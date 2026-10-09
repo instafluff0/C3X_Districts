@@ -1483,3 +1483,31 @@ in 6 s (16), adoption p50 238 ms (305); 2× 20 steps (16), 193 ms (283); 3×
 (38.6). Jumps 673 and 881 ms (965, 868). No seam frames. Busy steps still
 come about four times a second against Civ III's 12.8 ticks: this is the
 stage 2 reference.
+
+## 31. Window coverage and crossing cost (October 9)
+
+**Capture margin.** The window's fixed extent puts its leading edge up to
+reach + 2 blocks past the view (24 x, 28 y coordinates), but Civ III
+captured only reach + 1 block. After each crossing the last one or two
+columns were uncaptured and entered one column per step (36 tiles at 1×):
+about half of all steps changed the resident set. The margin is now
+`WorldWindow::margin_x/margin_y` (reach + 2 blocks); `test_world_window.py`
+checks every camera phase at 1× and zoomed-out tiles. Busy save (w18, window
+on): every changed job is now a block crossing, and 45 of 64 jobs keep the
+resident set.
+
+**Warming the next band (tried, reverted).** Background region preparation
+stays in RAM backing once GPU geometry is near its budget (always, on the
+busy save). Letting regions under the window's next band take GPU residency
+did warm them (82 regions, 1,029 tiles; crossings restored about half as
+many tiles), but:
+- crossings with warm geometry still took 100–170 ms: shadow proof
+  registration for the entering casters 40–76 ms, resource preparation
+  15–20 ms, static repair 10–20 ms, all proportional to the entering band;
+- the background preparation competed with Civ III's emulated threads in
+  the VM: covered steps 57 ms (about 45), Civ III's native pass after a 1× x
+  step 144 ms (52), with the hit-test queue backed up again.
+
+A crossing's cost is spread over several subsystems, each proportional to
+the entering band, and in the VM moving it to background threads costs Civ
+III's thread time. Crossing p50 157 ms (164 before), p90 700 ms.

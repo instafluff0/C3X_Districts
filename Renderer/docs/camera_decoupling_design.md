@@ -221,12 +221,13 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
    the camera moves. On October 8 the user agreed to fold the rest of stage 1
    into stage 2.
 2. **A renderer-owned resident world; the camera as a frame input.**
-   - 2a. **Resident world.** The renderer keeps the tiles it has captured
-     (retained topology and prepared geometry) and selects them by world
-     blocks, so the loaded set changes only when the camera crosses a block,
-     far from drawn pixels. Civ III's capture only refreshes tiles that
-     changed. Shadow casters and raster proofs update when blocks change, not
-     at every step.
+   - 2a. **Resident world. In place behind `C3X_RENDERER_WORLD_WINDOW=1`**
+     (review, sections 27–30). The renderer selects its resident set by a
+     block-anchored world window, and Civ III's capture reaches past the
+     view as appearance-only tiles. Steps that keep the set take 40–48 ms of
+     job (p50; 25 ms for a plain 1× step); block crossings take 164 ms
+     because the entering band's geometry is restored from RAM inside the
+     step. Off by default until 2c moves that work off the step.
    - 2b. **World-anchored static layer.** A wrap-around slot per lane, so
      refinement and new strips continue during a scroll and nothing
      recentres.
@@ -234,7 +235,15 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      frame-level camera update; the new edge's strips and shadow pages are
      filled in bounded slices; jobs remain for content changes and far
      jumps, and frames keep animating while they run. The hidden canonical
-     1× lane is not redrawn on zoomed steps.
+     1× lane is not redrawn on zoomed steps. Today a covered step still
+     costs about 100 ms from request to adoption: about 20 ms before the
+     worker starts the job (it is composing a display frame, 21 ms p50 on
+     the busy save), 14 ms of synchronous delivery, the job, and the wait
+     for Civ III's next poll. A block crossing costs 100–170 ms even with
+     its geometry already resident: shadow proofs for the entering casters,
+     resource preparation and static repair, each proportional to the band;
+     warming the band in background threads cost more Civ III time in the
+     VM than it saved (review, section 31).
    - Civ III then adopts each step on its next tick through the existing
      poll. Only if steps still slip: adopt without the deferral (the old
      stage 3), behind a flag.

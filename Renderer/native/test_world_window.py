@@ -105,6 +105,39 @@ if __name__ == '__main__':
 
 
 class CaptureMarginTests(unittest.TestCase):
+    def test_capture_margin_covers_the_window_at_every_phase(self):
+        # With a margin of reach + 1 block the window's leading 1-2 columns
+        # were uncaptured after each crossing and entered one column per step
+        # (36 tiles at 1x), so about half of all steps changed residency.
+        run_cpp(r'''
+#include "Renderer/native/render_core/world_window.h"
+#include <cassert>
+#include <cstdio>
+using c3x_renderer::render_core::WorldWindow;
+int floor_div(long long a,long long b){return int(a>=0?a/b:-((-a+b-1)/b));}
+int main(){
+ for(int zoomed=0;zoomed<2;++zoomed){
+  int tw=zoomed?64:128,th=tw/2,hw=tw/2,hh=th/2,W=2240,H=1192;
+  for(int vx=-3*8*hw;vx<3*8*hw;vx+=hw/2)for(int vy=-3*8*hh;vy<3*8*hh;vy+=hh/2){
+   // One RENDER tile at occurrence (0,0) fixes the camera: view origin (vx, vy).
+   c3x_renderer_tile_v1 t{};t.tile_flags=C3X_RENDERER_TILE_RENDER;t.anchor_x=-vx;t.anchor_y=-vy;
+   c3x_renderer_frame_v1 f{};f.tile_width=tw;f.tile_height=th;f.target_width=W;f.target_height=H;f.tiles=&t;f.tile_count=1;
+   std::array<std::int64_t,4> b{};std::int64_t ax=0,ay=0;
+   assert(WorldWindow::locate(f,ax,ay,b));
+   // Civ III's visible tile range, narrowest reading: tiles whose anchors
+   // start inside the view. Its capture reaches margin coordinates past it.
+   int min_x=floor_div(vx+hw-1,hw),max_x=floor_div(vx+W,hw)-1;
+   int min_y=floor_div(vy+hh-1,hh),max_y=floor_div(vy+H,hh)-1;
+   int left=int(b[0]/hw),right=int(b[2]/hw)-1,top=int(b[1]/hh),bottom=int(b[3]/hh)-1;
+   assert(left>=min_x-WorldWindow::margin_x && right<=max_x+WorldWindow::margin_x);
+   assert(top>=min_y-WorldWindow::margin_y && bottom<=max_y+WorldWindow::margin_y);
+  }
+ }
+ std::printf("PASS capture margin covers the window at every phase\n");
+}
+''')
+
+
     def test_margin_tiles_are_appearance_only(self):
         # The window's capture margin was captured as RENDER tiles, so Civ
         # III's HUD pass drew unit status boxes and city labels for every

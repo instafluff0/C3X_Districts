@@ -18387,11 +18387,11 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
         renderer_worker?int(renderer_worker->presented_zoom()):65536;
     if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
     if(operation==C3X_NATIVE_CAPTURE_MARGIN){
-        // The world window (render_core/world_window.h) reaches its reach
-        // plus one block past the view; Civ III captures appearance that far.
+        // Civ III captures appearance as far as the world window can reach
+        // (render_core/world_window.h, margin_x/margin_y).
         using Window=c3x_renderer::render_core::WorldWindow;
         static int const margin=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",value,sizeof(value))==1&&value[0]=='1'?
-            int(unsigned(Window::reach_x+Window::block)|(unsigned(Window::reach_y+Window::block)<<16)):0;}();
+            int(unsigned(Window::margin_x)|(unsigned(Window::margin_y)<<16)):0;}();
         return margin;
     }
     if(operation==C3X_NATIVE_VISUAL_POLICY)return remote_renderer_requested()?remote_renderer_backend()->visual_policy(color):

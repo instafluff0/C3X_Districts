@@ -26,6 +26,12 @@ namespace c3x_renderer { namespace render_core {
 // follow unchanged.
 struct WorldWindow {
     static constexpr int block=8,reach_x=8,reach_y=12; // tile coordinates
+    // The capture envelope Civ III must cover past its visible tiles. The
+    // fixed extent puts the leading edge up to reach + 2 blocks past the
+    // view; a margin of reach + 1 block left its last 1-2 columns uncaptured
+    // after each crossing, so they entered one column per step afterwards
+    // and about half of all steps changed the resident set (review, 31).
+    static constexpr int margin_x=reach_x+2*block,margin_y=reach_y+2*block;
     bool valid=false;
     std::int64_t camera_x=0,camera_y=0;
     // Occurrence-world pixels, [left,right) x [top,bottom), block-aligned.
