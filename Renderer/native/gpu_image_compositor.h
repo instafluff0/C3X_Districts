@@ -601,16 +601,18 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
     // The fused interface pass (SpatialComposition::fused): scene and front
     // are full-color images, screen_words is the native screen canvas and
     // screen_detail its full-color plane (0 when the transfer needs none).
-    bool fused_spatial(SpatialPlan const& plan,Id scene,Id screen_words,Id screen_detail,Id front,Id front_words,unsigned key,unsigned flags){
+    bool fused_spatial(SpatialPlan const& plan,Id scene,Id screen_words,Id screen_detail,Id front,Id front_words,unsigned key,unsigned flags,Id front_copy=0){
         auto s=find(scene),w=find(screen_words),d=screen_detail?find(screen_detail):nullptr,f=find(front),fw=find(front_words);
+        auto fc=front_copy?find(front_copy):nullptr;
+        if(front_copy&&(!fc||fc->read_only||fc->format!=Format::bgra32||fc->width!=f->width||fc->height!=f->height))return false;
         if(!s||!w||!f||!fw||(screen_detail&&!d)||s->format!=Format::bgra32||f->format!=Format::bgra32||f->read_only||fw->read_only||
            fw->format!=w->format||fw->width!=f->width||fw->height!=f->height||
            w->format==Format::bgra32||(d&&d->format!=Format::bgra32)||s->width!=f->width||s->height!=f->height||
            w->width!=f->width||w->height!=f->height||(d&&(d->width!=f->width||d->height!=f->height)))return false;
         unbind();
         bool ok=spatial.fused(plan,s->read.Get(),w->read.Get(),d?d->read.Get():nullptr,f->write.Get(),fw->write.Get(),f->width,f->height,
-            w->format==Format::rgb565?1u:0u,key,flags);
-        if(ok){f->cpu_current=fw->cpu_current=false;++counters.commands;}
+            w->format==Format::rgb565?1u:0u,key,flags,fc?fc->write.Get():nullptr);
+        if(ok){f->cpu_current=fw->cpu_current=false;if(fc)fc->cpu_current=false;++counters.commands;}
         return ok;
     }
     bool submit_spatial_sources(SpatialPlan const& plan,Id words,Id detail,std::vector<SpatialSource> const& sources){

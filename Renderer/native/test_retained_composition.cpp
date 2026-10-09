@@ -1281,11 +1281,14 @@ int test_retained_composition(){
         auto owner=std::make_unique<Session>(device.Get(),context.Get());auto& session=*owner;
         std::int64_t ticket=0;
         // Each frame's scene is a new publication, as each adopted camera is.
+        // The current publication's render generation: animation frames render
+        // new pixels into the same publication, as the game's units animate.
+        std::shared_ptr<std::uint64_t> current_generation;
         auto publish=[&](unsigned frame){paint(frame);D3D11_SUBRESOURCE_DATA initial={pixels.data(),width*4,0};ComPtr<ID3D11Texture2D> texture;
             checked(device->CreateTexture2D(&map_desc,&initial,&texture));maps.push_back(texture);auto map_texture=texture.Get();
-            std::uint64_t generation=frame+1;
-            RetainedComposition::Sample sample=[=](long long,long long){return RetainedComposition::SampledImage::bgra(map_texture,bounds,0.f,generation);};
-            sample.projected=[=](long long,long long,float){return RetainedComposition::SampledImage::bgra(map_texture,bounds,0.f,generation);};
+            auto generation=std::make_shared<std::uint64_t>(frame+1);current_generation=generation;
+            RetainedComposition::Sample sample=[=](long long,long long){return RetainedComposition::SampledImage::bgra(map_texture,bounds,0.f,*generation);};
+            sample.projected=[=](long long,long long,float){return RetainedComposition::SampledImage::bgra(map_texture,bounds,0.f,*generation);};
             ticket=frame+1;assert(session.publish(map_texture,ticket,0,0,width,height,std::move(sample)));};
         publish(0);
         c3x_renderer_gpu_images_v1 request={};c3x_renderer_gpu_result_v1 result={};
@@ -1330,6 +1333,9 @@ int test_retained_composition(){
         ComPtr<ID3D11RenderTargetView> target;checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
         for(unsigned frame=0;frame<6;++frame){
             if(frame)publish(frame);
+            // A small part of the interface canvas changes every frame.
+            Rect changing={int(4+frame*7),56,int(12+frame*7),62};
+            execute(C3X_GPU_SUBMIT,0,{{Kind::fill,panel,0,changing,bounds,0,0,0x0333u+frame},{Kind::fill,panel_detail,0,changing,bounds,0,0,0xff102030u+frame}});
             execute(C3X_GPU_SUBMIT,0,{{Kind::hud_begin,units,0,{}, {},48,32,42,0,unit_detail,0,int(key)}});
             execute(C3X_GPU_SUBMIT,0,redraw);execute(C3X_GPU_SUBMIT,0,{{Kind::hud_end}});
             execute(C3X_GPU_SUBMIT,0,{{Kind::quantize,map_words,session.map_image(),bounds,bounds},
@@ -1348,9 +1354,40 @@ int test_retained_composition(){
                 std::fprintf(stderr,"fused interface mismatch: format=%d frame=%u pixel=%zu,%zu shown=%08x expected=%08x fused=%llu fallback=%u\n",native_format,frame,
                     first%width,first/width,shown[first],output[first],(unsigned long long)session.visual_fused_frames(),session.visual_fused_fallback());}
             assert(shown==output);++checks;
+            // The persistent source canvases copy only changed fragments: the
+            // first fused frame fills both, later frames copy what changed.
+            if(frame==0)assert(session.visual_work().fused_source_pixels>=std::uint64_t(width)*height);
+            if(frame>1){auto work=session.visual_work();
+                if(work.fused_source_pixels*8>std::uint64_t(width)*height)std::fprintf(stderr,"fused sources copied %llu pixels\n",(unsigned long long)work.fused_source_pixels);
+                assert(work.fused_source_pixels*8<=std::uint64_t(width)*height);}
         }
         if(session.visual_fused_frames()<5)std::fprintf(stderr,"fused interface not used: fallback=%u\n",session.visual_fused_frames()?0u:session.visual_fused_fallback());
         assert(session.visual_fused_frames()>=5);
+        // Animation frames: new renders of the same publication and the same
+        // native screen. The fused pass also writes the displayed front, so
+        // the front assembly copies only the button, not the screen; the
+        // general retained evaluation is the oracle at the same clock.
+        for(unsigned animation=0;animation<3;++animation){
+            paint(20+animation);context->UpdateSubresource(maps.back().Get(),0,nullptr,pixels.data(),width*4,0);++*current_generation;
+            auto writes=session.visual_fused_front_writes();
+            assert(session.visual_frame(100+animation,1000,target.Get(),display.Get(),buffer.Get())==1);
+            auto work=session.visual_work();auto fused=retained_read(device.Get(),context.Get(),display.Get());
+            if(animation){
+                auto front_copies=work.copied_pixels-work.fused_source_pixels;
+                if(front_copies*8>std::uint64_t(width)*height||session.visual_fused_front_writes()!=writes+1)
+                    std::fprintf(stderr,"animation front copies %llu front_writes %llu->%llu\n",(unsigned long long)front_copies,
+                        (unsigned long long)writes,(unsigned long long)session.visual_fused_front_writes());
+                assert(session.visual_fused_front_writes()==writes+1&&front_copies*8<=std::uint64_t(width)*height);
+            }
+            session.set_fused_interface(false);
+            assert(session.visual_frame(100+animation,1000,target.Get(),display.Get(),buffer.Get())==1);
+            auto general=retained_read(device.Get(),context.Get(),display.Get());
+            session.set_fused_interface(true);
+            if(fused!=general){std::size_t first=0;while(first<fused.size()&&fused[first]==general[first])++first;
+                std::fprintf(stderr,"fused animation mismatch: format=%d frame=%u pixel=%zu,%zu fused=%08x general=%08x\n",native_format,animation,
+                    first%width,first/width,fused[first],general[first]);}
+            assert(fused==general);++checks;
+        }
         // Zoomed: the projected scene and the HUD's placement offsets change.
         // The live canvas is not zoomed, so the oracle is the general retained
         // evaluation of the same frame at the same settled clock.

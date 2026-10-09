@@ -276,6 +276,7 @@ public:
     std::uint64_t visual_sample_allocations()const{return layers.sampling_allocations();}
     std::uint64_t visual_sample_imports()const{return layers.sampling_imports();}
     std::uint64_t visual_fused_frames()const{return layers.fused_draws();}
+    std::uint64_t visual_fused_front_writes()const{return layers.fused_front_draws();}
     unsigned visual_fused_fallback()const{return layers.fused_fallback();}
     void set_fused_interface(bool value){layers.set_fused(value);}
     std::uint64_t visual_bytes()const{return layers.bytes();}

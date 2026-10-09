@@ -20,7 +20,7 @@ namespace c3x_gpu_images {
 class RetainedComposition {
 public:
     struct Work {unsigned operations=0,assemblies=0,copies=0,selected_borrows=0,selected_owned=0,direct_native_images=0;
-        std::uint64_t copied_pixels=0,assembly_pixels=0,avoided_copy_pixels=0;
+        std::uint64_t copied_pixels=0,assembly_pixels=0,avoided_copy_pixels=0,fused_source_pixels=0;
         // CPU submission time per visual-frame phase (diagnostic only).
         double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;
         std::array<LONGLONG,8> display_ticks{}; // per call inside the final display draw
@@ -1179,6 +1179,7 @@ private:
             ++work.copies;work.copied_pixels+=std::uint64_t(a.right-a.left)*(a.bottom-a.top);
         }
         ++work.assemblies;work.assembly_pixels+=std::uint64_t(region.right-region.left)*(region.bottom-region.top);
+        note_executed("assemble-projected",region,unsigned(selected.size()));
         return out;
     }
     Id assemble(Picture const& p,long long ticks,long long frequency,unsigned depth,Rect region={},bool readonly=false,bool initialize=true,ID3D11Texture2D* destination=nullptr){
@@ -1226,7 +1227,7 @@ private:
         Id out=destination&&base?replay.attach_source_unrecorded(destination,p.format):
             replay.create(region.right-region.left,region.bottom-region.top,p.format,initialize&&!base);
         if(!out)throw std::runtime_error("retained composition scratch budget");
-        ++work.assemblies;
+        ++work.assemblies;note_executed(base?"assemble-base":"assemble",region,unsigned(p.patches.size()));
         work.assembly_pixels+=std::uint64_t(region.right-region.left)*(region.bottom-region.top);
         try{
             if(base){auto r=base->node->area;
@@ -1304,8 +1305,8 @@ public:
         return !cancelled || !cancelled();
     }
     ~RetainedComposition(){front={};images.clear();world_selection.reset();}
-    void clear(){release_front();recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
-    void discard(){release_front();recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
+    void clear(){release_front();fused_sources[0]={};fused_sources[1]={};recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
+    void discard(){release_front();fused_sources[0]={};fused_sources[1]={};recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
     void uncommit(){release_front();collect_plan.clear();prepare_plan.clear();invalidate_plan();front={};}
     // The interpreter remains executable at the same clock for pixel oracles.
     // This switch changes execution only, never captured native semantics.
@@ -1594,7 +1595,57 @@ public:
     // Anything else returns false and the general path runs.
     // C3X_RENDERER_FUSED_INTERFACE=0 turns it off.
     bool fused_enabled=[]{char value[4]={};return !(GetEnvironmentVariableA("C3X_RENDERER_FUSED_INTERFACE",value,sizeof(value))&&value[0]=='0');}();
-    std::uint64_t fused_frames=0;unsigned fused_refusal=0; // last fallback reason (0: none)
+    std::uint64_t fused_frames=0,fused_front_writes=0;unsigned fused_refusal=0; // last fallback reason (0: none)
+    // The fused pass's source canvases (Civ III's interface words and color)
+    // persist between frames: a complete partition of computed fragments is
+    // re-copied only where a fragment's node, area or revision changed. Most
+    // of the canvas is a static upload; its map-dependent panels change.
+    struct RetainedPicture {Texture texture;CompositionStorage::Lease owned,physical;unsigned width=0,height=0;Format format=Format::bgra32;std::vector<FrontPatch> patches;};
+    RetainedPicture fused_sources[2];
+    Id assemble_retained(RetainedPicture& r,Picture const& p,long long ticks,long long frequency,unsigned depth){
+        Pins pinned;pinned.add(p);
+        for(auto const& part:p.patches)evaluate(part.node,ticks,frequency,depth);
+        Rect full=extent(p);std::uint64_t covered=0;bool complete=p.partitioned&&!p.patches.empty();
+        for(auto const& part:p.patches){auto a=intersect(part.area,full),b=part.node->area;
+            if(!same_rect(a,part.area)||!part.node->output[part.output]||b.left>a.left||b.top>a.top||b.right<a.right||b.bottom<a.bottom){
+                note_executed(!part.node->output[part.output]?"retained-no-output":"retained-outside",part.area);complete=false;break;}
+            covered+=std::uint64_t(a.right-a.left)*(a.bottom-a.top);}
+        if(complete&&covered!=std::uint64_t(p.width)*p.height)note_executed("retained-coverage",full);
+        if(!complete||covered!=std::uint64_t(p.width)*p.height)return assemble(p,ticks,frequency,depth,{},true);
+        if(!r.texture||r.width!=p.width||r.height!=p.height||r.format!=p.format){
+            // Native words and full color both live in R32_UINT, as owned outputs do.
+            r={};auto used=resident_bytes(),bytes=std::uint64_t(p.width)*p.height*4;
+            if(used>resident_budget||bytes>resident_budget-used){note_executed("retained-budget",full);return assemble(p,ticks,frequency,depth,{},true);}
+            D3D11_TEXTURE2D_DESC desc={};desc.Width=p.width;desc.Height=p.height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+            desc.Format=DXGI_FORMAT_R32_UINT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+            if(FAILED(device->CreateTexture2D(&desc,nullptr,&r.texture))){r={};return assemble(p,ticks,frequency,depth,{},true);}
+            r.owned=owned_storage.retain(r.texture.Get());r.physical=storage.retain(r.texture.Get());
+            r.width=p.width;r.height=p.height;r.format=p.format;
+        }
+        // A fragment is unchanged where the previous assembly already took
+        // its pixels from the same node, output and revision: a later write
+        // re-cuts the static canvas into new fragments without new pixels.
+        struct Previous {Node const* node;unsigned output;std::uint64_t revision;Rect area;};
+        std::vector<Previous> previous;previous.reserve(r.patches.size());
+        for(auto const& old:r.patches)if(auto node=old.node.lock())previous.push_back({node.get(),old.output,old.revision,old.area});
+        auto contains=[](Rect outer,Rect inner){return outer.left<=inner.left&&outer.top<=inner.top&&outer.right>=inner.right&&outer.bottom>=inner.bottom;};
+        std::uint64_t copied=0;
+        for(auto const& part:p.patches){
+            bool kept=false;
+            for(auto const& old:previous)if(old.node==part.node.get()&&old.output==part.output&&old.revision==part.node->revision&&contains(old.area,part.area)){kept=true;break;}
+            if(kept)continue;
+            auto area=part.area,source=part.node->area;
+            D3D11_BOX box={unsigned(area.left-source.left),unsigned(area.top-source.top),0,unsigned(area.right-source.left),unsigned(area.bottom-source.top),1};
+            context->CopySubresourceRegion(r.texture.Get(),0,area.left,area.top,0,part.node->output[part.output].Get(),0,&box);
+            ++work.copies;copied+=std::uint64_t(area.right-area.left)*(area.bottom-area.top);
+        }
+        if(copied){++work.assemblies;work.copied_pixels+=copied;work.assembly_pixels+=copied;work.fused_source_pixels+=copied;}
+        r.patches.clear();r.patches.reserve(p.patches.size());
+        for(auto const& part:p.patches)r.patches.push_back({part.area,part.node,part.output,part.node->revision});
+        auto id=replay.attach_source_unrecorded(r.texture.Get(),p.format);
+        if(!id)throw std::runtime_error("retained fused source admission");
+        return id;
+    }
     bool evaluate_fused(std::shared_ptr<Node> const& F,long long ticks,long long frequency,unsigned depth){
         if(!fused_enabled||!compiled_enabled){fused_refusal=1;return false;}
         auto const& c=F->command;
@@ -1666,20 +1717,30 @@ public:
         F->dynamic=true;F->map_dynamic=map_dynamic;
         if(F->output[0]&&F->output[1]&&!F->borrowed_output[0]&&!F->borrowed_output[1]&&versions==F->dependencies){fused_refusal=0;return true;}
         admit_owned_outputs(*F,2);
-        Id scene=0,words=0,detail=0,out_words=0,out_detail=0;
-        auto release=[&]{for(auto id:{scene,words,detail,out_words,out_detail})if(id)replay.recycle(id);};
+        Id scene=0,words=0,detail=0,out_words=0,out_detail=0,front_copy=0;
+        auto release=[&]{for(auto id:{scene,words,detail,out_words,out_detail,front_copy})if(id)replay.recycle(id);};
         try{
             scene=assemble_projected(V->inputs[0],ticks,frequency,depth+1,view_scale,full,w,h);
-            words=assemble(source_words,ticks,frequency,depth+1,{},true);
-            if(source_detail)detail=assemble(F->inputs[4],ticks,frequency,depth+1,{},true);
+            words=assemble_retained(fused_sources[0],source_words,ticks,frequency,depth+1);
+            if(source_detail)detail=assemble_retained(fused_sources[1],F->inputs[4],ticks,frequency,depth+1);
             out_words=replay.attach_target_unrecorded(F->output[0].Get(),words_format);
             out_detail=replay.attach_target_unrecorded(F->output[1].Get(),Format::bgra32);
-            if(!out_words||!out_detail||!replay.fused_spatial(plan,scene,words,detail,out_detail,out_words,c.color,flags)){
+            // When this node's color plane is part of the displayed front, the
+            // pass also writes the retained front texture; its other fragments
+            // are re-copied by the front assembly (see below).
+            if(assembled_front&&assembled_revision&&assembled_width==w&&assembled_height==h&&front.width==w&&front.height==h&&front.format==Format::bgra32)
+                for(auto const& part:front.patches)if(part.node==F&&part.output==1){front_copy=replay.attach_target_unrecorded(assembled_front.Get(),Format::bgra32);break;}
+            if(!out_words||!out_detail||!replay.fused_spatial(plan,scene,words,detail,out_detail,out_words,c.color,flags,front_copy)){
                 release();F->dependencies.clear();fused_refusal=15;return false;}
             render_core_detail("compose_fused");
         }catch(...){release();F->dependencies.clear();throw;}
         release();
         F->dependencies.swap(versions);F->revision=++serial;++fused_frames;fused_refusal=0;
+        if(front_copy){++fused_front_writes;
+            // The front texture now holds this node's new pixels everywhere:
+            // its fragments are current, every other fragment is copied again.
+            for(auto& entry:assembled_patches)entry.revision=entry.node.lock()==F&&entry.output==1?F->revision:0;
+        }
         work.operations+=unsigned(B->batch.size())+1;note_executed("fused",full,unsigned(B->batch.size())+1);
         return true;
     }
@@ -1688,6 +1749,7 @@ public:
     double view_scale()const{return selected_view_scale;}
     Work last_work()const{return work;}
     std::uint64_t fused_draws()const{return fused_frames;}
+    std::uint64_t fused_front_draws()const{return fused_front_writes;}
     // Tests compare the fused pass with the general evaluation.
     void set_fused(bool value){fused_enabled=value;drawn_dependencies.clear();}
     unsigned fused_fallback()const{return fused_refusal;}

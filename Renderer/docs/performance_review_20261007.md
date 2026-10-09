@@ -1629,3 +1629,25 @@ Still per frame: the projected scene assembly, the interface canvas's
 assembly (77 parts), a full-screen quantization of the scene feeding the
 bottom-right panel's blends, the small buttons, the front assembly copy and
 display.
+
+## 36. Stage 3: retained source canvases and the front write (October 9)
+
+**Change.** The fused pass's two source canvases (Civ III's interface words
+and color) persist between frames; a fragment is copied again only where the
+previous assembly did not already take its pixels from the same node, output
+and revision (a CPU comparison of about 77 rectangles, no pixel diff). When
+the transfer's color plane is part of the displayed front, the pass also
+writes the retained front texture, and the front assembly copies only the
+other fragments. Cost: two persistent full-screen textures (about 21 MB at
+2240×1192) inside the composition's fixed budget; a full interface redraw
+still copies once. Tests (`fused interface`): source copies at most an
+eighth of the screen per frame after the first; on animation-only frames
+the front assembly copies only the button and each frame equals the general
+retained evaluation.
+
+**Result (busy save, f6 against f5, one run each).** 1× idle 43.7 fps
+(41.7), 3× idle 53.6 (50.9), last 1× idle segment 42.7 (47.9). Same-build
+runs vary by 3–5 fps per segment on this VM, so the effect of this change
+is within run variation, consistent with an estimated 1–2 ms of GPU copies
+per frame. Against the pre-stage-3 run (n3): 1× idle 39.0 → 43.7, 3× idle
+47.2 → 53.6, last 1× idle segment 42.0 → 42.7.

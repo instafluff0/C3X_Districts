@@ -204,6 +204,7 @@ void dependencies(Op op,int2 at,uint native,uint full,inout bool dn,inout bool d
 cbuffer Fused:register(b1){uint columns,native_mode,key,transfer_flags;};
 Texture2D<uint> scene:register(t4);Texture2D<uint> screen_words:register(t5);Texture2D<uint> screen_detail:register(t6);
 StructuredBuffer<Tile> table:register(t7);RWTexture2D<uint> front:register(u3);RWTexture2D<uint> front_words:register(u4);
+RWTexture2D<uint> front_copy:register(u5); // the displayed front, when this node is its fragment (transfer_flags & 64)
 [numthreads(8,8,1)]void fused(uint3 id:SV_DispatchThreadID){
  int2 at=int2(id.xy);if(at.x>=int(width)||at.y>=int(height))return;
  uint full=scene.Load(int3(at,0));
@@ -217,7 +218,7 @@ StructuredBuffer<Tile> table:register(t7);RWTexture2D<uint> front:register(u3);R
  uint value=screen_words.Load(int3(at,0))&65535;
  if(value!=key){native=value;
   if(transfer_flags&1)full=(transfer_flags&2)?((transfer_flags&32)?full:screen_detail.Load(int3(at,0))):full_color(value,native_mode);}
- front[at]=full;front_words[at]=native;
+ front[at]=full;front_words[at]=native;if(transfer_flags&64)front_copy[at]=full;
 }
 )";
         auto compile_entry=[&](char const* entry_source,char const* entry,Ptr<ID3D11ComputeShader>& target){
@@ -401,19 +402,20 @@ public:
     // native word format (0 = 555, 1 = 565); key and flags describe the keyed
     // screen-canvas transfer exactly as the spatial program encodes kind 9.
     bool fused(Plan const& plan,ID3D11ShaderResourceView* scene,ID3D11ShaderResourceView* screen_words,ID3D11ShaderResourceView* screen_detail,
-               ID3D11UnorderedAccessView* front,ID3D11UnorderedAccessView* front_words,unsigned width,unsigned height,unsigned mode,unsigned key,unsigned flags){
+               ID3D11UnorderedAccessView* front,ID3D11UnorderedAccessView* front_words,unsigned width,unsigned height,unsigned mode,unsigned key,unsigned flags,
+               ID3D11UnorderedAccessView* front_copy=nullptr){
         if(!plan||!plan.table_view||plan.width!=width||plan.height!=height||!scene||!screen_words||!front||!front_words||((flags&2)&&!(flags&32)&&!screen_detail))return false;
         program();
-        unsigned params[4]={0,width,height,0},fused_params[4]={plan.columns,mode,key,flags};
+        unsigned params[4]={0,width,height,0},fused_params[4]={plan.columns,mode,key,(flags&~64u)|(front_copy?64u:0u)};
         context->UpdateSubresource(constants.Get(),0,nullptr,params,0,0);context->UpdateSubresource(fused_constants.Get(),0,nullptr,fused_params,0,0);
         ID3D11Buffer* buffers[]={constants.Get(),fused_constants.Get()};context->CSSetConstantBuffers(0,2,buffers);
         ID3D11ShaderResourceView* reads[]={plan.atlas_view.Get(),plan.command_view.Get(),plan.tile_view.Get(),plan.order_view.Get(),
             scene,screen_words,screen_detail,plan.table_view.Get()};
         context->CSSetShaderResources(0,8,reads);
-        ID3D11UnorderedAccessView* writes[]={nullptr,nullptr,nullptr,front,front_words};context->CSSetUnorderedAccessViews(0,5,writes,nullptr);
+        ID3D11UnorderedAccessView* writes[]={nullptr,nullptr,nullptr,front,front_words,front_copy};context->CSSetUnorderedAccessViews(0,6,writes,nullptr);
         context->CSSetShader(fused_shader.Get(),nullptr,0);context->Dispatch((width+7)/8,(height+7)/8,1);
-        ID3D11ShaderResourceView* none[8]={};ID3D11UnorderedAccessView* no_writes[5]={};
-        context->CSSetShaderResources(0,8,none);context->CSSetUnorderedAccessViews(0,5,no_writes,nullptr);
+        ID3D11ShaderResourceView* none[8]={};ID3D11UnorderedAccessView* no_writes[6]={};
+        context->CSSetShaderResources(0,8,none);context->CSSetUnorderedAccessViews(0,6,no_writes,nullptr);
         ++dispatches_;commands_+=unsigned(plan.original.size());return true;
     }
     template<class Legacy> bool submit(Plan const& plan,Id words_id,Id detail_id,ID3D11UnorderedAccessView* words,ID3D11UnorderedAccessView* detail,Legacy legacy){
