@@ -1511,3 +1511,57 @@ many tiles), but:
 A crossing's cost is spread over several subsystems, each proportional to
 the entering band, and in the VM moving it to background threads costs Civ
 III's thread time. Crossing p50 157 ms (164 before), p90 700 ms.
+
+## 32. Where a busy display frame goes (stage 3 input, October 9)
+
+Busy save, `near`, default settings (h0: profiled; h1:
+`C3X_RENDERER_PROFILE=3`, which drains the GPU at every mark so each phase
+is charged its own GPU time; drained times are inflated, proportions hold).
+
+- **Worker CPU per display frame, 1× idle:** 17.5 ms (p50 of sampled
+  frames): composition prepare 9.6 ms (it includes the 3D scene sample),
+  evaluate 2.0 ms (about 2,800 re-run operations), display 0.2 ms, about
+  5.7 ms elsewhere in the frame. Each frame copies 19.6 M pixels on the GPU.
+  `route-frame-budget` compose p50: 18.6 ms at 1× idle, 13.5 ms at 3× idle.
+- **GPU per frame without a scene redraw (drained):** about 28 ms, nearly
+  all of it the retained replay of Civ III's map-dependent interface:
+  before-image assembly for re-run operations 12 ms, re-run native images
+  5.5 ms, expansions 3.7 ms, the HUD batch (spatial run and two base copies)
+  4.3 ms, assemble and display 2 ms. With a scene redraw the 3D passes add
+  water 20.5 ms, static 13.8 ms, units 5.1 ms and reflections 4.8 ms
+  (drained).
+- **Why it re-runs:** the map image is new on every frame, so every
+  operation that reads it (the HUD batch, operations with map-dependent
+  inputs, the world selection and the changed front fragments) runs again.
+  The HUD batch's per-pixel cache (resolved against dependent pixels)
+  applies only to single spatial runs, still pays both base copies, and is
+  discarded on every recompile, including each zoom transition.
+
+Stage 3 targets this replay: the interface compiled once per committed
+front, with only map-dependent pixels evaluated against the scene in the
+final composite.
+
+## 33. Unchanged renders and the composition oracle (October 9)
+
+**Unchanged renders.** A visual frame's map sample returned the completed
+render as a new image even when the scene had not been re-rendered, and the
+projected view and projected map overlays re-ran unconditionally, so every
+operation over the map ran again on every frame. A sample now carries its
+render generation: the same generation at the same projection keeps the
+imported image, the projected overlays and the projected view, so nothing
+composed over them re-runs. On the busy save the units animate, so the
+scene is re-rendered on every presented frame (h3: 382 renders for 382
+presented frames in the last idle segment) and the interface replay is
+unchanged; the saving applies to static scenes. Cadence n3 against n2: 1×
+idle 39.0 fps (38.8), last idle segment 42.0 (39.0), scroll unchanged, no
+seam frames.
+
+**The composition oracle runs again.** `test_retained_composition.py` had
+been failing before its first case: the single test function's frame
+exceeds the default 1 MB stack (an access violation in the 32-bit build, a
+stack overflow in 64-bit). It now runs on a thread with a 64 MB stack
+reservation; all 664 GPU oracles pass, plus a new case for the unchanged
+generation that fails on the old code.
+
+Per frame on the busy save the interface must therefore be recomposed over
+a new scene: stage 3 makes that recomposition cheap rather than rare.

@@ -626,6 +626,10 @@ private:
             if(sampled.kind==SampledImage::Kind::frozen){
                 n->sample={};n->sample_target={};n->dynamic=n->map_dynamic=false;n->retired=true;
                 invalidate_plan();
+            }else if(sampled.kind==SampledImage::Kind::bgra&&sampled.generation&&sampled.generation==n->source_generation&&
+                     n->sample_target.texture&&n->output[0].Get()==n->sample_target.texture.Get()){
+                // The same completed render as the last import: its pixels and
+                // everything composed over them are unchanged (review, 33).
             }else if(sampled.kind==SampledImage::Kind::bgra){
                 auto r=sampled.area;unsigned w=unsigned(n->area.right-n->area.left),h=unsigned(n->area.bottom-n->area.top);
                 if(r.left<0||r.top<0||r.right-r.left!=int(w)||r.bottom-r.top!=int(h))
@@ -683,6 +687,28 @@ private:
             }
         }else if(n->view&&n->projects_scene){
             float scale=float(n->view->sample(ticks,frequency));
+            // An unchanged projected world (the same parts at the same scale)
+            // keeps its transformed view and words (review, 33).
+            bool unchanged=false;
+            {
+                auto& versions=n->pending_dependencies;versions.clear();versions.push_back(n->inputs[0].version);
+                auto region=extent(n->inputs[0]);
+                for(auto const& patch:n->inputs[0].patches){
+                    auto a=intersect(project(patch.area,scale,n->inputs[0].width,n->inputs[0].height,
+                        patch.node->map_source||patch.node->map_dynamic||patch.node->retired),region);
+                    if(empty(a))continue;
+                    auto m=evaluate_projected(patch,ticks,frequency,depth+1,scale,n->inputs[0].width,n->inputs[0].height);
+                    versions.push_back(m->revision);versions.push_back((std::uint64_t(unsigned(a.left))<<32)|unsigned(a.top));
+                    versions.push_back((std::uint64_t(unsigned(a.right))<<32)|unsigned(a.bottom));
+                }
+                std::uint32_t bits=0;std::memcpy(&bits,&scale,4);versions.push_back(bits);
+                unchanged=compiled_enabled&&n->output[0]&&(!n->view_native_format||n->view_words.texture)&&
+                    n->view_scale==scale&&versions==n->dependencies;
+            }
+            if(unchanged){
+                selected_view_scale=scale;n->map_dynamic=false;
+                for(auto const& patch:n->inputs[0].patches)n->map_dynamic|=patch.node->map_dynamic;
+            }else{
             auto source=assemble_projected(n->inputs[0],ticks,frequency,depth+1,scale,extent(n->inputs[0]),n->inputs[0].width,n->inputs[0].height);
             try{
                 for(unsigned i=0;i<(n->view_native_format?2u:1u);++i){
@@ -697,8 +723,10 @@ private:
                     n->view_native_format==2?Format::rgb565:Format::rgb555))throw std::runtime_error("projected world rejected");
             }catch(...){replay.recycle(source);throw;}
             replay.recycle(source);n->view_scale=scale;n->revision=++serial;selected_view_scale=scale;
+            n->dependencies.swap(n->pending_dependencies);
             n->map_dynamic=false;
             for(auto const& patch:n->inputs[0].patches)n->map_dynamic|=patch.node->map_dynamic;
+            }
         }else if(n->view){
             auto& versions=n->pending_dependencies;versions.clear();
             n->map_dynamic=false;
@@ -1028,11 +1056,34 @@ private:
                 n->seen=frame;return n;
             }
             if(sampled.kind!=SampledImage::Kind::bgra)throw std::runtime_error("projected scene unavailable");
+            if(n->output[0]&&n->sample_target.texture&&same_rect(n->area,area)&&n->view_scale==scale&&
+               sampled.generation&&sampled.generation==n->source_generation&&n->publication==original->publication){
+                n->seen=frame;return n; // the same completed render at the same projection
+            }
             projected_output(*n,area);
             if(!replay.import_bgra(n->sample_target,sampled.texture.Get(),sampled.area.left,sampled.area.top,sampled.sharpness))
                 throw std::runtime_error("projected scene import");
             n->publication=original->publication;n->source_generation=sampled.generation;n->map_source=original->map_source;
         }else if(original->operation&&(original->map_dynamic||retired_underlay)){
+            // Unchanged inputs at the same projection keep the drawn overlay:
+            // the underlay's projected parts, the source and key pictures, the
+            // scale and the area are the whole input (review, 33).
+            auto& versions=n->pending_dependencies;versions.clear();
+            for(auto const& part:original->inputs[3].patches){
+                auto a=intersect(project(part.area,scale,width,height,part.node->map_source||part.node->map_dynamic||part.node->retired),area);
+                if(empty(a))continue;auto m=evaluate_projected(part,ticks,frequency,depth+1,scale,width,height);
+                versions.push_back(m->revision);versions.push_back((std::uint64_t(unsigned(a.left))<<32)|unsigned(a.top));
+                versions.push_back((std::uint64_t(unsigned(a.right))<<32)|unsigned(a.bottom));
+            }
+            for(unsigned i:{1u,4u}){versions.push_back(original->inputs[i].version);
+                for(auto const& part:original->inputs[i].patches){evaluate(part.node,ticks,frequency,depth+1);versions.push_back(part.node->revision);}}
+            {std::uint32_t bits=0;std::memcpy(&bits,&scale,4);versions.push_back(bits);}
+            versions.push_back(original->revision);
+            if(compiled_enabled&&n->output[0]&&same_rect(n->area,area)&&n->view_scale==scale&&versions==n->dependencies){
+                original->map_dynamic=false;
+                for(auto const& input:original->inputs)for(auto const& part:input.patches)original->map_dynamic|=part.node->map_dynamic;
+                n->seen=frame;return n;
+            }
             // Project the retained underlay recursively. Native image ordering
             // and version ownership are unchanged. For a keyed native image,
             // use its native words as a mask over its full-color source. The
@@ -1050,6 +1101,7 @@ private:
                     key?replay.view(key):nullptr,c.color);
             }catch(...){if(source)replay.recycle(source);if(key)replay.recycle(key);replay.recycle(below);throw;}
             replay.recycle(source);if(key)replay.recycle(key);replay.recycle(below);
+            n->dependencies.swap(versions);
             original->map_dynamic=false;
             for(auto const& input:original->inputs)for(auto const& part:input.patches)
                 original->map_dynamic|=part.node->map_dynamic;

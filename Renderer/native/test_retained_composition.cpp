@@ -162,6 +162,46 @@ int test_retained_composition(){
         }
         std::puts("PASS retained direct unit: body survives two animated map samples in screen position");
     }
+    {
+        // A visual frame whose scene was not re-rendered samples the same
+        // completed render again. Importing it as a new image re-ran every
+        // operation over the map on every frame (review, section 33); the
+        // same generation now keeps the composed result.
+        Compositor native(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        auto map=native.create(w,h,Format::bgra32),screen=native.create(w,h,Format::bgra32);
+        std::vector<unsigned> pixels(w*h,0xff183040u);
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=w;desc.Height=h;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA initial={pixels.data(),w*4,0};ComPtr<ID3D11Texture2D> source;
+        checked(device->CreateTexture2D(&desc,&initial,&source));
+        std::uint64_t generation=7;
+        retained.create(map,w,h,Format::bgra32);retained.create(screen,w,h,Format::bgra32);
+        retained.source(map,source.Get(),[&](long long,long long){
+            return RetainedComposition::SampledImage::bgra(source.Get(),full,0.f,generation);},true,true);
+        retained.record({Kind::copy,screen,map,full,full});
+        // An offset copy is an operation that reads the map (the full copy
+        // above is a version selection).
+        retained.record({Kind::copy,screen,map,{20,10,40,30},full,10,5});
+        Rect panel={2,2,12,9};retained.record({Kind::fill,screen,0,panel,full,0,0,0xff6a2a10u});
+        retained.commit(screen,full);
+        auto check=[&](unsigned ground){
+            auto image=retained_read(device.Get(),context.Get(),retained.sample(1,1000).Get());
+            assert(image[4*w+5]==0xff6a2a10u && image[20*w+30]==ground);
+        };
+        check(0xff183040u);auto imports=retained.sampling_imports();assert(imports==1);
+        for(unsigned frame=0;frame<3;++frame){
+            check(0xff183040u);
+            assert(retained.sampling_imports()==imports && retained.last_work().operations==0);
+        }
+        // A new render is a new image: imported and composed exactly.
+        std::fill(pixels.begin(),pixels.end(),0xff52728cu);
+        context->UpdateSubresource(source.Get(),0,nullptr,pixels.data(),w*4,0);++generation;
+        check(0xff52728cu);assert(retained.sampling_imports()==imports+1 && retained.last_work().operations>0);
+        // Generation zero (no render identity) keeps sampling as before.
+        generation=0;check(0xff52728cu);check(0xff52728cu);assert(retained.sampling_imports()==imports+3);
+        ++checks;
+        std::puts("PASS unchanged render generation: three repeated frames import nothing and re-run no operation; a new render is exact");
+    }
     for(auto format:{Format::rgb555,Format::rgb565}){
         Compositor live(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
         auto create=[&](unsigned x,unsigned y,Format f){auto id=live.create(x,y,f);assert(id);retained.create(id,x,y,f);return id;};

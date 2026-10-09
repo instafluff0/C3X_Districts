@@ -252,6 +252,9 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
    - Verify: Civ III's draw to the presented frame ≤ one frame at p90; frame
      gaps; a step inside the resident world starts no job and changes no
      residency.
+   - **Order (the user, October 9):** stage 3 comes before the rest of 2c.
+     Every step first waits for the worker to finish composing Civ III's
+     interface into the current frame; stage 3 removes most of that work.
 3. **The interface as its own layer** (the H3 design in
    [camera_follow_and_hud_layer.md](camera_follow_and_hud_layer.md)).
    - At each front commit, the interface above the map is compiled into a
@@ -265,6 +268,29 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      shorter image queues (G5), interface memory 0.32–0.39 → about 0.1 GB.
    - Verify: bit-exact against today's interpreter over recorded native
      batches across animated frames; the existing HUD recipe oracles.
+   - **Measured starting point** (review, section 32): a busy idle frame
+     runs about seven full-screen GPU passes of interface replay (the
+     projected view and its quantized words, two HUD base copies, a
+     full-screen HUD dispatch, the world selection, front assembly, Civ
+     III's full-screen keyed canvas transfer, display) and about 2 ms of
+     CPU, because every operation reading the map re-runs when the map
+     image changes, which is every frame.
+   - **Phases**, each exact against the interpreter (`compiled_enabled`
+     off) before the next:
+     - 3.1 The view transform and the HUD program in one pass: the spatial
+       program starts from the projected scene pixel (detail and quantized
+       word computed in registers) instead of a copied world view. Removes
+       the view pass and both base copies.
+     - 3.2 The pointwise operations after the HUD (fixed shadows, Civ III's
+       keyed canvas transfer onto the screen, button images over the map)
+       join the same program; the world selection borrows its plane.
+     - 3.3 The front is composited at display time (H2) instead of copied
+       into a retained front texture.
+     - 3.4 Pixels proven independent of the map (the HUD cache's resolved
+       class, extended through 3.2) are kept across frames and zoom
+       placements; only map-dependent pixels run per frame.
+   - Cross-position reads (copies between positions, sprites from other
+     canvases) stay in the interpreter, as today.
 4. **Zoom drawn from the scene.** Zoom transitions sample the
    world-anchored lanes, removing the edge seams (review, section 24).
    Expected: zoom responds within one frame. (Scroll steps are not
