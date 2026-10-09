@@ -1083,3 +1083,54 @@ noise of u6:
 - scroll: 31.8 fps (1×), 34.9 (2×), 35.1 (3×), at native step pace;
 - zoom in: 51.6 fps;
 - jumps: 128 and 115 ms.
+
+## 23. Busy camera steps and frames after the memory changes (b11, October 8)
+
+Trace level 2, route witness, busy save, `near`.
+
+**Camera step job: 84.5 ms median, 226 ms at p90** (b58: 86 ms).
+- Tile uploads fell from 15.7 to 3.9 ms at the median, since the world is
+  resident. The p90 is still 57 ms.
+- The scene draw at the new camera is still 40 ms:
+  - shadows 17.3 ms (refresh 3.5, proofs 5.3, caster selection 1.9, page
+    draws 2.7);
+  - static layer 11 ms;
+  - water 3.9 ms; reflection 2.7 ms; units 2.1 ms.
+
+**Presented frames:** 18 ms median, 35 ms at p90.
+- Scene re-render for animation (`compose_prepare`): 10.1 ms.
+- Evaluation of about 2,560 native interface operations: 2.0 ms.
+- Heavy frames reach 5–21 ms of evaluation and up to 26 ms of scene
+  preparation.
+
+## 24. Glide fixes, and the glide on by default (October 8)
+
+**Bug (user report, 3350 BC save, 2× and 3× scroll).** With the glide on,
+zoomed scrolling showed repeated vertical slices or black at the trailing
+screen edge. Window frames at 10 Hz (v1–v7, `near`) and per-frame slide
+offsets (v8, route witness) found two causes:
+- **Nested trailing strips.** Each new step copied the selected world's
+  output as the previous world. While a slide ran, that output was the slid
+  composite, whose trailing strip was itself an older world, so continuous
+  scrolling nested the strips. The trailing world is now copied from the
+  selection's inputs at the start of Civ III's next world pass
+  (`copy_world_inputs`).
+- **Zoom.** A step whose trailing world was copied at another zoom does not
+  start, and camera moves across a zoom change (Civ III re-anchoring the
+  camera) do not slide.
+
+A first attempt removed the zoom scaling of steps; it was wrong (the
+selected world is the zoomed view, and Civ III's native steps are 128, 128
+and 84 px at 1×, 2× and 3×) and was reverted. Tests: `test_pan_transition.py`.
+
+**Verification.** A seam detector (an abrupt column change within 400 px of
+either edge) over every frame of 1×–3× scroll: no seams in 2× and 3×
+scroll. Slides occur only during scroll segments and the coast after them
+(v8: 187 of 196 presents in 2× scroll, 186 of 198 in 3×).
+- Seams remain in some zoom transitions in both glide runs (14 frames during
+  zoom-in notches, 5–9 after the 3× zoom), but no slide is active there. One
+  glide-off run had none. This is an intermittent zoom preview issue for G2,
+  not the glide.
+
+**Default.** At the user's request the glide is on by default;
+`C3X_RENDERER_GLIDE=0` restores stepped display.

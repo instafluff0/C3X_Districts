@@ -14966,6 +14966,7 @@ private:
     std::atomic<unsigned> presented_zoom_q16{65536};
     std::atomic<int> presented_pan_packed{0};
     int pan_origin_x=0,pan_origin_y=0;bool pan_origin=false; // last published map origin (1x basis)
+    double pan_origin_zoom=65536.; // presented zoom (Q16) at that publication
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     int last_visual_ready=-1;
 #ifdef C3X_HELPER_TRIAL
@@ -16049,19 +16050,23 @@ private:
                             // A small camera step slides into place (screen pixels at the
                             // settled presented zoom); jumps and zoom transitions cut.
                             // Civ III still chooses every step and its timing; only the
-                            // display glides between them (C3X_RENDERER_GLIDE=1).
+                            // display glides between them. On by default (user, October 8);
+                            // C3X_RENDERER_GLIDE=0 restores stepped display.
                             if(auto const& f=gpu_publication.frame;f.tile_count&&f.tiles){
                                 char glide[4]={};
-                                bool enabled=c3x_renderer::render_core::cached_environment("C3X_RENDERER_GLIDE",glide,sizeof(glide))&&glide[0]=='1';
+                                bool enabled=!(c3x_renderer::render_core::cached_environment("C3X_RENDERER_GLIDE",glide,sizeof(glide))&&glide[0]=='0');
                                 int ox=f.tiles[0].anchor_x-f.tiles[0].tile_x*int(f.tile_width)/2;
                                 int oy=f.tiles[0].anchor_y-f.tiles[0].tile_y*int(f.tile_height)/2;
                                 auto presented=double(presented_zoom_q16.load(std::memory_order_acquire));
                                 bool settled=std::abs(double(c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed))*65536.-presented)<=1.;
                                 int dx=int(std::lround(-double(ox-pan_origin_x)*presented/65536.));
                                 int dy=int(std::lround(-double(oy-pan_origin_y)*presented/65536.));
-                                bool step=enabled&&pan_origin&&settled&&std::abs(dx)<=int(f.target_width)/2&&std::abs(dy)<=int(f.target_height)/2;
+                                // A zoom re-anchors Civ III's camera; that move is not a
+                                // scroll step and its previous world is at another scale.
+                                bool same_zoom=presented==pan_origin_zoom;
+                                bool step=enabled&&pan_origin&&settled&&same_zoom&&std::abs(dx)<=int(f.target_width)/2&&std::abs(dy)<=int(f.target_height)/2;
                                 session.camera_step(step?dx:0,step?dy:0);
-                                pan_origin_x=ox;pan_origin_y=oy;pan_origin=true;
+                                pan_origin_x=ox;pan_origin_y=oy;pan_origin=true;pan_origin_zoom=presented;
                             }
                             gpu_replacements=gpu_publication.replacements;gpu_fallbacks=gpu_publication.fallback;
                             gpu_metadata.replacement_tile_flags=gpu_replacements.empty()?nullptr:gpu_replacements.data();

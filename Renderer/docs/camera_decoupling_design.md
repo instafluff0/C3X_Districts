@@ -199,7 +199,7 @@ regression test that fails on the old behaviour.
 ## Decisions for the user
 
 - **Option C, display between steps.** Accepted on October 8 as the image
-  glide behind `C3X_RENDERER_GLIDE` (review, section 17); stage 4 replaces it
-  with a rendered glide.
+  glide, on by default since October 8 (`C3X_RENDERER_GLIDE=0` turns it off;
+  review, sections 17 and 24). Stage 4 replaces it with a rendered glide.
 - **First frame after a far jump.** A coarse terrain view (no units, shadows
   or detail for up to 500 ms), or today's wait.

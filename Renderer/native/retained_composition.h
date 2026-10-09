@@ -1363,14 +1363,27 @@ public:
         pan_under[0]=under?under[0]:Texture{};pan_under[1]=under?under[1]:Texture{};
     }
     // Copy the displayed world planes before a camera step replaces them.
-    bool copy_selected_world(Texture out[2]){
+    // The previous camera's world planes as the last frame assembled them,
+    // before the next native world pass records over them. While a slide
+    // runs, the selection's output is the slid composite, whose trailing strip
+    // is itself an older world; copying that output nested the strips into
+    // repeated slices during continuous scrolling (October 8, v1 and v3).
+    bool copy_world_inputs(Texture out[2]){
         auto n=world_selection;if(!n||!n->output[0]||!n->output[1])return false;
         for(unsigned i=0;i<2;++i){
             D3D11_TEXTURE2D_DESC desc={},have={};n->output[i]->GetDesc(&desc);if(out[i])out[i]->GetDesc(&have);
             if(!out[i]||have.Width!=desc.Width||have.Height!=desc.Height||have.Format!=desc.Format){
                 out[i].Reset();desc.MiscFlags=0;checked(device->CreateTexture2D(&desc,nullptr,&out[i]));
             }
-            context->CopyResource(out[i].Get(),n->output[i].Get());
+            ID3D11Texture2D* plane=nullptr;Id source=0;
+            if(compiled_enabled&&n->inputs[i].format==n->selected_format[i]&&exact_plane(n->inputs[i],n->area)){
+                auto const& patch=n->inputs[i].patches.front();plane=patch.node->output[patch.output].Get();
+            }else{source=assemble(n->inputs[i],drawn_ticks,drawn_frequency,1,{},true,true,out[i].Get());plane=replay.texture(source);}
+            if(plane!=out[i].Get()){
+                D3D11_BOX box={0,0,0,unsigned(n->area.right-n->area.left),unsigned(n->area.bottom-n->area.top),1};
+                context->CopySubresourceRegion(out[i].Get(),0,0,0,0,plane,0,&box);++work.copies;
+            }
+            if(source)replay.recycle(source);
         }
         return true;
     }
@@ -1529,8 +1542,9 @@ public:
     }
     // Caller has supplied a completed native transfer. Rendering only touches
     // private scratch and the existing presenter's retained display.
+    long long drawn_ticks=0,drawn_frequency=1; // the last frame's sample time
     int draw(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
-        work={};selected_view_scale=1.;
+        work={};selected_view_scale=1.;drawn_ticks=ticks;drawn_frequency=frequency;
         if(!ready())return 0;++frame;
         using PhaseClock=std::chrono::steady_clock;
         auto phase=PhaseClock::now();

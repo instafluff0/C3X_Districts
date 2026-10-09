@@ -167,8 +167,9 @@ repl call, 0x4F0AF0, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
   the zoom target leaves the covered envelope, and keeps in-flight requests.
 - **Picking.** The native pick subtracts the presented camera-step slide
   (`C3X_NATIVE_PAN_PRESENTED`). Removed with vanilla scroll on October 7 and
-  restored on October 8 with the flag-gated glide (`C3X_RENDERER_GLIDE=1`);
-  with the glide off the presented slide is always zero.
+  restored on October 8 with the glide, which is on by default
+  (`C3X_RENDERER_GLIDE=0` turns it off; with it off the presented slide is
+  always zero).
 - **Not added:** no patch-table entry.
 - **Config-off:** delegation is unchanged.
 

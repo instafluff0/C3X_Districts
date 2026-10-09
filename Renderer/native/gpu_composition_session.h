@@ -20,8 +20,11 @@ class Session {
     c3x_renderer::PanTransition pan;
     ComPtr<ID3D11Texture2D> pan_under[2];
     int pan_step_x=0,pan_step_y=0;bool pan_pending=false,pan_armed=false;int presented_pan_packed=0;
+    double pan_under_scale=1.; // view scale the trailing world was copied at
     void start_pan(){
         if(!pan_armed)return;pan_armed=false;
+        // A trailing world copied before a zoom step is at the wrong scale.
+        if(zoom->moving()||std::abs(layers.view_scale()-pan_under_scale)>1e-6)return;
         LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
         pan.begin(pan_step_x,pan_step_y,now.QuadPart,frequency.QuadPart);
     }
@@ -104,20 +107,23 @@ class Session {
            !w||!h||w>2240||h>1260)throw std::runtime_error("invalid world composition boundary");
         if(c.kind==Kind::world_begin){
             auto format=gpu.format(c.destination);
-            if(world_width!=w||world_height!=h){
+            bool resized=world_width!=w||world_height!=h;
+            if(resized){
                 layers.destroy(world_words);layers.destroy(world_detail);layers.destroy(world_view_words);layers.destroy(world_view_detail);
                 layers.create(world_words,w,h,format);layers.create(world_detail,w,h,Format::bgra32);
                 layers.create(world_view_words,w,h,format);layers.create(world_view_detail,w,h,Format::bgra32);
                 world_width=w;world_height=h;
             }
             world_destination=c.destination;
+            // Before this pass records over them, keep the previous camera's
+            // world exactly as recorded for the slide's trailing strip.
+            if(pan_pending){pan_pending=false;pan_under_scale=layers.view_scale();
+                pan_armed=!resized&&!zoom->moving()&&layers.copy_world_inputs(pan_under);}
         }else if(world_destination!=c.destination||world_width!=w||world_height!=h)
             return; // Loading can compose the unit form before its map form.
         c.kind=Kind::native_image;c.destination=world_words;c.detail=world_detail;
         layers.record(c);
         if(input.kind==Kind::world_end){
-            // The displayed world planes still belong to the previous camera.
-            if(pan_pending){pan_pending=false;pan_armed=!zoom->moving()&&layers.copy_selected_world(pan_under);}
             layers.view(world_view_detail,world_detail,zoom,world_view_words);
             std::vector<RetainedComposition::Placed> placed;
             for(auto const& item:hud)for(auto draw:item.draws){
