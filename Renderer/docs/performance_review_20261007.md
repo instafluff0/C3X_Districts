@@ -1681,3 +1681,90 @@ pass but cannot promise bit-identical floating-point results across two
 shaders, so stage 3 stops here for now. Per frame the interface CPU is about
 1.5 ms of evaluation; about 30 small map-dependent operations remain (tiny
 copies, 74 k pixels per frame).
+
+## 38. How a busy scroll step's period forms; steps drawn at adoption (stage 2c, October 9)
+
+**Civ III's tick.** Edge scrolling runs on a 66 ms window timer (`Timer::activate`
+→ `SetTimer`), about 78 ms at the default timer resolution. Each tick runs the
+Animator update first, which polls and adopts a ready step and redraws, and
+then `scroll_at_mouse`, which requests the next step. A step therefore needs
+its request delivered and its work done before a later tick polls it. When a
+tick's own frame work runs past 78 ms, the next tick fires as soon as it ends,
+before any step requested at its end can be ready. So a step takes at least
+two ticks unless that frame work is short.
+
+**Where the period went (s0b, busy save, window on).** Median step period
+301 / 200 / 278 / 231 ms (1× x, 1× y, 2×, 3×), 3–4 ticks:
+- request to job ready 80–105 ms (delivery 15–27, job 45–75);
+- wait for the next tick 47–56 ms;
+- the adoption pass 15–48 ms;
+- the rest of Civ III's frame before the next request 54–75 ms.
+
+Civ III's thread spends 300–630 ms of every 2 s of busy scrolling inside the
+bridge's hooks:
+- unit draws about 60 µs each;
+- about 1 ms per navigation call;
+- up to 214 ms waiting for the click-test queue (`native-call-waits
+  backlog_ms`).
+
+Each step was also drawn twice: once by its job, and again by its adoption
+(17–23 ms) so that a newer pose shown in between could not rewind.
+
+**Change.** A step that keeps the resident window and its tile content
+completes at request time, reporting Civ III's tile ownership, and is drawn
+once, by its adoption. Crossings and content changes keep full jobs.
+- Ownership comes from the last draw by tile content
+  (`render_core/deferred_step.h`). It is taken before that draw clears it for
+  tiles Civ III did not capture to draw (RENDER), and it ignores placement
+  and per-capture authority bits (`CITY_BODY_KNOWN`,
+  `NATIVE_OVERLAYS_KNOWN`, which come with the view but not the margin).
+- The adoption compares what it reported with what it drew
+  (`deferred-step-ownership`). A first version took the masked array; this
+  check found 61–92 entering tiles per step reported as unowned (at the edge
+  of the zoom-out envelope, off screen at 1×).
+- Refusals are traced with their reason (`deferred-step-refused`).
+- `C3X_RENDERER_DEFERRED_STEPS=0` keeps every step a full job.
+- Tests: `test_deferred_step.py` (ownership follows content across
+  captures; content, exploration and block changes refuse; the adoption
+  draws before publishing; the reported flags are the unmasked ones).
+
+**Result (same build, deferral off d7 against on d6).**
+
+| | off (d7) | on (d6) | on: deferred steps | on: full jobs |
+|---|---|---|---|---|
+| 1× x | 379 ms | 229 | 199 | 487 |
+| 1× y | 221 ms | 200 | 156 | 353 |
+| 2× | 312 ms | 298 | 231 | 329 |
+| 3× | 230 ms | 161 | 156 | 393 |
+
+- 70 steps against 63 in the same scroll time.
+- 56 of 81 steps were deferred, with no ownership disagreements and no
+  native failures.
+- Camera requests wait longer in the bridge's queue (p50 26 against 7 ms):
+  the adoption's draw holds the helper worker while the next request
+  arrives.
+- Run-to-run noise is large: the deferral-off run was slower than s0b
+  (379 against 301 ms at 1× x).
+- An unprofiled cadence run with deferral on (d8) had step medians of
+  223 / 234 / 232 / 234 ms. It had no seam frames in any segment and no
+  native failures. Idle was 40.6 fps at 1×, 56.6 at 3× and 46.3 in the last
+  1× segment. Frames presented while scrolling: 6.8 / 19.0 / 7.4 / 6.1 per
+  second.
+
+**What remains for one step per tick.**
+- Deferred steps take 156–231 ms, two ticks. The adoption's draw now lands
+  inside Civ III's tick, which waits behind it (its frame after the pass is
+  58–132 ms).
+- The adoption must not hold Civ III or the transport. The step should be
+  drawn in the next display frame, with the display holding the previous
+  frame until the new one is ready.
+- Civ III's per-tick time in the hooks must fall.
+- Block crossings (25–31% of steps, 330–490 ms) need their entering band's
+  work spread across steps.
+
+Baselines recorded before deletion (window off s0a / on s0b, median ms):
+
+| | wait | queued | send | job | adopt |
+|---|---|---|---|---|---|
+| s0a (off) | 19.9 | 12.1 | 8.7 | 63.8 | 168.5 |
+| s0b (on) | 26.1 | 0.2 | 18.3 | 56.4 | 175.6 |

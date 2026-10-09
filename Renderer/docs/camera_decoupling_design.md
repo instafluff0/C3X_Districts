@@ -255,6 +255,21 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
    - **Order (the user, October 9):** stage 3 comes before the rest of 2c.
      Every step first waits for the worker to finish composing Civ III's
      interface into the current frame; stage 3 removes most of that work.
+   - **How a step's period forms (review, section 38).** Each Civ III tick
+     adopts a ready step, redraws, then requests the next step. When that
+     frame work passes 78 ms, the next tick fires before any new step can
+     be ready, so the period is at least two ticks until Civ III's frame
+     work is short. Measured busy steps took 3–4 ticks.
+   - **2c.1, steps drawn at adoption. In place** with the window (section
+     38): a step that keeps the window and its tile content completes at
+     request with Civ III's tile ownership and is drawn once, by its
+     adoption. Same-build A/B: median period 286 → 222 ms over the four
+     scroll segments; deferred steps take two ticks (156–231 ms).
+   - **Next, 2c.2:** the adoption does not draw. The step is drawn in the
+     next display frame, which holds the previous frame until the new one
+     is ready, so neither Civ III's tick nor the transport waits for the
+     draw. Then Civ III's per-tick hook time, and crossings spread across
+     steps.
 3. **The interface as its own layer** (the H3 design in
    [camera_follow_and_hud_layer.md](camera_follow_and_hud_layer.md)).
    - At each front commit, the interface above the map is compiled into a

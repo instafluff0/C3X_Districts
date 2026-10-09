@@ -95,6 +95,7 @@ void c3x_renderer64_memory_census(unsigned long long dxgi_usage);
 #include "render_core/retained_scene_view.h"
 #include "render_core/foreground_selection.h"
 #include "render_core/world_window.h"
+#include "render_core/deferred_step.h"
 #include "render_core/canonical_membership_diff.h"
 #include "camera_completion.h"
 #include "render_core/draw_parameter_stream.h"
@@ -1037,6 +1038,10 @@ public:
     std::vector<std::uint32_t> pixels;
     std::vector<c3x_renderer_u32> fallback_tile_indices;
     std::vector<c3x_renderer_u32> replacement_tile_flags;
+    // The last camera render's ownership by tile content, before RENDER
+    // masks it (window order): steps drawn at adoption report from it.
+    // Empty when the render took another path.
+    std::vector<c3x_renderer_u32> window_content_flags;
     std::array<TerrainTexture, c3x_renderer::terrain_type_count> terrain_textures;
     TerrainTexture dune_surface;
     c3x_renderer::FeatureBundle feature_bundle;
@@ -8652,6 +8657,7 @@ public:
         // The resident world window replaces the capture's selection before
         // anything reads the frame's tiles; output stays in capture order.
         world_window.valid=false;window_skips={};
+        if(prewarm_index<0)window_content_flags.clear();
         if(world_window_control && gpu_output_mode && prewarm_index<0 && !content_view && scene_surface_requested && city_profile &&
            world_window.build(native_frame,[&](int x,int y,c3x_renderer_tile_v1& tile){return window_tile(x,y,tile);})){
             window_frame=native_frame;window_frame.tiles=world_window.tiles.data();
@@ -12436,6 +12442,7 @@ public:
         }
         if(!make_tile_cache_room(0))return false; // include both current and still-selected retired leases
         geometry_cache.content_replacement_flags=build_replacement;
+        if(!prewarming)window_content_flags=build_replacement;
         // Off-screen caster geometry contributes shadows but never replaces a
         // native draw. Keep the public ownership array aligned with RENDER,
         // including the copies retained for bitmap and translated-cache hits.
@@ -12471,6 +12478,7 @@ public:
         } else {
             if(covered_membership){
                 build_replacement=retained_replacements;build_fallback.clear();textured_tile_count=0;fallback_tile_count=0;
+                window_content_flags=retained_replacements;
                 for(unsigned i=0;i<frame.tile_count;++i){
                     auto handle=retained_handles[i];if(!handle.generation)continue;
                     auto owner=resident_content.resolve(handle);if(!owner)return false;++textured_tile_count;
@@ -12986,6 +12994,9 @@ struct PublishedMapFrame {
     c3x_renderer_camera_identity_v1 identity={};
     std::uint64_t scene_signature=0;
     bool fresh=false;
+    // A step drawn at its adoption: the resident texture is the previous
+    // draw, kept only to satisfy readiness. It is never published.
+    bool deferred=false;
     int phase_x=0,phase_y=0;
     PublishedMapFrame()=default;
     PublishedMapFrame(PublishedMapFrame const&)=delete;
@@ -12996,7 +13007,7 @@ struct PublishedMapFrame {
         pixels.swap(other.pixels);fallback.swap(other.fallback);replacements.swap(other.replacements);
         occurrences.swap(other.occurrences);std::swap(frame,other.frame);std::swap(identity,other.identity);
         std::swap(scene_signature,other.scene_signature);
-        std::swap(fresh,other.fresh);
+        std::swap(fresh,other.fresh);std::swap(deferred,other.deferred);
         std::swap(phase_x,other.phase_x);std::swap(phase_y,other.phase_y);
     }
     std::size_t bytes() const {
@@ -13095,7 +13106,7 @@ struct PublishedMapFrame {
         std::vector<std::uint32_t>().swap(fallback);
         std::vector<std::uint32_t>().swap(replacements);
         std::vector<c3x_renderer_tile_v1>().swap(occurrences);frame={};identity={};
-        resident={};source_x=source_y=0;output={};scene_signature=0;fresh=false;phase_x=phase_y=0;
+        resident={};source_x=source_y=0;output={};scene_signature=0;fresh=false;deferred=false;phase_x=phase_y=0;
     }
 };
 
@@ -15136,6 +15147,8 @@ private:
     c3x_renderer_camera_completion_fn camera_completion_observer=nullptr;
     void* camera_completion_context=nullptr;
     bool camera_gpu=false,camera_ready_prepared=false;
+    // The last drawn resident window, for steps drawn at adoption (stage 2c).
+    c3x_renderer::render_core::DeferredStep::Drawn drawn_window;
     c3x_renderer_i64 gpu_camera_front_ticket=0;
     std::atomic<bool> camera_cancelled{false};
     std::atomic<c3x_renderer_i64> camera_obsolete_through{0};
@@ -15974,6 +15987,118 @@ private:
         target.fresh=std::strcmp(renderer_state.frame_cache_path,"resident-fresh")==0;
         return true;
     }
+    // Stage 2c (camera decoupling design): a scroll step that keeps the
+    // resident window and its content completes without a draw. Its adoption
+    // on Civ III's next tick draws it once, instead of this job drawing it and
+    // the adoption drawing it again (review, section 38). Civ III draws its
+    // own layers from the ownership reported here, before that draw.
+    // C3X_RENDERER_DEFERRED_STEPS=0 keeps every step a full job (A/B).
+    bool defer_scroll_step(PublishedMapFrame& ready){
+#ifndef C3X_RENDERER64_FRESH
+        (void)ready;return false; // only the fresh adoption draws a deferred step
+#else
+        char option[4]={};
+        if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_DEFERRED_STEPS",option,sizeof(option))&&option[0]=='0')return false;
+        auto& state=renderer_state;auto const& shown=gpu_publication;auto const& next=job_frame;
+        // Refusals are traced with their reason: 1 window off or nothing
+        // shown, 2 same camera, 3 identity, 4 projection, 5 no drawn window,
+        // 6 device/content, 7 window build, 8 resident set, 9 tile content,
+        // 10 publication capture.
+        auto refuse=[&](unsigned reason,char const* extra=""){
+            char detail[320];std::snprintf(detail,sizeof(detail),"ticket=%lld reason=%u%s",job_camera_ticket,reason,extra);
+            state.trace.write("deferred-step-refused",detail,true);return false;};
+        if(!state.world_window_control || !shown.resident.texture || shown.deferred || !next.tile_count || !next.tiles)return refuse(1);
+        // Same-camera requests keep their existing completed-scene path.
+        if(shown.matches_projection(next,job_camera_identity))return refuse(2);
+        if(std::memcmp(&shown.identity,&job_camera_identity,sizeof(shown.identity))){
+            char extra[192];std::snprintf(extra,sizeof(extra)," shown=%lld,%lld,%lld,%lld next=%lld,%lld,%lld,%lld",
+                shown.identity.map_epoch,shown.identity.viewer_epoch,shown.identity.visibility_epoch,shown.identity.scene_epoch,
+                job_camera_identity.map_epoch,job_camera_identity.viewer_epoch,job_camera_identity.visibility_epoch,job_camera_identity.scene_epoch);
+            return refuse(3,extra);}
+        if(shown.frame.target_width!=next.target_width || shown.frame.target_height!=next.target_height ||
+           shown.frame.tile_width!=next.tile_width || shown.frame.tile_height!=next.tile_height ||
+           shown.frame.world_width_tiles!=next.world_width_tiles || shown.frame.world_height_tiles!=next.world_height_tiles ||
+           shown.frame.world_wrap_x!=next.world_wrap_x || shown.frame.world_wrap_y!=next.world_wrap_y)return refuse(4);
+        if(!drawn_window.valid())return refuse(5);
+        if(drawn_window.device!=state.device_generation || drawn_window.content!=state.content_revision)return refuse(6);
+        c3x_renderer::render_core::WorldWindow window;std::vector<c3x_renderer_u32> flags;
+        if(!window.build(next,[&](int x,int y,c3x_renderer_tile_v1& tile){return state.window_tile(x,y,tile);}))return refuse(7);
+        auto same=[&](c3x_renderer_tile_v1 const& a,c3x_renderer_tile_v1 const& b){return state.same_terrain_content(a,b);};
+        if(!c3x_renderer::render_core::DeferredStep::ownership(drawn_window,window,next.tile_count,same,flags)){
+            if(window.box!=drawn_window.window.box || window.window_count!=drawn_window.window.window_count){
+                char extra[160];std::snprintf(extra,sizeof(extra)," window=%u,%u box_same=%u",
+                    drawn_window.window.window_count,window.window_count,unsigned(window.box==drawn_window.window.box));
+                return refuse(8,extra);}
+            unsigned first=~0u,count=0;
+            for(unsigned i=0;i<window.window_count;++i){auto a=drawn_window.window.tiles[i],b=window.tiles[i];
+                a.anchor_x=b.anchor_x;a.anchor_y=b.anchor_y;
+                a.tile_flags&=~c3x_renderer::render_core::DeferredStep::placement;b.tile_flags&=~c3x_renderer::render_core::DeferredStep::placement;
+                if(!same(a,b)){if(first==~0u)first=i;++count;}}
+            char extra[256]={};
+            if(first!=~0u){auto const& a=drawn_window.window.tiles[first];auto const& b=window.tiles[first];
+                std::snprintf(extra,sizeof(extra)," tiles=%u first=%u at=%d,%d flags=%x,%x seed=%u,%u effect=%u,%u city=%d,%d size=%d,%d edge=%x,%x improvement=%x,%x",
+                    count,first,b.tile_x,b.tile_y,a.tile_flags,b.tile_flags,a.variant_seed,b.variant_seed,a.has_effect,b.has_effect,
+                    a.city_id,b.city_id,a.city_size,b.city_size,a.territory_edge_mask,b.territory_edge_mask,a.improvement_flags,b.improvement_flags);}
+            return refuse(9,extra);
+        }
+        auto output=shown.output;
+        output.clip_left=next.clip_left;output.clip_top=next.clip_top;output.clip_right=next.clip_right;output.clip_bottom=next.clip_bottom;
+        output.replacement_tile_flags=flags.empty()?nullptr:flags.data();output.replacement_tile_count=c3x_renderer_u32(flags.size());
+        output.fallback_tile_indices=nullptr;output.fallback_tile_count=0;output.bgra_pixels=nullptr;
+        // The drawn view's ambient animation demand, as the adoption reports it.
+        auto ambient=shown.output.visible_animation_count>shown.frame.visible_animation_count?
+            shown.output.visible_animation_count-shown.frame.visible_animation_count:0u;
+        output.visible_animation_count=next.visible_animation_count+ambient;
+        output.request_continuous_redraw=output.visible_animation_count!=0;
+        if(!ready.capture(output,next.tiles[0].anchor_x,next.tiles[0].anchor_y,&next,job_camera_identity,&shown.resident))return refuse(10);
+        ready.fresh=true;ready.deferred=true;return true;
+#endif
+    }
+    void remember_drawn_window(){
+        drawn_window.remember(renderer_state.world_window,renderer_state.window_content_flags,
+            renderer_state.device_generation,renderer_state.content_revision);
+    }
+    // The adopted step's one draw, before anything publishes it. Civ III has
+    // already drawn its layers with the step's reported ownership; a draw
+    // that disagrees is traced. A failed draw retries once without the
+    // retained scene pins, as a camera job does under memory pressure.
+    bool draw_deferred_step(){
+        if(job_camera_ticket!=camera_ticket)return false;
+        auto promised=gpu_publication.replacements;
+        auto draw=[this]{
+            c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};
+            GpuOutputMode mode(renderer_state,true);
+            return renderer_state.render(job_frame,output,-1,nullptr) &&
+                capture_gpu(gpu_publication,output,job_frame,job_camera_identity);
+        };
+        bool drawn=false;
+        try{
+            drawn=draw();
+            if(!drawn){
+#ifdef C3X_RENDERER64_FRESH
+                retire_completed_scene();
+#endif
+                renderer_state.discard_scene_view();
+                renderer_state.trace.write("camera-retained-pressure","deferred step retry",true);
+                drawn=draw();
+            }
+        }catch(std::exception const& error){renderer_state.trace.write("camera-error",error.what(),true);drawn=false;}
+        if(!drawn){renderer_state.discard_scene_view();return false;}
+        remember_drawn_window();
+        if(promised!=gpu_publication.replacements){
+            auto const& real=gpu_publication.replacements;
+            std::size_t differ=promised.size()!=real.size()?promised.size():0,first=~std::size_t(0);
+            for(std::size_t i=0;promised.size()==real.size() && i<promised.size();++i)
+                if(promised[i]!=real[i]){++differ;if(first==~std::size_t(0))first=i;}
+            char detail[384];int used=std::snprintf(detail,sizeof(detail),"ticket=%lld tiles=%zu differ=%zu",camera_ticket,promised.size(),differ);
+            if(first!=~std::size_t(0) && first<job_frame.tile_count){auto const& t=job_frame.tiles[first];
+                std::snprintf(detail+used,sizeof(detail)-used," first=%zu at=%d,%d anchor=%d,%d promised=%x real=%x flags=%x terrain=%d,%d resource=%d city=%d road=%x rail=%x improvement=%x effect=%u",
+                    first,t.tile_x,t.tile_y,t.anchor_x,t.anchor_y,promised[first],real[first],t.tile_flags,t.terrain_type,t.real_terrain_type,
+                    t.resource_id,t.city_id,t.road_mask,t.railroad_mask,t.improvement_flags,t.has_effect);}
+            renderer_state.trace.write("deferred-step-ownership",detail,true);
+        }
+        return true;
+    }
 
     void prepare_ahead(std::unique_lock<std::mutex>& lock) {
         auto quantum=std::max<c3x_renderer_i64>(1,ahead_frame.presentation_frequency/15);
@@ -16077,6 +16202,11 @@ private:
                 gpu_view={sizeof(gpu_view)};gpu_metadata={C3X_RENDERER_API_VERSION,sizeof(gpu_metadata)};
                 {
                     bool ready=gpu_publication.resident.texture!=nullptr;
+#ifdef C3X_RENDERER64_FRESH
+                    // A deferred step's placeholder never reaches the session.
+                    bool const drawn_now=ready && gpu_publication.deferred;
+                    if(ready && gpu_publication.deferred)ready=draw_deferred_step();
+#endif
                     gpu_metadata=gpu_publication.output;
                     if(ready){
                         if(!renderer_state.gpu_composition)renderer_state.gpu_composition=std::make_unique<c3x_gpu_images::Session>(renderer_state.device,renderer_state.context);
@@ -16090,7 +16220,9 @@ private:
                         // body or re-cover a reveal already displayed meanwhile.
                         camera_scene_complete=true;retire_completed_scene();
                         advance_visual_clock();unit_instances.resume_motion(visual_ticks,visual_frequency);
-                        if(map_sample.prepare){
+                        // A step drawn just now is current: travel was held
+                        // since its job started, so no newer pose was shown.
+                        if(map_sample.prepare && !drawn_now){
                             map_sample.prepare(visual_ticks,visual_frequency,1.f);
                             if(prepared_map && prepared_map->ready)initial=prepared_map->front.Get();
                         }
@@ -17001,6 +17133,9 @@ private:
                                 "GPU camera lacks scene surface or visual preparation; no legacy map render",true);
                             result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
                         }
+                        // A step inside the resident world completes now and is
+                        // drawn once, by its adoption (stage 2c).
+                        else if(!initial_world && defer_scroll_step(ready))result=C3X_RENDERER_RESULT_OK;
                         else {
                             GpuOutputMode mode(renderer_state,true);
                             struct LoadingLease {
@@ -17031,6 +17166,7 @@ private:
                             }
                             complete=complete && !camera_cancelled.load(std::memory_order_relaxed) &&
                                 capture_gpu(ready,output,job_frame,job_camera_identity);
+                            if(complete)remember_drawn_window();
                             result=complete?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
                         }
                     }catch(c3x_renderer::render_core::CliffPreparationCancelled const&){result=C3X_RENDERER_RESULT_SUPERSEDED;}
@@ -17052,8 +17188,8 @@ private:
                         }
                         camera_result=result;
                     }
-                    char detail[192];std::snprintf(detail,sizeof(detail),"ticket=%lld current=%lld result=%d gpu=1 prepared=%u bytes=%zu",
-                        gpu_ticket,camera_ticket,result,0u,ready.bytes()+camera_ready.bytes());
+                    char detail[192];std::snprintf(detail,sizeof(detail),"ticket=%lld current=%lld result=%d gpu=1 prepared=%u bytes=%zu deferred=%u",
+                        gpu_ticket,camera_ticket,result,0u,ready.bytes()+camera_ready.bytes(),unsigned(camera_ready.deferred&&gpu_ticket==camera_ticket));
                     renderer_state.trace.write("camera-complete",detail,true);
                     camera_active=false;foreground_pending.store(camera_pending,std::memory_order_relaxed);completed.notify_all();
 #ifdef C3X_RENDERER64_FRESH

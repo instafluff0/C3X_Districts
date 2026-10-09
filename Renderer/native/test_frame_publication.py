@@ -365,6 +365,7 @@ int main(){
 #include "Renderer/native/tactical_overlay.h"
 #include "Renderer/native/render_core/scene_surface.h"
 #include "Renderer/native/camera_completion.h"
+#include "Renderer/native/render_core/deferred_step.h"
 #include <functional>
 // Recording is an observation seam; this scheduler fixture leaves it disabled.
 namespace c3x_inputs {
@@ -565,6 +566,8 @@ struct RendererState {
     struct {bool enabled=false;} reflection;std::unique_ptr<c3x_gpu_images::Session> gpu_composition;
     unsigned cache_hits=0,device_recoveries=0,frame_tiles_built=0,frame_tiles_reused=0,prepared_blocks=0,visible_resource_animations=0;
     unsigned content_revision=1,device_generation=1;
+    // Deferred steps (stage 2c) need the fresh adoption; this fixture keeps full jobs.
+    c3x_renderer::render_core::WorldWindow world_window;std::vector<c3x_renderer_u32> replacement_tile_flags,window_content_flags;
     unsigned ambient_count() const {return visible_resource_animations;}
     bool can_prepare_ambient() const {return animate_pixels && visible_resource_animations;}
     std::size_t prefetched_geometry_bytes=0,tile_geometry_cache_bytes=0;
