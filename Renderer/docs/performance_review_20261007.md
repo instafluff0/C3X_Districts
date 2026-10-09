@@ -1768,3 +1768,48 @@ Baselines recorded before deletion (window off s0a / on s0b, median ms):
 |---|---|---|---|---|---|
 | s0a (off) | 19.9 | 12.1 | 8.7 | 63.8 | 168.5 |
 | s0b (on) | 26.1 | 0.2 | 18.3 | 56.4 | 175.6 |
+
+## 39. Drawing the step outside its adoption (stage 2c.2, tried and reverted, October 9)
+
+**Change tried.** The adoption only published the step and scheduled its
+draw as a worker job. The job ran outside the call gate and serviced
+commands at its checkpoints. The display held the previous frame until a
+frame had sampled the step's image, using a two-level hold: a pending draw
+skips the frame before evaluation; an unsampled image is evaluated but not
+presented.
+
+**Result (d9 against d6, same options).**
+- Deferred steps: 207 / 163 / 215 / 206 ms against 199 / 156 / 231 / 156.
+- 61 steps against 70 in the scroll segments.
+- No failures or ownership disagreements.
+- The adoption itself now finished before Civ III's pass ended, as intended.
+
+**Why it did not help.**
+- The step's draw is about 55 ms of worker time (p90 99) with few
+  checkpoints.
+- Civ III's image commands hold the call gate while they wait for those
+  checkpoints, and the next camera request waits behind them. In one step
+  it waited 85 ms in the bridge queue and then 128 ms in service.
+- Moving the draw did not reduce the worker's serial work per step: the
+  draw, the first display frame's re-render (13 ms) and compose, and Civ
+  III's image batches. The change was reverted; the patch is kept for when
+  the worker has headroom.
+
+**Per-step worker cost against an ordinary display frame (d9, medians).**
+
+| | step draw | display frame |
+|---|---|---|
+| pre-draw geometry (window, membership, waves, resources, setup) | 17 ms | none |
+| scene prepare | 10.1 ms | 1.1 |
+| of which unit body requirements / setup / unit poses | 4.3 / 1.65 / 0.9 | 0 / 0.28 / 0.68 |
+| static layer | 5.4 ms | 0.03 |
+| resource coverage | 1.4 ms | 0.03 |
+| water | 2.95 ms | 1.69 |
+
+About 35 ms of each covered step's draw re-prepares, for a new camera, a
+scene whose content did not change.
+
+**Next.** Make a covered step a frame-level camera update: carry the
+per-camera preparation across steps by translation (window tiles, unit body
+requirements, static placement, resource coverage), so a covered step costs
+about one display frame (13–20 ms).

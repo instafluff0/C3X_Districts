@@ -265,11 +265,15 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      request with Civ III's tile ownership and is drawn once, by its
      adoption. Same-build A/B: median period 286 → 222 ms over the four
      scroll segments; deferred steps take two ticks (156–231 ms).
-   - **Next, 2c.2:** the adoption does not draw. The step is drawn in the
-     next display frame, which holds the previous frame until the new one
-     is ready, so neither Civ III's tick nor the transport waits for the
-     draw. Then Civ III's per-tick hook time, and crossings spread across
-     steps.
+   - **2c.2, the draw outside the adoption: tried and reverted** (section
+     39). Steps are bound by the helper worker's serial work per step, not
+     by where the draw runs: about 55 ms per covered step, of which about
+     35 ms re-prepares an unchanged scene for the new camera.
+   - **Next, 2c.3:** a covered step as a frame-level camera update. The
+     per-camera preparation is carried across steps by translation (window
+     tiles, unit body requirements, static placement, resource coverage),
+     so a covered step costs about one display frame. Then Civ III's
+     per-tick hook time, and crossings spread across steps.
 3. **The interface as its own layer** (the H3 design in
    [camera_follow_and_hud_layer.md](camera_follow_and_hud_layer.md)).
    - At each front commit, the interface above the map is compiled into a
