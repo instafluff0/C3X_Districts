@@ -83,7 +83,7 @@ int main(){Harness h;
         static = static[:static.index('repair_front(front_index,displayed,settings,ring)')]
         self.assertIn('bool proven=renderer.borrowed_scene_frame;', static)
         self.assertIn('if(!proven){', static)
-        self.assertLess(static.index('if(!proven){'), static.index('proven=raster_dependencies('))
+        self.assertLess(static.index('if(!proven){'), static.index('raster_dependencies(raster_inputs[front_index]'))
 
     def test_capture_checker_flags_borrowed_redraws(self):
         spec = importlib.util.spec_from_file_location(

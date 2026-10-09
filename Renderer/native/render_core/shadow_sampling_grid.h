@@ -94,4 +94,46 @@ struct ShadowSamplingGrid {
         return valid;
     }
 };
+
+// The sampling span (texel density) of the shadow pages, fixed per receiver
+// region and light. A span that followed the receivers the view contains
+// refitted whenever the view crossed coasts or unexplored land, and each refit
+// changed the sampling identity: all pages redrawn and every retained static
+// pixel stale while scrolling (performance review, section 25). The region is
+// the receiver area in world x+y and x-y (tiles) plus the largest receiver
+// height range; its light-space extent is camera-independent. The span grows
+// only if a receiver reaches past it. Each region (zoom level) keeps its span
+// under one light, so returning to a zoom does not grow it again.
+struct StableShadowSpan {
+    std::array<float,2> span{},area{},want{};
+    std::array<float,12> light{};
+    std::uint64_t refits=0;
+    struct Remembered {std::array<float,2> area{},span{};};
+    std::array<Remembered,16> remembered{};unsigned next_remembered=0;
+    // u = b0 x + b1 y + b2 z = (b0+b1)/2 (x+y) + (b0-b1)/2 (x-y) + b2 z.
+    static float region_extent(std::array<float,12> const& basis,unsigned axis,std::array<float,2> region,float height){
+        float const* b=basis.data()+axis*4;
+        return std::abs(b[0]+b[1])*.5f*region[0]+std::abs(b[0]-b[1])*.5f*region[1]+std::abs(b[2])*height;
+    }
+    // Writes the even span per axis; false if `needed` is not a finite box.
+    bool update(float const* needed,std::array<float,12> const& basis,std::array<float,2> region,float height,float guard){
+        if(light!=basis){span={0,0};light=basis;area=region;remembered={};next_remembered=0;}
+        else if(area!=region){
+            bool kept=false;
+            for(auto& entry:remembered)if(entry.area==area){entry.span=span;kept=true;break;}
+            if(!kept && span[0]>0){remembered[next_remembered]={area,span};next_remembered=(next_remembered+1)%unsigned(remembered.size());}
+            span={0,0};area=region;
+            for(auto const& entry:remembered)if(entry.area==region){span=entry.span;break;}
+        }
+        for(unsigned axis=0;axis<2;++axis){
+            float extent=needed[axis+2]-needed[axis]+2*guard;
+            if(!std::isfinite(extent) || !(extent>0))return false;
+            want[axis]=extent;
+            float fixed=region_extent(basis,axis,region,height)+2*guard;
+            if(std::isfinite(fixed))extent=std::max(extent,fixed);
+            if(!(span[axis]>=extent)){span[axis]=std::ceil(extent/2.f)*2.f;++refits;}
+        }
+        return true;
+    }
+};
 } }

@@ -45,7 +45,7 @@ struct Test {
  int workload=0;int* work=&workload;bool ready=true;
  bool receiver_grid_valid=false;Grid receiver_grid;std::array<float,4> receiver_wrap{};
  std::array<std::uint64_t,2> receiver_key{};std::array<float,12> receiver_light{};
- unsigned receiver_reuses=0,receiver_builds=0,receiver_visits=0;
+ unsigned receiver_reuses=0,receiver_builds=0,receiver_visits=0;float receiver_height=0;
  bool ensure(){return ready;}bool refresh_casters(std::uint64_t){return true;}
  auto receiver_identity(std::uint64_t r,std::uint64_t s){return std::array<std::uint64_t,2>{r,s};}
  bool configure_stable(Grid& grid,float const* needed){
@@ -558,7 +558,7 @@ struct State {
  Grid receiver_grid;std::array<float,4> receiver_wrap{};std::array<std::uint64_t,9> receiver_key{};
  std::array<float,12> receiver_light{};bool receiver_grid_valid=false;
  std::uint64_t receiver_visits=0,receiver_builds=0,receiver_reuses=0;
- std::array<float,2> stable_span{};std::array<float,12> stable_light{};std::uint64_t span_refits=0;
+ std::array<float,2> receiver_area={8,8};float receiver_height=0;c3x_renderer::render_core::StableShadowSpan stable;
 ''' + identity + stable + r'''
  bool prepare(GeometryDrawView::Records const& receivers,std::uint64_t revision=1,std::uint64_t scene=1){
 ''' + coverage + r'''
@@ -581,17 +581,17 @@ int main(){State state;GeometryDrawView::Records records;records[0].resize(100);
  before=state.receiver_builds;assert(state.prepare(records,2,2));assert(state.receiver_builds==before+1);
  // A scrolling receiver set rebuilds the window but keeps the sampling span,
  // so retained static pixels and unchanged shadow pages stay valid.
- auto span=state.receiver_grid.quality_span;auto refits=state.span_refits;
+ auto span=state.receiver_grid.quality_span;auto refits=state.stable.refits;
  for(unsigned step=0;step<40;++step){
   for(auto& record:records[0]){record.world_bounds.low[0]+=.25f;record.world_bounds.high[0]+=.25f;}
   if(step%7==3)records[0].back().world_bounds.high[1]+=.05f;
   assert(state.prepare(records,100+step,2));
   assert(state.receiver_grid.quality_span==span);
  }
- assert(state.span_refits==refits);
+ assert(state.stable.refits==refits);
  // A genuinely larger receiver extent (zoom out) refits once.
  for(auto& record:records[0])record.world_bounds.high[1]+=20.f;
- assert(state.prepare(records,200,2));assert(state.span_refits==refits+1&&state.receiver_grid.quality_span!=span);
+ assert(state.prepare(records,200,2));assert(state.stable.refits==refits+1&&state.receiver_grid.quality_span!=span);
  sandbox_perf_options().shadow_tight=true;assert(state.prepare(records,201,2));
 }
 ''')

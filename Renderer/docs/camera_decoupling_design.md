@@ -1,8 +1,8 @@
 # Camera decoupling (G1) — design
 
-Status: draft for review, October 8, 2026. Goal G1 in
-[performance_goals.md](performance_goals.md); measurements in the
-[performance review](performance_review_20261007.md), sections 12–15.
+Status: staged plan agreed with the user on October 8, 2026 (see "Stages").
+Goal G1 in [performance_goals.md](performance_goals.md); measurements in the
+[performance review](performance_review_20261007.md), sections 12–25.
 
 ## Aim
 
@@ -158,48 +158,129 @@ Civ VI's internals are not confirmed; this is inferred from its behaviour.
 Civ III keeps choosing camera targets and step timing and keeps drawing its
 overlays on its tick. The renderer side can follow the Civ VI model.
 
+## What ties a frame to the camera job (verified in code, October 8)
+
+Every animated frame already re-renders the scene with the camera as an input
+(`retain_visual_map` → `c3x_renderer64_render_fresh`; the camera comes from the
+copied frame's tile anchors), and zoom already renders at cameras no job
+produced. Three things pin frames to the last camera job:
+
+1. **Caches are keyed to residency and the camera, not to world content.**
+   - The static layer's validation key includes the resident geometry revision
+     and lease order (`raster_validation_key`), so every step forces a full
+     membership proof. Its slot is anchored at the camera of its draw and
+     recentres when a step overruns the 320 × 192 px margin.
+   - Shadow pages lie on a light-space lattice, but reuse fails whenever the
+     resident set changes (`prepared_signature != view_revision`), so every
+     caster is re-collected and re-proven. The sampling span follows the
+     receiver extent; a refit invalidates every page and the static layer.
+   - The resident mesh set is the viewport plus a 2-tile ring, rebuilt by the
+     job; waves cover the render tiles ±1 cell.
+2. **The job and the frames share one thread** (the owner of the D3D11
+   immediate context). Frames during a job run only at its checkpoints, and a
+   camera-move job retires the completed view, so frames hold until it ends.
+3. **Civ III's interface is replayed every frame.** Its operations (text
+   curves, 5-bit blends, palette lookups, keyed shadows) read the 16-bit map
+   words underneath and are reproduced bit-exactly, so every node over map
+   pixels re-runs when the animated map changes.
+
+Civ III already adopts a step on the tick after its request, as native draws
+it, whenever the renderer is ready (`settle_custom_renderer_navigation`). A
+camera move that is not deferred instead blocks Civ III's map pass until the
+renderer's job finishes (`composite_custom_renderer_frame`, "first-map-wait").
+
+**Where Civ VI is not followed.**
+- The pre-drawn static layer stays: redrawing the static scene every frame is
+  about 5,900 draws (about 130 ms in the VM).
+- Civ III's interface stays bit-exact; it is not approximated with alpha
+  blending.
+
 ## Stages
 
 Each stage is measured back to back in the VM against the previous build
-(`near_report.py`, `zoom_report.py`, frame-gap analysis) and gets a
-regression test that fails on the old behaviour.
+(`near_report.py`, `zoom_report.py`, `step_report.py`, frame gaps, the seam
+check on 10 Hz window frames) and gets a regression test that fails on the old
+behaviour. Expected effects are estimates from per-phase traces until measured.
 
-1. **Camera lane (A1). Done** (review, section 16). Queue wait 121 to 70 ms.
-2. **Compact resident world.** The scene can be drawn at any camera near the
-   current one without a camera job, within Civ VI's memory tier
-   (performance goals, G1):
-   - camera-dependent caches update only their new edge: the static layer
-     bounded and without whole-layer re-checks or recentring, and shadow
-     pages updated by adding casters;
-   - the world is compact enough to stay resident (shared instanced models,
-     compact terrain), so steps upload nothing;
-   - units are kept resident and updated incrementally;
-   - new strips are built in bounded slices between frames.
+- **Done before this plan:** the camera lane (review, section 16), the image
+  glide (sections 17, 24), unit types on demand and the zoom-lane release
+  (sections 21, 22).
 
-   Done when a moved camera prepares in about the time of an unchanged one
-   (1 ms against 20.7 ms) and frames keep their cadence during scrolling.
-   Loading tiles ahead within today's representation was considered and set
-   aside: it would grow memory (review, section 19).
-3. **Adopt at Civ III's pace.** Civ III adopts each step on its own tick
-   instead of waiting for the job (`injected_code.c`: the step deferral in
-   `move_camera` and the gate in `scroll_at_mouse`), behind a configuration
-   flag. Presentation keeps the previous step until the new map frame and
-   Civ III's matching front are both ready, so overlays never misalign.
-4. **A rendered glide (option C).** The presented camera eases between Civ
-   III's steps, and the scene is drawn at that position every frame instead
-   of sliding a finished image. Civ III's map-attached overlays are offset by
-   the same amount between its ticks (as zoom already places map-attached
-   HUD), screen-fixed HUD stays put, and clicks map back through the offset
-   (already done for the image glide).
-5. **Far jumps (B).** A coarse, always-resident view of the whole map for the
-   first frame, then refinement within 500 ms.
-6. **Background refinement (G4).** Shadow and static quality complete in
-   later frames, spread across cores.
+0. **Baseline. Done** (review, sections 25–26). Tracked seam and frame-gap
+   checks (`seam_report.py`, `frame_gap_report.py`; an overlay-alignment check
+   comes with stage 2c); `near` twice on the busy, user and light saves and one
+   busy memory run. The baseline exposed stale glide strips, now fixed.
+1. **Caches tied to the world, not the camera.** Partly done (review,
+   sections 25–26): the shadow sampling span is fixed per receiver region and
+   remembered per zoom level. The busy step job did not change beyond run
+   noise, because residency itself follows the camera: Civ III's capture
+   defines the loaded tiles around each step, so casters and contributors
+   churn at every step, and a stale static layer cannot finish refining while
+   the camera moves. On October 8 the user agreed to fold the rest of stage 1
+   into stage 2.
+2. **A renderer-owned resident world; the camera as a frame input.**
+   - 2a. **Resident world.** The renderer keeps the tiles it has captured
+     (retained topology and prepared geometry) and selects them by world
+     blocks, so the loaded set changes only when the camera crosses a block,
+     far from drawn pixels. Civ III's capture only refreshes tiles that
+     changed. Shadow casters and raster proofs update when blocks change, not
+     at every step.
+   - 2b. **World-anchored static layer.** A wrap-around slot per lane, so
+     refinement and new strips continue during a scroll and nothing
+     recentres.
+   - 2c. **Steps without camera jobs.** A step inside the resident world is a
+     frame-level camera update; the new edge's strips and shadow pages are
+     filled in bounded slices; jobs remain for content changes and far
+     jumps, and frames keep animating while they run. The hidden canonical
+     1× lane is not redrawn on zoomed steps.
+   - Civ III then adopts each step on its next tick through the existing
+     poll. Only if steps still slip: adopt without the deferral (the old
+     stage 3), behind a flag.
+   - Expected: busy steps on every tick (78 ms, from 230–470 ms); 3350 BC
+     scroll frame-gap p90 43–47 → ≤ 20 ms. Each piece is measured on its own.
+   - Verify: Civ III's draw to the presented frame ≤ one frame at p90; frame
+     gaps; a step inside the resident world starts no job and changes no
+     residency.
+3. **The interface as its own layer** (the H3 design in
+   [camera_follow_and_hud_layer.md](camera_follow_and_hud_layer.md)).
+   - At each front commit, the interface above the map is compiled into a
+     retained layer of map-independent pixels plus a sparse program for
+     map-dependent pixels, run once in the final composite against the scene
+     pixel (computing its 16-bit word in place). No full-screen quantized
+     copy and no per-frame replay.
+   - Map-attached items stay a separate layer, shifted or placed with the
+     camera.
+   - Expected: light zoom toward ≥ 55 fps (G2), busy idle +5–10 fps (G3),
+     shorter image queues (G5), interface memory 0.32–0.39 → about 0.1 GB.
+   - Verify: bit-exact against today's interpreter over recorded native
+     batches across animated frames; the existing HUD recipe oracles.
+4. **Glide and zoom drawn from the scene.** The scene is drawn at the
+   presented camera instead of sliding a finished image with a trailing strip
+   of the previous world; Civ III's map-attached layer is offset by the same
+   amount (picking already subtracts it). Zoom transitions sample the
+   world-anchored lanes, removing the edge seams (review, section 24).
+   Expected: zoom responds within one frame; busy 2× scroll no longer soft.
+5. **A compact, instanced world within a memory tier.**
+   - A byte census by layer first (`world-streaming-cost`).
+   - Picture-identical changes in order of bytes per risk: city building
+     parts as shared instanced models (their placements are already recorded),
+     cliffs instanced, ordered rigid packets no longer re-copying meshes,
+     leaner vertex formats. Only if still over the tier: terrain generated on
+     the GPU from the height lattice (Lab comparison).
+   - The geometry budget becomes a fixed tier instead of following free
+     memory.
+   - Expected: busy save 3.4 GB GPU / 6.3 GB process (median) toward about
+     2 / 4 GB, with the whole explored world resident.
+6. **Far jumps (B).** A coarse, always-resident view of the whole map for the
+   first frame; Civ III adopts at once; full quality within 500 ms.
+
+If busy 1× idle still misses 55 fps after stage 3, unit-part batching (G3)
+comes next.
 
 ## Decisions for the user
 
 - **Option C, display between steps.** Accepted on October 8 as the image
   glide, on by default since October 8 (`C3X_RENDERER_GLIDE=0` turns it off;
   review, sections 17 and 24). Stage 4 replaces it with a rendered glide.
-- **First frame after a far jump.** A coarse terrain view (no units, shadows
-  or detail for up to 500 ms), or today's wait.
+- **First frame after a far jump** (stage 6). A coarse terrain view (no units,
+  shadows or detail for up to 500 ms), or today's wait.

@@ -780,28 +780,21 @@ struct SandboxSceneShadow {
     // static pixels stay valid while it is unchanged, even when the page
     // window slides and new pages are drawn for newly exposed receivers.
     std::uint64_t sampling_identity=0;
-    // World-anchored density: the span only changes when the receiver extent
-    // leaves a hysteresis band, so scrolling never refits (and never redraws)
-    // every page. A tight per-view fit made each scroll step a full rebuild.
-    std::array<float,2> stable_span{};
-    std::array<float,12> stable_light{};
-    std::uint64_t span_refits=0;
+    // World-anchored density (StableShadowSpan): the span is fixed by the
+    // receiver region (update_roi) and the light, so scrolling never refits.
+    // receiver_area: the region in world x+y and x-y (tiles, with a reach
+    // margin); receiver_height: the largest receiver height range seen.
+    std::array<float,2> receiver_area{};
+    float receiver_height=0;
+    c3x_renderer::render_core::StableShadowSpan stable;
     bool configure_stable(Grid& grid,float const* needed){
         if(sandbox_perf_options().shadow_tight)return grid.configure(needed,renderer.shadow_basis);
-        float bounds[4]={needed[0],needed[1],needed[2],needed[3]};
-        if(stable_light!=renderer.shadow_basis){stable_span={0,0};stable_light=renderer.shadow_basis;}
-        for(unsigned axis=0;axis<2;++axis){
-            float want=needed[axis+2]-needed[axis]+2*Grid::guard;
-            if(!std::isfinite(want) || !(want>0))return grid.configure(needed,renderer.shadow_basis);
-            if(!(stable_span[axis]>=want && stable_span[axis]<=want*1.45f)){
-                // Even spans are exact for configure(); 1.15x+2 stays inside the band.
-                stable_span[axis]=std::ceil(want*1.15f/2.f)*2.f;++span_refits;
-            }
-            // configure() derives exactly this (even) span from these bounds.
-            bounds[axis+2]=bounds[axis]+stable_span[axis]-2*Grid::guard;
-        }
+        if(!stable.update(needed,renderer.shadow_basis,receiver_area,receiver_height,Grid::guard))
+            return grid.configure(needed,renderer.shadow_basis);
+        // configure() derives exactly this (even) span from these bounds.
+        float bounds[4]={needed[0],needed[1],needed[0]+stable.span[0]-2*Grid::guard,needed[1]+stable.span[1]-2*Grid::guard};
         if(grid.configure(bounds,renderer.shadow_basis))return true;
-        stable_span={0,0};
+        stable.span={0,0};
         return grid.configure(needed,renderer.shadow_basis);
     }
     void update_sampling_identity(std::uint64_t scene,std::array<float,4> const& wrap){
@@ -1389,6 +1382,7 @@ struct SandboxSceneShadow {
             -std::numeric_limits<float>::max(),-std::numeric_limits<float>::max()};
         bool any=false;
         float zero[3]={};
+        float low_z=std::numeric_limits<float>::max(),high_z=-std::numeric_limits<float>::max();
         std::array<float,4> wrap_query{};
         Grid query_grid;
         auto next_receiver_key=receiver_identity(revision,scene);
@@ -1423,11 +1417,13 @@ struct SandboxSceneShadow {
                 auto p=Shadow::project(b,offset,renderer.shadow_basis);
                 needed[0]=std::min(needed[0],p[0]);needed[1]=std::min(needed[1],p[1]);
                 needed[2]=std::max(needed[2],p[2]);needed[3]=std::max(needed[3],p[3]);
+                low_z=std::min(low_z,b.low[2]);high_z=std::max(high_z,b.high[2]);
                 any=true;
             }
         // An unrevealed viewport has no receivers. Keep a finite neutral
         // extent so empty placement/shadow submissions remain valid.
         if (!any) { needed[0]=needed[1]=0;needed[2]=needed[3]=1; }
+        if(any && high_z-low_z>receiver_height && std::isfinite(high_z-low_z))receiver_height=high_z-low_z;
         if(!configure_stable(query_grid,needed))return false;
         receiver_grid=query_grid;receiver_wrap=wrap_query;receiver_key=next_receiver_key;receiver_light=renderer.shadow_basis;
         receiver_grid_valid=true;++receiver_builds;
@@ -1656,9 +1652,10 @@ struct SandboxSceneShadow {
         ++builds;
         update_sampling_identity(scene,wrap_query);
         lap(7);
-        char detail[384];sprintf_s(detail,"refresh_ms=%.2f receivers_ms=%.2f body_ms=%.2f proofs_ms=%.2f casters_ms=%.2f terrain_ms=%.2f bounds_ms=%.2f draw_ms=%.2f casters=%zu inputs=%zu pages=%u draws=%llu proved=%u reuse_failures=%u proof_stage=%u borrowed=%u",
+        char detail[768];sprintf_s(detail,"refresh_ms=%.2f receivers_ms=%.2f body_ms=%.2f proofs_ms=%.2f casters_ms=%.2f terrain_ms=%.2f bounds_ms=%.2f draw_ms=%.2f casters=%zu inputs=%zu pages=%u draws=%llu proved=%u reuse_failures=%u proof_stage=%u borrowed=%u span=%.0f,%.0f want=%.0f,%.0f refits=%llu",
             laps[0],laps[1],laps[2],laps[3],laps[4],laps[5],laps[6],laps[7],casters.size(),caster_inputs.size(),drawn_pages,
-            static_cast<unsigned long long>(draws),unsigned(proved),reuse_failures,page_proof_stage,unsigned(renderer.borrowed_scene_frame));
+            static_cast<unsigned long long>(draws),unsigned(proved),reuse_failures,page_proof_stage,unsigned(renderer.borrowed_scene_frame),
+            sampling_grid.quality_span[0],sampling_grid.quality_span[1],stable.want[0],stable.want[1],static_cast<unsigned long long>(stable.refits));
         renderer.trace.write("fresh-shadow-build",detail);
         return true;
     }
@@ -1850,7 +1847,13 @@ struct SandboxFreshPipeline {
         unsigned entry=0,home_entry=0;std::size_t input_bytes=0;
         // repair: 1 incomplete, 2 overflow, 3 order, 4 unlocated, 5 too broad, 6 draw; dirty rects/area %.
         unsigned repair=0,repair_rects=0,repair_percent=0,repair_changed=0,repair_reordered=0;
-        double boot_draw_ms=0,boot_deps_ms=0;long long boot_area=0;} static_decision;
+        // Repair causes: new contributor keys, visibility or proof changes,
+        // resident draws no longer visited, shadow footprints, unshadowed ring.
+        unsigned repair_new=0,repair_revised=0,repair_removed=0,repair_shadow=0,repair_ring=0;
+        double boot_draw_ms=0,boot_deps_ms=0;long long boot_area=0;
+        // CPU time of each part of the composition (trace level 2).
+        double proof_ms=0,repair_ms=0,recenter_ms=0,refine_ms=0,strip_ms=0,restore_ms=0;
+        unsigned key_diff=0;} static_decision; // bit i: key word i differs from the front's
     bool layout_reset=false;
     // Per-lane zoom motion: transactions draw lane 0 at 1x between visual frames.
     unsigned reflection_skips=0;std::array<float,2> lane_projection{};std::array<unsigned,2> lane_still{};
@@ -3826,19 +3829,21 @@ struct SandboxFreshPipeline {
             auto key=contributor_key(layer,record);current.insert(key);
             inputs.visit_membership(key);
             bool changed=!inputs.contains(key);
+            if(changed)++static_decision.repair_new;
             if(!changed){
                 auto tile=renderer.topology_cache.key(record.tile_x,record.tile_y);
                 auto observed=renderer.topology_cache.retained(tile);
                 auto seen=inputs.visibility.find(tile);
                 changed=seen==inputs.visibility.end() || seen->second!=(observed?observed->visibility_revision:0);
-            }
-            if(!changed){
-                auto proof=inputs.proofs.find(key[0]);
-                changed=proof==inputs.proofs.end() || !proof->second || !renderer.raster_content_valid(*proof->second);
+                if(!changed){
+                    auto proof=inputs.proofs.find(key[0]);
+                    changed=proof==inputs.proofs.end() || !proof->second || !renderer.raster_content_valid(*proof->second);
+                }
+                if(changed)++static_decision.repair_revised;
             }
             if(changed)mark(key);
         });
-        for(auto const& draw:inputs.draws)if(!current.count(draw.first) && tile_resident(draw.first))mark(draw.first);
+        for(auto const& draw:inputs.draws)if(!current.count(draw.first) && tile_resident(draw.first)){++static_decision.repair_removed;mark(draw.first);}
         // Lease order shifts as tiles move between the view and its halo;
         // order matters only where draws overlap, inside each draw's region.
         std::vector<std::uint32_t> reordered;
@@ -3853,10 +3858,10 @@ struct SandboxFreshPipeline {
         for(auto const& source:shadow_dirty){if(overflow)break;
             auto r=source_region_rect(source[0],source[1],source[2],source[3],view,192);
             r={std::max(r.left,c.left),std::max(r.top,c.top),std::min(r.right,c.right),std::min(r.bottom,c.bottom)};
-            if(!r.empty()){dirty.push_back(r);if(dirty.size()>4096)overflow=true;}
+            if(!r.empty()){++static_decision.repair_shadow;dirty.push_back(r);if(dirty.size()>4096)overflow=true;}
         }
         ring=ring.clipped(c);
-        if(!ring.empty())dirty.push_back(ring);
+        if(!ring.empty()){++static_decision.repair_ring;dirty.push_back(ring);}
         static_decision.repair_changed=unsigned(dirty.size());static_decision.repair_reordered=unsigned(reordered.size());
         if(overflow){static_decision.repair=2;return false;}
         // A changed dependency without a changed contributor cannot be located.
@@ -4146,6 +4151,8 @@ struct SandboxFreshPipeline {
             explicit StaticClock(double& o):out(o){}
             ~StaticClock(){out=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();}
         } static_clock{last_static_ms};
+        auto timed=[](double& slot,auto&& work){auto begin=std::chrono::steady_clock::now();auto result=work();
+            slot+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();return result;};
         auto const& options=sandbox_perf_options();
         auto* context=renderer.context;
         float zoom=projection_zoom;
@@ -4177,6 +4184,7 @@ struct SandboxFreshPipeline {
         unsigned front_index=static_rasters.front_slot[lane];
         {
             auto& displayed=static_rasters.states[front_index];
+            for(unsigned word=0;word<key.size();++word)if(displayed.key[word]!=key[word])static_decision.key_diff|=1u<<word;
             static_decision.entry=(displayed.valid?1u:0u)|(displayed.stale?2u:0u)|(displayed.key!=key?4u:0u)|
                 (raster_inputs[front_index].complete?32u:0u)|(layout_reset?64u:0u);layout_reset=false;
             static_decision.input_bytes=raster_inputs[front_index].bytes();
@@ -4193,8 +4201,8 @@ struct SandboxFreshPipeline {
                 bool proven=renderer.borrowed_scene_frame;
                 if(!proven){
                     ZoomScope scope_zoom(*this,displayed.projection);
-                    proven=raster_dependencies(raster_inputs[front_index],slot_settings(displayed,settings),
-                        {displayed.covered.left,displayed.covered.top,displayed.covered.right,displayed.covered.bottom},false);
+                    proven=timed(static_decision.proof_ms,[&]{return raster_dependencies(raster_inputs[front_index],slot_settings(displayed,settings),
+                        {displayed.covered.left,displayed.covered.top,displayed.covered.right,displayed.covered.bottom},false);});
                 }
                 shadow_dirty.clear();
                 StaticRect field{},ring{};
@@ -4226,7 +4234,7 @@ struct SandboxFreshPipeline {
                 if(shadow_only && ring.empty()){static_decision.entry|=8u;displayed.shadow_serial=shadow.change_serial;}
                 else if(shadow_only && ring.area()*100>displayed.covered.area()*45)
                     static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_shadow); // refine behind it
-                else if(repair_front(front_index,displayed,settings,ring)){static_decision.entry|=16u;displayed.shadow_serial=shadow.change_serial;
+                else if(timed(static_decision.repair_ms,[&]{return repair_front(front_index,displayed,settings,ring);})){static_decision.entry|=16u;displayed.shadow_serial=shadow.change_serial;
                     // Bounds that still reach into the field cannot shrink; stop
                     // tracking them rather than repairing on every frame.
                     if(!ring.empty()){auto rest=displayed.unshadowed.outside(field);
@@ -4243,7 +4251,7 @@ struct SandboxFreshPipeline {
             static_decision.lane=lane;static_decision.slot_x=displayed.camera_x;static_decision.slot_y=displayed.camera_y;
             if(displayed.valid && displayed.projection==zoom){
                 visible_rect(displayed,shift);static_decision.reusable=shift.reusable?1:0;
-                if(!shift.reusable && recenter(lane,settings,shift,w,h)){front_index=static_rasters.front_slot[lane];static_decision.recenter=1;}
+                if(!shift.reusable && timed(static_decision.recenter_ms,[&]{return recenter(lane,settings,shift,w,h);})){front_index=static_rasters.front_slot[lane];static_decision.recenter=1;}
                 shifted=shift.reusable;
             }
         }
@@ -4292,7 +4300,7 @@ struct SandboxFreshPipeline {
                 auto& abandoned=static_rasters.back(lane);
                 if(abandoned.refining){abandoned.refining=false;abandoned.stale=true;}
             }
-            else if(budget!=0){static_decision.refine=1;if(refine(goal,budget)<0)return false;}
+            else if(budget!=0){static_decision.refine=1;if(timed(static_decision.refine_ms,[&]{return refine(goal,budget);})<0)return false;}
         }
         // Strips the displayed raster needs now. Small (scroll) gaps are drawn
         // immediately; a large gap is filled progressively behind a preview.
@@ -4310,7 +4318,7 @@ struct SandboxFreshPipeline {
                 // nearly a full strip every frame. Draw a band ahead so most
                 // scroll frames need none; background guard fill continues.
                 int ahead=previewable?96:128;
-                if(spend!=0 && !extend_coverage(front_index,displayed,settings,needed,spend,progressive?0:ahead,1.f,!displayed.stale))return false;
+                if(spend!=0 && !timed(static_decision.strip_ms,[&]{return extend_coverage(front_index,displayed,settings,needed,spend,progressive?0:ahead,1.f,!displayed.stale);}))return false;
                 if(progressive){budget=spend;refine_worked=true;}
                 if(!displayed.covered.contains(needed))shifted=false;
             }
@@ -4320,7 +4328,7 @@ struct SandboxFreshPipeline {
             if(shifted && previewable && budget>0 && displayed.fresh(key) && !static_rasters.lane_refining(lane) &&
                     !displayed.covered.contains(limits)){
                 double spend=budget*.5;
-                if(!extend_coverage(front_index,displayed,settings,limits,spend,0,1.f,true))return false;
+                if(!timed(static_decision.strip_ms,[&]{return extend_coverage(front_index,displayed,settings,limits,spend,0,1.f,true);}))return false;
                 refine_worked=true;
             }
         }
@@ -4338,6 +4346,7 @@ struct SandboxFreshPipeline {
                 std::uint64_t(std::uint32_t(shift.y)),bits(settings.depth_translation),bits(displayed.depth_translation),
                 std::uint64_t(displayed.region.width),bits(zoom),0,0,0};
             if(next!=restore_key){
+                auto restore_begin=std::chrono::steady_clock::now();
                 if(!static_restore.draw(context,static_cache,displayed.region.samples,
                         displayed.region.depth_samples,shift.x-region_margin_x,
                         shift.y-region_margin_y,{},nullptr,displayed.region.width,
@@ -4351,6 +4360,7 @@ struct SandboxFreshPipeline {
                 else context->ResolveSubresource(static_cache.resolved,0,static_cache.color,0,
                     DXGI_FORMAT_R16G16B16A16_FLOAT);
                 restore_key=next;++cache_scrolls;++displayed.metrics.restores;
+                static_decision.restore_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-restore_begin).count();
             }else ++displayed.metrics.reuses;
             static_decision.shifted=1;
             overlay_frame={true,front_index,shift.x-region_margin_x,shift.y-region_margin_y,
@@ -4441,6 +4451,7 @@ struct SandboxFreshPipeline {
     // body placements and city lights (superset of every lane's region) and,
     // at the destination zoom, the shadow receivers. It changes only when the
     // camera crosses a quantum, so scrolling does not refit shadows or lights.
+    float tile_half_width=0,tile_half_height=0;
     bool update_roi(ViewportShaderSettings const& settings,int w,int h){
         auto floor_to=[](int value,int quantum){return value>=0?value/quantum*quantum:-((-value+quantum-1)/quantum)*quantum;};
         int qx=floor_to(camera_x,roi_quantum),qy=floor_to(camera_y,roi_quantum);
@@ -4472,6 +4483,11 @@ struct SandboxFreshPipeline {
             .source_rect(body_clip,4.f);
         float half_x=(float(w)*.5f+2.f*region_margin_x)/shadow_zoom+float(pad);
         float half_y=(float(h)*.5f+2.f*region_margin_y)/shadow_zoom+float(pad);
+        // The region in world x+y and x-y: a 1x screen pixel is 1/(tile
+        // width/2) of x+y and 1/(tile height/2) of x-y. Receivers that only
+        // touch the region reach up to two tiles past it.
+        if(tile_half_width>0 && tile_half_height>0)
+            shadow.receiver_area={2.f*half_x/tile_half_width+4.f,2.f*half_y/tile_half_height+4.f};
         D3D11_RECT shadow_clip={LONG(std::floor(float(w)*.5f-half_x)),LONG(std::floor(float(h)*.5f-half_y)),
             LONG(std::ceil(float(w)*.5f+half_x)),LONG(std::ceil(float(h)*.5f+half_y))};
         bool escaped=false;
@@ -4688,6 +4704,7 @@ struct SandboxFreshPipeline {
         // body placements (see update_roi). Camera steps inside it change none
         // of them, so retained static pixels and shadow pages stay valid.
         mark_prepare(prepare_raster_proof);
+        tile_half_width=float(frame.tile_width)*.5f;tile_half_height=float(frame.tile_height)*.5f;
         if(!update_roi(settings,int(w),int(h)))return fail("body_requirements");
         auto const& body_inputs=body_requirements;
         mark_prepare(prepare_body_requirements);
@@ -4818,12 +4835,14 @@ struct SandboxFreshPipeline {
         // budgeted refinement (never a synchronous full redraw while a usable
         // preview exists). May move `settings` by a sub-pixel snap.
         if(!compose_static(settings,int(w),int(h)))return fail("static_layer");
-        if(renderer.trace.level>=2){auto const& d=static_decision;char detail[512];
-            sprintf_s(detail,"zoom=%.4f lane=%u camera=%d,%d slot=%d,%d reusable=%d recenter=%d shifted=%d refine=%d sync=%d preview=%d covers=%d,%d,%d missing=%lld static_ms=%.2f entry=%u home_entry=%u input_kb=%zu repair=%u changed=%u reordered=%u rects=%u percent=%u boot_draw_ms=%.1f boot_deps_ms=%.1f boot_kpx=%lld borrowed=%u",
+        if(renderer.trace.level>=2){auto const& d=static_decision;char detail[1536];
+            sprintf_s(detail,"zoom=%.4f lane=%u camera=%d,%d slot=%d,%d reusable=%d recenter=%d shifted=%d refine=%d sync=%d preview=%d covers=%d,%d,%d missing=%lld static_ms=%.2f entry=%u home_entry=%u input_kb=%zu repair=%u changed=%u reordered=%u rects=%u percent=%u boot_draw_ms=%.1f boot_deps_ms=%.1f boot_kpx=%lld borrowed=%u proof_ms=%.2f repair_ms=%.2f recenter_ms=%.2f refine_ms=%.2f strip_ms=%.2f restore_ms=%.2f key_diff=%u span_refits=%llu repair_new=%u repair_revised=%u repair_removed=%u repair_shadow=%u repair_ring=%u refine_restarts=%llu",
                 projection_zoom,d.lane,d.camera_x,d.camera_y,d.slot_x,d.slot_y,d.reusable,d.recenter,d.shifted,d.refine,d.sync,d.preview,
                 d.front_cover,d.home_cover,d.boot_cover,d.missing,last_static_ms,d.entry,d.home_entry,d.input_bytes/1024,
                 d.repair,d.repair_changed,d.repair_reordered,d.repair_rects,d.repair_percent,d.boot_draw_ms,d.boot_deps_ms,d.boot_area/1000,
-                unsigned(renderer.borrowed_scene_frame));
+                unsigned(renderer.borrowed_scene_frame),d.proof_ms,d.repair_ms,d.recenter_ms,d.refine_ms,d.strip_ms,d.restore_ms,d.key_diff,
+                static_cast<unsigned long long>(shadow.stable.refits),d.repair_new,d.repair_revised,d.repair_removed,d.repair_shadow,d.repair_ring,
+                static_cast<unsigned long long>(refine_restarts));
             renderer.trace.write("static-compose",detail,false);}
         QueryPerformanceCounter(&ticks[3]);c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"static");
 #ifdef C3X_RENDERER64_FRESH

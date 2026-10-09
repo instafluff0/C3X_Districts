@@ -1134,3 +1134,145 @@ scroll. Slides occur only during scroll segments and the coast after them
 
 **Default.** At the user's request the glide is on by default;
 `C3X_RENDERER_GLIDE=0` restores stepped display.
+
+## 25. Baseline for the architecture plan (October 8, evening)
+
+The staged plan toward Civ VI's architecture (stages 0–6,
+[camera decoupling design](camera_decoupling_design.md)) is measured against
+this baseline. Build: commit f12529cb plus per-part static-layer timers
+(trace level 2 only). The uncommitted experiment (a grow-only shadow span and
+paused static refinement while moving) was reverted: its runs (67 and 76 ms
+against 84.5 ms per busy step job) were within run noise, the pause fired on 5
+of 58 step frames, and stage 1 replaces both with world-anchored caches.
+
+New tools: `tools/seam_report.py` (straight seams in 10 Hz window frames per
+`near` segment; calibrated on three real busy-save stale strips and 87 clean
+frames) and `tools/frame_gap_report.py` (presented-frame gaps per segment from
+route-presented traces).
+
+**Runs** (`near`; a0, a2, a4 `-MeasureCadence -SampleHz 10`; a1, a3, a5 trace
+level 2 with route witness and unbuffered traces; a6 memory census).
+
+| Segment | Busy 1498 AD (a0) | User 3350 BC (a2) | Light (a4) |
+| --- | --- | --- | --- |
+| 1× idle | 36.7 fps | 59.9 fps | 60.0 fps |
+| 1× scroll x | 364 px/s, 10.6 fps, step 313 ms | 2,565 px/s, 41.9 fps, step 79 ms | 2,786 px/s, 57.6 fps, step 78 ms |
+| 2× scroll | 231 px/s, 9.3 fps, step 609 ms | 2,587 px/s, 35.2 fps | 2,937 px/s, 51.4 fps |
+| 3× scroll | 168 px/s, 9.0 fps, step 543 ms | 2,262 px/s, 37.3 fps | 1,702 px/s, 50.4 fps |
+| 3× idle | 45.0 fps | 59.7 fps | 60.3 fps |
+| Zoom in / out | 27.5 / 12.1 fps | 50.4 / 51.4 fps | 53.9 / 50.8 fps |
+| Zoom start (wheel to motion) | 157–1,819 ms | 27–45 ms | 29–47 ms |
+| Jumps | 872, 861 ms | 85 ms | 73, 78 ms |
+
+**Frame gaps while scrolling** (route-presented, a1, a3, a5):
+
+| | Busy | User | Light |
+| --- | --- | --- | --- |
+| 1× scroll x, p50 / p90 | 58 / 127 ms | 17 / 43 ms | 22 / 37 ms |
+| 1× scroll x, gaps over 30 ms | 61 of 85 | 82 of 267 | 77 of 280 |
+| 2× scroll, p90 | 217 ms | 49 ms | 34 ms |
+| 3× scroll, p90 | 227 ms | 47 ms | 34 ms |
+
+Even the light save's 10 ms step job leaves a quarter of scroll frame gaps
+over 30 ms: frames during a job come only from its checkpoints (section 18).
+
+**Camera step jobs** (`step_report.py`, p50): busy 79.7 ms (shadows 15.2,
+scene preparation 18.9, static 10.9, reflection 2.3; queued 95 ms; request to
+adoption 171 ms); user 17.6 ms (adoption 61 ms); light 10.4 ms (56.5 ms).
+
+**What the busy step's static and shadow work is** (a1, 53 step frames, 58
+shadow builds):
+- On 30 step frames the displayed static layer was stale because the shadow
+  sampling identity changed (key word 3, a span refit): the step showed a
+  preview while a back slot refined (static 7 ms). 8 shadow builds redrew all
+  25 pages.
+- On 18 step frames tiles entering residency caused repairs of 12–26 ms.
+- Every step re-proved membership over the whole layer (about 3 ms).
+- Recentring was rare and cheap (8 frames, mean 0.4 ms, p90 2.4 ms); section
+  19's recentre cost no longer applies after the memory changes.
+- Shadow builds: 46 of 58 were triggered only by a residency change
+  (`prepared_signature`), 11 by the span. Medians: caster refresh 3.1, proofs
+  4.6, caster selection 1.9, page draws 3.0 ms.
+
+So stage 1 starts with the sampling span (fixed per zoom step), then
+residency-independent static coverage and proofs, then caster deltas; the
+wrap-around slot is not needed for cost and is deferred until stage 2 needs
+it.
+
+**Memory** (a6, busy, `sample_memory.ps1` and census): Renderer64 6,161 MB
+process memory median (6,670 max) and 3,359 MB GPU (4,317 max); Civ III 371 MB.
+Census: geometry 2,300 MB, terrain textures 261, static slots 105 plus
+overlays 105, static cache 31, shadow 100, scene targets 93, units 94,
+instances 52, composition 53. Geometry is 72% of the attributed GPU memory:
+stage 5's main target.
+
+**Seams** (`seam_report.py`, a0, a2, a4): during scroll, busy 16 of 93
+frames (plus one coast frame), user 35 of 146, light 6 of 146 (weak). All
+inspected cases are stale strips at the trailing edge. Cause: a step that
+arrives before the previous slide finished starts from the unfinished offset
+plus the step; the trailing world covered only one step, so a strip as wide
+as the leftover was never written (`RetainedComposition`, panning branch).
+Busy steps arrive every 230–750 ms and the user save's 78 ms steps are
+shorter than the 150 ms minimum cruise, so overlaps are routine. Section 24's
+check did not catch them.
+
+**Failure under profiling.** a1 hit "renderer publication pressure"
+(65,536 work items) 3 s after the last zoom-out notch with trace level 2 and
+unbuffered traces; a0 (same build, trace 0) was clean. Scroll segments
+precede it.
+
+## 26. Glide strip fix and stage 1, first measurements (October 8, night)
+
+**Glide trailing strip.** The trailing image for a new step is now the
+selected world composed as the next frame would show it (the committed world at
+its slide offset over that slide's own trailing image), and the slide places
+it by that offset (`RetainedComposition::copy_world_output`,
+`PanTransition::begin`'s copied offset). The resting world alone left a stale
+strip as wide as the unfinished offset; the last drawn frame was a step behind
+whenever no frame ran between a commit and the next step. Test:
+`test_pan_transition.py` (a one-row model driven by the real `PanTransition`;
+the old rules leave stale or misplaced pixels). User save (g2 against a2):
+seam frames in 1×–3× scroll 35 → 4. The remaining four follow a long camera
+move that was slid as one step (the view jumped from a city to unexplored
+land within one step); stage 4 removes trailing strips. Scroll fps and step
+pace unchanged within noise (1× x 39.3 fps, 2,502 px/s; 2× 36.1; 3× 36.5).
+
+**Stage 1a, shadow sampling span.** The span is fixed by the receiver region
+(the region of interest at the shadow zoom) and the light, grows only when a
+receiver reaches past it, and is remembered per region
+(`StableShadowSpan`, `shadow_sampling_grid.h`; test
+`test_stable_shadow_span.py`). Density: the new span is 0.92× the old rule's
+median span (p10 0.88, p90 1.21), so shadows are as sharp or slightly sharper
+on most frames.
+
+Busy save, trace level 2 (g3, g5; a1 is the baseline):
+
+| | a1 | g3 | g5 (remembered spans) |
+| --- | --- | --- | --- |
+| Span refits over the run | 11 | 36 | 20 |
+| Step job p50 | 79.7 ms | 65.0 ms | 76.1 ms |
+| Static on step frames, mean | 16.9 ms | 11.7 ms | 13.8 ms |
+| Step frames with a stale static layer | 30 of 53 | 48 of 70 | 39 of 60 |
+
+The step job did not change beyond run noise. Three findings explain why:
+- **Zoom changes the receiver region**, so each zoom level starts a new span;
+  the busy save's receivers also reach past the region estimate (light-space
+  v extent 83 against 30–46), so each level grows once. Remembering spans per
+  level halves the refits.
+- **A stale static layer stays stale while scrolling.** Its back-slot
+  refinement restarts whenever the camera leaves the back slot, so after a
+  refit 13–15 consecutive steps show a preview. A world-anchored back slot
+  (the wrap-around slot) is needed for refinement to survive camera motion;
+  section 25's conclusion that it could wait was wrong.
+- **Repairs come from residency churn, mostly shadow casters.** Repair causes
+  per 1× y step (g5): about 150 shadow footprints of casters entering or leaving
+  the resident set and about 44 new contributor keys; no visibility, proof or
+  order causes. A 4-tile input ring (g4) did not reduce them. Civ III's capture
+  defines residency around each step's camera (appearance halo of 8 tile
+  coordinates: 512 px in x, 256 px in y), which is not enough room for a
+  selection that is both stable and covers the static guard band plus shadow
+  reach.
+
+Also: at 2× and 3× every step's job renders the hidden canonical 1× lane, and
+its static layer is stale there (a different shadow region), costing static
+work on every zoomed step for a lane that is not displayed.

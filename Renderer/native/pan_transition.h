@@ -5,8 +5,12 @@
 namespace c3x_renderer {
 // Image-space presentation of a camera step. A newly committed camera is first
 // shown at the previous camera's screen position (its step plus any unfinished
-// offset) and slides to rest while the previous world fills the trailing
-// strip. Offsets are whole screen pixels at the presented zoom.
+// offset) and slides to rest while the previously displayed world fills the
+// trailing strip. That world was itself composed at a slide offset (`copied`);
+// placing it at offset - step - copied keeps the previous camera's world
+// registered and covers the whole strip, including the older world it holds
+// when a step arrives before the previous slide finished. Offsets are whole
+// screen pixels at the presented zoom.
 //
 // An isolated step (a recentre, or the first step of a scroll) eases in and
 // out. Steps that follow within restart_seconds are scrolling: they cruise at
@@ -16,7 +20,7 @@ namespace c3x_renderer {
 // step of a scroll glides to rest instead of stopping dead.
 class PanTransition {
     double base_x=0,base_y=0;
-    int step_x=0,step_y=0;
+    int step_x=0,step_y=0,copied_x=0,copied_y=0;
     long long start=0,last_start=0;
     double interval=0; // seconds between recent steps
     double cruise=1,tail=0,reserve=0; // seconds; tail==0 is an eased shift
@@ -36,8 +40,9 @@ public:
     static constexpr double first_seconds=.6,minimum_seconds=.15,maximum_seconds=1.,restart_seconds=2.;
     static constexpr double shift_seconds=.28,shift_seconds_per_pixel=.00035,shift_minimum=.3,shift_maximum=.55;
     static constexpr double reserve_maximum=.25,tail_maximum=.45;
-    void begin(int dx,int dy,long long now,long long frequency){
+    void begin(int dx,int dy,long long now,long long frequency,int copied_dx=0,int copied_dy=0){
         if(frequency<=0){active=false;return;}
+        copied_x=copied_dx;copied_y=copied_dy;
         double left=active?remaining(double(now-start)/double(frequency)):0.;
         double current_x=base_x*left,current_y=base_y*left;
         double gap=last_start?double(now-last_start)/double(frequency):0.;
@@ -62,7 +67,7 @@ public:
         double f=remaining(std::max(0.,double(now-start)/double(frequency)));
         if(f<=0.){active=false;return o;}
         o.x=int(std::lround(base_x*f));o.y=int(std::lround(base_y*f));
-        o.under_x=o.x-step_x;o.under_y=o.y-step_y;o.active=o.x||o.y;return o;
+        o.under_x=o.x-step_x-copied_x;o.under_y=o.y-step_y-copied_y;o.active=o.x||o.y;return o;
     }
     void cancel(){active=false;last_start=0;}
     bool moving()const{return active;}

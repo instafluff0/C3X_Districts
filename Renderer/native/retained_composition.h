@@ -1362,27 +1362,48 @@ public:
         pan_x=x;pan_y=y;pan_under_x=under_x;pan_under_y=under_y;
         pan_under[0]=under?under[0]:Texture{};pan_under[1]=under?under[1]:Texture{};
     }
-    // Copy the displayed world planes before a camera step replaces them.
-    // The previous camera's world planes as the last frame assembled them,
-    // before the next native world pass records over them. While a slide
-    // runs, the selection's output is the slid composite, whose trailing strip
-    // is itself an older world; copying that output nested the strips into
-    // repeated slices during continuous scrolling (October 8, v1 and v3).
-    bool copy_world_inputs(Texture out[2]){
+    // The trailing image for the next camera step: the selected world as the
+    // next frame would show it, before the next native world pass records
+    // over it. While a slide runs that is the committed world at (x, y) over
+    // the slide's own trailing image `under` at (under_x, under_y). A step
+    // that arrives before the previous slide finished starts from that
+    // offset plus the step, so its trailing strip needs the older world too;
+    // composed here and placed by its offset (PanTransition::begin) it covers
+    // the strip exactly. Earlier versions copied the resting world alone (a
+    // strip as wide as the unfinished offset stayed stale, October 8, a0),
+    // the slid output at the wrong offset (repeated slices, v1 and v3), or
+    // the last drawn frame, which predates the committed world when no frame
+    // ran between its commit and the next step (one-step seams, g1).
+    bool copy_world_output(Texture out[2],int x,int y,int under_x,int under_y,Texture const* under){
         auto n=world_selection;if(!n||!n->output[0]||!n->output[1])return false;
+        bool slid=under&&under[0]&&under[1]&&(x||y);
+        int w=n->area.right-n->area.left,h=n->area.bottom-n->area.top;
+        auto shifted=[&](ID3D11Texture2D* target,ID3D11Texture2D* source,int dx,int dy){
+            int cw=w-std::abs(dx),ch=h-std::abs(dy);if(cw<=0||ch<=0)return;
+            D3D11_BOX box={unsigned(std::max(0,-dx)),unsigned(std::max(0,-dy)),0,
+                unsigned(std::max(0,-dx)+cw),unsigned(std::max(0,-dy)+ch),1};
+            context->CopySubresourceRegion(target,0,unsigned(std::max(0,dx)),unsigned(std::max(0,dy)),0,source,0,&box);
+            ++work.copies;work.copied_pixels+=std::uint64_t(cw)*ch;
+        };
         for(unsigned i=0;i<2;++i){
             D3D11_TEXTURE2D_DESC desc={},have={};n->output[i]->GetDesc(&desc);if(out[i])out[i]->GetDesc(&have);
             if(!out[i]||have.Width!=desc.Width||have.Height!=desc.Height||have.Format!=desc.Format){
                 out[i].Reset();desc.MiscFlags=0;checked(device->CreateTexture2D(&desc,nullptr,&out[i]));
             }
+            if(slid){D3D11_TEXTURE2D_DESC trailing={};under[i]->GetDesc(&trailing);
+                if(trailing.Width!=desc.Width||trailing.Height!=desc.Height||trailing.Format!=desc.Format)return false;}
             ID3D11Texture2D* plane=nullptr;Id source=0;
             if(compiled_enabled&&n->inputs[i].format==n->selected_format[i]&&exact_plane(n->inputs[i],n->area)){
                 auto const& patch=n->inputs[i].patches.front();plane=patch.node->output[patch.output].Get();
-            }else{source=assemble(n->inputs[i],drawn_ticks,drawn_frequency,1,{},true,true,out[i].Get());plane=replay.texture(source);}
-            if(plane!=out[i].Get()){
-                D3D11_BOX box={0,0,0,unsigned(n->area.right-n->area.left),unsigned(n->area.bottom-n->area.top),1};
-                context->CopySubresourceRegion(out[i].Get(),0,0,0,0,plane,0,&box);++work.copies;
-            }
+            }else if(!slid){source=assemble(n->inputs[i],drawn_ticks,drawn_frequency,1,{},true,true,out[i].Get());plane=replay.texture(source);}
+            else{source=assemble(n->inputs[i],drawn_ticks,drawn_frequency,1,{},true);plane=replay.texture(source);}
+            try{
+                if(slid){shifted(out[i].Get(),under[i].Get(),under_x,under_y);shifted(out[i].Get(),plane,x,y);}
+                else if(plane!=out[i].Get()){
+                    D3D11_BOX box={0,0,0,unsigned(w),unsigned(h),1};
+                    context->CopySubresourceRegion(out[i].Get(),0,0,0,0,plane,0,&box);++work.copies;
+                }
+            }catch(...){if(source)replay.recycle(source);throw;}
             if(source)replay.recycle(source);
         }
         return true;

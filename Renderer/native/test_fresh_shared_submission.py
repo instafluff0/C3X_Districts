@@ -55,6 +55,7 @@ struct Harness {
  std::array<std::int64_t,11> roi_key{};std::uint64_t roi_revision=1,roi_receiver_check=0,static_receiver_revision=0,membership=1;
  unsigned queries=0;
  struct StaticRect {int left=0,top=0,right=0,bottom=0;} shadow_field;
+ float tile_half_width=64,tile_half_height=32;struct {std::array<float,2> receiver_area{};} shadow;
  struct Options {bool shadow_tight=false;};Options sandbox_perf_options()const{return {};}
  float zoom_destination()const{return 1.f;}
  bool canonical_hidden()const{return false;}

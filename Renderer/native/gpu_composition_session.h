@@ -18,15 +18,18 @@ class Session {
     // A published camera step is shown as an image-space slide once its
     // native world arrives (see PanTransition and RetainedComposition::set_pan).
     c3x_renderer::PanTransition pan;
-    ComPtr<ID3D11Texture2D> pan_under[2];
-    int pan_step_x=0,pan_step_y=0;bool pan_pending=false,pan_armed=false;int presented_pan_packed=0;
+    // pan_under: the running slide's trailing image; pan_next: the next
+    // step's, prepared at its world_begin while the running slide continues.
+    ComPtr<ID3D11Texture2D> pan_under[2],pan_next[2];
+    int pan_step_x=0,pan_step_y=0,pan_under_offset_x=0,pan_under_offset_y=0;bool pan_pending=false,pan_armed=false;int presented_pan_packed=0;
     double pan_under_scale=1.; // view scale the trailing world was copied at
     void start_pan(){
         if(!pan_armed)return;pan_armed=false;
         // A trailing world copied before a zoom step is at the wrong scale.
         if(zoom->moving()||std::abs(layers.view_scale()-pan_under_scale)>1e-6)return;
         LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
-        pan.begin(pan_step_x,pan_step_y,now.QuadPart,frequency.QuadPart);
+        pan.begin(pan_step_x,pan_step_y,now.QuadPart,frequency.QuadPart,pan_under_offset_x,pan_under_offset_y);
+        std::swap(pan_under[0],pan_next[0]);std::swap(pan_under[1],pan_next[1]);
     }
     // Private retained IDs do not cross the image transport or own exact GPU
     // working textures. Each frame starts from the complete canonical map.
@@ -115,10 +118,15 @@ class Session {
                 world_width=w;world_height=h;
             }
             world_destination=c.destination;
-            // Before this pass records over them, keep the previous camera's
-            // world exactly as recorded for the slide's trailing strip.
+            // Before this pass records over them, compose the world as the
+            // next frame would show it, with its slide offset, for the next
+            // slide's trailing strip.
             if(pan_pending){pan_pending=false;pan_under_scale=layers.view_scale();
-                pan_armed=!resized&&!zoom->moving()&&layers.copy_world_inputs(pan_under);}
+                LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+                auto shown=pan.sample(now.QuadPart,frequency.QuadPart);if(zoom->moving())shown={};
+                pan_under_offset_x=shown.active?shown.x:0;pan_under_offset_y=shown.active?shown.y:0;
+                pan_armed=!resized&&!zoom->moving()&&layers.copy_world_output(pan_next,pan_under_offset_x,pan_under_offset_y,
+                    shown.under_x,shown.under_y,shown.active?pan_under:nullptr);}
         }else if(world_destination!=c.destination||world_width!=w||world_height!=h)
             return; // Loading can compose the unit form before its map form.
         c.kind=Kind::native_image;c.destination=world_words;c.detail=world_detail;

@@ -132,7 +132,9 @@ its package data, not from its engine code.
    free.
 6. Background streaming with level of detail for far zoom and jumps.
 
-**Work.**
+**Work.** The staged plan agreed on October 8 (stages 0–6) is in
+`Renderer/docs/camera_decoupling_design.md`, "Stages"; it supersedes the list
+below where they differ.
 1. Camera design: `Renderer/docs/camera_decoupling_design.md` (written).
 2. Memory census by category: GPU targets, textures, geometry, CPU caches,
    driver copies.
