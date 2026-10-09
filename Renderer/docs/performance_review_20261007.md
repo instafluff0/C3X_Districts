@@ -1813,3 +1813,24 @@ scene whose content did not change.
 per-camera preparation across steps by translation (window tiles, unit body
 requirements, static placement, resource coverage), so a covered step costs
 about one display frame (13–20 ms).
+
+## 40. A covered step's setup before its draw (October 9)
+
+`render-setup-phases` (trace level 2) times `render()` from entry to the
+scene draw. Busy save, window on, deferred steps (e2), medians:
+
+| phase | covered step drawn at adoption | crossing (full job) |
+|---|---|---|
+| window build and initialization | 1.4 ms | 1.7 |
+| world sources | 0.0 | 0.1 |
+| settings and memory budgets | 1.1 | 1.1 |
+| membership diff | 3.2 | 6.6 |
+| geometry build and ownership | 0.7 | 51.8 |
+| ownership traces to waves | 1.3 | 1.5 |
+| waves, unit selection and assets | 5.1 | 9.4 |
+
+A covered step spends about 13 ms before its draw and about 31 ms in it
+(section 39). The draw's prepare is 10 ms against 1 ms for a display frame;
+static placement is 5.4 against 0.03. No single item exceeds about 5 ms. A
+crossing's cost is its geometry build (52 ms) plus the shadow and static
+work in its draw.

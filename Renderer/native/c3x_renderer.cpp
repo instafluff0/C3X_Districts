@@ -8656,6 +8656,10 @@ public:
                 std::function<void()> service={}) {
         // The resident world window replaces the capture's selection before
         // anything reads the frame's tiles; output stays in capture order.
+        // Setup phase marks for a camera render's draw (trace level 2,
+        // render-setup-phases): entry, begin, sources, settings, membership,
+        // ownership, waves, draw.
+        std::array<LARGE_INTEGER,8> setup_marks{};QueryPerformanceCounter(&setup_marks[0]);
         world_window.valid=false;window_skips={};
         if(prewarm_index<0)window_content_flags.clear();
         if(world_window_control && gpu_output_mode && prewarm_index<0 && !content_view && scene_surface_requested && city_profile &&
@@ -8793,7 +8797,7 @@ public:
         frame_region_phase_ms={};frame_tile_validation_ms=frame_tile_append_ms=frame_topology_ms=0;
         frame_center_shore_ms=0;center_shore_cache.hits=center_shore_cache.misses=0;
         memory_sample("frame-start");
-        trace.write("render-begin", "", false);
+        trace.write("render-begin", "", false);QueryPerformanceCounter(&setup_marks[1]);
         LARGE_INTEGER load_mark={};QueryPerformanceCounter(&load_mark);
         auto load_phase=[&](char const* stage){
             LARGE_INTEGER now={};QueryPerformanceCounter(&now);
@@ -8827,6 +8831,7 @@ public:
         }
         load_phase("load-glow");
         if (!prepare_world_sources(frame)) return false;
+        QueryPerformanceCounter(&setup_marks[2]);
         }
         frame_tiles_built = frame_tiles_reused = frame_tiles_evicted = frame_instances_ready = frame_patch_index_reuses = frame_world_object_hits = frame_world_object_builds = 0;
         frame_tile_missing_instance=frame_tile_missing_binding=frame_tile_context_mismatch=frame_tile_dependency_mismatch=0;
@@ -8988,6 +8993,7 @@ public:
             geometry_canonical_world=canonical_world_content;
         }
         if (!prewarming) requested_signature = signature.complete;
+        QueryPerformanceCounter(&setup_marks[3]);
         c3x_renderer_u32 invalidations = 0;
         std::vector<std::uint32_t> restored_viewport;
         CachedViewport const* restored_viewport_entry=nullptr;
@@ -9179,7 +9185,7 @@ public:
                 if(membership_diff.leaving)covered_membership=false;
                 geometry_translation_x=membership_diff.translation_x;
                 geometry_translation_y=membership_diff.translation_y;
-                reuse_geometry=covered_membership;
+                reuse_geometry=covered_membership;QueryPerformanceCounter(&setup_marks[4]);
             }
         }
         if(reuse_geometry && fresh_scene_path && !covered_membership){
@@ -12507,7 +12513,7 @@ public:
             geometry_cache.coverage_bounds.left,geometry_cache.coverage_bounds.top,geometry_cache.coverage_bounds.right,geometry_cache.coverage_bounds.bottom,
             -static_cast<long long>(geometry_translation_x),-static_cast<long long>(geometry_translation_y),
             static_cast<long long>(frame.target_width)-geometry_translation_x,static_cast<long long>(frame.target_height)-geometry_translation_y);
-            trace.write("canonical-membership",detail,true);
+            trace.write("canonical-membership",detail,true);QueryPerformanceCounter(&setup_marks[5]);
         }
 #ifdef C3X_RENDERER64_FRESH
         if (fresh_scene_path) {
@@ -12532,7 +12538,7 @@ public:
             // the fresh pass draws the new ribbons from wave_chunks below.
             if(!geometry_vertex_buffers[geometry_wave].empty())geometry_vertex_buffers.edit(geometry_wave).clear();
             if(visibility_pass && !visibility_coverage.capture(frame))return false;
-            trace.write("fresh-wave", "begin", true);
+            trace.write("fresh-wave", "begin", true);QueryPerformanceCounter(&setup_marks[6]);
             bool waves_ready=prepare_wave_chunks(frame);
             if(cancelled())return false;
             if(!waves_ready){
@@ -12578,6 +12584,10 @@ public:
                 Sleep(1);
             }
             LARGE_INTEGER draw_start={},draw_end={};QueryPerformanceCounter(&draw_start);
+            if(trace.level>=2 && !prewarming){setup_marks[7]=draw_start;char phases[256];int used=std::snprintf(phases,sizeof(phases),"covered=%u",unsigned(covered_membership));
+                for(unsigned i=1;i<setup_marks.size();++i)used+=std::snprintf(phases+used,sizeof(phases)-used," p%u=%.3f",i,
+                    setup_marks[i].QuadPart&&setup_marks[i-1].QuadPart?trace.milliseconds(setup_marks[i].QuadPart-setup_marks[i-1].QuadPart):-1.);
+                trace.write("render-setup-phases",phases,true);}
             route_map_serial=gpu_serial+1;
             bool drawn=c3x_renderer64_render_fresh(frame,target);
             target->Release();QueryPerformanceCounter(&draw_end);
