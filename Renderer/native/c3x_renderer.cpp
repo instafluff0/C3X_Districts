@@ -868,7 +868,7 @@ public:
                         char census[4]={};
                         if(now-last_memory_census>=5000 && c3x_renderer::render_core::cached_environment(
                                "C3X_RENDERER_MEMORY_CENSUS",census,sizeof(census)) && census[0]=='1'){
-                            c3x_renderer64_memory_census(static_cast<unsigned long long>(local.CurrentUsage));last_memory_census=now;}
+                            c3x_renderer64_memory_census(static_cast<unsigned long long>(local.CurrentUsage));geometry_census();last_memory_census=now;}
 #endif
                     }
                 }
@@ -950,6 +950,40 @@ public:
         auto& record=world_gpu_records[key];if(measured){record.required=bytes;record.measured=true;}
         if(std::find(world_gpu_current.begin(),world_gpu_current.end(),&record)==world_gpu_current.end())world_gpu_current.push_back(&record);
         return record;
+    }
+    // Stage 5 byte census (C3X_RENDERER_MEMORY_CENSUS=1): resident tile geometry
+    // by layer. unique = GPU buffer bytes, each buffer once (shared terrain
+    // patch indices excluded); logical = vertices x stride + indices per chunk;
+    // strides = mask of vertex strides in use (bit stride/8).
+    void geometry_census(){
+        struct Row {std::uint64_t unique=0,logical=0,vertices=0,indices=0,instances=0;unsigned chunks=0,rigid=0,strides=0;};
+        std::array<Row,geometry_layer_count> rows{};
+        std::unordered_set<ID3D11Buffer*> seen,grid;
+        for(auto const& entry:terrain_patch_indices)grid.insert(entry.second);
+        unsigned owners=0,shared_owners=0;std::uint64_t unique=0,logical=0;
+        for(auto const& entry:tile_geometry_cache){auto const& owner=entry.second;++owners;shared_owners+=owner.shared_natural;
+            if(!owner.mesh)continue;
+            for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:owner.mesh->layers[layer]){
+                auto& row=rows[layer];++row.chunks;row.rigid+=chunk.rigid_source;
+                if(chunk.instances)row.instances+=chunk.instances->size();
+                std::uint64_t index_size=chunk.index_format==DXGI_FORMAT_R16_UINT?2u:4u;
+                row.vertices+=chunk.vertex_count;row.indices+=chunk.index_count;
+                row.logical+=std::uint64_t(chunk.vertex_count)*chunk.vertex_stride+std::uint64_t(chunk.index_count)*index_size;
+                row.strides|=1u<<std::min(31u,unsigned(chunk.vertex_stride/8u));
+                for(auto* buffer:{chunk.buffer,chunk.indices})if(buffer && !grid.count(buffer) && seen.insert(buffer).second){
+                    D3D11_BUFFER_DESC d{};buffer->GetDesc(&d);row.unique+=d.ByteWidth;}
+            }}
+        for(auto const& row:rows){unique+=row.unique;logical+=row.logical;}
+        std::string detail="owners="+std::to_string(owners)+" shared_owners="+std::to_string(shared_owners)+
+            " unique_mb="+std::to_string(unique>>20)+" logical_mb="+std::to_string(logical>>20)+
+            " accounted_mb="+std::to_string(tile_geometry_cache_bytes>>20)+" grid_mb="+std::to_string(terrain_patch_index_bytes>>20);
+        for(unsigned layer=0;layer<geometry_layer_count;++layer){auto const& row=rows[layer];if(!row.chunks)continue;
+            char cell[200];std::snprintf(cell,sizeof(cell)," L%u=%llu,%llu,%u,%llu,%llu,%llu,%u,%x",layer,
+                static_cast<unsigned long long>(row.unique>>10),static_cast<unsigned long long>(row.logical>>10),row.chunks,
+                static_cast<unsigned long long>(row.vertices),static_cast<unsigned long long>(row.indices),
+                static_cast<unsigned long long>(row.instances),row.rigid,row.strides);
+            detail+=cell;}
+        trace.write("geometry-census",detail.c_str(),true);
     }
     std::size_t world_owner_gpu_bytes(CachedTileGeometry const& owner)const{
         std::unordered_set<ID3D11Buffer*> unique;

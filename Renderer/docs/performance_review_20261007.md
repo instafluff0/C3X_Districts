@@ -2839,3 +2839,32 @@ emulation, so every CPU cost here is inflated. A native x64 measurement of the
 busy save would show how far the per-step chain is from one tick on real
 hardware.
 
+## 63. Stage 5 census: resident geometry by layer (October 10)
+
+New `geometry-census` trace (with `C3X_RENDERER_MEMORY_CENSUS=1`, every 5 s):
+per geometry layer, unique GPU buffer bytes, logical bytes (vertices × stride
++ indices), chunks, vertex and index counts, instances and vertex strides.
+One vertex buffer serves several layers of a tile, so unique bytes fall on the
+first layer counted; logical bytes are the per-layer split.
+
+Busy save during play (mc1): 4,608 resident owners (2,304 shared natural),
+813 MB unique, 945 MB logical (the whole explored world loaded at start is
+about 2 GB). Logical MB by layer:
+
+| Layers | MB | Vertex stride | Note |
+| --- | --- | --- | --- |
+| natural terrain, mountain, decal | 207, 155, 93 | 88 B | 26 M indices, 32-bit |
+| underlay, river, water, bed, route, land | 108, 62, 43, 43, 39, 1 | 168 B | water and bed are the same mesh |
+| city | 99 | 88 B | |
+| farm, feature, mine, site, cliffs | 64, 21, 6, 1, about 1 | 32-48 B | instanced parts |
+
+Light save: 39 owners, 3 MB; its memory is fixed costs.
+
+**Stage 5 direction.** Vertex formats dominate. The 168-byte integrated
+vertex (`integrated_terrain.hlsl`) stores per-tile constants on every vertex
+(base and real terrain, surface kind, effect, tundra) and full floats for
+weights, normals and UVs; a packed layout of about 40-48 bytes would cut those
+layers by about 70%. The 88-byte natural and city vertices and 32-bit indices
+(16-bit where a chunk has under 65,536 vertices) are the next most valuable.
+Changes need Lab comparisons for fidelity.
+
