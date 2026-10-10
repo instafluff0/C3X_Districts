@@ -14,6 +14,9 @@ namespace c3x_remote_scene {
 template<class Transport>class AsyncSceneClient {
     Transport transport;
     bool enabled;
+    // Native presents posted and retired (executed, abandoned or rejected);
+    // declared before the publication so they outlive its thread.
+    std::atomic<unsigned> presents_posted{0},presents_retired{0};
     c3x_async::Publication publication;
     using Id=c3x_renderer_i64;
     Id next_image=0,next_camera=0,session=1;
@@ -534,7 +537,14 @@ public:
     }
     template<class Shared>int present(c3x_renderer_gpu_present_v1 value,Shared& frame){
         if(!enabled)return transport.present(value,frame);
-        frame={};return post(sizeof(value),[this,value]()mutable{
+        // At most two native presents in flight. Civ III's combat loop
+        // presents ~60 times a second, each ~5.5 ms of transport with image
+        // batches between; unbounded, the display fell 4.5 s behind and the
+        // queue overflowed (review 47). Waiting paces Civ III to the renderer.
+        publication.wait_progress([this]{return presents_posted.load()-presents_retired.load()<2;});
+        struct Flight {std::atomic<unsigned>* retired;~Flight(){retired->fetch_add(1);}};
+        ++presents_posted;std::shared_ptr<Flight> flight(new Flight{&presents_retired});
+        frame={};return post(sizeof(value),[this,value,flight]()mutable{
             if(!value.action){value.ticket=ticket(value.ticket);value.image=image(value.image);}
             Shared unused;require_result(transport.present(value,unused),"present");policy=transport.visual_policy(3);
         },0,"present");

@@ -2185,3 +2185,68 @@ fortified outline, the movement LED and the stack marks.
 which is unavailable. The stack count uses `patch_Unit_is_visible_to_civ`,
 because the exact native check, `is_unit_hidden_from_player`, has no usable
 `civ_prog_objects.csv` entry.
+
+## 48. Combat: the display fell seconds behind Civ III (October 9)
+
+**Found while checking the unit status in combat** (`combat` scenario,
+`user-3350BC.SAV`):
+- Bombard: the defender's bar went from green 3 to yellow 2 to red 1, as it
+  should, but 1.6–1.9 s after Civ III applied each hit. The 3D impacts reached
+  the screen 0.2–0.35 s after theirs.
+- Melee, three runs: each failed with `async-publication-failed reason=renderer
+  publication pressure` at the 65,536 work limit. After that, the GPU image
+  session refused every operation for the rest of the run (about 78,000
+  failures).
+- It is the same with Civ III drawing the statuses (the new
+  `C3X_RENDERER_NATIVE_MAP_HUD=1`), so section 47 did not cause it. The earlier
+  clean combat captures (bombard, victory, air) were single-round; a long
+  melee had not been validated.
+
+**Cause.**
+- During a fight, Civ III's loop ticks the animating units about 270 times a
+  second: 1,600 unit ticks/s against 78/s at idle. It presents about 60 times
+  a second.
+- On the bridge's transport thread, each present costs about 5.5 ms and each
+  image batch about 6 ms. Between 43 and 48 s they took about 4.4 s of every
+  5 s.
+- The publication queue grew steadily. A profiled run reached 4.5 s of latency
+  and 59,500 work units.
+- Image batches wait for capacity and filled it to the limit. Ordinary facts,
+  such as unit observations, never wait, so the next one was rejected and the
+  session faulted.
+- HUD ink and statuses travel with the image batches, so they were as late as
+  the queue. Combat-effect facts may pass queued canvas work, which is why the
+  impacts were on time.
+
+**Changes.**
+- At most two native presents in flight (`AsyncSceneClient::present`).
+  - A third waits on queue progress (`Publication::wait_progress`). This
+    paces Civ III's loop to the renderer, like a maximum frame latency.
+  - A token captured in the present's work counts it retired on every path
+    (executed, abandoned or rejected), so a fault releases the wait.
+- Waiting producers leave an eighth of every budget (bytes, packets, work)
+  for ordinary state publication. An empty queue still admits any request
+  that fits.
+- `C3X_RENDERER_NATIVE_MAP_HUD=1` declines the renderer-drawn HUD, so Civ III
+  draws it. This is the side-by-side reference for stage 4.3.
+
+**Evidence** (same save and cases):
+
+| | Before | After |
+| --- | --- | --- |
+| Melee publication failures | 3 of 3 runs | none (2 runs) |
+| Peak queue latency during the fight | 0.7–4.5 s | 40–93 ms |
+| Peak queued work | 59,500 units | about 200–430 units |
+| Bar change after each bombard hit | 1.9 s, 1.6 s | 0.22 s, 0.16 s |
+
+In the melee, the attacker's bar shows its damage. When the attacker dies,
+its bar and stack marks disappear and the next unit on its tile shows its
+own bar. The defender ends at yellow 2 of 3.
+
+**Tests.**
+- `test_present_frames_in_flight`: a third present waits for the first, and
+  a fault releases it. Fails without the wait.
+- `test_async_image_backpressure` ("waiting images leave room for ordinary
+  facts"): fails on the old admission. The full-window upload case now
+  expects ten 11.3 MB windows below the 7/8 watermark, where it expected
+  eleven.

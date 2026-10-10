@@ -164,16 +164,18 @@ int main(){
  {std::lock_guard<std::mutex> lock(state.mutex);state.held=true;}
  std::vector<unsigned> pixels(2240*1260);
  request.action=C3X_GPU_UPLOAD;request.image=image;request.pixels=pixels.data();request.pixel_count=unsigned(pixels.size());
- for(unsigned revision=1;revision<=11;++revision){std::fill(pixels.begin(),pixels.end(),revision);request.revision=revision;
+ // Ten 11.3 MB windows fit below the 7/8 watermark that waiting images keep
+ // (an eighth of each budget stays free for ordinary facts); the next waits.
+ for(unsigned revision=1;revision<=10;++revision){std::fill(pixels.begin(),pixels.end(),revision);request.revision=revision;
   assert(client.images(request,result,nullptr,0)==C3X_RENDERER_RESULT_OK);if(revision==1)state.wait();}
- std::fill(pixels.begin(),pixels.end(),12);request.revision=12;
+ std::fill(pixels.begin(),pixels.end(),11);request.revision=11;
  auto pending=std::async(std::launch::async,[&]{return client.images(request,result,nullptr,0);});
  assert(pending.wait_for(100ms)==std::future_status::timeout);
- auto blocked=client.publication_status();assert(blocked.records==11&&blocked.rejected==0&&blocked.bytes<128u*1024u*1024u);
+ auto blocked=client.publication_status();assert(blocked.records==10&&blocked.rejected==0&&blocked.bytes<112u*1024u*1024u);
  {std::lock_guard<std::mutex> lock(state.mutex);state.held=false;state.wake.notify_all();}
  assert(pending.wait_for(2s)==std::future_status::ready&&pending.get()==C3X_RENDERER_RESULT_OK);
  std::fill(pixels.begin(),pixels.end(),999);client.stats();
- assert(state.revisions==std::vector<unsigned>({1,2,3,4,5,6,7,8,9,10,11,12}));
+ assert(state.revisions==std::vector<unsigned>({1,2,3,4,5,6,7,8,9,10,11}));
  request.action=C3X_GPU_DESTROY;request.pixels=nullptr;request.pixel_count=0;
  assert(client.images(request,result,nullptr,0)==C3X_RENDERER_RESULT_OK);client.stats();
  assert(state.actions.front()==C3X_GPU_CREATE&&state.actions.back()==C3X_GPU_DESTROY);
@@ -235,6 +237,37 @@ int main(){
  assert(pending.wait_for(100ms)==std::future_status::timeout&&leases==0&&reads==1);
  release.set_value();assert(pending.wait_for(2s)==std::future_status::ready&&pending.get());queue.stop();
  assert(received==std::vector<unsigned>({1,2,3,4})&&image.revision==1&&h.cpu_bytes==8&&leases==0);
+}
+''')
+
+    def test_waiting_images_leave_room_for_ordinary_facts(self):
+        # A long melee filled the work budget with waiting image batches; the
+        # next unit fact (never waits) was rejected and faulted the session.
+        run_cpp(r'''
+#include "Renderer/sandbox/async_publication.h"
+#include <cassert>
+using namespace std::chrono_literals;
+struct Payload {};
+int main(){
+ std::promise<void> entered,release;auto held=release.get_future();std::atomic<unsigned> made{0};
+ c3x_async::Publication queue({},1024,64,64);
+ assert(queue.post(1,[&]{entered.set_value();held.wait();}));entered.get_future().get();
+ // Seven 9-unit batches would fill all 64 work units; waiting ones stop at 55.
+ auto images=std::async(std::launch::async,[&]{
+  for(int n=0;n<7;++n)if(!queue.post_group_wait<Payload>(1,9,2,[&]{++made;return std::make_shared<Payload>();},
+   [](Payload&){},[](Payload&,Payload&){},64,64,64,"images"))return false;
+  return true;});
+ assert(images.wait_for(200ms)==std::future_status::timeout&&made==6&&queue.status().units==55);
+ // Ordinary facts still fit in the reserve while an image waits.
+ for(int n=0;n<9;++n)assert(queue.post(1,[]{},0,"state",1));
+ assert(queue.healthy()&&queue.status().rejected==0);
+ release.set_value();assert(images.wait_for(2s)==std::future_status::ready&&images.get());queue.stop();
+ auto s=queue.status();assert(s.accepted==17&&s.executed==17&&!s.rejected&&s.peak_units<=64);
+ // An empty queue still admits a waiting request larger than the reserve allows.
+ c3x_async::Publication empty({},1024,64,64);
+ assert(empty.post_group_wait<Payload>(1,60,2,[]{return std::make_shared<Payload>();},
+  [](Payload&){},[](Payload&,Payload&){},64,64,64,"images"));
+ empty.stop();assert(empty.status().executed==1);
 }
 ''')
 

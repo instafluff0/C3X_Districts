@@ -40,6 +40,9 @@ class CompositionOwner {
     std::array<float,2> route_point(int x,int y)const{
         return route_anchors.resolve(x,y,{projected(x,false),projected(y,true)},field(route_image,0x38),field(route_image,0x3c));
     }
+    // C3X_RENDERER_NATIVE_MAP_HUD=1 declines the map HUD the renderer draws
+    // itself (stage 4.3), so Civ III draws it: the side-by-side reference.
+    bool native_map_hud=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_NATIVE_MAP_HUD",value,sizeof(value))==1&&value[0]=='1';}();
     std::array<std::uint64_t,4> status_counts{};
     void note_status(){auto total=status_counts[0]+status_counts[1]+status_counts[2]+status_counts[3];
         if(total>3&&total%4096)return;char line[192];std::snprintf(line,sizeof(line),
@@ -312,6 +315,7 @@ public:
             client->submit(&command,1);return 1;
         }
         if(op==C3X_NATIVE_UNIT_STATUS){
+            if(native_map_hud)return 0;
             // Stage 4.3: the renderer draws this unit status in its open HUD
             // scope from draw_status's facts; nothing reaches the canvas.
             auto s=static_cast<c3x_renderer_unit_status_v1 const*>(from);

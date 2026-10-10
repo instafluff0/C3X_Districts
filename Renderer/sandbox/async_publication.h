@@ -70,9 +70,16 @@ class Publication {
                     superseded.fetch_add(unsigned(at->records),std::memory_order_release);at=entries.erase(at);}
                 else ++at;}
             auto fits=[&]{return next.bytes<=limit-bytes&&next.units<=work_limit-units&&records<count_limit;};
+            // Waiting producers leave an eighth of every budget to ordinary
+            // state publication, which never waits. Filled to the limits by
+            // images, the next unit fact was rejected and faulted the session
+            // (a long melee, review 47). An empty queue admits any fitting size.
+            auto room=[&]{if(!wait_capacity||(!bytes&&!units&&!records))return fits();
+                return next.bytes+limit/8<=limit-bytes&&next.units+work_limit/8<=work_limit-units&&
+                    records+count_limit/8<count_limit;};
             if(wait_capacity&&size<=limit&&semantic<=work_limit&&count_limit)
-                wake.wait(lock,[&]{return stopping||!healthy()||fits();});
-            if(!stopping&&(healthy()||next.reconciliation)&&fits()){
+                wake.wait(lock,[&]{return stopping||!healthy()||room();});
+            if(!stopping&&(healthy()||next.reconciliation)&&room()){
                 // This opt-in factory only copies immutable caller memory. The
                 // gate reserves its exact capacity before any payload allocation.
                 if(prepare)prepare(next);
@@ -121,6 +128,9 @@ public:
     void stop(){{std::lock_guard<std::mutex> lock(mutex);stopping=true;}wake.notify_all();if(thread.joinable())thread.join();}
     Publication(Publication const&)=delete;Publication& operator=(Publication const&)=delete;
     bool healthy()const{return !fault.load(std::memory_order_acquire);}
+    // Waits for queue progress: each execution, fault and stop wakes it.
+    template<class Ready>void wait_progress(Ready ready){
+        std::unique_lock<std::mutex> lock(mutex);wake.wait(lock,[&]{return stopping||!healthy()||ready();});}
     unsigned accepted()const{return submitted.load(std::memory_order_acquire);}
     unsigned completed()const{return consumed.load(std::memory_order_acquire);}
     Status status()const{std::lock_guard<std::mutex> lock(mutex);
