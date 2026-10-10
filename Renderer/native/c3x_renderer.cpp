@@ -15887,7 +15887,7 @@ private:
                 // can replace it meanwhile. Holding instead showed a new
                 // step's canonical image magnified while scrolling zoomed in
                 // (review 49).
-                if((camera_active || !camera_scene_complete) && !completed_scene_usable() && !(job->ready && job->zoom==zoom))
+                if((camera_active || !camera_scene_complete) && !completed_scene_usable() && !(zoom!=1.f && job->ready && job->zoom==zoom))
                     return Sampled::held();
                 if(!job->ready || job->zoom!=zoom)return job->pending_since?Sampled::held():Sampled{};
                 return Sampled::bgra(job->front.Get(),{x,y,x+w,y+h},sharpness,job->source_generation);

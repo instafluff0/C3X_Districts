@@ -47,6 +47,8 @@ int main(){
  job->ready=true;job->zoom=2.f;assert(o.sample(job,2.f).kind==K::bgra);
  // A different zoom still holds, and the canonical 1x sample is unaffected.
  assert(o.sample(job,3.f).kind==K::held);assert(o.sample(job,1.f).kind==K::held);
+ // At 1x a pending preparation still holds (a reveal keeps its displayed pose).
+ job->zoom=1.f;assert(o.sample(job,1.f).kind==K::held);job->zoom=2.f;
  // A newer publication retires this sampler.
  o.renderer_state.gpu_serial=6;assert(o.sample(job,2.f).kind==K::frozen);
 }
