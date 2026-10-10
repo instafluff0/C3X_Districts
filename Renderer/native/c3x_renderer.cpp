@@ -590,6 +590,7 @@ public:
     std::uint64_t unit_scene_rejections=0;
     c3x_renderer::render_core::LinearTarget unit_scene_work;
     c3x_renderer::tactical::Gpu tactical_gpu;
+    c3x_renderer::tactical::Gpu tactical_world_gpu; // held routes, whole-view display textures (stage 4.3)
     unsigned frame_output_readbacks=0;
     std::unique_ptr<c3x_gpu_images::Session> gpu_composition;
     std::int64_t gpu_serial=0,camera_serial=0; // identities survive worker/device recreation
@@ -1459,7 +1460,7 @@ public:
     void reset() {
         raster_dependency_revisions.invalidate();
         material_views={};material_views_valid=false;
-        gpu_composition.reset();tactical_gpu=c3x_renderer::tactical::Gpu{};visibility_gpu.reset();visibility_pixels.clear();
+        gpu_composition.reset();tactical_gpu=c3x_renderer::tactical::Gpu{};tactical_world_gpu=c3x_renderer::tactical::Gpu{};visibility_gpu.reset();visibility_pixels.clear();
         world_preparation_queue.clear();terrain_preparation.clear();world_backing.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         for(auto& scratch:world_ground_scratch){scratch.rivers.reset_world();scratch.reset_tile();}
@@ -16697,7 +16698,19 @@ private:
                 if(session&&session->current_ticket()==tactical_target.ticket){
                     auto area=tactical_input.extent({tactical_target.clip[0],tactical_target.clip[1],tactical_target.clip[2],tactical_target.clip[3]});
                     result=C3X_RENDERER_RESULT_OK;
-                    if(area[0]<area[2]&&area[1]<area[3]&&!tactical_input.animated){
+                    if(area[0]<area[2]&&area[1]<area[3]&&tactical_input.world_overlay){
+                        // A held route: drawn at each frame's zoom over the
+                        // whole display view, not into its 1x canvas (stage 4.3).
+                        auto capture=std::make_shared<c3x_renderer::tactical::Input>(std::move(tactical_input));
+                        double seconds=double(visual_ticks)/double(std::max(1ll,visual_frequency));
+                        result=session->world_overlay(tactical_target,{area[0],area[1],area[2],area[3]},capture->animated,
+                            [this,capture,seconds](c3x_gpu_images::Compositor& target,c3x_gpu_images::Command const& command,float scale){
+                                auto texture=renderer_state.tactical_world_gpu.packed(renderer_state.device,renderer_state.context,*capture,
+                                    {0,0,command.area.right,command.area.bottom},seconds,scale);
+                                auto source=target.attach_source(texture);if(!source)return false;
+                                auto draw=command;draw.source=source;bool ok=target.submit(&draw,1);target.destroy(source);return ok;
+                            });
+                    }else if(area[0]<area[2]&&area[1]<area[3]&&!tactical_input.animated){
                         if(renderer_state.trace.level>=2){char detail[192];sprintf_s(detail,
                             "primitives=%zu area=%d,%d,%d,%d destination=%lld",tactical_input.primitives.size(),
                             area[0],area[1],area[2],area[3],tactical_target.destination);

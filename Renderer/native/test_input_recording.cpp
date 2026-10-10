@@ -12,6 +12,17 @@
 using namespace c3x_inputs;
 int main(int argc,char** argv){try{
     require(argc==2,"test requires disposable root");auto root=std::filesystem::path(argv[1]);std::filesystem::create_directories(root);
+    {   // A held route records that it is drawn at display resolution (stage
+        // 4.3); recordings from before that flag still read.
+        c3x_renderer::tactical::Input route;route.ring(10,20,128,false);route.world_overlay=true;
+        c3x_inputs::Writer out;c3x_inputs::tactical(out,route);
+        c3x_inputs::Reader in{out.bytes};c3x_renderer::tactical::Input copy;c3x_inputs::tactical(in,copy);in.done();
+        require(copy.world_overlay&&!copy.animated&&copy.primitives.size()==1,"held route flag lost");
+        out.bytes[0]=1;c3x_inputs::Reader old{out.bytes};c3x_inputs::tactical(old,copy);
+        require(copy.animated&&!copy.world_overlay,"older tactical recording misread");
+        out.bytes[0]=4;c3x_inputs::Reader bad{out.bytes};bool refused=false;
+        try{c3x_inputs::tactical(bad,copy);}catch(std::exception const&){refused=true;}require(refused,"unknown tactical flag accepted");
+    }
 #ifdef _WIN32
     {auto file=root/"path-contract.txt";std::ofstream(file)<<"stable filesystem identity";
         auto missing=root/"absent-directory"/"optional.bin";

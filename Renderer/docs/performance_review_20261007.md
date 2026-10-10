@@ -2097,3 +2097,37 @@ the renderer draws the unit HUD, city labels and map messages itself (stage
   stay crisp at their native size.
 - While scrolling at 2× and 3×, the whole canvas, labels included, is the
   1× canvas magnified (section 43).
+
+## 46. Stage 4.3, step 1: the held route at display resolution (October 9)
+
+**Problem.** The pathfinder route was drawn by our vector drawer, but
+rasterized at 1× into Civ III's unit canvas. That canvas is projected with the
+world, so at 2× and 3× the route line, the destination circle and the turn
+count were magnified 1× pixels (the user's report).
+
+**Changes.**
+- A held route is now a world overlay. `Session::world_overlay` stores it with
+  the native canvas it stands for. A native erase over its area retires it, and
+  a newer route on that canvas replaces it.
+- At each world boundary, the overlay is recorded as a direct operation over
+  the world view. That operation samples the presented zoom every frame and
+  draws the canonical primitives projected at display resolution, through
+  `tactical_world_gpu`, a separate drawer instance that owns whole-view
+  textures.
+- It sits below the HUD batch, matching its native canvas.
+- The tactical anti-aliasing ramp is one display pixel at every zoom. Its
+  0.75-canonical floor had widened it to 1.5–2.25 px at 2–3×, which also
+  softened the 3D selection ring.
+- Recordings carry the overlay flag in the tactical flags word. Older
+  recordings still read.
+
+**Evidence.** The `route-zoom` scenario holds a route through 2×, the zoom to
+3×, and 3×.
+- Before: the line, both rings and the "1" were soft and doubled.
+- After: they are crisp at both zooms.
+
+**Tests.**
+- `test_retained_composition` ("held route overlay"): drawn at each
+  transition frame's own zoom, replaced by a newer route, retired by an erase.
+- `test_input_recording`: flag round trip; older and unknown flags.
+- `test_tactical_overlay`: GPU coverage.

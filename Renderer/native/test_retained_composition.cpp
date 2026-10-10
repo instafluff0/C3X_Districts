@@ -932,6 +932,38 @@ int test_retained_composition(){
         request.image=unit_detail;request.pixel_count=w*h;
         assert(session.execute(request,{}, {},result,output)==1);
         assert(output[0]==0xffff00ff&&output[20*w+28]==0xffffffff);
+        {   // A held route is drawn over the world view at each frame's zoom,
+            // replaced by a newer route and retired by a native erase over its
+            // area (stage 4.3; it was 1x ink magnified with the world).
+            std::vector<float> scales;unsigned older=0,newer=0;
+            auto paint=[&](unsigned& count,unsigned color){
+                return [&scales,&count,color,w,h](Compositor& target,Command const& c,float scale){++count;scales.push_back(scale);
+                    Rect r={int(w/2)-2,int(h/2)-2,int(w/2)+2,int(h/2)+2};
+                    Command ink[2]={{Kind::fill,c.destination,0,r,c.clip,0,0,0x001f},{Kind::fill,c.detail,0,r,c.clip,0,0,color}};
+                    return target.submit(ink,2);};};
+            c3x_renderer_gpu_unit_v1 route={sizeof(route),1,std::int64_t(units),std::int64_t(units),std::int64_t(unit_detail),
+                std::int64_t(unit_detail),{0,0,int(w),int(h)},0};
+            assert(session.world_overlay(route,{10,10,20,20},false,paint(older,0xff2040c0))==C3X_RENDERER_RESULT_OK);
+            assert(session.world_overlay(route,{10,10,20,20},false,paint(newer,0xff20c040))==C3X_RENDERER_RESULT_OK);
+            route.ticket=2;assert(session.world_overlay(route,{10,10,20,20},false,paint(older,0))==C3X_RENDERER_RESULT_SUPERSEDED);
+            boundary();now.QuadPart+=frequency.QuadPart*2; // settle at the current zoom first
+            assert(session.visual_frame(now.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())!=0);
+            session.did_present();assert(newer==1);
+            send({{Kind::zoom_target,0,0,{}, {},0,0,131072}});
+            for(unsigned frame=1;frame<=8;++frame){
+                assert(session.visual_frame(now.QuadPart+frequency.QuadPart*frame/60,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())!=0);
+                session.did_present();
+            }
+            // Redrawn at every transition frame's own zoom, never magnified.
+            assert(!older&&newer==9&&std::is_sorted(scales.begin()+1,scales.end())&&scales.back()>scales[1]);
+            assert(std::abs(scales.back()-float(session.presented_zoom())/65536.f)<1e-4f);
+            assert(retained_read(device.Get(),context.Get(),display.Get())[(h/2)*w+w/2]==0xff20c040);
+            send({{Kind::fill,units,0,{12,12,14,14},full,0,0,0x7c1f}});boundary();
+            auto drawn=newer;now.QuadPart+=frequency.QuadPart;
+            assert(session.visual_frame(now.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())!=0);
+            assert(newer==drawn&&retained_read(device.Get(),context.Get(),display.Get())[(h/2)*w+w/2]!=0xff20c040);
+            std::puts("PASS held route overlay: drawn at each frame's zoom, replaced by a newer route, retired by a native erase");
+        }
         std::puts("PASS live zoom Session: 16 intermediate GPU frames, partial native copies, fixed panel, marker alignment, present-only picking and canonical source preservation");
     }
     // Independent native targets can select the same complete before-images.

@@ -200,6 +200,16 @@ memory. A run that eventually recovers but retains seconds of queued UI work
 does not pass the responsiveness investigation. Native folded route endpoints
 must resolve to adjacent captured map anchors rather than crossing the screen.
 
+`-Scenario route-zoom -Seconds 125 -SampleHz 4 -ProfileRenderer` uses the same
+3700 BC witness. It zooms to 2× and holds a pathfinder destination near the
+selected unit while circling the pointer. Still holding, it zooms to 3×,
+continues for about 8 s, and then releases. The released route moves the unit
+only in the disposable game.
+- Require route-line traces and both zoom targets.
+- Review the frames held at 2× and 3×. The route lines, the destination circle
+  and the turn count must be crisp at screen resolution, not magnified 1× pixels
+  (performance review, section 45).
+
 `-Scenario city-builds -Seconds 190 -SampleHz 4 -MeasureCadence -ProfileRenderer`
 uses the same capital without the preceding unit move. It opens the build list,
 hovers six rows, sends two wheel events, then selects items through 20 repeated

@@ -252,11 +252,12 @@ inline void images(Reader& in,Images& out){
     for(auto& x:out.commands){x={};command_fields(in,x);}out.bind();
 }
 inline void tactical(Writer& out,c3x_renderer::tactical::Input const& v){
-    require(v.primitives.size()<=16384,"input tactical limit");out.u32(v.animated?1:0);out.u32(unsigned(v.primitives.size()));
+    require(v.primitives.size()<=16384,"input tactical limit");out.u32((v.animated?1u:0u)|(v.world_overlay?2u:0u));out.u32(unsigned(v.primitives.size()));
     for(auto& p:v.primitives)for(auto& a:{p.bounds,p.shape,p.color,p.style})for(float x:a)out(x);
 }
 inline void tactical(Reader& in,c3x_renderer::tactical::Input& v){
-    auto animated=in.u32(),count=in.u32();require(animated<=1&&count<=16384,"input tactical bounds");v={};v.animated=animated!=0;
+    auto flags=in.u32(),count=in.u32();require(flags<=3&&count<=16384,"input tactical bounds");v={};
+    v.animated=(flags&1)!=0;v.world_overlay=(flags&2)!=0;
     for(unsigned n=0;n<count;++n){c3x_renderer::tactical::Primitive p;
         for(auto* a:{&p.bounds,&p.shape,&p.color,&p.style})for(auto& x:*a)in(x);v.append(p);}
 }

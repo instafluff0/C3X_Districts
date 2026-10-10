@@ -380,6 +380,7 @@ public:
         if(op==C3X_NATIVE_TACTICAL_ROUTE_END){
             if(image!=route_image)return 0;route_image=nullptr;
             if(!route_text.empty())route.label(destination[0],destination[1],route_text,20.f);
+            route.world_overlay=true;
             int result=tactical_draw(image,route,source);route={};route_text.clear();route_anchors.points.clear();return result;
         }
         if(op==C3X_NATIVE_TACTICAL_RING){

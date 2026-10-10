@@ -25,6 +25,13 @@ class Session {
     struct Hud {Id canvas=0,detail=0;unsigned identity=0;int x=0,y=0;unsigned key=0,key_detail=0;int layout_x=0,layout_y=0;int unit_id=-1;
         std::vector<Command> draws;std::vector<Id> snapshots;};
     std::vector<Hud> hud;
+    // A held route is drawn at display resolution above the projected world
+    // instead of into its native 1x canvas, which zoom magnified (stage 4.3,
+    // review 45). It stands for native ink on `canvas`: an erase over its area
+    // retires it, and a newer route on the same canvas replaces it.
+    struct WorldOverlay {Id canvas=0;Rect area{};bool animated=false;
+        std::function<bool(Compositor&,Command const&,float)> draw;};
+    std::vector<WorldOverlay> overlays;
     std::shared_ptr<c3x_renderer::render_core::UnitHudAnchors> unit_anchors;
     Id hud_canvas=0,hud_detail=0,next_snapshot=world_detail+4096;
     void erase_hud(std::size_t at){for(auto id:hud[at].snapshots)layers.destroy(id);hud.erase(hud.begin()+at);}
@@ -74,6 +81,10 @@ class Session {
                 }
                 item.draws=std::move(remaining);if(item.draws.empty())erase_hud(at);
             }
+            for(std::size_t at=overlays.size();at-->0;)if(overlays[at].canvas==command.destination){
+                auto cut=intersection(overlays[at].area,erase);
+                if(cut.left<cut.right&&cut.top<cut.bottom)overlays.erase(overlays.begin()+at);
+            }
         }
         if(fixed_words&&(command.destination==fixed_words||command.destination==fixed_detail)){
             // Notification text is in the GUI form, but Civ III writes its
@@ -107,6 +118,19 @@ class Session {
         layers.record(c);
         if(input.kind==Kind::world_end){
             layers.view(world_view_detail,world_detail,zoom,world_view_words);
+            // Held routes, at this frame's zoom and display resolution; below
+            // the HUD like their native canvas (stage 4.3).
+            for(auto const& overlay:overlays){
+                Command draw={Kind::unit_over,world_view_words,0,{0,0,int(w),int(h)},{0,0,int(w),int(h)},0,0,0,
+                    world_view_words,world_view_detail,world_view_detail};
+                auto scale=std::make_shared<float>(1.f);RetainedComposition::Direct operation;operation.animated=overlay.animated;
+                operation.revision=[scale,view=zoom,animated=overlay.animated](long long ticks,long long frequency){
+                    *scale=float(view->sample(ticks,frequency));std::uint32_t bits=0;std::memcpy(&bits,scale.get(),sizeof(bits));
+                    return (std::uint64_t(bits)<<32)|(animated?std::uint64_t(ticks/std::max(1ll,frequency/30))&0xffffffffu:0u);
+                };
+                operation.draw=[scale,paint=overlay.draw](Compositor& target,Command const& c){return paint(target,c,*scale);};
+                layers.record(draw,std::move(operation));
+            }
             std::vector<RetainedComposition::Placed> placed;
             for(auto const& item:hud)for(auto draw:item.draws){
                 draw.destination=draw.destination==item.detail?world_view_detail:world_view_words;
@@ -161,7 +185,7 @@ public:
             // subsequent map writes restore their dynamic dependencies.
             if(!layers.accepting()){
                 layers.clear();world_width=world_height=0;world_destination=0;
-                hud.clear();hud_canvas=hud_detail=0;fixed_shadows.clear();
+                hud.clear();hud_canvas=hud_detail=0;fixed_shadows.clear();overlays.clear();
                 gpu.visit_images([&](Id id,unsigned w,unsigned h,Format format,ID3D11Texture2D* source){
                     layers.create(id,w,h,format);layers.source(id,source);
                 });
@@ -269,6 +293,17 @@ public:
         }catch(...){layers.destroy(source);gpu.destroy(source);throw;}
         layers.destroy(source);gpu.destroy(source);
         return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    }
+    // A held route (stage 4.3): retained with the native canvas it replaces
+    // and drawn over the world view at each frame's zoom by `draw`.
+    int world_overlay(c3x_renderer_gpu_unit_v1 const& request,Rect area,bool animated,
+                      std::function<bool(Compositor&,Command const&,float)> draw){
+        if(request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(!request.destination||request.destination==std::int64_t(map)||!draw)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        Id canvas=Id(request.destination);
+        overlays.erase(std::remove_if(overlays.begin(),overlays.end(),[&](auto const& o){return o.canvas==canvas;}),overlays.end());
+        overlays.push_back({canvas,area,animated,std::move(draw)});
+        return C3X_RENDERER_RESULT_OK;
     }
     int draw_dynamic(c3x_renderer_gpu_unit_v1 const& request,unsigned width,unsigned height,int x,int y,RetainedComposition::Direct operation){
         if(request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;

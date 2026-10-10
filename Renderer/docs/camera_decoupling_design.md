@@ -356,6 +356,27 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      - Further smoothness needs one of:
        - display frames that do not wait on Civ III's submissions;
        - stand-in frames (opt-in).
+   - **4.3, the map HUD drawn by the renderer.** Agreed with the user on
+     October 9.
+     - Civ III no longer draws:
+       - the unit HUD (health bar, flag, stack number);
+       - city labels;
+       - map messages.
+     - The injected hooks skip the native draw and report only the facts.
+     - The renderer draws these elements every frame, at screen resolution,
+       pinned to their world anchors, with Civ III's own fonts and sprites so
+       they look the same and sit in the same place.
+     - Expected:
+       - crisp at any zoom, during a zoom and while scrolling;
+       - no per-tick native unit pass work (about 930 renderer commands a
+         tick on the busy save);
+       - no Civ III interface batches competing with frames;
+       - the native HUD capture and re-placement machinery is retired.
+     - Order: unit HUD (with the soft selection ring), then city labels, then
+       map messages. Each step is compared side by side with native, tested
+       and measured.
+     - Every other vanilla interface element (minimap, panels) is unchanged.
+       So is the configuration-off path.
    - **Scrolling at 2×/3× is soft** (user report, October 9; measured in
      section 43). While the camera moves, the zoomed scene is not drawn, so
      frames stretch the step's 1× image. The fix is to draw each step at the

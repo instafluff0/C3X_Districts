@@ -46,6 +46,10 @@ struct Primitive {
 struct Input {
     std::vector<Primitive> primitives;
     bool animated=false;
+    // Drawn at display resolution above the projected world rather than into
+    // the native 1x canvas, which zoom magnifies (the held route: lines,
+    // destination ring and turn count; performance review, section 45).
+    bool world_overlay=false;
     void append(Primitive p){
         if(primitives.size()>=16384)throw std::runtime_error("tactical primitive budget");
         for(auto a:{p.bounds,p.shape,p.color,p.style})for(float x:a)

@@ -32,7 +32,7 @@ V vertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
  o.position=float4((o.location-viewport.xy)/viewport.zw*float2(2,-2)+float2(-1,1),0,1);o.id=instance;return o;
 }
 float segment(float2 q,float2 a,float2 b){float2 v=b-a;return length(q-a-v*saturate(dot(q-a,v)/max(dot(v,v),.001)));}
-float coverage(float distance,float halfWidth){return saturate((halfWidth-distance)/max(fwidth(distance),.75)+.5);}
+float coverage(float distance,float halfWidth){return saturate((halfWidth-distance)/max(fwidth(distance),.0001)+.5);}
 float4 over(float4 a,float4 b){return a+b*(1-a.a);}
 float curlDistance(float2 q,float2 a,float2 control,float2 end){
  float2 midpoint=(a+2*control+end)*.25;
@@ -115,13 +115,13 @@ float4 pixel(V i):SV_Target{
         SelectObject(dc,oldfont);DeleteObject(face);SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);check(hr);check(d->CreateShaderResourceView(atlas.Get(),nullptr,&glyphs));
     }
 public:
-    ID3D11Texture2D* draw(ID3D11Device* d,ID3D11DeviceContext* c,Input const& capture,std::array<int,4> area,double seconds){
+    ID3D11Texture2D* draw(ID3D11Device* d,ID3D11DeviceContext* c,Input const& capture,std::array<int,4> area,double seconds,float zoom=1.f){
         initialize(d);unsigned w=unsigned(area[2]-area[0]),h=unsigned(area[3]-area[1]);
         if(!w||!h||w>2240||h>1260||capture.primitives.empty())throw std::runtime_error("tactical extent");
         if(w!=width||h!=height){texture.Reset();target.Reset();color_view.Reset();packed_texture.Reset();packed_view.Reset();D3D11_TEXTURE2D_DESC td={};td.Width=w;td.Height=h;td.MipLevels=td.ArraySize=1;td.Format=DXGI_FORMAT_B8G8R8A8_UNORM;td.SampleDesc.Count=1;td.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
             check(d->CreateTexture2D(&td,nullptr,&texture));check(d->CreateRenderTargetView(texture.Get(),nullptr,&target));width=w;height=h;}
         float clear[4]={};c->ClearRenderTargetView(target.Get(),clear);
-        draw_into(d,c,capture,area,seconds,target.Get(),w,h);
+        draw_into(d,c,capture,area,seconds,target.Get(),w,h,zoom);
         return texture.Get();
     }
     // Shared primitive/shader implementation for the scene's under-unit pass.
@@ -149,8 +149,10 @@ public:
         ID3D11ShaderResourceView* views[]={input.Get(),glyphs.Get()};c->VSSetShaderResources(0,1,views);c->PSSetShaderResources(0,2,views);auto sam=sampler.Get();c->PSSetSamplers(0,1,&sam);c->DrawInstanced(6,count,0,0);
         views[0]=views[1]=nullptr;c->VSSetShaderResources(0,1,views);c->PSSetShaderResources(0,2,views);c->OMSetRenderTargets(0,nullptr,nullptr);
     }
-    ID3D11Texture2D* packed(ID3D11Device* d,ID3D11DeviceContext* c,Input const& capture,std::array<int,4> area,double seconds){
-        draw(d,c,capture,area,seconds);
+    // zoom other than 1 projects canonical primitives about the area's center
+    // (a whole display view), drawing them at display resolution.
+    ID3D11Texture2D* packed(ID3D11Device* d,ID3D11DeviceContext* c,Input const& capture,std::array<int,4> area,double seconds,float zoom=1.f){
+        draw(d,c,capture,area,seconds,zoom);
         // The existing native compositor consumes packed R32_UINT BGRA. Keep
         // conversion GPU-resident in reusable scratch rather than a CPU upload.
         if(!pack_shader){char const* source=R"(

@@ -75,6 +75,7 @@ int main(){
         run_cpp(r'''
 #include <cassert>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include "Renderer/native/gpu_frame_api.h"
