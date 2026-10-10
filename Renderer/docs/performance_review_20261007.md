@@ -2405,3 +2405,27 @@ segment):
   control and the margin. Fails on the old opt-in parse.
 - `test_zoomed_step_sample`: the adoption prepares every step, deferred ones
   included, after the canonical publish.
+
+**Amendment (same night): the window is opt-in again.**
+- On the light save (`near`) it ran camera jobs continuously at steady zoom:
+  49 completions in 4 s at 2×, so every zoomed frame was magnified (100%
+  soft), at about 13 fps, and the final 1× segment ran at 12.9 fps.
+- With `C3X_RENDERER_WORLD_WINDOW=0`, the same save ran at 60 fps at steady 3×
+  and in the final 1× segment.
+- The window is opt-in until that is fixed. Section 41 had validated it only
+  on the busy save.
+- The adoption-time zoomed draw now runs only when the step moved the camera.
+  A same-view republication keeps its completed scene, and drawing one per
+  republication slowed the light save (1× segment 38 → 48.6 fps).
+
+Defaults now (window off):
+
+| Save | Steady 2×/3× | Zoomed scroll | Soft zoomed frames | Failures |
+| --- | --- | --- | --- | --- |
+| Busy (b3) | 58–62 fps | 4–11 frames/s | 2 | 0 |
+| Light (l3) | 60 fps (3×) | 13–22 frames/s, about the step pace | 34 at 2× | 0 |
+
+During a zoomed scroll a frame is presented when its content changes, so
+frames per second there is close to the step rate. The October 7–8 light-save
+scroll figures (42–46 fps) were measured with the glide that was later
+removed.

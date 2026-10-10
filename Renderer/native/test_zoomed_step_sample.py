@@ -73,6 +73,9 @@ int main(){
         self.assertIn('auto zoomed_prepare=map_sample.prepare;', block)
         self.assertGreater(block.index('zoomed_prepare(visual_ticks,visual_frequency,presented);'),
                            block.index('if(session.publish(initial,'))
+        # Only a moved camera: same-view republications keep their completed
+        # scene, and a draw per republication slowed the light save.
+        self.assertIn('if(zoomed_prepare&&moved&&', block)
 
 
 if __name__ == '__main__':

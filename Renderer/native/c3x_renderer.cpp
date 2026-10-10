@@ -661,7 +661,7 @@ public:
     bool tight_natural_bounds=false;
     int region_input_ring=2;
     // Stage 2a: resident geometry selected by a block-anchored world window
-    // (render_core/world_window.h); on unless C3X_RENDERER_WORLD_WINDOW=0.
+    // (render_core/world_window.h); C3X_RENDERER_WORLD_WINDOW=1.
     bool world_window_control=false;
     c3x_renderer::render_core::WorldWindow world_window;
     c3x_renderer_frame_v1 window_frame{};unsigned window_native_count=0;
@@ -3079,9 +3079,9 @@ public:
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
         region_input_ring=std::strcmp(control,"4")==0?4:2;
-        // The resident world window is on unless C3X_RENDERER_WORLD_WINDOW=0
-        // (stage 2 finished; busy 1x scroll 6.7 -> 10-14 fps, review 51).
-        world_window_control=!(GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",control,sizeof(control)) && std::strcmp(control,"0")==0);
+        // Opt-in: on by default it ran camera jobs continuously on the light
+        // save (every zoomed frame magnified, 13 fps at 1x; review 51).
+        world_window_control=GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",control,sizeof(control)) && std::strcmp(control,"1")==0;
         GetEnvironmentVariableA("C3X_RENDERER_REGION_METADATA_MIB",control,sizeof(control));
         std::size_t metadata_limit=std::strcmp(control,"32")==0?32u*1024u*1024u:96u*1024u*1024u;
         if(render_regions.metadata_limit!=metadata_limit)render_regions.clear();
@@ -15164,6 +15164,9 @@ private:
     int camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
     bool camera_active=false,camera_pending=false,camera_paused=false;
     bool camera_scene_complete=true;
+    // World origin of the last adopted step; only a moved camera needs the
+    // adoption-time zoomed draw (review 51).
+    long long adopted_camera=LLONG_MIN;
     DWORD camera_notify_thread=0;UINT camera_notify_message=0;
     c3x_renderer_camera_completion_fn camera_completion_observer=nullptr;
     void* camera_completion_context=nullptr;
@@ -16298,9 +16301,15 @@ private:
                             // every scrolled frame showed this step's canonical
                             // image magnified (review 49). After the publish, so
                             // the canonical import above is untouched.
+                            // A same-view republication keeps its completed scene,
+                            // so ordinary display frames prepare it at zoom.
                             float presented=float(session.presented_zoom())/65536.f;
                             float destination=c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed);
-                            if(zoomed_prepare&&presented!=1.f&&std::fabs(destination-presented)<1e-4f)
+                            auto const& shown=gpu_publication.frame;long long camera=LLONG_MIN;
+                            if(shown.tile_count&&shown.tiles)camera=(static_cast<long long>(shown.tiles[0].anchor_x-shown.tiles[0].tile_x*shown.tile_width/2)<<32)^
+                                static_cast<unsigned>(shown.tiles[0].anchor_y-shown.tiles[0].tile_y*shown.tile_height/2);
+                            bool moved=camera!=adopted_camera;adopted_camera=camera;
+                            if(zoomed_prepare&&moved&&presented!=1.f&&std::fabs(destination-presented)<1e-4f)
                                 zoomed_prepare(visual_ticks,visual_frequency,presented);
 #endif
                         }else result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
@@ -18619,7 +18628,7 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
         // Civ III captures appearance as far as the world window can reach
         // (render_core/world_window.h, margin_x/margin_y).
         using Window=c3x_renderer::render_core::WorldWindow;
-        static int const margin=[]{char value[4]={};return !(GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",value,sizeof(value))==1&&value[0]=='0')?
+        static int const margin=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",value,sizeof(value))==1&&value[0]=='1'?
             int(unsigned(Window::margin_x)|(unsigned(Window::margin_y)<<16)):0;}();
         return margin;
     }

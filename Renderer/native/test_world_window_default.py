@@ -1,9 +1,9 @@
-"""The resident world window is on by default; C3X_RENDERER_WORLD_WINDOW=0 opts out.
+"""The resident world window stays opt-in (C3X_RENDERER_WORLD_WINDOW=1).
 
-Stage 2 finished with the window behind an opt-in flag, so ordinary games never
-deferred scroll steps (every step was refused, reason 1). Busy 1x scroll went
-from about 6.7 to 10-14 fps with it (performance review, section 51). The
-renderer's control and the capture margin it returns to Civ III must agree.
+On by default it sped busy 1x scroll (6.7 -> 11 fps) but ran camera jobs
+continuously on the light save, magnifying every zoomed frame at 13 fps
+(performance review, section 51). The renderer's control and the capture margin
+it returns to Civ III must agree.
 """
 import re
 import unittest
@@ -12,7 +12,7 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class WorldWindowDefaultTests(unittest.TestCase):
-    def test_control_and_capture_margin_default_on(self):
+    def test_control_and_capture_margin_are_opt_in(self):
         source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
         control = re.search(r'world_window_control=(.*GetEnvironmentVariableA.*);\n', source).group(1)
         margin = source[source.index('static int const margin=[]{'):]
@@ -30,7 +30,7 @@ int margin_for(char const* v){value=v;using Window=c3x_renderer::render_core::Wo
  return margin;}
 int main(){
  int on=int(7u|(9u<<16));
- assert(control_for(nullptr)&&margin_for(nullptr)==on);
+ assert(!control_for(nullptr)&&margin_for(nullptr)==0);
  assert(control_for("1")&&margin_for("1")==on);
  assert(!control_for("0")&&margin_for("0")==0);
 }
