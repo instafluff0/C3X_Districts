@@ -2429,3 +2429,18 @@ During a zoomed scroll a frame is presented when its content changes, so
 frames per second there is close to the step rate. The October 7–8 light-save
 scroll figures (42–46 fps) were measured with the glide that was later
 removed.
+
+**Why the window failed on the light save** (l4, window on). The run never
+prepared a map frame (`frame-preparation-ready`), so the presented-zoom path
+never engaged:
+- every zoomed frame was the canonical image magnified;
+- idle animation dropped to about 13 presents a second;
+- the helper's camera events stop at 62.5 s.
+
+Cause: every publication took `map-path fresh` (55 times), never
+`resident-fresh`.
+- `gpu_publication.fresh` is true only for `resident-fresh`, so
+  `retain_visual_map` created no prepared sampler.
+- On this small map the whole world fits the window (box 0,0,4096,2304).
+- Find why the window keeps the light save on the non-resident path before
+  enabling it again.
