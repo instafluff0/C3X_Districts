@@ -4833,8 +4833,9 @@ public:
                 pose_only && animation.name=="fish"?0.015f:0.f;
             unsigned visibility=visibility_pass?visibility_coverage.state(anchor.tile_x,anchor.tile_y):2;
             if(!visibility)continue; // Never-explored objects contribute no body or shadow.
-            bool advances=visibility==2;
-            double time=c3x_renderer::ambient_animation_time(advances?ticks:0,frame.presentation_frequency,
+            // Explored resources keep moving in fog, as water does (the user,
+            // October 10); they were posed at time zero while not visible.
+            double time=c3x_renderer::ambient_animation_time(ticks,frame.presentation_frequency,
                 animation.mesh.duration,anchor.seed);
             ++resource_preparation.pose_samples;
             if(city_profile) {
@@ -4926,7 +4927,7 @@ public:
                 chunk.animation_texture=shadow_chunk.animation_texture=animation.view;
                 buffers[geometry_shadow].push_back(shadow_chunk);buffers[geometry_feature].push_back(chunk);
                 aquatic_resource.push_back(animation.name=="fish" || animation.name=="whales");
-                ++visible_resource_animations;if(advances)++moving_resources;continue;
+                ++visible_resource_animations;++moving_resources;continue;
             }
             if (!c3x_renderer::sample_animation_mesh(animation.mesh,time,true,posed)) {
                 trace.write("animation-pose-failed",animation.name.c_str(),true);return false;
@@ -5045,7 +5046,7 @@ public:
             buffers[geometry_shadow].push_back(shadow_chunk);
             buffers[geometry_feature].push_back(chunk);
             aquatic_resource.push_back(animation.name=="fish" || animation.name=="whales");
-            ++visible_resource_animations;if(advances)++moving_resources;
+            ++visible_resource_animations;++moving_resources;
         }
         timing.phase(3);
         if(pose_only){

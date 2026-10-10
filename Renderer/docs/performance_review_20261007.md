@@ -2568,3 +2568,45 @@ and display frames swap the completed scene into the camera job's live
 fields (`borrow_completed_scene`), so a concurrent job needs separate state
 first. The user agreed to do whole-world residency first.
 
+## 54. Whole-world residency, step 1: one appearance per explored tile (October 10)
+
+**Why crossings rebuilt tiles.** Loading makes the whole explored world
+resident (`world-gpu-residency fully_resident=1`, 16,900 keys, 1.98 GB), but
+the map draws Civ III's per-step capture. For explored fog the world seed
+sent a narrower record (no resources, tile buildings, effects or border
+edges), so its world input was not "full" and the loaded content was a
+different appearance from the one the window drew. Each crossing into fogged
+land restored or rebuilt those tiles; each new variant evicted others, and
+evictions of shared natural components invalidated more (`shared`). Native
+draws those facts on fog too: `Map_Renderer::m19` passes the same flags for
+every tile and `m33_Draw_Resource` checks only `get_resource_visible_to`.
+The geometry budget in the VM is about what is owned plus 0.1-0.3 GB (free
+RAM 3.7-4.0 GB against a 3.4 GB reserve), so every new variant evicts.
+
+**Change.** The seed reads explored fog with the capture's own
+`read_custom_renderer_tile` (no units) and marks it `HALO | PREFETCH`, as it
+already did for visible tiles; unexplored tiles keep the topology record
+(`injected_code.c`, ledger "Explored fog seeded by the capture's read").
+Test: `test_injected_world_authority.py` (five cases fail on the old seed).
+Explored resources also keep animating in fog, as water does (the user):
+`test_fogged_resource_motion.py`.
+
+**Result** (busy, `near`, window on, trace level 2, no witness):
+
+| Crossings | Before (b9, b11) | After (f1, f2) |
+| --- | --- | --- |
+| Tiles built | 2,445 | 179 |
+| Tiles evicted | 3,876-3,877 | 569-616 |
+| Missing bindings | 1,439 | 0 |
+| Shared-content rebuilds | 2,012 | 358 |
+| Crossing job p50 / p90 | 211-227 / 644-749 ms | 149-164 / 210-369 ms |
+| Full step period p50 | 421-427 ms | 298-319 ms |
+
+Covered steps are unchanged (p50 166-211 ms). f2 completed 83 scroll steps
+against 67-71 before in the same scroll time. Idle is unchanged (busy final
+1× 39.4 and 37.2 fps; light 60). No failures; every completion adopted.
+
+**Left:** 358 shared-content rebuilds and about 600 evictions per run; a
+crossing still costs about 100 ms more than a covered step (membership,
+shadow proofs and static repair for the entering band, review 53).
+
