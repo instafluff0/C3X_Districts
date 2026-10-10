@@ -30,6 +30,8 @@ struct Bundle {std::vector<Asset> assets;};
 namespace c3x_renderer {
 Group const* find_feature_group(Bundle const&,char const*){return nullptr;}
 float stable_random(unsigned){return 0;}
+// These instances carry no site-optional flag, which production always keeps.
+namespace city_fidelity {template<class... Queries> bool site_keeps(Composition const&,Instance const&,int,int,Queries...){return true;}}
 }
 int main(){
  CapturedScene scene;auto& topology_cache=scene;
@@ -50,6 +52,11 @@ int main(){
   composition.instances={{{.1f,.2f},{0,0,float(record.city_size)*.25f,.5f}}};
   return &composition;
  };
+ // Site queries for version-five packs; unread by unflagged bodies.
+ auto world_lookup=[](int,int){return 0;};
+ auto shore_sample_at=[](float,float){struct Sample {float distance=99;};return Sample{};};
+ struct Natural {struct Sample {float distance=99;};Sample river_sample(std::array<float,2>)const{return {};}} natural;
+ auto height_natural=[](float,float){return 0.f;};
  std::vector<BuildingBounds> buildings;
  auto collect=[&]()->bool{buildings.clear();
 '''+loop+r'''

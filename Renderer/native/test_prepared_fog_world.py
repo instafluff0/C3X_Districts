@@ -124,10 +124,12 @@ int main(){
  CapturedScene sparse;assert(sparse.publication_scope(f,{1,1,1,1},1));
  auto t=make(2,2);assert(sparse.publish(t,changed));
  assert(region.build(sparse,f,0,true)&&region.selected.size()==1);
- assert(!region.build(sparse,f,63,true));
+ // An unknown core is an empty owned lease, not a failed build (ea135a9b).
+ assert(region.build(sparse,f,63,true)&&region.selected.empty());
  f.world_topology=nullptr;assert(!region.build(sparse,f,0,true));f.world_topology=topology.data();
  auto unseen=make(2,2);unseen.tile_flags=C3X_RENDERER_TILE_VISIBILITY_KNOWN;
- assert(sparse.publish(unseen,changed));assert(!region.build(sparse,f,0,true));
+ // Unseen input never becomes a selected body; the lease is empty (ea135a9b).
+ assert(sparse.publish(unseen,changed));assert(region.build(sparse,f,0,true)&&region.selected.empty());
  // Completion means successful preparation; failures are attempts, not ready
  // regions. Local invalidation retires each tally consistently.
  WorldPreparationSchedule q;q.configure(f,1,1,1,true);q.finish(true);q.finish(false);

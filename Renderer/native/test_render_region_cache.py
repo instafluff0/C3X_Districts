@@ -151,6 +151,9 @@ std::vector<unsigned> select(c3x_renderer_frame_v1 const& frame,int region_input
  bool pickup_profile=true,batch_preparing=false;std::vector<unsigned> result;
  unsigned const* preparation_indices=nullptr;unsigned preparation_count=0;
  int prefetch_guard_tiles=guarded_prefetch?2:0;
+ // Full assembly: no retained incremental membership handles are reused.
+ bool incremental_membership=false;struct Handle {unsigned generation=0;};
+ std::vector<Handle> retained_handles(frame.tile_count);
  c3x_renderer::render_core::ForegroundSelection selection{
   frame.target_width,frame.target_height,frame.tile_width,frame.tile_height,
   region_input_ring,prefetch_guard_tiles,pickup_profile,offload_prefetch};
@@ -207,7 +210,10 @@ int main(){
 
     def test_diagnostic_pixels_match_world_region_after_clipped_scroll(self):
         from Renderer.native.analyze_region_dependencies import analyze_pixels
-        from PIL import Image
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow unavailable")
         from pathlib import Path
         import tempfile
         with tempfile.TemporaryDirectory() as temporary:
@@ -296,7 +302,9 @@ int main(){
         layers="enum GeometryLayer : std::size_t {"+source.split("enum GeometryLayer : std::size_t {",1)[1].split("};",1)[0]+"};\n"
         shadow=(ROOT / "Renderer/native/render_core/source_shadow.h").read_text()
         preparation="static std::array<float,4> project("+shadow.split("static std::array<float,4> project(",1)[1].split("    template<class Bind>",1)[0]
-        methods="    static bool append_region_bytes("+source.split("    static bool append_region_bytes(",1)[1].split("    bool draw_cached_geometry(",1)[0]
+        # Region methods end where shared-instance submission begins.
+        methods="    static bool append_region_bytes("+source.split("    static bool append_region_bytes(",1)[1].split(
+            "    c3x_renderer::render_core::SharedInstanceSubmission::Key shared_instance_draw_key(",1)[0]
         program=r'''
 #include <algorithm>
 #include <array>
@@ -313,6 +321,7 @@ int main(){
 #include "Renderer/native/render_core/world_pass_index.h"
 #include "Renderer/native/render_core/projected_mesh_bounds.h"
 #include "Renderer/lab/shared/natural/instance.h"
+#include "Renderer/lab/shared/natural/data.h" // max_natural_bodies sizes GeometryLayer.
 using UINT=unsigned;using DXGI_FORMAT=unsigned;constexpr unsigned DXGI_FORMAT_R32_UINT=42;
 struct ID3D11Buffer{};struct ID3D11ShaderResourceView{};struct ID3D11Texture2D{void Release(){}};
 struct D3D11_RECT{long left,top,right,bottom;};

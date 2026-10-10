@@ -248,8 +248,9 @@ int main(){
         if not compiler:
             self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
-        body = "auto natural_height_at =" + source.split("auto natural_height_at =", 1)[1].split(
-            "            auto relief_at_world", 1)[0]
+        # The lambda ends at its own closing brace; resource relief follows it.
+        rest = source.split("auto natural_height_at =", 1)[1]
+        body = "auto natural_height_at =" + rest[:rest.index("\n            };\n")] + "\n            };\n"
         self.assertIn("natural_height_samples.clear();", source)
         self.assertIn("return natural_height_at(x,y,support)",
                       (ROOT / "Renderer/native/source_fidelity/geometry.h").read_text())
@@ -444,6 +445,7 @@ struct State {
   c3x_renderer::fidelity::NaturalWorld::CellInputs river_dependencies;
   std::unordered_map<std::uint64_t,std::uint64_t> dependencies,coast_dependencies;
   std::unordered_map<std::size_t,std::uint32_t> world_dependencies;
+  auto const& ground_observations=topology_cache; // Production's ground compilation view.
 ''' + lookup + r'''
   bool hit=ground_hit;
   if(record){
@@ -685,6 +687,7 @@ using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
 namespace c3x_renderer {struct TerrainFrameSignature {std::uint64_t complete=0;};}
+struct D3D11_RECT {long left,top,right,bottom;}; // CachedGeometry's coverage bounds.
 ''' + caches + r'''
 struct CachedTileGeometry {bool shared_natural=false;std::uint64_t version=0;Handle binding,natural_content;};
 struct State {
@@ -732,7 +735,7 @@ int main(){
             self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         append = "    void append_tile_geometry(" + source.split(
-            "    void append_tile_geometry(", 1)[1].split("    c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(", 1)[0]
+            "    void append_tile_geometry(", 1)[1].split("    template<class Lookup> c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(", 1)[0]
         program = r'''
 #include <array>
 #include "Renderer/native/render_core/water_coverage.h"
@@ -743,7 +746,7 @@ int main(){
 using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
-constexpr int geometry_layer_count=3,C3X_RENDERER_TILE_RENDER=1,C3X_RENDERER_TILE_VISIBLE=2;
+constexpr int geometry_layer_count=3,C3X_RENDERER_TILE_RENDER=1,C3X_RENDERER_TILE_VISIBLE=2,C3X_RENDERER_TILE_EXPLORED=4;
 // Compact fixture layers retain the current underlay/terrain/mountain slots.
 constexpr int geometry_underlay=0,geometry_natural_terrain=1,geometry_natural_mountain=2;
 constexpr int geometry_water=3,geometry_river=4,geometry_shadow=5,geometry_route=6,geometry_feature=7;
@@ -756,6 +759,7 @@ struct CachedVertexChunk {
  struct {float low[3]={},high[3]={};} world_bounds;
  Ref *buffer=nullptr,*indices=nullptr;void* instances=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned city_material=0xffffffffu,projection_kind=0;int source_tile_width=128;};
 #include "Renderer/native/render_core/geometry_draws.h"
+#include "Renderer/native/render_core/scene_membership.h"
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
 using GeometryDrawReference=GeometryDrawView::Reference;
@@ -779,7 +783,8 @@ struct State {
  c3x_renderer::render_core::ResidentContent<CachedTileGeometry> resident_content{4};
  struct Scene {void attach(c3x_renderer_tile_v1 const&,Handle){}} topology_cache;
  std::vector<Anchor> resource_anchors;std::vector<int> geometry_footprints;
- GeometryDrawView::Records geometry_vertex_buffers;
+ // Production selection: records plus their generation leases.
+ c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count> geometry_vertex_buffers;
  c3x_renderer::render_core::ResidentSelection geometry_content;
  void index_world_content(CachedTileGeometry const&){}
  int tile_footprint(CachedTileGeometry const&,c3x_renderer_tile_v1 const&){return 1;}
@@ -814,7 +819,7 @@ int main(){
  GeometryDrawView direct(owner.mesh->layers);assert(direct.is(owner.mesh->layers));
  assert(direct[0].empty() && direct[1][0].content().buffer==&world);
  assert(!GeometryDrawView{});
- for(auto& layer:state.geometry_vertex_buffers)layer.clear();
+ state.geometry_vertex_buffers.clear();
  assert(ground.references==1 && world.references==1 && indices.references==1);
  // Caster-only records must not publish resource anchors or pin indefinitely.
  state.tile_geometry_epoch=6;state.append_tile_geometry(tile,{0,0,0},false);

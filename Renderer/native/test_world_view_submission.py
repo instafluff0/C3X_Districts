@@ -12,12 +12,17 @@ class WorldViewSubmissionTests(unittest.TestCase):
 #include <cassert>
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <vector>
+#include "Renderer/native/render_core/raster_dependency_revisions.h"
 struct c3x_renderer_tile_v1 {int anchor_x=3,anchor_y=4;};
 struct Handle {int generation=1;};
 struct CachedTileGeometry {
- bool shared_natural=false,world_ground=false,world_objects=false;int source_tile_width=128;Handle natural_content;
+ bool shared_natural=false,ground_component=false,world_ground=false,world_objects=false;int source_tile_width=128;Handle natural_content;
+ struct Proof {};struct Mesh {std::shared_ptr<Proof> proof=std::make_shared<Proof>();};
+ std::shared_ptr<Mesh> mesh=std::make_shared<Mesh>();
  std::uint64_t validity_epoch=0,validity_world_sequence=0;int validity_anchor_x=0,validity_anchor_y=0;bool validity=false;
+ c3x_renderer::render_core::RasterDependencyRevisions::Checkpoint validity_revision{};
  std::vector<std::pair<unsigned,unsigned>> appearance_dependencies{{0,1}},dependencies{{0,42}},coast_dependencies{{0,1}},world_dependencies{{0,7}};
  std::vector<std::pair<unsigned,std::array<int,2>>> anchor_dependencies{{0,{10,20}}};int river_dependencies=1;
 };
@@ -35,6 +40,9 @@ struct State {
  struct World {unsigned value=7,reads=0;unsigned node_revision(unsigned){++reads;return 1;}
   World&world(){return *this;}unsigned at(unsigned){++reads;return value;}}world_coast;
  struct Rivers {int calls=0;bool valid(int){++calls;return true;}}natural;
+ c3x_renderer::render_core::RasterDependencyRevisions raster_dependency_revisions;
+ // Shared natural content here has no ground component, so no raster proof.
+ bool raster_content_valid(CachedTileGeometry::Proof const&){return true;}
 '''+validate+r'''
 };
 int main(){

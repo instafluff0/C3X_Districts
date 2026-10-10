@@ -45,7 +45,7 @@ int main(){
     def test_prepared_world_projection_identity_preserves_real_detail_and_legacy(self):
         source=(ROOT/'Renderer/native/world_preparation.h').read_text()
         method='inline WorldPreparationKey world_preparation_key('+source.split(
-            'inline WorldPreparationKey world_preparation_key(',1)[1].split('\nusing WorldPreparation=',1)[0]
+            'inline WorldPreparationKey world_preparation_key(',1)[1].split('\ninline WorldPreparationKey object_world_preparation_key(',1)[0]
         key='struct GroundRecipeKey {'+source.split('struct GroundRecipeKey {',1)[1].split('inline GroundRecipeKey ground_recipe_key',1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
@@ -72,8 +72,8 @@ int main(){
 
     def test_preparation_key_preserves_content_and_detail_across_camera_changes(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        method='c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input('+source.split(
-            'c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(',1)[1].split('\n    bool terrain_result_valid',1)[0]
+        method='template<class Lookup> c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input('+source.split(
+            'template<class Lookup> c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(',1)[1].split('\n    bool terrain_result_valid',1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include <array>
@@ -81,8 +81,9 @@ int main(){
 #include <cassert>
 namespace c3x_renderer {namespace fidelity {
 struct Detail {unsigned value=5;unsigned identity()const{return value;}};
+struct CanopyClearing {std::uint64_t hash()const{return 0x5eed;}};
 struct TerrainCompileInput {
- using Key=std::array<std::uint64_t,12>;Key key{};
+ using Key=std::array<std::uint64_t,13>;Key key{};CanopyClearing clearing;
  int tile_x,tile_y,real_terrain_type,ground,tile_width,tile_height,target_height;
  long long world_revision;Detail detail;
  bool river_ready,skip_flat_shore,separate_relief,indexed,retain_height;
@@ -92,20 +93,24 @@ struct State {
  bool city_profile=true,retained_world=true,share_world_meshes=true,river_assets_ready=true;
  int content_view_height=900;unsigned content_revision=13;
  c3x_renderer::fidelity::Detail patch_detail;
+ struct Coast {long long value=0;long long revision()const{return value;}} world_coast;
+ template<class Lookup> c3x_renderer::fidelity::CanopyClearing canopy_clearing(c3x_renderer_tile_v1 const&,Lookup)const{return {};}
 '''+method+r'''
 };
 int main(){
  State state;c3x_renderer_tile_v1 tile={};tile.tile_x=2;tile.tile_y=4;tile.real_terrain_type=6;
  c3x_renderer_frame_v1 frame={};frame.tile_width=128;frame.tile_height=64;
  frame.world_width_tiles=frame.world_height_tiles=100;
- auto compile=[&]{return state.terrain_compile_input(tile,frame,2,true,true,true,true,state.share_world_meshes);};
+ auto compile=[&]{return state.terrain_compile_input(tile,frame,2,true,true,true,true,state.share_world_meshes,
+  [](int,int){return nullptr;});};
  auto first=compile();assert(first.tile_width==128 && first.target_height==128);
  for(int zoom:{64,128,160,192,224}){
   frame.tile_width=zoom;frame.tile_height=zoom/2;state.content_view_height=1200;
-  tile.anchor_x+=37;frame.world_topology_revision++;
+  tile.anchor_x+=37;frame.world_topology_revision++;state.world_coast.value++;
   auto next=compile();assert(first.key==next.key);
   // Local proof validation, not this global revision, decides reuse.
-  assert(next.world_revision==frame.world_topology_revision);
+  // The revision follows the viewer-masked world, not the capture (9537f440).
+  assert(next.world_revision==state.world_coast.revision());
  }
  state.patch_detail.value++;assert(first.key!=compile().key);state.patch_detail.value--;
  state.content_revision++;assert(first.key!=compile().key);state.content_revision--;
@@ -157,7 +162,7 @@ class PreparedWorldLifetimeTests(unittest.TestCase):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         method='bool world_result_valid('+source.split('bool world_result_valid(',1)[1].split('\n    std::unique_ptr<c3x_renderer::fidelity::TerrainSurfaces> compile_terrain',1)[0]
         header=(ROOT/'Renderer/native/world_preparation.h').read_text()
-        key='struct GroundRecipeKey {'+header.split('struct GroundRecipeKey {',1)[1].split('inline GroundRecipeKey ground_recipe_key',1)[0]+'inline WorldPreparationKey world_preparation_key('+header.split('inline WorldPreparationKey world_preparation_key(',1)[1].split('\nusing WorldPreparation=',1)[0]
+        key='struct GroundRecipeKey {'+header.split('struct GroundRecipeKey {',1)[1].split('inline GroundRecipeKey ground_recipe_key',1)[0]+'inline WorldPreparationKey world_preparation_key('+header.split('inline WorldPreparationKey world_preparation_key(',1)[1].split('\ninline WorldPreparationKey object_world_preparation_key(',1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/render_core/prepared_world_validity.h"
@@ -231,6 +236,7 @@ struct CachedTileGeometry {
  bool shared_natural=false,world_ground=true,world_objects=true,validity=false;
  ContentHandle natural_content{};
  std::uint64_t validity_epoch=0,validity_world_sequence=0;
+ RasterDependencyRevisions::Checkpoint validity_revision{};
  int validity_anchor_x=0,validity_anchor_y=0,source_tile_width=128;
  std::vector<std::pair<std::uint64_t,std::uint64_t>> appearance_dependencies,dependencies,coast_dependencies;
  std::vector<std::pair<std::size_t,std::uint32_t>> world_dependencies;
@@ -238,6 +244,7 @@ struct CachedTileGeometry {
  std::vector<int> river_dependencies;
 };
 struct State {
+ RasterDependencyRevisions raster_dependency_revisions;
  CapturedScene topology_cache;
  struct Resident {bool available=true;struct Mesh{CachedTileGeometry proof_value;CachedTileGeometry const* proof=&proof_value;};
   struct Value{bool shared_natural=true,ground_component=false;std::shared_ptr<Mesh> mesh=std::make_shared<Mesh>();} value;
@@ -254,6 +261,8 @@ struct State {
 };
 int main(){
  State state;ScenePublication journal;c3x_renderer_camera_identity_v1 identity{};identity.map_epoch=identity.viewer_epoch=1;
+ // Production binds the scene's producer edits to the raster revision stream.
+ state.topology_cache.bind_raster_dependencies(&state.raster_dependency_revisions);
  c3x_renderer_frame_v1 f{};f.world_width_tiles=f.world_height_tiles=16;f.world_wrap_x=1;
  c3x_renderer_tile_v1 tiles[3]{};
  for(int i=0;i<3;++i){tiles[i].tile_x=2+2*i;tiles[i].tile_y=2;tiles[i].terrain_type=tiles[i].real_terrain_type=2;
