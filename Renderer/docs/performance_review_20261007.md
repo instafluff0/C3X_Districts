@@ -2450,5 +2450,19 @@ Cause not yet known.
   - Every later frame reprojected that stale first map: soft when zoomed,
     with dead idle animation.
   - The save is an early game whose explored world fits inside the window.
+- Where the stall comes from (temporary traces, l6–l8, light save, window on):
+  - Bridge map transactions: 975 prepares and 211 polls returned
+    `SUPERSEDED`, each followed by a new begin; there was one adoption.
+  - The `SUPERSEDED` comes from the async client's completion check
+    (`same_camera_source` in `async_scene_client.h`). The helper's completed
+    camera frame and the bridge's latest published frame are identical
+    except one tile, index 1722 of 3,340.
+  - On that tile the flags differ: `0x12040` (KNOWN|PREFETCH|TOPOLOGY_HALO,
+    the world window's rewrite in `world_window.h`) against `0x12001`
+    (KNOWN|PREFETCH|RENDER).
+  - The tile's map position changes from run to run (44,4; 0,4; 10,4…).
+    Either the window's halo rewrite reaches the echoed frame, or
+    consecutive captures legitimately differ while scrolling.
+  - Even so, adoption never resumes after the camera stops.
 - Fix that adoption stall, and validate on the light save, before enabling
   the window again.
