@@ -6208,7 +6208,8 @@ public:
                 return tile.animation_epoch != 0 &&
                     tile_geometry_epoch-tile.animation_epoch <= viewport_cache_capacity;
             };
-            auto handle=residency_candidates.next(tile_geometry_cache,resident_content,tile_geometry_epoch,animation_priority);
+            auto handle=residency_candidates.next(tile_geometry_cache,resident_content,tile_geometry_epoch,animation_priority,
+                [](CachedTileGeometry const& tile){return tile.natural_content;});
             if(auto candidate=resident_content.resolve(handle)){
                 auto range=tile_geometry_cache.equal_range(candidate->signature);
                 for(auto it=range.first;it!=range.second;++it)if(&it->second==candidate){oldest=it;break;}

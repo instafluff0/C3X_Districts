@@ -2610,3 +2610,30 @@ against 67-71 before in the same scroll time. Idle is unchanged (busy final
 crossing still costs about 100 ms more than a covered step (membership,
 shadow proofs and static repair for the entering band, review 53).
 
+## 55. Shared components outlive their dependents (October 10)
+
+**Cause of the shared rebuilds.** Eviction ranked a region's shared natural
+component by its own last use. Everything loaded at start shares old use
+stamps, so a component could go before its tiles; every resident tile drawing
+with it was then invalid (`tile-dependency-reasons shared`) and rebuilt when
+the window reached it, while still occupying memory.
+
+**Change.** `ResidencyCandidates` ranks a component as recently used as its
+newest resident dependent and, on a tie, after it; a dependent in the current
+frame pins it. Test: `test_residency_candidates.py`
+(`test_shared_components_outlive_their_resident_dependents`).
+
+**Result** (busy, `near`, e1 and e2 against f2):
+
+| | f2 | e1, e2 |
+| --- | --- | --- |
+| Shared-content rebuilds | 358 | 0 |
+| Tiles built at crossings | 179 | 96 (evicted tiles only) |
+| Evictions | 616 | 603, 636 |
+| Crossing job p90 | 210 ms | 339, 181 ms |
+| Full step time | 7.9 s | 6.6, 7.1 s |
+
+Light save: 196 of 196 adopted, no failures. The remaining evictions come
+from the VM's geometry budget, which has no growth margin (section 54);
+stage 5's smaller world is what removes them.
+
