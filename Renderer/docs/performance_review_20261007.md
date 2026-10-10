@@ -2637,3 +2637,29 @@ Light save: 196 of 196 adopted, no failures. The remaining evictions come
 from the VM's geometry budget, which has no growth margin (section 54);
 stage 5's smaller world is what removes them.
 
+## 56. How a covered step scales with the window (October 10)
+
+Temporary experiment (reverted): the window's reach ×3 on the busy save
+(x3), against e2. With explored fog seeded in full (section 54), the
+window drew 1,344 tiles beyond Civ III's capture from world inputs, with no
+skips, no failures and every completion adopted.
+
+| | e2 (reach ×1) | x3 (reach ×3) |
+| --- | --- | --- |
+| Window tiles | 2,304 | 5,472 |
+| Covered render setup | 11.7 ms | 17.8 ms |
+| …membership admission (p4) | 2.6 ms | 6.5 ms |
+| …window build (p1) | 1.6 ms | 2.3 ms |
+| Covered render draw | 23.0 ms | 35.0 ms |
+| …traced scene phases within it | 10.8 ms | 11.9 ms |
+| Crossings | 26 | 22 |
+| Crossing builds / evictions | 96 / 636 | 642 / 2,363 |
+
+A covered step costs about 5.7 µs more per resident tile. At the whole busy
+world (16,900 tiles) that is about 80 ms more per step. Whole-world residency
+therefore needs per-step work bounded by the view, not by the resident set:
+membership admission, the window build and the draw's per-record work
+(most of its growth is outside the traced scene phases; attribute it first).
+A larger window also evicts more while the VM's geometry budget has no
+margin.
+
