@@ -2666,6 +2666,10 @@ struct district_button_image_set {
 	UINT_PTR custom_renderer_view_timer;
 	bool custom_renderer_view_timer_running, custom_renderer_scroll_request;
 	int custom_renderer_minimap_zoom;
+	// Civ III's movement LED sprites (full, partial, no moves) for unit status
+	// the renderer draws (renderer review, section 47): 1 loaded, -1 unavailable.
+	Sprite custom_renderer_movement_leds[3];
+	int custom_renderer_movement_leds_state;
 	int custom_renderer_capture_cover; // zoom tile width the last capture envelope covers
 	// Opt-in scripted game diagnostics; inactive without the per-process save path.
 	bool custom_renderer_trace_input;

@@ -40,6 +40,12 @@ class CompositionOwner {
     std::array<float,2> route_point(int x,int y)const{
         return route_anchors.resolve(x,y,{projected(x,false),projected(y,true)},field(route_image,0x38),field(route_image,0x3c));
     }
+    std::array<std::uint64_t,4> status_counts{};
+    void note_status(){auto total=status_counts[0]+status_counts[1]+status_counts[2]+status_counts[3];
+        if(total>3&&total%4096)return;char line[192];std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=unit-status-reports accepted=%llu refused_facts=%llu refused_canvas=%llu refused_led=%llu\n",
+            (unsigned long long)status_counts[0],(unsigned long long)status_counts[1],(unsigned long long)status_counts[2],(unsigned long long)status_counts[3]);
+        OutputDebugStringA(line);}
     int tactical_draw(void* image,Tactical const& capture,void* background=nullptr){
         if(capture.primitives.empty())return 1;
         if(!tactical)return 0;
@@ -303,6 +309,23 @@ public:
                 if(to){auto offset=static_cast<int const*>(to);command.area.left=offset[0];command.area.top=offset[1];}
                 command.source_width=int(adapter->transparency(image));
             }
+            client->submit(&command,1);return 1;
+        }
+        if(op==C3X_NATIVE_UNIT_STATUS){
+            // Stage 4.3: the renderer draws this unit status in its open HUD
+            // scope from draw_status's facts; nothing reaches the canvas.
+            auto s=static_cast<c3x_renderer_unit_status_v1 const*>(from);
+            // Accepted and refused reports by reason (1 facts, 2 canvas, 3 LED).
+            auto refuse=[&](unsigned reason){++status_counts[reason];note_status();return 0;};
+            if(!s||s->struct_size!=sizeof(*s)||s->max_hp<1||s->max_hp>100000||s->damage<0||s->damage>100000||
+               (s->flags&~3u)||s->stack<0||s->stack>8||s->x<-32768||s->x>32767||s->y<-32768||s->y>32767)return refuse(1);
+            if(!adapter->owns(image)&&!adapter->admit(image))return refuse(2);
+            unsigned led_width=0,led_height=0;Id led=0;
+            if(to&&!(led=adapter->ordinary_sprite(const_cast<void*>(to),image,led_width,led_height)))return refuse(3);
+            ++status_counts[0];note_status();
+            Command command={Kind::unit_status,adapter->image(image),led,{s->x,s->y,s->x,s->y},{},s->max_hp,s->damage,
+                s->flags|(unsigned(s->stack)<<8)};
+            command.source_width=int(led_width);command.source_height=int(led_height);
             client->submit(&command,1);return 1;
         }
         if(op==C3X_NATIVE_FIXED_UI_BEGIN||op==C3X_NATIVE_FIXED_UI_END){

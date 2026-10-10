@@ -2131,3 +2131,57 @@ count were magnified 1× pixels (the user's report).
   transition frame's own zoom, replaced by a newer route, retired by an erase.
 - `test_input_recording`: flag round trip; older and unknown flags.
 - `test_tactical_overlay`: GPU coverage.
+
+## 47. Stage 4.3, step 2: the renderer draws the unit status (October 9)
+
+**Change.** Civ III no longer draws a unit's map status: the health bar, the
+fortified outline, the movement LED and the stack marks.
+- `patch_Unit_draw_map_status` reports, inside its accepted HUD scope, what
+  `Unit::draw_status` (0x5BA750) would draw:
+  - HP and damage;
+  - whether the unit has a bar and is fortified;
+  - the stack count;
+  - the movement LED, as the JGL sprite inside Civ III's `Sprite`.
+
+  The LEDs are loaded and sliced from `MovementLED.pcx` exactly as Civ III
+  does it.
+- `C3X_NATIVE_UNIT_STATUS` turns those facts into one command. The renderer
+  re-creates the native ink at placement, from `draw_status`'s geometry and
+  its 15/16-bit colours, so nothing is drawn into the canvas.
+- The renderer may decline any report; Civ III then draws natively, as it
+  does with the configuration off.
+- `Adapter::ordinary_sprite` decodes plain and row-trimmed 8-bit sprites.
+  The LED slices are row-trimmed.
+
+**Evidence** (busy 1498 AD save, `near` scenario):
+- Trace: 122,880 reports accepted, none refused; no visual failures.
+- 1×: the bars, LED and stack marks at Nagoya and Kagoshima match the
+  native capture within JPEG noise. The largest channel difference over the
+  bar regions is 26.
+- 2×: the same native-size status beside the crisp ring.
+- Idle native-image execution (per 2 s):
+
+  | | Commands | Renderer time |
+  | --- | --- | --- |
+  | Before (section 44) | about 24–33k (about 930 per tick) | about 130 ms |
+  | After | 6.2k (about 240 per tick) | about 50 ms |
+
+**Tests.**
+- `test_unit_status_report`: draw_status's rules become facts, and the JGL
+  sprite is what gets passed. It fails when the `Sprite` wrapper is passed.
+- `test_ordinary_sprite_decode`: plain and row-trimmed decode, plus
+  refusals. It fails without trimmed support.
+- `test_retained_composition` ("renderer unit status"): ink, placement and
+  erase.
+- `test_unit_hud`, `test_custom_zoom`, `test_injected_unit_bootstrap`: the
+  report is offered inside the scope; native draws when the renderer
+  declines and when the configuration is off.
+- Harnesses broken by sections 44 and 46 are repaired:
+  - `test_native_view_identity`: the minimap follow rule is excluded; it
+    has its own test.
+  - `test_frame_publication`: world overlay stubs.
+
+**Not reproduced.** Mech Infantry's 4 px quirk depends on `FUN_00539290`,
+which is unavailable. The stack count uses `patch_Unit_is_visible_to_civ`,
+because the exact native check, `is_unit_hidden_from_player`, has no usable
+`civ_prog_objects.csv` entry.

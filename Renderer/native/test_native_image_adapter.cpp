@@ -671,6 +671,16 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
             row_data.insert(row_data.end(),indexed.begin()+y*w+left,indexed.begin()+y*w+left+count);
         }
         sprite.f18=1;sprite.f1c=reinterpret_cast<int>(row_headers.data());sprite.bits=row_data.data();
+        {   // Renderer-drawn unit status LEDs are sliced row-trimmed like this
+            // (stage 4.3): margins clear, run pixels through the sprite palette.
+            unsigned sw=0,sh=0;auto led=backend.ordinary_sprite(&sprite,target[2],sw,sh);
+            verify(led&&sw==unsigned(w)&&sh==unsigned(h),"row-trimmed ordinary sprite decoded");
+            std::vector<unsigned> decoded(sw*sh);verify(gpu.readback(led,decoded.data(),decoded.size()),"ordinary sprite source read");
+            auto words=c3x_native_access::colors(c3x_native_access::pointer(&sprite,0x10),false);verify(words!=nullptr,"sprite palette words");
+            for(int y=0;y<h;++y)for(int x=0;x<w;++x){unsigned left=row_headers[y*4],count=row_headers[y*4+1],c=indexed[y*w+x];
+                unsigned expected=unsigned(x)>=left&&unsigned(x)<left+count&&c<254?65536u|words[c]:0u;
+                verify(decoded[y*w+x]==expected,"row-trimmed ordinary sprite pixels");}
+        }
         check_opacity(0.5f,0,0,0);check_opacity(1.f,1,-7,9);
         for(int slot:{23,29,31}){check_style(slot,0,0,0x80003579u);check_style(slot,-7,9,17);}
         draw_sprite(0,0,sprite_palette);draw_sprite(-7,9,sprite_palette);

@@ -23,7 +23,16 @@ class Session {
     Id fixed_words=0,fixed_detail=0;
     std::vector<Command> fixed_shadows;
     struct Hud {Id canvas=0,detail=0;unsigned identity=0;int x=0,y=0;unsigned key=0,key_detail=0;int layout_x=0,layout_y=0;int unit_id=-1;
-        std::vector<Command> draws;std::vector<Id> snapshots;};
+        std::vector<Command> draws;std::vector<Id> snapshots;
+        // Unit status reported as draw_status facts (stage 4.3). It is drawn
+        // only at placement, never into the canvas, so no erase or history
+        // rebuild can leave it in the world picture to be magnified.
+        struct Status {int x=0,y=0,max_hp=1,damage=0;unsigned flags=0;int stack=0;Id led=0;int led_width=0,led_height=0;
+            // The ink's bounding box: outline, LED above the bar, stack marks.
+            Rect extent()const{int max=std::max(1,max_hp),pitch=max*5-1<41?5:std::max(2,41/max),bar=std::min(pitch*max-1,40);
+                int led_left=((x+6)-led_width+(x+8))/2;
+                return {std::min(x+5,led_left),y+24-bar-std::max(1,led_height),std::max(x+9,led_left+led_width),y+25+2*stack};}};
+        std::vector<Status> statuses;};
     std::vector<Hud> hud;
     // A held route is drawn at display resolution above the projected world
     // instead of into its native 1x canvas, which zoom magnified (stage 4.3,
@@ -34,6 +43,35 @@ class Session {
     std::vector<WorldOverlay> overlays;
     std::shared_ptr<c3x_renderer::render_core::UnitHudAnchors> unit_anchors;
     Id hud_canvas=0,hud_detail=0,next_snapshot=world_detail+4096;
+    // Unit::draw_status as native fills and the LED sprite, on the HUD item's
+    // canvas pair: bar background, health segments, fortified outline, LED
+    // and stack marks, with its geometry and 15/16-bit colours (stage 4.3).
+    void status_ink(Hud const& item,Hud::Status const& s,int width,int height,std::vector<Command>& out){
+        bool green6=gpu.format(item.canvas)==Format::rgb565;Rect clip={0,0,width,height};
+        auto full=[green6](unsigned word){unsigned r=(word>>(green6?11:10))&31,g=(word>>5)&(green6?63:31),b=word&31;
+            return 0xff000000u|(((r<<3)|(r>>2))<<16)|((green6?(g<<2)|(g>>4):(g<<3)|(g>>2))<<8)|((b<<3)|(b>>2));};
+        auto fill=[&](Rect a,unsigned word){out.push_back({Kind::fill,item.canvas,0,a,clip,0,0,word});
+            if(item.detail)out.push_back({Kind::fill,item.detail,0,a,clip,0,0,full(word)});};
+        unsigned const green=green6?0x07e0u:0x03e0u,yellow=green6?0xffe0u:0x7fe0u,red=green6?0xf800u:0x7c00u,white=green6?0xffffu:0x7fffu;
+        int max=std::max(1,s.max_hp),pitch=max*5-1<41?5:std::max(2,41/max),bar=std::min(pitch*max-1,40);
+        Rect r={s.x+6,s.y+24-bar,s.x+8,s.y+24};
+        if(s.flags&C3X_RENDERER_UNIT_STATUS_BAR){
+            fill(r,0);
+            unsigned color=max-s.damage<2?red:s.damage*3<max||!s.damage?green:s.damage*3<2*max?yellow:red;
+            int bottom=r.bottom;
+            for(int n=std::min(std::clamp(max-s.damage,0,9999),20);n>0;--n){fill({r.left,bottom-pitch+1,r.right,bottom},color);bottom-=pitch;}
+            if(s.flags&C3X_RENDERER_UNIT_STATUS_FORTIFIED){
+                fill({r.left-1,r.top-1,r.right+1,r.top},white);fill({r.left-1,r.bottom,r.right+1,r.bottom+1},white);
+                fill({r.left-1,r.top,r.left,r.bottom},white);fill({r.right,r.top,r.right+1,r.bottom},white);
+            }
+        }
+        if(s.led){
+            int x=(r.left-s.led_width+r.right)/2,y=r.top-s.led_height;Rect a={x,y,x+s.led_width,y+s.led_height};
+            out.push_back({Kind::native_sprite,item.canvas,s.led,a,clip});
+            if(item.detail){Command d={Kind::native_sprite,item.detail,s.led,a,clip};d.color=green6?2:1;out.push_back(d);}
+        }
+        for(int n=0;s.stack>=2&&n<s.stack;++n)fill({s.x+5,s.y+26+2*n,s.x+9,s.y+27+2*n},white);
+    }
     void erase_hud(std::size_t at){for(auto id:hud[at].snapshots)layers.destroy(id);hud.erase(hud.begin()+at);}
     // Native image execution cost, summarized every 2 s at trace level 2.
     struct ExecuteProfile {
@@ -79,7 +117,10 @@ class Session {
                         {a.left,cut.top,cut.left,cut.bottom},{cut.right,cut.top,a.right,cut.bottom}};
                     for(auto r:pieces)if(r.left<r.right&&r.top<r.bottom){c.clip=r;remaining.push_back(c);}
                 }
-                item.draws=std::move(remaining);if(item.draws.empty())erase_hud(at);
+                item.draws=std::move(remaining);
+                item.statuses.erase(std::remove_if(item.statuses.begin(),item.statuses.end(),[&](auto const& status){
+                    auto cut=intersection(status.extent(),erase);return cut.left<cut.right&&cut.top<cut.bottom;}),item.statuses.end());
+                if(item.draws.empty()&&item.statuses.empty())erase_hud(at);
             }
             for(std::size_t at=overlays.size();at-->0;)if(overlays[at].canvas==command.destination){
                 auto cut=intersection(overlays[at].area,erase);
@@ -131,8 +172,10 @@ class Session {
                 operation.draw=[scale,paint=overlay.draw](Compositor& target,Command const& c){return paint(target,c,*scale);};
                 layers.record(draw,std::move(operation));
             }
-            std::vector<RetainedComposition::Placed> placed;
-            for(auto const& item:hud)for(auto draw:item.draws){
+            std::vector<RetainedComposition::Placed> placed;std::vector<Command> ink;
+            for(auto const& item:hud){
+                ink=item.draws;for(auto const& status:item.statuses)status_ink(item,status,int(w),int(h),ink);
+                for(auto draw:ink){
                 draw.destination=draw.destination==item.detail?world_view_detail:world_view_words;
                 if(draw.detail)draw.detail=world_view_detail;
                 if(draw.source==item.canvas)draw.source=world_view_words;
@@ -144,7 +187,7 @@ class Session {
                 draw.clip={draw.clip.left-item.layout_x,draw.clip.top-item.layout_y,
                     draw.clip.right-item.layout_x,draw.clip.bottom-item.layout_y};
                 placed.push_back({draw,item.x,item.y,item.unit_id>=0?unit_anchors:nullptr,item.unit_id});
-            }
+            }}
             layers.placed_batch(world_view_words,world_view_detail,placed,zoom);
             for(auto shadow:fixed_shadows){
                 shadow.destination=shadow.background=world_view_words;
@@ -380,6 +423,14 @@ public:
                         item.key_detail=0xff000000u|(r<<16)|(g<<8)|b;
                         hud_canvas=c.destination;hud_detail=c.detail;
                     }else if(c.kind==Kind::hud_end){hud_canvas=hud_detail=0;}
+                    else if(c.kind==Kind::unit_status){
+                        if(layers.accepting()&&hud_canvas&&c.destination==hud_canvas&&!hud.empty()){
+                            auto& item=hud.back();Hud::Status status{c.area.left,c.area.top,c.source_x,c.source_y,c.color&255u,int(c.color>>8)};
+                            if(c.source){status.led=++next_snapshot;layers.snapshot(status.led,c.source);item.snapshots.push_back(status.led);
+                                status.led_width=c.source_width;status.led_height=c.source_height;}
+                            item.statuses.push_back(status);
+                        }
+                    }
                     else if(c.kind==Kind::fixed_ui_begin){
                         for(auto const& shadow:fixed_shadows)layers.destroy(shadow.source);
                         fixed_shadows.clear();fixed_words=c.destination;fixed_detail=c.detail;

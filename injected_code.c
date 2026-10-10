@@ -24270,6 +24270,58 @@ patch_MapMessage_compute_rect (MapMessage * this)
 	return rect;
 }
 
+// Reports what Unit::draw_status (0x5BA750) would draw instead of drawing it:
+// the renderer draws it at native pixel size and display resolution, so zoom
+// never magnifies it (renderer review, section 47). Mirrors draw_status's
+// rules; false asks the caller to draw natively.
+bool
+report_custom_renderer_unit_status (Unit * unit, PCX_Image * canvas, int x, int y, bool stack_marks)
+{
+	if (is->custom_renderer_native_image == NULL || canvas == NULL) return false;
+	Unit * container = get_unit_ptr (unit->Body.Container_Unit);
+	if (container != NULL && Unit_has_ability (container, __, UTA_Army)) return true; // army members show no status
+	if (is->custom_renderer_movement_leds_state == 0) {
+		// Loaded and sliced exactly as Civ III loads its own LEDs.
+		is->custom_renderer_movement_leds_state = -1;
+		PCX_Image pcx;
+		PCX_Image_construct (&pcx);
+		char * path = BIC_get_asset_path (p_bic_data, __, "art\\interface\\MovementLED.pcx", true);
+		if (path != NULL && PCX_Image_read_file (&pcx, __, path, NULL, 0, 0x100, 2) == 0 && pcx.JGL.Image != NULL) {
+			for (int n = 0; n < 3; n++) {
+				Sprite_construct (&is->custom_renderer_movement_leds[n]);
+				Sprite_slice_pcx (&is->custom_renderer_movement_leds[n], __, &pcx, 1 + 14 * n, 1, 6, 6, 1, 1);
+			}
+			is->custom_renderer_movement_leds_state = 1;
+		}
+		if (pcx.JGL.Image != NULL) pcx.vtable->clear_JGL (&pcx);
+		pcx.vtable->destruct (&pcx, __, 0);
+	}
+	struct c3x_renderer_unit_status_v1 status = {sizeof status, x, y, Unit_get_max_hp (unit), unit->Body.Damage};
+	int max_moves = Unit_get_max_move_points (unit), left = max_moves - unit->Body.Moves;
+	if (Unit_get_attack_strength (unit) >= 1 || Unit_get_defense_strength (unit) >= 1) {
+		status.flags |= C3X_RENDERER_UNIT_STATUS_BAR;
+		Tile * tile = tile_at (unit->Body.X, unit->Body.Y);
+		if (p_bic_data->UnitTypes[unit->Body.UnitTypeID].Unit_Class == UTC_Land && tile != NULL &&
+		    ! tile->vtable->m35_Check_Is_Water (tile) && unit->Body.UnitState == UnitState_Fortifying &&
+		    left >= 1 && p_bic_data->General.DefenceBonus_Fortification > 0)
+			status.flags |= C3X_RENDERER_UNIT_STATUS_FORTIFIED;
+	}
+	Sprite * led = NULL;
+	if (unit->Body.CivID == p_main_screen_form->Player_CivID && is->custom_renderer_movement_leds_state == 1)
+		led = &is->custom_renderer_movement_leds[(left <= 0 && (unit->Body.Active >> 8) == 0) ? 2 :
+			clamp (0, 9999, left) != max_moves ? 1 : 0];
+	if (stack_marks) {
+		int count = 1;
+		FOR_UNITS_ON (uti, tile_at (unit->Body.X, unit->Body.Y))
+			if (uti.unit != NULL && uti.unit != unit &&
+			    patch_Unit_is_visible_to_civ (uti.unit, __, p_main_screen_form->Player_CivID, 1))
+				count++;
+		if (count >= 2) status.stack = not_above (8, count);
+	}
+	return is->custom_renderer_native_image (C3X_NATIVE_UNIT_STATUS, canvas->JGL.Image, NULL, &status,
+		led != NULL ? led->jgl_sprite : NULL, 0) == 1;
+}
+
 // Only the audited map/army call sites use these wrappers. The shared native
 // routines remain unpatched for city-screen lists and other UI consumers.
 void __fastcall
@@ -24288,14 +24340,16 @@ patch_Unit_draw_map_status (Unit * this, int edx, PCX_Image * canvas, int x, int
 		x -= offset; y -= offset;
 	}
 	int offset = is->custom_renderer_zoom_native_tile_width / 4;
-	int scoped = canvas != NULL && custom_renderer_hud_scope (canvas->JGL.Image, x + offset, y + offset, 1, this->Body.ID);
-	if (scoped) {
+	int hud = canvas != NULL ? custom_renderer_hud_scope (canvas->JGL.Image, x + offset, y + offset, 1, this->Body.ID) : 0;
+	if (hud) {
 		int dx, dy;
 		custom_renderer_hud_layout_offset (x + offset, y + offset, &dx, &dy);
 		x += dx; y += dy;
 	}
-	Unit_draw_status (this, edx, canvas, x, y, stack_marks);
-	if (scoped) custom_renderer_hud_scope (NULL, 0, 0, 0, -1);
+	// Inside an accepted scope the renderer draws the status itself.
+	if (hud != 1 || ! report_custom_renderer_unit_status (this, canvas, x, y, stack_marks))
+		Unit_draw_status (this, edx, canvas, x, y, stack_marks);
+	if (hud) custom_renderer_hud_scope (NULL, 0, 0, 0, -1);
 }
 
 void __fastcall

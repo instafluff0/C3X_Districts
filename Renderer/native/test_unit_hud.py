@@ -46,10 +46,14 @@ struct{struct{bool enable_custom_rendering=false;}current_config;
 bool custom_renderer_zoom_transform_active(){return false;}
 void custom_renderer_zoom_transform_point(int*,int*){}
 void custom_renderer_hud_layout_offset(int,int,int*x,int*y){*x=*y=0;}
-int scopes=0,natives=0;Unit* expected=nullptr;PCX_Image* target=nullptr;
+int scopes=0,natives=0,reports=0;bool renderer_draws=false;Unit* expected=nullptr;PCX_Image* target=nullptr;
 int custom_renderer_hud_scope(void* image,int x,int y,unsigned,int id){
  if(image){assert(id==7&&x==132&&y==232);++scopes;return 1;}
  assert(id==-1);--scopes;return 1;
+}
+// Inside an accepted scope the renderer is offered the status first (stage 4.3).
+bool report_custom_renderer_unit_status(Unit* u,PCX_Image* c,int x,int y,bool marks){
+ assert(u==expected&&c==target&&x==100&&y==200&&marks&&scopes==1);++reports;return renderer_draws;
 }
 void Unit_draw_status(Unit* u,int edx,PCX_Image* c,int x,int y,bool marks){
  assert(u==expected&&edx==123&&c==target&&x==100&&y==200&&marks);
@@ -57,11 +61,13 @@ void Unit_draw_status(Unit* u,int edx,PCX_Image* c,int x,int y,bool marks){
 }
 '''+wrapper+r'''
 int main(){Unit u;PCX_Image canvas{{&u}};expected=&u;target=&canvas;
- patch_Unit_draw_map_status(&u,123,&canvas,100,200,true);assert(natives==1&&scopes==0);
+ patch_Unit_draw_map_status(&u,123,&canvas,100,200,true);assert(natives==1&&scopes==0&&reports==0);
  state.current_config.enable_custom_rendering=true;
- patch_Unit_draw_map_status(&u,123,&canvas,100,200,true);assert(natives==2&&scopes==0);
+ patch_Unit_draw_map_status(&u,123,&canvas,100,200,true);assert(natives==2&&scopes==0&&reports==1);
+ renderer_draws=true;
+ patch_Unit_draw_map_status(&u,123,&canvas,100,200,true);assert(natives==2&&scopes==0&&reports==2);
  state.custom_renderer_unit_bootstrap=true;
- patch_Unit_draw_map_status(&u,123,&canvas,100,200,true);assert(natives==2&&scopes==0);
+ patch_Unit_draw_map_status(&u,123,&canvas,100,200,true);assert(natives==2&&scopes==0&&reports==2);
 }
 ''')
 

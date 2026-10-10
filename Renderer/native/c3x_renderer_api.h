@@ -586,11 +586,28 @@ enum { C3X_NATIVE_WORLD_BEGIN = 127, C3X_NATIVE_WORLD_END = 128,
        /* Extra capture envelope past the visible tiles, in tile coordinates:
           (short)low = x, (short)high = y; 0 keeps the native envelope. The
           renderer's resident world window asks for it (stage 2a). */
-       C3X_NATIVE_CAPTURE_MARGIN = 138 };
+       C3X_NATIVE_CAPTURE_MARGIN = 138,
+       /* Stage 4.3: a unit's map status reported instead of drawn, inside its
+          open UNIT_HUD scope; see c3x_renderer_unit_status_v1. */
+       C3X_NATIVE_UNIT_STATUS = 139 };
 /* HUD_BEGIN: image=canonical canvas, from=int[2] canonical map attachment,
    color=opaque native item identity. The scoped native draws keep pixel size.
    UNIT_HUD_BEGIN uses from=int[3], with the copied stable unit ID at [2]. */
 struct c3x_renderer_native_stroke { int x1,y1,x2,y2,width,dash; unsigned argb; };
+/* UNIT_STATUS: what Unit::draw_status would draw, as facts. image=the canvas
+   it would be drawn into, from=this struct, to=the movement LED Sprite or NULL.
+   The renderer draws the bar, fortified outline, LED and stack marks with
+   draw_status's geometry and colours at native pixel size, nothing reaches
+   the canvas, and zoom places it like other unit HUD ink. Returns 1 when the
+   renderer drew it, 0 when the caller must draw it natively. */
+enum { C3X_RENDERER_UNIT_STATUS_BAR = 1u, C3X_RENDERER_UNIT_STATUS_FORTIFIED = 2u };
+struct c3x_renderer_unit_status_v1 {
+    unsigned struct_size;
+    int x,y;            /* draw_status's origin */
+    int max_hp,damage;  /* the bar's segments and colour */
+    unsigned flags;     /* C3X_RENDERER_UNIT_STATUS_* */
+    int stack;          /* stack marks: 0, or 2..8 */
+};
 /* Process-lifetime, read-only tracking. No scene/device/configuration required.
    VERIFY with null image establishes the owner; MAP queries eligibility. */
 typedef int (*c3x_renderer_native_lifetime_fn)(int operation, void * image, int context);

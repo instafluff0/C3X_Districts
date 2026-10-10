@@ -375,6 +375,13 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      - Order: unit HUD (with the soft selection ring), then city labels, then
        map messages. Each step is compared side by side with native, tested
        and measured.
+     - Done:
+       - the held route and the ring at display resolution (review,
+         section 46);
+       - the unit status, as facts drawn by the renderer (section 47). It
+         matches native, and idle ticks went from about 930 to about 240
+         renderer commands.
+     - Next: city labels.
      - Every other vanilla interface element (minimap, panels) is unchanged.
        So is the configuration-off path.
    - **Scrolling at 2×/3× is soft** (user report, October 9; measured in

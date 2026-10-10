@@ -1025,6 +1025,35 @@ public:
     }
     Id image(void* p){auto i=find(p);return i?i->gpu:0;}
     bool owns(void* p){auto i=find(p);return i&&i->owned;}
+    // An ordinary 8-bit Civ III sprite, plain or row-trimmed (as
+    // Sprite::slice_pcx makes them), as a cached source in the canvas's
+    // native format, for ink the renderer draws itself (the unit status LED,
+    // stage 4.3). Decoded like draw_sprite's unscaled ordinary path: palette
+    // indices 254 and 255 and trimmed margins are clear. 0 otherwise.
+    Id ordinary_sprite(void* source,void* canvas,unsigned& width,unsigned& height){
+        auto d=find(canvas);
+        if(!d||!source||!native_sprite(source)||d->format==Format::bgra32)return 0;
+        int bits=field(source,0x20),w=field(source,0x30),h=field(source,0x34),stride=field(source,0x2c);
+        bool trimmed=(field(source,0x18)&1)!=0;
+        if(bits!=8||w<1||h<1||w>64||h>64||(!trimmed&&stride<w))return 0;
+        auto rows=trimmed?c3x_native_access::rows(source):nullptr;
+        if(trimmed&&!rows)return 0;
+        if(trimmed)for(int y=0;y<h;++y)if(unsigned(rows[y*4])+rows[y*4+1]>unsigned(w))return 0;
+        auto palette=c3x_native_access::pointer(source,0x10);if(!palette)palette=c3x_native_access::palette();
+        auto colors=palette?c3x_native_access::colors(palette,d->format==Format::rgb565):nullptr;
+        if(!colors)return 0;
+        auto pixels=c3x_native_access::sprite_bytes(source);if(!pixels)return 0;
+        std::vector<std::uint32_t> decoded(std::size_t(w)*h);
+        for(int y=0;y<h;++y){
+            unsigned left=trimmed?rows[y*4]:0,count=trimmed?rows[y*4+1]:unsigned(w);
+            std::size_t offset=trimmed?std::size_t(rows[y*4+2]|(rows[y*4+3]<<8)):std::size_t(y)*stride;
+            for(unsigned x=left;x<left+count;++x){unsigned c=pixels[offset+x-left];
+                decoded[std::size_t(y)*w+x]=c<254?65536u|colors[c]:0u;}
+        }
+        c3x_native_access::release_sprite(source);
+        if(!upload_sprite(decoded,unsigned(w),unsigned(h)))return 0;
+        width=unsigned(w);height=unsigned(h);return sprite_image;
+    }
     Counts stats()const{return counters;}
 };
 } // namespace c3x_native_images

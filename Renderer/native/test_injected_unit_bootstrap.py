@@ -266,6 +266,11 @@ void Unit_draw_status(Unit *unit, int edx, PCX_Image *canvas, int x, int y, bool
     (void)unit; (void)canvas; (void)stack_marks;
     ++status_count; last_edx = edx; last_status_x = x; last_status_y = y;
 }
+// The renderer declines here; its status report has its own contract
+// (test_unit_status_report).
+bool report_custom_renderer_unit_status(Unit *unit, PCX_Image *canvas, int x, int y, bool stack_marks) {
+    (void)unit; (void)canvas; (void)x; (void)y; (void)stack_marks; return false;
+}
 void Animator_draw_unit_cursor(Animator *animator, int unused, int x, int y) {
     (void)unused; assert(animator == &screen.animator); ++cursor_count;
     last_status_x = x; last_status_y = y;

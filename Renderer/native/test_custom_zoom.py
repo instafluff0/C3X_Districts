@@ -173,6 +173,9 @@ int main(){
         functions = source[source.index("int\ncustom_renderer_zoom_transform_coordinate"):source.index("// Temporary, event-bounded diagnosis")]
         start=functions.index('RECT * __fastcall\npatch_MapMessage_compute_rect')
         functions=functions[:start]+functions[functions.index('\n}\n',start)+3:]
+        # The status report has its own contract (test_unit_status_report).
+        start=functions.index('bool\nreport_custom_renderer_unit_status')
+        functions=functions[:start]+functions[functions.index('\n}\n',start)+3:]
         functions = functions[:functions.index('// A separate traversal envelope:')] + functions[functions.index('void __fastcall\npatch_Main_Screen_Form_city_hud_coords'):]
         functions = functions.replace("this", "screen").replace("int * anchors = malloc (", "int * anchors = (int*)malloc (")
         program = r'''
@@ -220,6 +223,7 @@ int native_image(int op,void*,void*,void const* from,void const* to,unsigned cou
 }
 int custom_renderer_hud_scope(void*,int,int,unsigned,int){return 0;}
 void custom_renderer_hud_layout_offset(int,int,int*x,int*y){*x=*y=0;}
+struct PCX_Image;bool report_custom_renderer_unit_status(Unit*,PCX_Image*,int,int,bool){assert(false);return false;}
 PCX_Image canvas;PCX_Color_Table palette;
 void Unit_draw_status(Unit*,int,PCX_Image* c,int x,int y,bool stack){
  assert(c==&canvas&&stack);++status_calls;overlay_x=x;overlay_y=y;

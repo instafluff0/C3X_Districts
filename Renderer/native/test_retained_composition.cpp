@@ -964,6 +964,35 @@ int test_retained_composition(){
             assert(newer==drawn&&retained_read(device.Get(),context.Get(),display.Get())[(h/2)*w+w/2]!=0xff20c040);
             std::puts("PASS held route overlay: drawn at each frame's zoom, replaced by a newer route, retired by a native erase");
         }
+        {   // A unit status reported as draw_status facts (stage 4.3) is drawn
+            // pixel-exact at the unit's anchor, moved but never scaled by zoom,
+            // never written into its canvas, and retired by a native erase.
+            auto frame_at=[&](unsigned zoom_q16){send({{Kind::zoom_target,0,0,{}, {},0,0,zoom_q16}});
+                now.QuadPart+=frequency.QuadPart*2;
+                assert(session.visual_frame(now.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())!=0);
+                session.did_present();return retained_read(device.Get(),context.Get(),display.Get());};
+            anchors->anchors={{7,24,18}};frame_at(65536);
+            send({{Kind::hud_begin,units,0,{}, {},24,18,42,0,unit_detail,0,0x7c1f,8},
+                  {Kind::unit_status,units,0,{30,0,30,0},{},3,0,C3X_RENDERER_UNIT_STATUS_BAR|C3X_RENDERER_UNIT_STATUS_FORTIFIED|(2u<<8)},
+                  {Kind::hud_end}});boundary();
+            unsigned const green=0xff00ff00,black=0xff000000,white=0xffffffff;
+            auto check=[&](std::vector<unsigned> const& shown,int dx,int dy){
+                auto at=[&](int x,int y){return shown[unsigned(y+dy)*w+unsigned(x+dx)];};
+                for(int y:{10,11,12,13,15,16,17,18,20,21,22,23})for(int x:{36,37})if(at(x,y)!=green)return false; // three segments
+                for(int x:{36,37})if(at(x,14)!=black||at(x,19)!=black)return false;                           // one-pixel gaps
+                for(int y=9;y<=24;++y)if(at(35,y)!=white||at(38,y)!=white)return false;                      // fortified outline
+                for(int x=35;x<=38;++x)if(at(x,9)!=white||at(x,24)!=white||at(x,26)!=white||at(x,28)!=white)return false; // stack marks
+                return at(35,27)!=white&&at(34,15)!=white&&at(39,15)!=white;};
+            auto shown=frame_at(65536);assert(check(shown,0,0));
+            request={};request.struct_size=sizeof(request);request.ticket=1;request.action=C3X_GPU_READBACK;
+            request.image=unit_detail;request.pixel_count=w*h;assert(session.execute(request,{}, {},result,output)==1);
+            assert(output[22*w+36]==0xffff00ff&&output[9*w+35]==0xffff00ff); // nothing reached the canvas
+            shown=frame_at(131072);auto offset=anchors->offset(7,24,18,w,h,2.);
+            assert(offset.visible&&check(shown,offset.x,offset.y));
+            send({{Kind::fill,units,0,{35,20,37,22},full,0,0,0x7c1f}});boundary();
+            shown=frame_at(131072);assert(shown[unsigned(22+offset.y)*w+unsigned(36+offset.x)]!=green);
+            std::puts("PASS renderer unit status: draw_status geometry at native pixel size, moved by zoom, outside the canvas, erased with it");
+        }
         std::puts("PASS live zoom Session: 16 intermediate GPU frames, partial native copies, fixed panel, marker alignment, present-only picking and canonical source preservation");
     }
     // Independent native targets can select the same complete before-images.

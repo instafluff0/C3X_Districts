@@ -293,7 +293,8 @@ int main(){
         # The navigation transaction fixture supplies a wrapped native camera;
         # zoom clamping and the Win32 timer have their own executable fixture.
         helpers = helpers.split('#ifdef Main_Screen_Form_scroll_at_mouse', 1)[0]
-        poll_begin = helpers.index('void\npoll_custom_renderer_combat_zoom ()')
+        # The minimap follow rule is covered by test_camera_navigation.
+        poll_begin = helpers.index('// Whether the minimap box should follow the presented zoom now.')
         poll_end = helpers.index('#ifdef Animator_update_display\nvoid __fastcall\npatch_Animator_update_display', poll_begin)
         helpers = helpers[:poll_begin] + helpers[poll_end:]
         begin = helpers.index('// Preserve native wrapping and city centering;')
