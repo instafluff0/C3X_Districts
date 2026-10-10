@@ -3000,8 +3000,9 @@ packs without ground-state groups draw nothing new.
 injected-state entry is added. `capture_custom_renderer_topology` asks the
 renderer for an extra capture envelope (`C3X_NATIVE_CAPTURE_MARGIN`, tile
 coordinates past the visible tiles; 0 keeps the native envelope). The
-renderer returns a margin unless `C3X_RENDERER_WORLD_WINDOW=0` (stage 2a,
-on by default since October 10). Tiles past the zoom envelope are captured as appearance
+renderer returned a margin while stage 2a's window needed Civ III's capture;
+since October 10 it returns 0 (Civ III's native envelope): window tiles past
+the capture come from complete world inputs (review, 54 and 57). Tiles past the zoom envelope are captured as appearance
 only, like the halo (visibility bits, `TOPOLOGY_HALO | PREFETCH`), so the
 injected HUD pass draws no unit status or city label for them, and the
 renderer reports replacement ownership only for RENDER tiles. Config-off

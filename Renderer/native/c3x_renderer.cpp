@@ -15772,7 +15772,11 @@ private:
                 if(((camera_active || !camera_scene_complete) && !completed_scene_usable()) ||
                     !capture->valid() || renderer_state.device_generation!=job->device_generation ||
                     renderer_state.gpu_serial!=job->serial)return;
-                job->ready=false;
+                // Readiness changes only with a completed swap below: the
+                // displayed front is never written meanwhile. Clearing it here
+                // discarded the completed zoomed draw whenever prepare returned
+                // early, and an unchanged still view returns early on every
+                // frame, so it stayed magnified until the next change (review, 58).
                 auto completed_view=borrow_completed_scene();
                 struct BorrowedFrame {bool& flag;bool prior;~BorrowedFrame(){flag=prior;}}
                     borrowed_frame{renderer_state.borrowed_scene_frame,renderer_state.borrowed_scene_frame};
@@ -16269,7 +16273,7 @@ private:
                         // since its job started, so no newer pose was shown.
                         if(map_sample.prepare && !drawn_now){
                             map_sample.prepare(visual_ticks,visual_frequency,1.f);
-                            if(prepared_map && prepared_map->ready)initial=prepared_map->front.Get();
+                            if(prepared_map && prepared_map->ready && prepared_map->zoom==1.f)initial=prepared_map->front.Get();
                         }
                         // A deferred step was just drawn canonically; zoomed in
                         // it still needs its presented-zoom draw below.
@@ -18630,14 +18634,9 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
     if(operation==C3X_NATIVE_ZOOM_PRESENTED)return remote_renderer_requested()?int(remote_renderer_backend()->presented_zoom()):
         renderer_worker?int(renderer_worker->presented_zoom()):65536;
     if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
-    if(operation==C3X_NATIVE_CAPTURE_MARGIN){
-        // Civ III captures appearance as far as the world window can reach
-        // (render_core/world_window.h, margin_x/margin_y).
-        using Window=c3x_renderer::render_core::WorldWindow;
-        static int const margin=[]{char value[4]={};return !(GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",value,sizeof(value))==1&&value[0]=='0')?
-            int(unsigned(Window::margin_x)|(unsigned(Window::margin_y)<<16)):0;}();
-        return margin;
-    }
+    // Civ III keeps its native capture envelope: the world window draws the
+    // tiles past it from complete world inputs (render_core/world_window.h).
+    if(operation==C3X_NATIVE_CAPTURE_MARGIN)return 0;
     if(operation==C3X_NATIVE_VISUAL_POLICY)return remote_renderer_requested()?remote_renderer_backend()->visual_policy(color):
         renderer_worker?renderer_worker->visual_policy(color):0;
     if(operation==C3X_NATIVE_STROKE && native_composition && native_composition->defer_cold_stroke(image,from))return 1;

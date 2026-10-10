@@ -55,14 +55,21 @@ int main(){
 ''')
 
 
-    def test_blocked_preparation_keeps_the_completed_draw(self):
-        # The compositor calls prepare every display frame. While a camera job
-        # blocks it, clearing readiness first discarded the step's zoomed draw.
+    def test_no_early_return_discards_the_completed_draw(self):
+        # The compositor calls prepare every display frame. Clearing readiness
+        # at its top discarded the step's zoomed draw whenever prepare returned
+        # early: while a camera job blocks it (review 50), and on every frame of
+        # an unchanged still view, which then stayed magnified until the next
+        # change (light save, end of the 2x scroll; review 58).
         source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
         start = source.index('            auto prepare=[this,weak,capture,selected,origin,settings,geometry,x,y]')
         body = source[start:source.index('            auto draw=[this,weak,capture,selected', start)]
-        gate = body.index('renderer_state.gpu_serial!=job->serial)return;')
-        self.assertGreater(body.index('job->ready=false;'), gate)
+        self.assertFalse('job->ready=false' in body, 'prepare must not clear readiness')
+        swap = body.index('std::swap(job->front,job->back);')
+        self.assertEqual(body.count('job->ready=true'), 1)
+        self.assertGreater(body.index('job->ready=true'), swap)
+        # A kept zoomed draw must not become a 1x publication's initial image.
+        self.assertTrue('prepared_map->ready && prepared_map->zoom==1.f' in source, 'adoption must use only a 1x draw')
 
 
     def test_adoption_prepares_every_step_at_the_settled_zoom(self):

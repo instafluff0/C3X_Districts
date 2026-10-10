@@ -2682,3 +2682,49 @@ The view is unchanged, so six times the water draws means water is culled
 against something that grows with the window. Order of work: water culling,
 membership admission, shadow caster collection, static refinement.
 
+## 57. Civ III's native capture envelope again (October 10)
+
+The window's capture margin (sections 29-31) existed because window tiles
+past Civ III's capture had no full appearance. Since the seed reads explored
+fog as the capture does (section 54), every explored tile's world input is
+complete, so the window can draw those tiles from the retained world. Busy
+save, window on, margin 0 (m1) against the margin (e2):
+
+| | e2 (margin) | m1 (margin 0) |
+| --- | --- | --- |
+| Native capture | 4,888 tiles | 1,686 tiles |
+| Window tiles from world inputs | 0 | 1,224 (none skipped) |
+| Covered render setup / draw | 11.7 / 23.0 ms | 10.7 / 18.7 ms |
+| Covered step period p50 | 174 ms | 156 ms (two ticks) |
+| Steps in the scroll segments | 82 | 89 |
+| Crossing builds | 96 | 96 |
+
+No failures; every completion adopted. Civ III's per-step capture (three
+copies, a comparison and an encode per tile on its thread, section 29) is
+about a third of its size. `C3X_NATIVE_CAPTURE_MARGIN` now returns 0.
+Tests: `test_world_window_default.py`.
+
+## 58. A still zoomed view kept its magnified image (October 10)
+
+**Symptom.** On the light save, the last two seconds of the 2× scroll segment
+were magnified 1× frames (all frames soft), in window-off runs too (l3, 22%
+soft). With the capture margin removed, steps came every tick and the
+pattern repeated on every run.
+
+**Cause** (temporary traces of the sampler and of prepare's exits). The last
+step's adoption prepared its 2× draw, but the next display frame's prepare
+cleared `job->ready` at its top and then returned early: an unchanged, still,
+unanimated view returns before drawing on every frame. Readiness never came
+back, so every frame sampled the canonical image magnified until the zoom
+changed. Busy saves keep animating, so they always re-prepared.
+
+**Fix.** Prepare no longer clears readiness; it changes only with the
+completed swap (the displayed front is never written meanwhile). The
+adoption's initial image now requires a 1× draw (`prepared_map->zoom==1.f`).
+Test: `test_zoomed_step_sample.py`
+(`test_no_early_return_discards_the_completed_draw`, fails on the old code).
+
+**Result** (r1 light, r2 busy, margin 0 with the fix): light 2× and 3× 0%
+soft (19-20% at 2× before), 210 of 210 adopted; busy 2% soft at 2× and 3×,
+80 of 80 adopted; no failures.
+
