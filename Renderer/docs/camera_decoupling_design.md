@@ -381,13 +381,16 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        - the unit status, as facts drawn by the renderer (section 47). It
          matches native, and idle ticks went from about 930 to about 240
          renderer commands.
-     - Next: city labels.
+     - Next: city labels, deferred by the user on October 10. They need new
+       hook entries in `civ_prog_objects.csv`.
      - Every other vanilla interface element (minimap, panels) is unchanged.
        So is the configuration-off path.
    - **Scrolling at 2×/3× is soft** (user report, October 9; measured in
      section 43). While the camera moves, the zoomed scene is not drawn, so
-     frames stretch the step's 1× image. The fix is to draw each step at the
-     presented zoom. That comes after 4.2.
+     frames stretch the step's 1× image. **Fixed October 10** (review,
+     sections 49–51): each adopted step is also prepared at the presented
+     zoom, and that draw stays displayable during the next camera job. Soft
+     scrolled frames went from 60–75% to about 1%.
 5. **A compact, instanced world within a memory tier.**
    - A byte census by layer first (`world-streaming-cost`).
    - Picture-identical changes in order of bytes per risk: city building
