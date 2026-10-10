@@ -450,6 +450,22 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        draw caches keyed by the revisions of blocks near the view rather
        than one membership revision.
      - R4. Block-indexed culling, caster collection and region of interest.
+     - **Status and order (October 10, after R1).** R1 is done (review 60).
+       A steady-step fast path for the moving window was designed and
+       deferred: R3's fixed set removes the window it optimizes. Kept from
+       that design:
+       - the world guard: the topology appearance, visibility, world-input,
+         scope and observation sequences plus the raster dependency
+         checkpoint prove `window_tile` unchanged;
+       - the list of state a covered step writes;
+       - fast-equals-slow equivalence tests.
+       Next is R2': key the view-anchored draw caches (shadow page proofs,
+       static raster proofs, region of interest, water lighting) by the
+       content of blocks near the view instead of `view_revision()`. A
+       crossing's band lies outside the guard band, yet today it re-proves
+       shadows (31 ms), repairs static (12 ms) and rebuilds the region of
+       interest (about 27 ms). Then resident-set membership (R2 and R3
+       together).
      - Each stage keeps the 8,192 cap off the resident path, is measured on
        the busy, light and user saves, and gets a regression test.
    - Original order: (1) the draw's set-dependent passes (static refinement and water
