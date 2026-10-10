@@ -59,6 +59,8 @@ int main(){
         self.assertIn('compile("city.hlsl",entries[i],&replacement)',source)
         for entry in ['PSNativeCity','PSNativeCityEmission','PSNativeCityReflection','PSNativeCityReflectionEmission']:
             self.assertIn('"'+entry+'"',source)
-        self.assertIn('float texel=max(box.z,box.w)/4096.',source)
+        # 33986a93 derives the bias texel from the paged sampling grid pitch, not a fixed 4096 box.
+        self.assertIn('float texel=1/min(inverse_pitch.x,inverse_pitch.y);',source)
+        self.assertIn('normal*(water?6./1024.:texel*1.5)',source)
 
 if __name__=='__main__':unittest.main()

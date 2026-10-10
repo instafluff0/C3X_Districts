@@ -71,6 +71,7 @@ def extract(source):
 
 
 PRELUDE = r'''
+#include <array>
 #include <atomic>
 #include <cassert>
 #include <cstdint>
@@ -113,7 +114,9 @@ int ID3D11RenderTargetView::releases=0;
 template<class T>void release(T*& value){if(value){value->Release();value=nullptr;}}
 struct Frame {unsigned visible_animation_count=0,tile_count=0;int const* tiles=nullptr;};
 struct Output {unsigned version=0,size=0;bool filled=false;};
-struct Trace {int writes=0;void write(char const*,char const*,bool){++writes;}};
+// c2330b9f times setup phases at trace level 2; the fixture keeps tracing off.
+struct Trace {int writes=0,level=0;void write(char const*,char const*,bool){++writes;}
+    double milliseconds(long long)const{return 0;}};
 enum class CancelAt {none,before,wave,texture,rtv,selection,assets,meshes,draw,capture};
 struct Harness;
 struct Device {
@@ -155,12 +158,14 @@ struct Harness {
     Texture* gpu_map_texture=nullptr;
     long long frame_geometry_ticks=0,frame_draw_ticks=0;
     char const* frame_cache_path="prior";
-    int waves=0,draws=0,fills=0,captures=0,selections=0,assets=0,meshes=0,consumes=0;
+    int waves=0,draws=0,fills=0,captures=0,selections=0,assets=0,meshes=0,consumes=0,warms=0;
     std::uint64_t route_map_serial=0,gpu_serial=19;
     std::vector<int> fresh_unit_poses;
     bool select_frame_units(Frame const&,std::vector<int> const&,std::vector<int>&,float){
         ++selections;event(CancelAt::selection);return selection_ok;
     }
+    // 5c51842a offers optional idle decoding of on-demand unit types; it never waits.
+    void warm_unit_assets(std::vector<int> const&){++warms;}
     int prepare_frame_unit_assets(std::vector<int> const&){++assets;event(CancelAt::assets);return assets_result;}
     int c3x_renderer64_prepare_unit_meshes(){++meshes;event(CancelAt::meshes);return meshes_result;}
     void consume_required_world_changes(unsigned,bool success){assert(success);++consumes;}
@@ -182,8 +187,9 @@ struct Harness {
         ready={61,std::make_shared<int>(61)};return true;
     }
     void service_camera_preparation(){}
-    bool render(Frame const& frame,Output& output,int,std::atomic<bool>* pending,unsigned=0,void const* =nullptr,unsigned=0,void const* =nullptr,std::function<void()> ={}){
+    bool render(Frame const& frame,Output& output,int prewarm_index,std::atomic<bool>* pending,unsigned=0,void const* =nullptr,unsigned=0,void const* =nullptr,std::function<void()> ={}){
         auto cancelled=[&]{return pending&&pending->load(std::memory_order_relaxed);};
+        std::array<LARGE_INTEGER,8> setup_marks{};bool const prewarming=prewarm_index>=0;bool covered_membership=false;
         unsigned signature=97,textured_tile_count=2,fallback_tile_count=0,invalidations=0;
         int width=128,height=64;
         std::vector<int> replacement_tile_flags{1,1};

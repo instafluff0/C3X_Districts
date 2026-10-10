@@ -63,7 +63,8 @@ int main(){
 
     def test_alias_copy_reference_pixels_resize_swap_and_msaa(self):
         source=(ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
-        method='    bool ensure_linear_target('+source.split('    bool ensure_linear_target(',1)[1].split('    bool ensure_targets(',1)[0]
+        # ea135a9b places configured_samples/prepare_assets between this method and ensure_targets.
+        method='    bool ensure_linear_target('+source.split('    bool ensure_linear_target(',1)[1].split('    unsigned configured_samples() const {',1)[0]
         run_cpp(r'''
 #define NOMINMAX
 #include <windows.h>
@@ -81,6 +82,10 @@ int main(){
 #include "Renderer/native/render_core/linear_target.h"
 using Microsoft::WRL::ComPtr;
 using c3x_renderer::render_core::LinearTarget;
+// e439ec74 memoizes switches for the process lifetime; this fixture toggles both modes in one process.
+namespace c3x_renderer { namespace render_core {
+DWORD cached_environment(char const* name,char* buffer,DWORD size){return GetEnvironmentVariableA(name,buffer,size);}
+}}
 struct Harness {struct {ID3D11Device* device;} renderer;
 ''' + method + r'''
 };

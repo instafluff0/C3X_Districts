@@ -14,12 +14,18 @@ class DirectUnitPlacementTests(unittest.TestCase):
         # draw constants/shader arithmetic; dirty-canvas expansion is separate.
         preparation = source.split("auto& draw=sample.draw;auto& pose=sample.pose;", 1)[1].split(
             "// Native occurrences carry their own exact wrap/anchor.", 1)[0]
+        # 25221b37 fills a per-part placement row and applies the display zoom
+        # projection; the following shadow-policy fields do not move the ground point.
+        projected = ".unit_placement(placement_values.data(),guard,scene_scale);"
         placement = real.split("float scale=pose.projection_scale*scene_scale;", 1)[1].split(
-            "context->UpdateSubresource(material", 1)[0]
+            projected, 1)[0] + projected
         shader = source.split("float2 local=", 1)[1].split("Output o;", 1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/unit_animation_runtime.h"
+#include "Renderer/native/render_core/combat_effects.h"
+#include "Renderer/native/scene_projection.h"
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <vector>
@@ -31,11 +37,13 @@ struct float2 {
  float2 operator*(float s)const{return {x*s,y*s};}
 };
 struct Instance {c3x_renderer_unit_v1 draw{};};
-struct Unit {int minimum_canvas;};
+// bde67917 adds pack armament sync and aircraft lift; these are ground units.
+struct Unit {int minimum_canvas;c3x_renderer::effects::Armament arms{};};
 struct Action {bool loop=true;};
 struct Mesh {unsigned bones=1;};
 struct Part {float cutout=0;};
-struct Prepared {c3x_renderer_unit_v1 draw{};c3x_renderer::UnitAnimationPose pose;};
+struct Prepared {c3x_renderer_unit_v1 draw{};c3x_renderer::UnitAnimationPose pose;float lift=0;};
+float flight_lift(Unit const&,Instance const&,c3x_renderer_frame_v1 const&){return 0;}
 float2 ground(Instance instance,int minimum,c3x_renderer_frame_v1 frame,
               float scene_scale,bool reflected,float x,float y,float z){
  Unit unit{minimum};Action action;Mesh mesh;auto* source=&mesh;Part part;
@@ -43,7 +51,8 @@ float2 ground(Instance instance,int minimum,c3x_renderer_frame_v1 frame,
  struct {int width=2400,height=1400;} scene;
  struct {float left=0,top=0,width=1,height=1,dx=0,dy=0;} shadow_fit;
  for(auto const& unused:std::vector<int>{0}){
-  (void)unused;Prepared sample;sample.draw=instance.draw;
+  (void)unused;Prepared sample;sample.draw=instance.draw;auto& prepared=sample;
+  std::vector<std::array<float,28>> part_placements(1);unsigned part_index=0;float zoom=1;
   auto& draw=sample.draw;auto& pose=sample.pose;
 ''' + preparation.replace("return false;", "return {-99999,-99999};") + r'''
   // The native center was formed before minimum-canvas expansion, and no
@@ -54,8 +63,9 @@ float2 ground(Instance instance,int minimum,c3x_renderer_frame_v1 frame,
 ''' + placement.replace("unit.scale,unit.offset_z", "1,0") + r'''
   float2 origin(placement_values[0],placement_values[1]);
   struct {float x;} pass_control{reflected?2.f:0.f};
+  {float scale=placement_values[4]; // the shader's ScenePlacement scale
   float2 local=''' + shader + r'''
-  return pixel;
+  return pixel;}
  }
  return {-99999,-99999};
 }
