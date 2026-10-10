@@ -2728,3 +2728,31 @@ Test: `test_zoomed_step_sample.py`
 soft (19-20% at 2× before), 210 of 210 adopted; busy 2% soft at 2× and 3×,
 80 of 80 adopted; no failures.
 
+## 59. The window cannot grow to the whole world inside the frame (October 10)
+
+Temporary experiments at margin 0 (reverted):
+
+| | r2 (×1) | x5 (×3) | x6 (×5) |
+| --- | --- | --- | --- |
+| Window tiles | 2,304 | 5,472 | 8,320 |
+| Covered setup | 10.9 ms | 16.2 ms | first camera job failed |
+| …membership admission (p4) | 3.1 ms | 6.4 ms | |
+| …window build (p1) | 1.5 ms | 2.4 ms | |
+| Covered draw growth | | about +2 ms | |
+
+At margin 0 a covered step grows about 1.8 µs per window tile in setup and
+under 1 µs in the draw. At ×5 the first camera job failed (`gpu-failure`,
+render returned false): the window is substituted for Civ III's capture as the
+camera job's frame, and a frame holds at most 8,192 occurrences
+(`CapturedScene::occurrence_limit` and the same cap in visibility coverage,
+dynamic scene input, city overlays, unit arrivals, unit instances, the
+membership diff and publication). The busy world has 16,900 explored tiles.
+
+A bigger window also does not remove crossings: its box still moves a block
+at a time with the camera. Only a fixed whole-world set does, and that set
+cannot be a frame. Whole-world residency therefore needs the resident world
+separated from the per-step frame: the frame describes the view (Civ III's
+capture), and the renderer keeps the explored world resident and consults it
+by block for selection, shadows, the static layer and visibility. Raising every
+8,192 cap instead would double each per-frame pass and buffer.
+

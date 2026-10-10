@@ -421,7 +421,12 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      membership admission +4.8 ms, static refinement and the water overlay
      misses it causes +5.9 ms, shadow caster collection +2.1 ms, reflection
      +1.9 ms, units and prepare +1.9 ms, window build and assembly +3 ms.
-   - Order: (1) the draw's set-dependent passes (static refinement and water
+   - Update (review 57-59): the capture margin is retired and covered steps
+     run at two ticks; the window cannot hold the whole world because it is
+     the camera job's frame (8,192-occurrence cap) and a moving window never
+     removes crossings. Next: separate the resident world from the per-step
+     frame (frame = Civ III's view; world = renderer-owned, block-indexed).
+   - Original order: (1) the draw's set-dependent passes (static refinement and water
      overlay validity, shadow casters, reflection), indexed by window block;
      (2) membership admission revalidating only changed or view-near tiles;
      (3) the window build and assembly; (4) the window grows to the explored
