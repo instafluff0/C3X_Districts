@@ -63,5 +63,17 @@ int main(){
         self.assertGreater(body.index('job->ready=false;'), gate)
 
 
+    def test_adoption_prepares_every_step_at_the_settled_zoom(self):
+        # After the canonical publish (so its import is untouched), for deferred
+        # steps too: they are drawn canonically at adoption, and zoomed in they
+        # were displayed magnified until the camera stopped.
+        source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
+        start = source.index('}else if(command==Command::gpu_render){')
+        block = source[start:source.index('stage=gpu-map-publication', start) if 'stage=gpu-map-publication' in source[start:start+20000] else start+20000]
+        self.assertIn('auto zoomed_prepare=map_sample.prepare;', block)
+        self.assertGreater(block.index('zoomed_prepare(visual_ticks,visual_frequency,presented);'),
+                           block.index('if(session.publish(initial,'))
+
+
 if __name__ == '__main__':
     unittest.main()

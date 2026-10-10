@@ -221,7 +221,7 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
    the camera moves. On October 8 the user agreed to fold the rest of stage 1
    into stage 2.
 2. **A renderer-owned resident world; the camera as a frame input.**
-   - 2a. **Resident world. In place behind `C3X_RENDERER_WORLD_WINDOW=1`**
+   - 2a. **Resident world. On by default since October 10; `C3X_RENDERER_WORLD_WINDOW=0` opts out** (review, section 51). Previously in place behind `C3X_RENDERER_WORLD_WINDOW=1`
      (review, sections 27–30). The renderer selects its resident set by a
      block-anchored world window, and Civ III's capture reaches past the
      view as appearance-only tiles. Steps that keep the set take 40–48 ms of

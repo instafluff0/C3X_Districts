@@ -661,7 +661,7 @@ public:
     bool tight_natural_bounds=false;
     int region_input_ring=2;
     // Stage 2a: resident geometry selected by a block-anchored world window
-    // (render_core/world_window.h); C3X_RENDERER_WORLD_WINDOW=1.
+    // (render_core/world_window.h); on unless C3X_RENDERER_WORLD_WINDOW=0.
     bool world_window_control=false;
     c3x_renderer::render_core::WorldWindow world_window;
     c3x_renderer_frame_v1 window_frame{};unsigned window_native_count=0;
@@ -3079,7 +3079,9 @@ public:
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
         region_input_ring=std::strcmp(control,"4")==0?4:2;
-        world_window_control=GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        // The resident world window is on unless C3X_RENDERER_WORLD_WINDOW=0
+        // (stage 2 finished; busy 1x scroll 6.7 -> 10-14 fps, review 51).
+        world_window_control=!(GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",control,sizeof(control)) && std::strcmp(control,"0")==0);
         GetEnvironmentVariableA("C3X_RENDERER_REGION_METADATA_MIB",control,sizeof(control));
         std::size_t metadata_limit=std::strcmp(control,"32")==0?32u*1024u*1024u:96u*1024u*1024u;
         if(render_regions.metadata_limit!=metadata_limit)render_regions.clear();
@@ -16260,7 +16262,9 @@ private:
                             map_sample.prepare(visual_ticks,visual_frequency,1.f);
                             if(prepared_map && prepared_map->ready)initial=prepared_map->front.Get();
                         }
-                        auto zoomed_prepare=drawn_now?decltype(map_sample.prepare){}:map_sample.prepare;
+                        // A deferred step was just drawn canonically; zoomed in
+                        // it still needs its presented-zoom draw below.
+                        auto zoomed_prepare=map_sample.prepare;
 #endif
                         if(session.publish(initial,renderer_state.gpu_serial,
                             gpu_publication.source_x,gpu_publication.source_y,gpu_metadata.width,gpu_metadata.height,std::move(map_sample))){
@@ -18615,7 +18619,7 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
         // Civ III captures appearance as far as the world window can reach
         // (render_core/world_window.h, margin_x/margin_y).
         using Window=c3x_renderer::render_core::WorldWindow;
-        static int const margin=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",value,sizeof(value))==1&&value[0]=='1'?
+        static int const margin=[]{char value[4]={};return !(GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",value,sizeof(value))==1&&value[0]=='0')?
             int(unsigned(Window::margin_x)|(unsigned(Window::margin_y)<<16)):0;}();
         return margin;
     }

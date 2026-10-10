@@ -2354,3 +2354,54 @@ render waited for the camera to stop.
 - the sampler returns the completed zoomed draw during a camera job, and
   fails without the change;
 - a blocked `prepare` keeps readiness.
+
+## 51. The world window on by default; deferred steps drawn at the presented zoom (October 10)
+
+**Finding.** Stage 2's resident world window (2a) and its deferred scroll
+steps (2c) worked only with `C3X_RENDERER_WORLD_WINDOW=1`. Ordinary games and
+every capture since section 41 refused all deferrals (`deferred-step-refused
+reason=1`). Stage 2 finished in section 41, so the window is now on by
+default, and `C3X_RENDERER_WORLD_WINDOW=0` opts out.
+- The renderer's control and the capture margin it returns to Civ III follow
+  the same default.
+- Deferred steps are drawn canonically at adoption. Zoomed in, they now also
+  get the section 50 presented-zoom draw. Without it, 26 of 250 (2×) and 25
+  of 571 (3×) frames were magnified.
+
+**Evidence** (busy save, `near`; mean fps over the seconds of each scroll
+segment):
+
+| Run | 1× scroll | Zoomed scroll | Soft zoomed frames | Failures |
+| --- | --- | --- | --- | --- |
+| Window off (h14) | 6.7 | 6.7 | 5 | 0 |
+| Window on, before the deferred-step fix (w20) | 14.2 | about 8 | 51 | 0 |
+| Window on (w21) | 10.0 | 6.4 | 2 | 0 |
+| Default, no option (w22) | 11.2 | 7.7 | 1 | 0 |
+
+- Melee combat with the default: finished, with no failures.
+- Steady 2× and 3× stay at 55–61 fps.
+
+**Where a scroll step's time goes now** (window off, 1×):
+- The camera job takes about 100 ms from render-begin to camera-complete.
+- The next job starts 200–270 ms later: adoption, Civ III's redraw of the
+  step, and its image batches, each waiting about 9 ms for the helper's
+  single worker.
+- Civ III's own thread barely waits (4–45 ms per 2 s).
+- The remaining lever is the single worker that runs camera jobs,
+  composition and native batches in turn. That is the planned job split.
+
+**The busy 1× HUD** (new `hud_items_max` and `hud_placed_max` in
+`native-image-execution`):
+- About 150 HUD items (about 50 city labels and 100 unit statuses) place
+  about 3,100 draws. At 2× and 3× it is 12–34 items and 200–750 draws.
+- At idle 1×, the fused pass replays all 3,080 every frame, because the
+  animating scene below changes. That costs little CPU: evaluate is 1.7 ms of
+  a 22.7 ms frame, and the scene prepare is 14.6 ms.
+- Zoomed scroll is just as slow with five times fewer HUD draws, so HUD
+  replay is not what limits scrolling.
+
+**Tests.**
+- `test_world_window_default`: unset or `1` is on, `0` is off, for both the
+  control and the margin. Fails on the old opt-in parse.
+- `test_zoomed_step_sample`: the adoption prepares every step, deferred ones
+  included, after the canonical publish.

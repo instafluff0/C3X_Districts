@@ -78,6 +78,8 @@ class Session {
         LARGE_INTEGER reported{},frequency{};std::uint64_t calls=0,commands=0,uploads=0,upload_pixels=0;
         // Commands recorded into map HUD items: city labels, units, others.
         std::uint64_t hud_city=0,hud_units=0,hud_other=0;
+        // The largest HUD at a world boundary: items, and draws placed over the world.
+        std::size_t hud_items_max=0,hud_placed_max=0;
         double submit_ms=0,record_ms=0,resource_ms=0,total_ms=0,max_ms=0;bool enabled=false;
         ExecuteProfile(){char value[4]={};enabled=GetEnvironmentVariableA("C3X_RENDERER_TRACE",value,sizeof(value))==1&&value[0]=='2';
             QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&reported);}
@@ -87,10 +89,10 @@ class Session {
             LARGE_INTEGER now={};QueryPerformanceCounter(&now);
             if(now.QuadPart-reported.QuadPart<2*frequency.QuadPart)return;
             char line[400];std::snprintf(line,sizeof(line),
-                "[C3X renderer] stage=native-image-execution calls=%llu commands=%llu uploads=%llu upload_pixels=%llu total_ms=%.1f submit_ms=%.1f record_ms=%.1f resource_ms=%.1f max_ms=%.2f window_ms=%.0f hud_city=%llu hud_units=%llu hud_other=%llu\n",
+                "[C3X renderer] stage=native-image-execution calls=%llu commands=%llu uploads=%llu upload_pixels=%llu total_ms=%.1f submit_ms=%.1f record_ms=%.1f resource_ms=%.1f max_ms=%.2f window_ms=%.0f hud_city=%llu hud_units=%llu hud_other=%llu hud_items_max=%zu hud_placed_max=%zu\n",
                 (unsigned long long)calls,(unsigned long long)commands,(unsigned long long)uploads,(unsigned long long)upload_pixels,
                 total_ms,submit_ms,record_ms,resource_ms,max_ms,1000.*double(now.QuadPart-reported.QuadPart)/double(frequency.QuadPart),
-                (unsigned long long)hud_city,(unsigned long long)hud_units,(unsigned long long)hud_other);
+                (unsigned long long)hud_city,(unsigned long long)hud_units,(unsigned long long)hud_other,hud_items_max,hud_placed_max);
             OutputDebugStringA(line);auto keep=enabled;auto rate=frequency;*this=ExecuteProfile{};enabled=keep;frequency=rate;reported=now;
         }
     } execute_profile;
@@ -192,6 +194,8 @@ class Session {
                     draw.clip.right-item.layout_x,draw.clip.bottom-item.layout_y};
                 placed.push_back({draw,item.x,item.y,item.unit_id>=0?unit_anchors:nullptr,item.unit_id});
             }}
+            execute_profile.hud_items_max=std::max(execute_profile.hud_items_max,hud.size());
+            execute_profile.hud_placed_max=std::max(execute_profile.hud_placed_max,placed.size());
             layers.placed_batch(world_view_words,world_view_detail,placed,zoom);
             for(auto shadow:fixed_shadows){
                 shadow.destination=shadow.background=world_view_words;
