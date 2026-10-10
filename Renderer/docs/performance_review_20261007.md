@@ -2534,3 +2534,37 @@ final 1×. Busy: final 1× idle 38.3 fps with the witness on (now cheap).
 The busy save's first seconds at 2× ran at 4–16 frames a second in this run;
 watch it in later runs.
 
+## 53. Where a busy scroll step's time goes with the window (October 10)
+
+Busy save, `near`, window on, trace level 2, no witness (b9, b11). Step
+period is adoption to adoption.
+
+| Step | Steps | Median period | Scroll time |
+| --- | --- | --- | --- |
+| Full job (mostly block crossings) | 19, 20 | 427, 426 ms | 8.4, 8.2 s |
+| Covered (deferred, drawn at adoption) | 48, 51 | 212, 191 ms | 11.4, 10.5 s |
+
+**A crossing job (330–810 ms):**
+- 110–350 ms building the entering band's tiles on the worker
+  (`render()` p5, the per-tile loop: routes, features, cliffs, resource
+  anchors, `cache_geometry_layer`, uploads);
+- 36–173 ms of display frames run inline at the job's checkpoints
+  (`service_camera_preparation`; about 70 ms each);
+- 9–175 ms waiting for the band's RAM-backing restore, which runs on
+  `world_preparation_queue` workers but is only scheduled inside p5;
+- 75–210 ms of draw (`sandbox_fresh.draw`).
+
+**A covered step** uses about 12–25 ms of setup and 20–60 ms of draw on the
+worker; the rest of its period is Civ III's ticks.
+
+Notes on the traces: `frame geometry_ms` is the whole setup (p1–p7), not part
+of the draw; `draw_submit_ms` is the draw. Setup phase times include display
+frames serviced inline; subtract `camera-service-turn` before attributing.
+
+**Consequence for the order.** Whole-world residency builds each tile once
+instead of at every crossing (43% of scroll time). The worker split could
+move only about 15 ms of CPU setup per covered step off the context thread,
+and display frames swap the completed scene into the camera job's live
+fields (`borrow_completed_scene`), so a concurrent job needs separate state
+first. The user agreed to do whole-world residency first.
+

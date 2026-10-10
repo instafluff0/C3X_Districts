@@ -405,8 +405,14 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
 6. **Far jumps (B).** No coarse view (the user, October 10). The whole
    explored world stays resident when it fits the memory tier, so a far jump
    lands in loaded geometry; larger maps may exceed Civ VI's memory figures.
-   **Order agreed October 10:** split the helper's single worker first, then
-   whole-world residency, then stage 5 compaction.
+   **Order agreed October 10** (after review, section 52): whole-world
+   residency first, then the helper worker split, then stage 5 compaction.
+   With the window on, block crossings are 28% of busy scroll steps but 43%
+   of scroll time, mostly building the entering band's tiles on the worker
+   (110–350 ms a crossing); whole-world residency does that once. The split
+   could move only about 15 ms of CPU setup per covered step off the context
+   thread, and display frames swap the completed scene into the camera job's
+   live fields, which needs separate state first.
 
 If busy 1× idle still misses 55 fps after stage 3, unit-part batching (G3)
 comes next.
