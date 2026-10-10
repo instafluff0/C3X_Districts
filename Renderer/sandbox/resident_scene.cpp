@@ -403,10 +403,18 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         captured.dirty_flags=captured.visible_animation_count=0;
         bool source_complete=frame.tile_count<=8192&&(!frame.tile_count||frame.tiles)&&
             frame.world_topology_count<=1024u*1024u&&(!frame.world_topology_count||frame.world_topology);
-        hash(source,&captured,sizeof(captured));
-        if(source_complete){
-            hash(source,frame.tiles,std::size_t(frame.tile_count)*sizeof(*frame.tiles));
-            hash(source,frame.world_topology,std::size_t(frame.world_topology_count)*sizeof(*frame.world_topology));
+        // A publication's occurrences are immutable: hash them once per
+        // published frame, not on every displayed frame.
+        auto key=captured;key.tiles=frame.tiles;key.world_topology=frame.world_topology;
+        auto& cached=renderer.route_source;
+        if(cached.valid && cached.serial==renderer.route_map_serial && !std::memcmp(&cached.key,&key,sizeof(key)))source=cached.digest;
+        else{
+            hash(source,&captured,sizeof(captured));
+            if(source_complete){
+                hash(source,frame.tiles,std::size_t(frame.tile_count)*sizeof(*frame.tiles));
+                hash(source,frame.world_topology,std::size_t(frame.world_topology_count)*sizeof(*frame.world_topology));
+            }
+            cached.serial=renderer.route_map_serial;cached.key=key;cached.digest=source;cached.valid=true;
         }
         auto const& records=sandbox_direct_units.prepared_units;
         for(auto const& unit:records){

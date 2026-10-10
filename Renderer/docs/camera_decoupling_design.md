@@ -221,7 +221,7 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
    the camera moves. On October 8 the user agreed to fold the rest of stage 1
    into stage 2.
 2. **A renderer-owned resident world; the camera as a frame input.**
-   - 2a. **Resident world. In place behind `C3X_RENDERER_WORLD_WINDOW=1`.** On by default (October 10), it ran camera jobs continuously on the light save, so it is opt-in again until that is fixed (review, section 51)
+   - 2a. **Resident world. On by default since October 10** (`C3X_RENDERER_WORLD_WINDOW=0` opts out). The light-save stall that kept it opt-in was the camera delta's wrapped copies (review, sections 51–52).
      (review, sections 27–30). The renderer selects its resident set by a
      block-anchored world window, and Civ III's capture reaches past the
      view as appearance-only tiles. Steps that keep the set take 40–48 ms of
@@ -402,8 +402,11 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      memory.
    - Expected: busy save 3.4 GB GPU / 6.3 GB process (median) toward about
      2 / 4 GB, with the whole explored world resident.
-6. **Far jumps (B).** A coarse, always-resident view of the whole map for the
-   first frame; Civ III adopts at once; full quality within 500 ms.
+6. **Far jumps (B).** No coarse view (the user, October 10). The whole
+   explored world stays resident when it fits the memory tier, so a far jump
+   lands in loaded geometry; larger maps may exceed Civ VI's memory figures.
+   **Order agreed October 10:** split the helper's single worker first, then
+   whole-world residency, then stage 5 compaction.
 
 If busy 1× idle still misses 55 fps after stage 3, unit-part batching (G3)
 comes next.
@@ -413,5 +416,7 @@ comes next.
 - **Option C, display between steps.** Accepted on October 8 as the image
   glide and retired by the user on October 9: Civ III's scroll steps are
   shown as jumps, as in the vanilla game (review, section 30).
-- **First frame after a far jump** (stage 6). A coarse terrain view (no units,
-  shadows or detail for up to 500 ms), or today's wait.
+- **First frame after a far jump** (stage 6). Decided by the user on
+  October 10: **no coarse view**; it would be noticeable and look odd. Far
+  jumps are served by whole-world residency instead (the window covering the
+  explored world when it fits the memory tier).

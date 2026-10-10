@@ -2466,3 +2466,71 @@ Cause not yet known.
   - Even so, adoption never resumes after the camera stops.
 - Fix that adoption stall, and validate on the light save, before enabling
   the window again.
+
+## 52. The light-save stall: wrapped copies in the camera delta (October 10)
+
+**Cause.** The `0x12040` flags came from the injected capture margin, not
+from `world_window.h`: tiles past the zoom envelope are captured as
+`TOPOLOGY_HALO | PREFETCH` (section 30). On a small wrapping map, the
+window's wider margin (`WorldWindow::margin_x/margin_y`) reaches around the
+world, so one tile is captured twice: on screen as RENDER and as a wrapped
+copy as HALO.
+- The camera delta (`camera_delta.h`, section 30) keeps one slot per
+  canonical coordinate on the helper and overwrites it while decoding.
+- The sender judged each occurrence against the previous frame, so the
+  later copy was sent as "unchanged" and rebuilt with the earlier copy's
+  flags.
+- The helper's frame then differed from the bridge's request on every step.
+  Every completion was superseded, and Civ III adopted only the first.
+- Large maps have no wrapped copies in the margin, so the busy save never
+  showed it.
+
+**Fix.** The sender follows the receiver's slot within the frame
+(`CameraDeltaSender::written`). Wrapped copies with different flags are
+sent in full each step; unique tiles still travel as references. Test:
+`test_camera_delta.py`
+(`test_wrapped_copies_with_different_placement_rebuild_exactly`). It fails
+on the old sender with the flags seen in the game (`12040` against `12001`).
+
+**Result** (`near`, window on, same build; soft = drawn below the presented
+zoom):
+
+| Save | Adopted / completed | 1× | 2× | 3× | Final 1× | Failures |
+| --- | --- | --- | --- | --- | --- | --- |
+| Light, window off (l3) | — | 48.6 fps | 15.6 fps, 22% soft | 36.3 fps | 60.0 fps | 0 |
+| Light, window on (l9) | 154 / 154 | 51.7 fps | 18.7 fps, 2% soft | 44.6 fps | 60.0 fps | 0 |
+| User, window on (u2) | 191 / 191 | 49.1 fps | 27.1 fps, 11% soft | 36.1 fps | 59.7 fps | 0 |
+| Busy, window on (b5, b7) | 68 / 68, 70 / 70 | 26.8, 32.0 fps | 21.7, 23.4 fps | 36.7, 37.1 fps | 33.6, 32.9 fps | 0 |
+
+Before the fix the light save adopted 1 of 211 completions.
+
+**The idle cost was the witness.** A same-build busy A/B with
+`C3X_RENDERER_ROUTE_WITNESS=1` showed the window 10–18% slower at idle
+(35–36 against 38–41 fps; frame composition 13.3 against 10.3–11.1 ms). The
+witness hashed every captured tile byte on every frame, and with the window's
+capture margin the frame carries 4,888 tiles (2,304 of them window tiles).
+Without the witness, idle frames per second (from `frame-preparation-ready`):
+
+| Busy save | Opening 1× idle | Final 1× idle |
+| --- | --- | --- |
+| Window on (b9, b11) | 43.1, 43.3 | 39.1, 34.3 |
+| Window off (b10, b12) | 33.9 (a noisy run), 45.4 | 38.4, 38.7 |
+
+- The witness now hashes a publication's tiles once
+  (`RendererState::route_source`; digests unchanged). Test:
+  `test_route_source_digest.py`, which fails on the per-frame hash.
+- Comparisons between capture sizes made with the witness before this change
+  (sections 49–51) understate the larger capture by 1–3 ms a frame.
+- Zoomed and 1× scroll rates on the busy save are about the same with and
+  without the window (5–6 frames a second at 1×).
+- **The window is on by default again** (`C3X_RENDERER_WORLD_WINDOW=0` opts
+  out): neutral on the busy save, faster and sharper on the light save, and
+  the user save adopts every step.
+
+**Default build** (no window option, d10 light, d11 busy): the window was
+valid on every step (190 and 69), every completion was adopted, and no run
+failed. Light: 52.4 fps at 1×, 23.4 at 2× (0% soft), 44.7 at 3×, 60 at the
+final 1×. Busy: final 1× idle 38.3 fps with the witness on (now cheap).
+The busy save's first seconds at 2× ran at 4–16 frames a second in this run;
+watch it in later runs.
+

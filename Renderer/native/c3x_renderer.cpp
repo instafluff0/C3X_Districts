@@ -596,6 +596,10 @@ public:
     std::int64_t gpu_serial=0,camera_serial=0; // identities survive worker/device recreation
     std::int64_t route_map_serial=0; // opt-in source/version witness, never an admission key
     std::uint64_t route_frame_sequence=0;
+    // The witness's source digest for the current publication. Hashing every
+    // tile byte each frame cost 1-3 ms and grew with the capture, which
+    // skewed every comparison between capture sizes (review, section 52).
+    struct RouteSource {std::int64_t serial=0;c3x_renderer_frame_v1 key{};std::uint64_t digest=0;bool valid=false;} route_source;
 
     std::size_t viewport_cache_budget=default_viewport_cache_budget;
     std::size_t resource_backdrop_cache_budget=default_resource_backdrop_cache_budget;
@@ -661,7 +665,7 @@ public:
     bool tight_natural_bounds=false;
     int region_input_ring=2;
     // Stage 2a: resident geometry selected by a block-anchored world window
-    // (render_core/world_window.h); C3X_RENDERER_WORLD_WINDOW=1.
+    // (render_core/world_window.h); on unless C3X_RENDERER_WORLD_WINDOW=0.
     bool world_window_control=false;
     c3x_renderer::render_core::WorldWindow world_window;
     c3x_renderer_frame_v1 window_frame{};unsigned window_native_count=0;
@@ -3079,9 +3083,9 @@ public:
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
         region_input_ring=std::strcmp(control,"4")==0?4:2;
-        // Opt-in: on by default it ran camera jobs continuously on the light
-        // save (every zoomed frame magnified, 13 fps at 1x; review 51).
-        world_window_control=GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        // On unless C3X_RENDERER_WORLD_WINDOW=0. The light-save stall that
+        // made it opt-in was the camera delta's wrapped copies (review, 52).
+        world_window_control=!(GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",control,sizeof(control)) && std::strcmp(control,"0")==0);
         GetEnvironmentVariableA("C3X_RENDERER_REGION_METADATA_MIB",control,sizeof(control));
         std::size_t metadata_limit=std::strcmp(control,"32")==0?32u*1024u*1024u:96u*1024u*1024u;
         if(render_regions.metadata_limit!=metadata_limit)render_regions.clear();
@@ -18628,7 +18632,7 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
         // Civ III captures appearance as far as the world window can reach
         // (render_core/world_window.h, margin_x/margin_y).
         using Window=c3x_renderer::render_core::WorldWindow;
-        static int const margin=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",value,sizeof(value))==1&&value[0]=='1'?
+        static int const margin=[]{char value[4]={};return !(GetEnvironmentVariableA("C3X_RENDERER_WORLD_WINDOW",value,sizeof(value))==1&&value[0]=='0')?
             int(unsigned(Window::margin_x)|(unsigned(Window::margin_y)<<16)):0;}();
         return margin;
     }
