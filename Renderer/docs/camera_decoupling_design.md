@@ -330,6 +330,16 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
    world-anchored lanes, removing the edge seams (review, section 24).
    Expected: zoom responds within one frame. (Scroll steps are not
    animated: the user retired the glide on October 9.)
+   - The section 24 seams no longer appear: there were no seam frames in
+     any zoom segment of the October 9 cadence runs.
+   - **4.1, the wheel request reaches the next frame. Done** (review,
+     section 42). The request is applied 6–25 ms after the wheel; before,
+     it waited 150–250 ms in Civ III's ordered stream. The first presented
+     change still takes 29–317 ms, because composing a frame at a new scale
+     costs 50–125 ms in the VM.
+   - **4.2, cheap transition frames. Needs the user's decision:** stand-in
+     frames during the roughly 200 ms animation, drawn from one completed
+     world image.
 5. **A compact, instanced world within a memory tier.**
    - A byte census by layer first (`world-streaming-cost`).
    - Picture-identical changes in order of bytes per risk: city building
