@@ -2437,10 +2437,11 @@ never engaged:
 - idle animation dropped to about 13 presents a second;
 - the helper's camera events stop at 62.5 s.
 
-Cause: every publication took `map-path fresh` (55 times), never
-`resident-fresh`.
-- `gpu_publication.fresh` is true only for `resident-fresh`, so
-  `retain_visual_map` created no prepared sampler.
+Cause not yet known.
 - On this small map the whole world fits the window (box 0,0,4096,2304).
-- Find why the window keeps the light save on the non-resident path before
-  enabling it again.
+- Candidates: `retain_visual_map` returning no prepared sampler, and the
+  camera state (`camera_active`, `camera_scene_complete`) staying gated after
+  the last deferred step.
+- `map-path fresh` only names the scene path, not the frame cache path that
+  `gpu_publication.fresh` checks.
+- Trace both before enabling the window again.
