@@ -2444,4 +2444,11 @@ Cause not yet known.
   the last deferred step.
 - `map-path fresh` only names the scene path, not the frame cache path that
   `gpu_publication.fresh` checks.
-- Trace both before enabling the window again.
+- A temporary trace (l5) showed the actual failure. With the window on,
+  Civ III adopted only the first step: one `gpu-map-publication` against 211
+  `camera-complete` (mostly deferred), and `gpu_serial` stayed at 1.
+  - Every later frame reprojected that stale first map: soft when zoomed,
+    with dead idle animation.
+  - The save is an early game whose explored world fits inside the window.
+- Fix that adoption stall, and validate on the light save, before enabling
+  the window again.
