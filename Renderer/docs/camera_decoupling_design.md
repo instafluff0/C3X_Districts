@@ -392,6 +392,28 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      zoom, and that draw stays displayable during the next camera job. Soft
      scrolled frames went from 60–75% to about 1%.
 5. **A compact, instanced world within a memory tier.**
+   - **Census (October 10, review 63-64).** Busy save during play: 813 MB
+     unique resident geometry. Vertex bytes are natural 92-B vertices
+     (4.62 M, 425 MB), city 88-B (98.8 MB), and 168-B integrated ground
+     (underlay, river, route: 208 MB; water and bed alias the underlay
+     buffers). Indices are already 16-bit where possible (prepared_mesh.h:94)
+     and natural grids share index buffers.
+   - **Compaction plan** (vertex formats; the pixel shaders keep their
+     inputs through compact vertex-shader front ends):
+     - Stage 0: an explicit `vertex_format` on `PreparedMesh`,
+       `CachedVertexChunk` and the world backing codec; draw loops, pulled
+       path, caster layouts and borders bind per format; exact census
+       strides.
+     - Stage 1 (exact, identical pixels): drop constant, derivable or unused
+       fields (positions under world projection, uv equal to world, constant
+       panel/normal/visibility/owner) and pack per-tile integer codes into
+       one R8G8B8A8_UINT; per-chunk bitwise checks with a counted legacy
+       fallback. About 209 MB (26%).
+     - Stage 2 (quantized, needs the user's visual acceptance): octahedral
+       16-bit normals and city tangent frames, half or unorm16 weights,
+       relief and hydrology. About 137 MB more (43% cumulative).
+     - Stage 3: grid-exact natural world.xy, narrower UVs; about 50%.
+
    - A byte census by layer first (`world-streaming-cost`).
    - Picture-identical changes in order of bytes per risk: city building
      parts as shared instanced models (their placements are already recorded),

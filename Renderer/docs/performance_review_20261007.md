@@ -2868,3 +2868,10 @@ layers by about 70%. The 88-byte natural and city vertices and 32-bit indices
 (16-bit where a chunk has under 65,536 vertices) are the next most valuable.
 Changes need Lab comparisons for fidelity.
 
+**Corrections (vertex format map, October 10).** Natural vertices are 92 B
+(the census strides mask buckets stride/8, so 88 and 92 coincide); indices are
+already 16-bit where a chunk allows; water and bed alias the underlay buffers
+with `byte_count=0`, so logical 945 MB double-counts about 86 MB and 813 MB
+unique is the resident figure. Vertex bytes: natural 425 MB, city 98.8 MB,
+168-B ground layers 208 MB. Plan in the design doc (stage 5).
+
