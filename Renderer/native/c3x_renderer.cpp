@@ -13445,15 +13445,17 @@ public:
         // Direct-surface offers are optional display work. Never queue behind a
         // game-state or camera transaction merely to draw an older visual time.
         std::unique_lock<std::mutex> calls(call_mutex,std::defer_lock);
+        auto busy_holder=[this]{
+            visual_busy_by[std::clamp(submitted_command.load(std::memory_order_relaxed),0,31)].fetch_add(1,std::memory_order_relaxed);};
         if(consumer_pid)calls.lock();
         else if(!calls.try_lock()){
-            trial_visual_call_busy.fetch_add(1,std::memory_order_relaxed);
+            trial_visual_call_busy.fetch_add(1,std::memory_order_relaxed);busy_holder();
             return C3X_RENDERER_RESULT_BUSY;
         }
         std::unique_lock<std::mutex> lock(state_mutex,std::defer_lock);
         if(consumer_pid)lock.lock();
         else if(!lock.try_lock()){
-            trial_visual_state_busy.fetch_add(1,std::memory_order_relaxed);
+            trial_visual_state_busy.fetch_add(1,std::memory_order_relaxed);busy_holder();
             return C3X_RENDERER_RESULT_BUSY;
         }
         // Camera-job frames are serviced on the job's own thread. Without a
@@ -15172,6 +15174,11 @@ private:
     bool isolated_publication=false;
     int completed_phase_x=0,completed_phase_y=0;
     std::mutex call_mutex;
+    // Who held the renderer when a display frame found it busy (review, 44):
+    // the command its caller waits on (index command+1; 0: a caller outside
+    // submit_locked, or the worker's own camera work). Diagnostic only.
+    std::atomic<int> submitted_command{0};
+    std::array<std::atomic<unsigned>,32> visual_busy_by{};
     std::mutex state_mutex;
     std::condition_variable wake;
     std::condition_variable completed;
@@ -15360,10 +15367,12 @@ private:
         job_command = command;
         has_job = true;
         std::uint64_t sequence = ++latest_job_sequence;
+        submitted_command.store(int(command)+1,std::memory_order_relaxed);
         wake.notify_one();
         completed.wait(lock, [this, sequence] {
             return completed_job_sequence == sequence;
         });
+        submitted_command.store(0,std::memory_order_relaxed);
         return last_job_result;
     }
 
@@ -16586,6 +16595,11 @@ private:
                                 static_cast<unsigned long long>(trial_visual_permit_denials.load(std::memory_order_relaxed)),
                                 static_cast<unsigned long long>(trial_visual_call_busy.load(std::memory_order_relaxed)),
                                 static_cast<unsigned long long>(trial_visual_state_busy.load(std::memory_order_relaxed)),double(work.stretch));
+                            if(int used=int(std::strlen(detail));used<int(sizeof(detail))-24){
+                                used+=std::snprintf(detail+used,sizeof(detail)-used," busy_by=");
+                                for(unsigned i=0;i<visual_busy_by.size()&&used<int(sizeof(detail))-16;++i)
+                                    if(auto n=visual_busy_by[i].load(std::memory_order_relaxed))used+=std::snprintf(detail+used,sizeof(detail)-used,"%u:%u,",i,n);
+                            }
                             renderer_state.trace.write("route-frame-budget",detail,true);
                         }
                     }

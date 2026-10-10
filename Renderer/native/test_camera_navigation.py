@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class CameraNavigationTests(unittest.TestCase):
     def test_combat_zoom_poll_consumes_only_zoom(self):
         source = (ROOT / 'injected_code.c').read_text()
-        body = 'void ' + function(source, 'poll_custom_renderer_combat_zoom')
+        body = 'bool ' + function(source, 'custom_renderer_minimap_zoom_due') + '\nvoid ' + function(source, 'poll_custom_renderer_combat_zoom')
         body = body.replace('(void *)(*p_GetProcAddress)', '(Peek)(*p_GetProcAddress)')
         run_cpp(r'''
 #include <cassert>
@@ -32,7 +32,7 @@ void redraw(Base_Form* p){assert(p==(Base_Form*)&screen.GUI);++draws;}
 int image(int op,void*,void*,void const*,void const*,unsigned){assert(op==130);++samples;return scale;}
 struct State {struct {bool enable_custom_rendering=true;}current_config;
  bool combat_unit_display_override_active=true,custom_renderer_modal=false,paused_for_popup=false;
- int custom_renderer_zoom_wheel_remainder=0,custom_renderer_minimap_zoom=65536;
+ int custom_renderer_zoom_wheel_remainder=0,custom_renderer_minimap_zoom=65536,custom_renderer_zoom_target_width=0;
  int(*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=image;
  void* user32=nullptr;
 }state,*is=&state;
@@ -40,7 +40,7 @@ struct State {struct {bool enable_custom_rendering=true;}current_config;
 int modal=0;HWND focus=&screen;
 HWND GetFocus(){return focus;}
 int key_state(int key){return (key==VK_CONTROL?ctrl:alt)?0x8000:0;}auto p_GetAsyncKeyState=key_state;
-bool custom_renderer_zoom_enabled(){return zoom;}
+bool custom_renderer_zoom_enabled(){return zoom;}int int_abs(int x){return x<0?-x:x;}
 bool advance_custom_renderer_zoom(Main_Screen_Form* p,int delta,bool wrap){assert(p==&screen);++targets;steps+=delta;return true;}
 std::vector<MSG> queue;
 BOOL peek(LPMSG out,HWND hwnd,UINT lo,UINT hi,UINT flags){
@@ -261,10 +261,13 @@ int main(){
         # Edge scrolling is Civ III's own (scroll_at_mouse). The renderer's
         # 16 ms timer only redraws the minimap box for the presented zoom and
         # re-clamps the camera after a zoom-out at an expanded map edge.
-        body = function((ROOT / 'injected_code.c').read_text(), 'custom_renderer_view_timer')
+        source = (ROOT / 'injected_code.c').read_text()
+        body = function(source, 'custom_renderer_view_timer')
+        due = 'bool ' + function(source, 'custom_renderer_minimap_zoom_due')
         run_cpp(r'''
 #include <cassert>
 #include <cstdio>
+#include <initializer_list>
 using HWND=int;using UINT=unsigned;using UINT_PTR=unsigned;using DWORD=unsigned;
 constexpr int __=0,C3X_NATIVE_ZOOM_PRESENTED=130;
 struct Animator{int Units2_Count=0,field_18E4[20]={};};
@@ -283,15 +286,17 @@ struct State{struct{bool enable_custom_rendering=true;}current_config;
  bool combat_unit_display_override_active=false;
  unsigned custom_renderer_view_timer=17;bool custom_renderer_view_timer_running=false;
  bool custom_renderer_modal=false,paused_for_popup=false,custom_renderer_draw_in_progress=false;
- int custom_renderer_minimap_zoom=65536;
+ int custom_renderer_minimap_zoom=65536,custom_renderer_zoom_target_width=0;
  int (*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=nullptr;
 }state,*is=&state;
+int int_abs(int x){return x<0?-x:x;}
 bool custom_renderer_zoom_enabled(){return true;}
 int query(int op,void*,void*,void const*,void const*,unsigned){assert(op==C3X_NATIVE_ZOOM_PRESENTED);return scale;}
 void patch_Main_Screen_Form_move_camera(Main_Screen_Form*p,int,int x,int y,int r,bool b){
  assert(p==&screen&&r==1&&!b);last_x=x;last_y=y;++moves;}
 void patch_Animator_update_display(Animator*,int){++draws;}
 void gui_draw(Base_Form*){++gui_draws;}
+''' + due + r'''
 void ''' + body + r'''
 void tick(){custom_renderer_view_timer(0,0,17,0);assert(!state.custom_renderer_view_timer_running);}
 int main(){state.custom_renderer_native_image=query;
@@ -314,6 +319,28 @@ int main(){state.custom_renderer_native_image=query;
  }
  state.current_config.enable_custom_rendering=false;screen.turn_end_flag=true;scale=32768;
  int before=moves;tick();assert(moves==before);
+ // An animating zoom: the presented scale changes on every frame. Redrawing
+ // the native GUI (and re-clamping) for each one queued Civ III interface work
+ // ahead of the zoom's frames (review, 44). The box follows within 1% of the
+ // target, then once more on arrival.
+ state.current_config.enable_custom_rendering=true;
+ state.custom_renderer_modal=state.paused_for_popup=screen.is_now_loading_game=false;city.Base.Data.Status2=0;
+ screen.animator.Units2_Count=0;state.combat_unit_display_override_active=false;screen.GUI.is_enabled=true;
+ *(bool*)(screen.animator.field_18E4+0xD)=false;state.custom_renderer_draw_in_progress=false;modal_depth=inhibited=ending=0;
+ scale=65536;state.custom_renderer_minimap_zoom=65536;state.custom_renderer_zoom_target_width=256;
+ int drawn=gui_draws,moved=moves;
+ for(int s:{70000,90000,110000,120000})scale=s,tick();
+ assert(gui_draws==drawn);
+ scale=130000;tick();assert(gui_draws==drawn+1);
+ scale=130900;tick();assert(gui_draws==drawn+1);
+ scale=131072;tick();tick();assert(gui_draws==drawn+2&&moves==moved);
+ // Zooming out re-clamps the same way: near the target, then on arrival.
+ state.custom_renderer_zoom_target_width=128;drawn=gui_draws;
+ for(int s:{120000,100000,80000})scale=s,tick();
+ assert(gui_draws==drawn&&moves==moved);
+ scale=66000;tick();assert(gui_draws==drawn+1&&moves==moved+1);
+ scale=65600;tick();assert(gui_draws==drawn+1&&moves==moved+1);
+ scale=65536;tick();assert(gui_draws==drawn+2&&moves==moved+2);
 }
 ''')
 

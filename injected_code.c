@@ -32568,6 +32568,21 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
 }
 #endif
 
+// Whether the minimap box should follow the presented zoom now. The presented
+// scale changes on every frame of a zoom animation, and redrawing the whole
+// native GUI (and, zooming out, re-clamping the camera) for each one queued
+// Civ III interface work ahead of the zoom's own frames (renderer review,
+// section 44). Follow it once within 1% of the target, and when it arrives.
+bool
+custom_renderer_minimap_zoom_due (int scale)
+{
+    int target = is->custom_renderer_zoom_target_width * 65536 / 128;
+    if (scale == is->custom_renderer_minimap_zoom) return false;
+    if (target < 32768 || target > 196608 || scale == target) return true;
+    return int_abs (scale - target) * 100 <= target &&
+        int_abs (is->custom_renderer_minimap_zoom - target) * 100 > target;
+}
+
 void
 poll_custom_renderer_combat_zoom ()
 {
@@ -32596,7 +32611,7 @@ poll_custom_renderer_combat_zoom ()
     // minimap box here while leaving the native battlefield camera fixed.
     int scale = is->custom_renderer_native_image != NULL ?
         is->custom_renderer_native_image (C3X_NATIVE_ZOOM_PRESENTED, NULL, NULL, NULL, NULL, 0) : 65536;
-    if (scale >= 32768 && scale <= 196608 && scale != is->custom_renderer_minimap_zoom) {
+    if (scale >= 32768 && scale <= 196608 && custom_renderer_minimap_zoom_due (scale)) {
         is->custom_renderer_minimap_zoom = scale;
         p_main_screen_form->GUI.Base.vtable->m73_call_m22_Draw ((Base_Form *)&p_main_screen_form->GUI);
     }
@@ -32675,8 +32690,9 @@ custom_renderer_view_timer (HWND window, UINT message, UINT_PTR timer, DWORD tim
     int scale = custom_renderer_zoom_enabled () && is->custom_renderer_native_image != NULL ?
         is->custom_renderer_native_image (C3X_NATIVE_ZOOM_PRESENTED, NULL, NULL, NULL, NULL, 0) : 65536;
     if (scale < 32768 || scale > 196608) scale = 65536;
-    bool zoom_out = scale < is->custom_renderer_minimap_zoom;
-    if (scale != is->custom_renderer_minimap_zoom) {
+    bool due = custom_renderer_minimap_zoom_due (scale);
+    bool zoom_out = due && scale < is->custom_renderer_minimap_zoom;
+    if (due) {
         is->custom_renderer_minimap_zoom = scale;
         screen->GUI.Base.vtable->m73_call_m22_Draw ((Base_Form *)&screen->GUI);
     }

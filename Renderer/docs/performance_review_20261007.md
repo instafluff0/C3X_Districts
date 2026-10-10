@@ -2037,3 +2037,44 @@ map-derived operation that `projectable()` rejects. The scroll blit (a copy
 of the map canvas at the step offset) is the likely one; this is not yet
 confirmed. The fix is to keep the view projected during steps, drawing each
 step at the presented zoom.
+
+## 44. What holds the renderer during a zoom (October 9)
+
+**Self-inflicted interface work.** Our injected 16 ms view timer
+(`custom_renderer_view_timer`), and the same check in the combat-zoom
+poll, made Civ III redraw its whole main interface whenever the presented
+zoom changed, only to move the minimap box. During an animation the
+presented zoom changes on every frame. Zooming out also re-ran a camera
+move and a native display update each time.
+
+The box now follows the zoom twice per notch: when it is within 1% of the
+target, and when it arrives (`custom_renderer_minimap_zoom_due`; test
+`test_camera_navigation`). Zoom-frame interval p50 was 34.6 and 46.6 ms in
+two runs, against 44–56 ms before. That is a modest gain, within run noise.
+
+**Who holds the lock.** Route frame budgets now carry `busy_by`: the command
+the lock holder waits on when a display frame finds the renderer busy.
+
+| Frames | Busy hits per frame | Main holder |
+| --- | --- | --- |
+| Zoom-changing | 3.0–3.4 | `gpu_images_scope` (Civ III's native draw batches), 1.9–2.3 per frame |
+| Steady | about 0.5 | spread across tactical, step drawing and presentation; native batches about 0 |
+
+During a zoom, frames are not held behind batch receipts (section 42), so
+they collide with the batches instead.
+
+**What Civ III draws.**
+- **Every tick, even with no input.** The Animator steps every visible
+  unit's idle animation:
+  - about 49 `C3X_NATIVE_UNIT_DRAW` operations and one full-screen
+    hand-off per tick;
+  - about 930 compositor commands per tick;
+  - about 130 ms of renderer time per 2 s (6.5%), continuously.
+
+  The unit-draw patch forwards animation timing and Civ III's unit
+  overlays (flag, health bar, selection cursor). The 3D bodies animate on
+  their own clock, so most of this per-tick work redraws unchanged
+  overlays.
+- **During a zoom.** The map moves under a still cursor, so Civ III's hover
+  handler fires about 7 times per notch and re-creates a 36×30 cursor
+  surface each time.

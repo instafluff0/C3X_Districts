@@ -175,6 +175,7 @@ int main(){
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         body='    int visual_frame('+source.split('    int visual_frame(',1)[1].split('    int present_gpu(',1)[0]
         run_cpp(r'''
+#include <array>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -238,9 +239,11 @@ int main(){
         block = 'bool presentation_ready=' + branch.split('bool presentation_ready=', 1)[1].split(
             'if(result==C3X_RENDERER_RESULT_OK){trial_width=', 1)[0]
         run_cpp(r'''
+#include <array>
 #include <cassert>
 #include <atomic>
 #include <cstdio>
+#include <cstring>
 #include <memory>
 #include <utility>
 #include "Renderer/native/c3x_renderer_api.h"
@@ -294,6 +297,7 @@ struct Owner{
  std::atomic<unsigned> presented_zoom_q16{65536};std::atomic<int> presented_pan_packed{0};unsigned route_present_index=0;
  std::atomic<bool> trial_front_pending{true};std::uint64_t trial_presented_front_revision=0;
  std::atomic<std::uint64_t> trial_visual_permit_denials{0},trial_visual_call_busy{0},trial_visual_state_busy{0};
+ std::array<std::atomic<unsigned>,32> visual_busy_by{};
  long long visual_ticks=17,visual_frequency=1000;
  int offer(){
   bool phase_probe=true,route_witness=true;
@@ -372,6 +376,8 @@ int main(){using namespace std::chrono;
         advance='    void advance_visual_clock(){'+source.split('    void advance_visual_clock(){',1)[1].split('    long long visual_clock()',1)[0]
         run_cpp(r'''
 #include <cassert>
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <thread>
 #include <chrono>
@@ -395,6 +401,7 @@ namespace c3x_renderer{std::atomic<float>& zoom_destination_hint(){static std::a
 struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;std::atomic<unsigned> presented_zoom_q16{65536};
  std::atomic<std::uint64_t> zoom_hint_request{0};std::atomic<unsigned> zoom_hint_applied{0};std::atomic<bool> trial_panning{false};
  std::atomic<std::uint64_t> trial_visual_call_busy{0},trial_visual_state_busy{0};
+ std::atomic<int> submitted_command{0};std::array<std::atomic<unsigned>,32> visual_busy_by{};
  std::uint64_t trial_handle=0;unsigned trial_width=0,trial_height=0,submits=0;
  bool visual_allowed=true,replay_clock_seeded=false;long long visual_ticks=0,visual_frequency=0,visual_last=100;int result=C3X_RENDERER_RESULT_PENDING;
  std::atomic<long long> visual_qpc_offset{0};
@@ -414,6 +421,7 @@ int main(){State state;std::uint64_t handle=0;unsigned w=0,h=0;
   assert(state.submits==0&&state.visual_ticks==0);release=true;owner.join();
  }
  assert(state.trial_visual_call_busy==1&&state.trial_visual_state_busy==1);
+ assert(state.visual_busy_by[0]==2); // neither holder was waiting in submit_locked
  assert(state.trial_visual_shared(456,1000,0,handle,w,h)==C3X_RENDERER_RESULT_PENDING);
  assert(state.submits==1&&state.visual_ticks==456&&state.visual_last==10000);
  // An external frame replaces the wall-clock anchor too. A following camera
