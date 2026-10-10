@@ -426,6 +426,32 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      the camera job's frame (8,192-occurrence cap) and a moving window never
      removes crossings. Next: separate the resident world from the per-step
      frame (frame = Civ III's view; world = renderer-owned, block-indexed).
+   - **Resident world restructure (October 10; code map in review 59).**
+     The frame becomes Civ III's view; the explored world is resident in the
+     renderer. The fresh draw already reads only resident draw records
+     (`geometry_vertex_buffers`) plus wrap, tile size and camera. The frame
+     coupling is in `render()` setup: selection, membership diff, topology
+     update, job loops, the per-tile loop, assembly and `geometry_cache`
+     (frame-index shaped). `topology_cache`'s world snapshot is already a
+     block-indexed resident world. Work is done near the view only: resident
+     means loaded, not animated, shadowed or composited (animation phase is
+     clock plus seed, so off-view objects keep no state).
+     - R1. View consumers take the native frame: visibility coverage, arrival
+       visibility, units, combat effects, city overlay, waves, environment,
+       and `fill_output` (no window-to-native ownership mapping). Removes the
+       visibility coverage rebuild after every step (it alternated between
+       the window and native lists).
+     - R2. Geometry membership comes from a resident-set object instead of
+       the substituted frame; `geometry_cache` keyed by occurrence; topology
+       updates only for Civ III's observations; per step, membership work is
+       proportional to what changed.
+     - R3. The resident set is the explored world: records in world space,
+       wrapped copies drawn at the seam instead of membership flips, and
+       draw caches keyed by the revisions of blocks near the view rather
+       than one membership revision.
+     - R4. Block-indexed culling, caster collection and region of interest.
+     - Each stage keeps the 8,192 cap off the resident path, is measured on
+       the busy, light and user saves, and gets a regression test.
    - Original order: (1) the draw's set-dependent passes (static refinement and water
      overlay validity, shadow casters, reflection), indexed by window block;
      (2) membership admission revalidating only changed or view-near tiles;
