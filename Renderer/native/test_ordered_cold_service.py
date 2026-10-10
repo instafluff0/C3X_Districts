@@ -22,6 +22,8 @@ bool QueryPerformanceFrequency(LARGE_INTEGER* value){value->QuadPart=1000;return
 unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
 void InterlockedExchange(volatile LONG* p,LONG v){*p=v;}void InterlockedIncrement(volatile LONG* p){++*p;}
 LONG InterlockedCompareExchange(volatile LONG* p,LONG v,LONG match){auto old=*p;if(old==match)*p=v;return old;}
+long long InterlockedCompareExchange64(volatile long long* p,long long v,long long match){auto old=*p;if(old==match)*p=v;return old;}
+unsigned long long GetTickCount64(){return static_cast<unsigned long long>(ticks);}
 void OutputDebugStringA(char const*){}
 struct Owner{
  bool direct_surface_bound=true,direct_display_ready=true;
@@ -31,10 +33,13 @@ struct Owner{
  struct Batch{std::size_t bytes=0;bool ready=false;
   c3x_remote_scene::ImageBatchService::Status status(){return {1,bytes,0,0,ready,0,{}};}}batch;
  Batch* image_batches=&batch;
- struct{LONG presented_zoom_q16=0,presented_pan=0,visual_frames=0,native_queue_records=0;}values;
+ struct{LONG presented_zoom_q16=0,presented_pan=0,visual_frames=0,native_queue_records=0;long long requested_zoom=0;}values;
  decltype(values)* telemetry=&values;
  std::function<int(long long,long long,unsigned,std::uint64_t*,unsigned*,unsigned*)> visual_shared;
  std::function<int(int,void*,void*,void*,void*,unsigned)> native_image;
+ // No wheel request is forwarded: zoom_hint stays absent, so the batch
+ // receipt and pressure holds are exercised without a zoom transition.
+ std::function<int(unsigned,unsigned)> zoom_hint;std::int64_t forwarded_zoom=0;unsigned long long zoom_hint_ms=0;
 '''+counters+report+body+r'''
 };
 int main(){Owner owner;unsigned samples=0;

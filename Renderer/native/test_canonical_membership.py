@@ -132,6 +132,8 @@ int main(){exact_diff();ownership_diff();depth_basis();std::cout<<"CANONICAL_MEM
 using SceneTopology=c3x_renderer::render_core::CapturedScene;
 using Selection=c3x_renderer::render_core::ForegroundSelection;
 struct Rect {long left,top,right,bottom;};
+struct LARGE_INTEGER {long long QuadPart=0;};
+void QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=1;}
 struct Handle {unsigned generation=0;};
 struct Proof {unsigned scope=1,assets=2;bool valid=true;};
 struct Mesh {std::shared_ptr<Proof> proof=std::make_shared<Proof>();};
@@ -157,7 +159,7 @@ struct Harness {
  bool tile_content_valid(Owner const& owner,c3x_renderer_tile_v1 const&){return !owner.invalid && owner.mesh->proof->valid;}
  bool raster_content_valid(Proof const& proof){return proof.valid;}
  struct Result {bool covered,incremental;unsigned entering,leaving;};
- Result admit(c3x_renderer_frame_v1 const& frame){bool reuse_geometry=false;
+ Result admit(c3x_renderer_frame_v1 const& frame){bool reuse_geometry=false;std::array<LARGE_INTEGER,8> setup_marks{};
 ''' + source[begin:end] + r'''
    return {covered_membership,incremental_membership,membership_diff.entering,membership_diff.leaving};
  }

@@ -110,7 +110,7 @@ inline void checked(HRESULT result){if(FAILED(result))throw std::runtime_error("
 ''' + '\n'.join(classes) + r'''
 namespace c3x_gpu_images {
 struct SpatialComposition{
- ID3D11Device* device;Ptr<ID3D11ComputeShader> shader;Ptr<ID3D11Buffer> constants;
+ ID3D11Device* device;Ptr<ID3D11ComputeShader> shader,fused_shader;Ptr<ID3D11Buffer> constants,fused_constants;
  SpatialComposition(ID3D11Device* d):device(d){}
  static void check(HRESULT result){checked(result);}
 ''' + method(spatial, '    void program()') + method(spatial, '    void prepare_assets()') + r'''
@@ -144,7 +144,9 @@ class CompositorAssetLoadingTests(unittest.TestCase):
         run_cpp(fixture() + r'''
 int main(){
  reset();ID3D11Device device;ID3D11DeviceContext context;c3x_gpu_images::Session session(&device);
- assert(session.prepare_assets());assert(compiled==27 && !draws && !textures);
+ // 29: each Compositor's spatial owner also compiles the fused interface
+ // entry (a0fa2441, performance review section 35).
+ assert(session.prepare_assets());assert(compiled==29 && !draws && !textures);
  auto before=operations;assert(session.prepare_assets());assert(operations==before);
  // Both owners and all packed native display formats are ready. Their actual
  // first draw bodies reuse source programs and allocate no new shader/buffer.
@@ -155,11 +157,11 @@ int main(){
   c3x_renderer::UnitSceneSample sample;gpu->unit_scene.draw(&device,&context,sample,12,16);
  }
  session.layers.projected_layer.draw(&device,&context,&input,nullptr,&output,{0,0,12,16},1.,0,0,0,0);
- assert(operations==before && compiled==27 && draws==11 && !textures);
+ assert(operations==before && compiled==29 && draws==11 && !textures);
  // Existing device replacement rebuilds only the final-display source set;
  // the Session itself is recreated by the existing owner reset path.
  ID3D11Device replacement;session.gpu.display_program.prepare_assets(&replacement);
- assert(compiled==31);before=operations;session.gpu.display_program.prepare_assets(&replacement);assert(operations==before);
+ assert(compiled==33);before=operations;session.gpu.display_program.prepare_assets(&replacement);assert(operations==before);
 }
 ''')
 

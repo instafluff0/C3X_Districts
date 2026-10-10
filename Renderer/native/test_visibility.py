@@ -195,7 +195,10 @@ int main(){
         body=text[start:text.index('\n    }',mask)+len('\n    }')]
         run_cpp(r'''
 #include <cassert>
+#include <cstdio>
 #define SUCCEEDED(x) ((x)>=0)
+struct LARGE_INTEGER {long long QuadPart=0;};
+void QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=1;}
 struct ID3D11Texture2D {int id;};
 namespace Microsoft {namespace WRL {
 template<class T>struct ComPtr {T* value=nullptr;T** operator&(){return &value;}
@@ -215,10 +218,19 @@ struct Fresh {struct {struct {ID3D11Texture2D* depth_texture=nullptr;} linear;} 
  }} city_site_overlay;
 } sandbox_fresh;
 struct Output {bool draw(Target*,int,int){drawn=true;return draw_ok;}} sandbox_backbuffer_output;
-struct Renderer {bool visibility_pass=true;int device=0,context=0,visibility_coverage=123;
- struct Mask {bool apply(int,int,ID3D11Texture2D* texture,int coverage,ID3D11Texture2D* actors,unsigned guard,float zoom){
+// The fog pass masks the arrival-held visibility, captured per frame (25221b37).
+struct Coverage {int id=123;bool ok=true;unsigned captures=0;
+ bool capture(int visible,unsigned scope,unsigned sequence,unsigned content,unsigned device){
+  assert(drawn&&visible==77&&scope==5&&sequence==6&&content==8&&device==9);++captures;return ok;}};
+struct Renderer {bool visibility_pass=true;int device=0,context=0;unsigned content_revision=8,device_generation=9;
+ struct {unsigned revealed=0;long long revealed_frequency=0,revealed_capture=0;
+  template<class F>int sample(F const&,unsigned scope){assert(scope==5);return 77;}} arrival_visibility;
+ struct {unsigned scope_sequence()const{return 5;}unsigned visibility_sequence()const{return 6;}} topology_cache;
+ struct {int level=0;void write(char const*,char const*,bool){}} trace;
+ Coverage arrival_coverage;
+ struct Mask {bool apply(int,int,ID3D11Texture2D* texture,Coverage const& coverage,ID3D11Texture2D* actors,unsigned guard,float zoom){
   assert(actors==sandbox_fresh.glow.linear.depth_texture&&guard==4&&zoom==1.25f);
-  assert(drawn&&texture->id==42&&coverage==123);++masks;return apply_ok;}} visibility_gpu;
+  assert(drawn&&texture->id==42&&coverage.id==123&&coverage.captures==unsigned(masks+1));++masks;return apply_ok;}} visibility_gpu;
 } renderer;
 struct Frame {int target_width=128,target_height=64;} frame;
 bool sample(Target* target,float zoom=1.25f){
@@ -233,6 +245,8 @@ int main(){
  renderer.visibility_pass=true;draw_ok=false;assert(!sample(&target)&&masks==60&&overlays==61);
  draw_ok=true;overlay_ok=false;assert(!sample(&target)&&masks==60&&overlays==62);
  overlay_ok=true;apply_ok=false;assert(!sample(&target)&&masks==61&&overlays==63);
+ apply_ok=true;renderer.arrival_coverage.ok=false;
+ assert(!sample(&target)&&masks==61&&overlays==64&&renderer.arrival_coverage.captures==62);
 }
 ''')
 

@@ -6,7 +6,7 @@ import unittest
 class ProcessHeadroomTests(unittest.TestCase):
     def test_hysteresis_and_resource_release(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        method='void preserve_process_headroom(){'+source.split('void preserve_process_headroom(){',1)[1].split('    ULONGLONG last_memory_status',1)[0]
+        method='void preserve_process_headroom('+source.split('void preserve_process_headroom(',1)[1].split('    ULONGLONG last_memory_status',1)[0]
         run_cpp(r'''
 #include "Renderer/native/render_core/render_region_cache.h"
 #include "Renderer/native/render_core/frame_working_set.h"

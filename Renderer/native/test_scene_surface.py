@@ -22,7 +22,9 @@ struct State {
  std::uint64_t scene_static_signature=42,resource_pixel_signature=42,wave_signature=42;
  int material_submission=7,static_submission=7;
  std::vector<int> region_contributors{1},resource_anchors{2},geometry_footprints{3};
- std::array<std::vector<int>,2> geometry_vertex_buffers{std::vector<int>{4},std::vector<int>{5}};
+ // Selected records are a SceneMembership generation (f1c658de); clear() selects an empty one.
+ struct {std::array<std::vector<int>,2> records{std::vector<int>{4},std::vector<int>{5}};void clear(){records={};}
+  auto begin()const{return records.begin();}auto end()const{return records.end();}} geometry_vertex_buffers;
 ''' + method("void clear_geometry_vertex_buffers() {") + method("void discard_scene_view() {") + r'''
 };
 int main(){

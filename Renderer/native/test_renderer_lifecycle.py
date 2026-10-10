@@ -31,7 +31,8 @@ struct Prepared {
  unsigned long long source_generation=31;long long pending_since=99;
 };
 struct Harness {
- bool camera_active=false;
+ bool camera_active=false,camera_scene_complete=true,completed_usable=false;
+ bool completed_scene_usable()const{return completed_usable;}
  struct {int device_generation=5,gpu_serial=7;} renderer_state;
  Capture captured;Selected selection;
  std::shared_ptr<Prepared> prepared=std::make_shared<Prepared>();
@@ -50,7 +51,8 @@ int main(){
  owner.captured.current=true;owner.selection.current=false;
  assert(draw(3,1000,1.f).kind==2&&samples==1);
  owner.selection.current=true;assert(draw(4,1000,1.f).kind==1&&samples==2);
- owner.camera_active=true;assert(draw(5,1000,1.f).kind==2&&samples==2);
+ // A camera job now holds the displayed pose instead of retiring the sampler (25221b37).
+ owner.camera_active=true;assert(draw(5,1000,1.f).kind==3&&samples==2);
  owner.camera_active=false;owner.renderer_state.device_generation=6;
  assert(draw(6,1000,1.f).kind==2&&samples==2);
  owner.renderer_state.device_generation=5;owner.renderer_state.gpu_serial=8;
@@ -62,6 +64,9 @@ int main(){
  owner.prepared->ready=true;assert(draw(9,1000,.5f).kind==3&&samples==2);
  assert(draw(10,1000,1.f).kind==1&&samples==3);
  owner.prepared.reset();assert(draw(11,1000,1.f).kind==2&&samples==3);
+ Harness camera;auto moving=camera.make_draw();camera.camera_scene_complete=false;
+ assert(moving(12,1000,1.f).kind==3&&samples==3);
+ camera.completed_usable=true;assert(moving(13,1000,1.f).kind==1&&samples==4);
 }
 ''')
 

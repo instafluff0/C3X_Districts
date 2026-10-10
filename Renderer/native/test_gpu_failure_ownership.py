@@ -65,7 +65,7 @@ int main(){
 
     def test_worker_exception_preserves_gpu_owned_native_canvases(self):
         source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
-        start = source.index('                if(command==Command::unit){renderer_state.frame_unit_asset_union_valid=false;renderer_state.unit_bodies.reset_gpu();}')
+        start = source.index('                if(command==Command::unit){renderer_state.frame_unit_asset_union_valid=false;')
         body = source[start:source.index('                output = ', start)]
         run_cpp(r'''
 #include <cassert>
@@ -73,7 +73,7 @@ int main(){
 #include <stdexcept>
 struct State {
  int gpu_composition=0;unsigned resets=0;
- bool frame_unit_asset_union_valid=true;
+ bool frame_unit_asset_union_valid=true,unit_sources_ready=true;unsigned long long unit_source_device=5;
  struct {unsigned resets=0;void reset_gpu(){++resets;}}unit_bodies;
  struct{void write(char const*,char const*,bool){}}trace;
  void reset(){++resets;gpu_composition=0;}
@@ -87,6 +87,7 @@ int main(){
   }
   assert(renderer_state.gpu_composition==1 && renderer_state.resets==0);
   assert(renderer_state.frame_unit_asset_union_valid && renderer_state.unit_bodies.resets==0);
+  assert(renderer_state.unit_sources_ready && renderer_state.unit_source_device==5);
  }
  for(int owned:{0,1}){
   State renderer_state;renderer_state.gpu_composition=owned;auto command=Command::unit;
@@ -96,6 +97,8 @@ int main(){
   // Retiring failed unit resources also retires their asset-union proof,
   // while preserving any GPU-owned native canvas and its session.
   assert(!renderer_state.frame_unit_asset_union_valid && renderer_state.unit_bodies.resets==1);
+  // Failed unit work also retires the prepared unit-source proof (ea135a9b).
+  assert(!renderer_state.unit_sources_ready && !renderer_state.unit_source_device);
   assert(renderer_state.gpu_composition==owned && renderer_state.resets==0);
  }
  for(auto command:{Command::native_screen,Command::visual_frame}){

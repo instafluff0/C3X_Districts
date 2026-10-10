@@ -65,8 +65,12 @@ int main(){Owner o;auto original=std::make_shared<Node>(),n=std::make_shared<Nod
 #include <memory>
 #include <vector>
 #include <map>
+#include <array>
+#include <chrono>
+#include <string>
 #include <cassert>
 using namespace c3x_gpu_images;
+void OutputDebugStringA(char const*){}
 struct Tex {unsigned width,height;std::vector<unsigned> pixels;Tex(unsigned w,unsigned h):width(w),height(h),pixels(w*h,0) {}};
 struct Texture {std::shared_ptr<Tex> p;Texture()=default;Texture(std::shared_ptr<Tex> v):p(std::move(v)){};
  Tex* Get()const{return p.get();}explicit operator bool()const{return bool(p);}void Reset(){p.reset();}};
@@ -81,15 +85,18 @@ struct Replay {struct Target {Texture texture;};std::map<Id,Texture> images;std:
  Id create(unsigned w,unsigned h,Format,bool){if(refuse)return 0;images[++next]=Texture(std::make_shared<Tex>(w,h));return next;}
  Target release_import_target(Id id){auto texture=images.at(id);images.erase(id);return {texture};}
  Id attach_source_unrecorded(Tex* t,Format){if(refuse)return 0;assert(t);borrowed[++next]=t;return next;}
- bool display(Id id,Tex* target,unsigned width,unsigned height,Rect area){if(!target)return false;auto source=borrowed.at(id);assert(width==source->width&&height==source->height);
+ bool display(Id id,Tex* target,unsigned width,unsigned height,Rect area,std::array<long long,8>*){if(!target)return false;auto source=borrowed.at(id);assert(width==source->width&&height==source->height);
   for(int y=area.top;y<area.bottom;++y)for(int x=area.left;x<area.right;++x)target->pixels[y*width+x]=source->pixels[y*width+x];return true;}
  void recycle(Id id){borrowed.erase(id);images.erase(id);}};
 struct Owner {
- struct Node {Rect area{};Texture output[2];std::uint64_t revision=1;};
+ struct Node {Rect area{};Texture output[2];std::uint64_t revision=1;unsigned pins=0;};
  struct Patch {Rect area{};std::shared_ptr<Node> node;unsigned output=0;};
  struct Picture {unsigned width=4,height=4;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;};
  struct FrontPatch {Rect area{};std::weak_ptr<Node> node;unsigned output=0;std::uint64_t revision=0;};
- struct Work {unsigned copies=0,assemblies=0;std::uint64_t copied_pixels=0,assembly_pixels=0;}work;
+ struct Work {unsigned operations=0,copies=0,assemblies=0;std::uint64_t copied_pixels=0,assembly_pixels=0;
+  double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;std::array<long long,8> display_ticks{};std::string executed;}work;
+ // Diagnostics stay off: no held interface frames, no evaluated-operation trace, no GPU timeline.
+ bool diag_ui_hold=false,trace_evaluated=false;void render_core_mark(char const*){}
  Picture front;bool compiled_enabled=true;std::uint64_t front_revision=1,used=0,frame=0,drawn_revision=0;double selected_view_scale=1;
  std::vector<std::uint64_t> drawn_dependencies,pending_drawn_dependencies;
  Texture assembled_front;Storage::Lease front_owned,front_physical;unsigned assembled_width=0,assembled_height=0;Format assembled_format=Format::bgra32;
@@ -103,7 +110,7 @@ struct Owner {
  Rect extent(Picture const& p)const{return {0,0,int(p.width),int(p.height)};}
  bool ready()const{return front.width!=0;}void prepare_front(long long,long long){}void evaluate(std::shared_ptr<Node> const&,long long,long long,unsigned){}
  Id assemble(Picture const&,long long,long long,unsigned,Rect,bool){assert(false);return 0;}
-''' + method(source, '    void release_front()') + '\n' + method(source, '    bool assemble_front(') + '\n' + method(source, '    int draw(') + r'''
+''' + method(source, '    struct Pins {') + ';\n' + method(source, '    void release_front()') + '\n' + method(source, '    bool assemble_front(') + '\n' + method(source, '    int draw(') + r'''
 };
 int main(){
  Owner o;auto left=std::make_shared<Owner::Node>(),right=std::make_shared<Owner::Node>();

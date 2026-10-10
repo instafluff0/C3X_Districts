@@ -23,7 +23,7 @@ struct Worker {
  Frame* prepared_map=&frame;
  Texture saved;
  void advance_visual_clock(){visual_ticks=1500;}
- Texture* adopt(bool resource_ready){
+ Texture* adopt(bool resource_ready,bool const drawn_now=false){
   auto initial=&saved;
   struct {std::function<void(long long,long long,float)> prepare;} map_sample;
   map_sample.prepare=[&](long long t,long long f,float z){
@@ -39,6 +39,7 @@ int main(){
  Worker worker;
  assert(worker.adopt(true)==worker.frame.front.Get()); // never re-import the old pose
  assert(worker.adopt(false)==&worker.saved); // pending assets retain a complete image
+ assert(worker.adopt(true,true)==&worker.saved&&!worker.frame.ready); // a step drawn just now is current
 }
 ''')
 

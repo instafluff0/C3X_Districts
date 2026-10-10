@@ -40,10 +40,13 @@ def production_program():
     canonical += "        }\n        n->seen=frame;\n    }\n"
     projected = definition(retained, "    std::shared_ptr<Node> evaluate_projected(")
     tail = projected[projected.rindex("        n->view_scale=scale;"):]
-    projected = projected.split("        }else if(original->operation&&original->map_dynamic){", 1)[0]
+    projected = projected.split("        }else if(original->operation&&(original->map_dynamic||retired_underlay)){", 1)[0]
     projected += "        }\n" + tail
+    # The projected preamble classifies retired underlays with production
+    # projectable(), which records the first unprojected operation.
+    refusal = retained[retained.index("    struct Refusal {"):retained.index("    Rect project(")]
     methods = "\n".join(definition(retained, signature) for signature in (
-        "    Rect intersect(", "    bool empty(", "    Rect extent(",
+        "    Rect intersect(", "    bool empty(", "    Rect extent(", "    static bool same_rect(",
         "    Picture read(", "    void replace(", "    void write(",
         "    void collect(", "    void prepare(", "    Rect project(",
         "    void projected_output(", "    bool accepting(", "    void create(",
@@ -76,6 +79,9 @@ struct RetainedComposition {
     // the production collect/prepare plans. Keep their invalidation boundary.
     std::vector<int> collect_plan,prepare_plan;
     void invalidate_plan(){}
+    // No assembled front exists in this fixture; uncommit still releases it.
+    void release_front(){}
+    struct {float stretch=1.f;} work; // diagnostic stretch only
     std::shared_ptr<Node> node(){return std::make_shared<Node>();}
     void reserve(std::uint64_t,char const*){}
     void output(Node& n,unsigned i,Texture texture){n.output[i]=std::move(texture);}
@@ -86,7 +92,7 @@ struct RetainedComposition {
     }
     void clear(){images.clear();front={};admitted=true;}
     void discard(){images.clear();front={};admitted=false;}
-''' + methods + canonical + projected + r'''
+''' + refusal + methods + canonical + projected + r'''
     void canonical_frame(){
         ++frame;
         for(auto const& p:front.patches)collect(p.node,frame,1000,0);
@@ -105,7 +111,8 @@ struct Session {
     Compositor gpu;RetainedComposition layers;
     Id map=0;std::int64_t ticket=0,identity=0;bool map_animation_expected=false;
     unsigned world_width=0,world_height=0;Id world_destination=0,hud_canvas=0,hud_detail=0;
-    std::vector<int> hud,fixed_shadows;
+    std::vector<int> hud,fixed_shadows,overlays;
+    std::shared_ptr<c3x_renderer::render_core::UnitHudAnchors> unit_anchors;
 ''' + publish + inspect + r'''
 };
 using Proof=std::pair<std::uint64_t,std::uint64_t>;
@@ -136,10 +143,10 @@ DOUBLE = r'''
 #include <vector>
 #include "Renderer/native/scene_projection.h"
 #include "Renderer/native/zoom_transition.h"
-using Id=std::uint64_t;
-struct Rect {int left=0,top=0,right=0,bottom=0;};
-enum class Format {bgra32};
-struct Command {};
+#include "Renderer/native/gpu_image_commands.h"
+#include "Renderer/native/render_core/unit_hud_anchors.h"
+#include <cstring>
+using namespace c3x_gpu_images;
 struct D3D11_TEXTURE2D_DESC {unsigned Width=96,Height=64;};
 struct ID3D11Texture2D;
 struct ID3D11ShaderResourceView {ID3D11Texture2D* texture=nullptr;};
