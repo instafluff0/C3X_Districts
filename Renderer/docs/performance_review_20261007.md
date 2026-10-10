@@ -2756,3 +2756,22 @@ capture), and the renderer keeps the explored world resident and consults it
 by block for selection, shadows, the static layer and visibility. Raising every
 8,192 cap instead would double each per-frame pass and buffer.
 
+## 60. Resident world restructure, R1: view consumers read the native frame (October 10)
+
+The camera job passed the world window (resident membership) to arrival
+visibility, visibility coverage, wave chunks, unit selection and the fresh
+draw; display frames passed Civ III's capture. Coverage therefore rebuilt
+after every step and each consumer paid for the whole window. They now take
+the native frame (`render()`; `fill_output`'s ownership mapping is unchanged).
+Test: `test_view_consumers_native_frame.py`.
+
+| | r2 | v1 (R1) |
+| --- | --- | --- |
+| Coverage builds in the run (busy) | 135 | 92 |
+| Covered camera draw p50 (busy) | 32.8 ms (noisy run) | 23.1 ms |
+| Full step period p50 | 384 ms | 302 ms |
+| Steps in the scroll segments | 72 | 84 |
+
+No failures or draw failures on the busy, light (211 of 211 adopted, 0%
+soft) and user (205 of 205, 0% soft) saves.
+

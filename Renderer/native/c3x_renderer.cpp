@@ -8750,7 +8750,9 @@ public:
         };
         if (cancelled()) return false;
 #ifdef C3X_RENDERER64_FRESH
-        if(!prewarming)arrival_visibility.capture(frame,topology_cache.scope_sequence());
+        // View consumers read Civ III's capture, not the world window: the
+        // window is resident membership only (resident world restructure, R1).
+        if(!prewarming)arrival_visibility.capture(native_frame,topology_cache.scope_sequence());
 #endif
         if (prewarming && (static_cast<unsigned>(prewarm_index) >= frame.tile_count ||
             (batch_preparing?
@@ -12546,9 +12548,9 @@ public:
             // Drop borrowed legacy wave records before replacing their buffers;
             // the fresh pass draws the new ribbons from wave_chunks below.
             if(!geometry_vertex_buffers[geometry_wave].empty())geometry_vertex_buffers.edit(geometry_wave).clear();
-            if(visibility_pass && !visibility_coverage.capture(frame))return false;
+            if(visibility_pass && !visibility_coverage.capture(native_frame))return false;
             trace.write("fresh-wave", "begin", true);QueryPerformanceCounter(&setup_marks[6]);
-            bool waves_ready=prepare_wave_chunks(frame);
+            bool waves_ready=prepare_wave_chunks(native_frame);
             if(cancelled())return false;
             if(!waves_ready){
                 fresh_path_failed=true;
@@ -12580,7 +12582,7 @@ public:
             }
             if(cancelled()){target->Release();return false;}
             auto candidates=fresh_unit_poses;
-            if(!select_frame_units(frame,candidates,fresh_unit_poses,1.f)){target->Release();return false;}
+            if(!select_frame_units(native_frame,candidates,fresh_unit_poses,1.f)){target->Release();return false;}
             warm_unit_assets(candidates);
             for(;;){
                 if(cancelled()){target->Release();return false;}
@@ -12598,7 +12600,7 @@ public:
                     setup_marks[i].QuadPart&&setup_marks[i-1].QuadPart?trace.milliseconds(setup_marks[i].QuadPart-setup_marks[i-1].QuadPart):-1.);
                 trace.write("render-setup-phases",phases,true);}
             route_map_serial=gpu_serial+1;
-            bool drawn=c3x_renderer64_render_fresh(frame,target);
+            bool drawn=c3x_renderer64_render_fresh(native_frame,target);
             target->Release();QueryPerformanceCounter(&draw_end);
             if(cancelled())return false;
             if(!drawn){
