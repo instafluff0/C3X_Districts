@@ -85,26 +85,29 @@ int main(){
   Occurrences indexed(frame,true),linear(frame,false);
   for(unsigned query=0;query<300;++query){int x=query<tiles.size()?tiles[query].tile_x:int(next()%257)-128;
    int y=query<tiles.size()?tiles[query].tile_y:int(next()%257)-128;
+   // An accepted native move also draws at tiles the viewer cannot see (d43d4517).
+   for(bool accepted:{false,true}){
    auto key=indexed.key(x,y);std::vector<unsigned> a,b,expected;
-   for(unsigned i=indexed.next(key);i!=UINT_MAX;i=indexed.next(key,i))a.push_back(i);
-   for(unsigned i=linear.next(key);i!=UINT_MAX;i=linear.next(key,i))b.push_back(i);
+   for(unsigned i=indexed.next(key,accepted);i!=UINT_MAX;i=indexed.next(key,accepted,i))a.push_back(i);
+   for(unsigned i=linear.next(key,accepted);i!=UINT_MAX;i=linear.next(key,accepted,i))b.push_back(i);
    for(unsigned i=0;i<tiles.size();++i){auto const& t=tiles[i];
     bool sx=frame.world_wrap_x&&extent>0?(std::int64_t(t.tile_x)-x)%extent==0:t.tile_x==x;
     bool sy=frame.world_wrap_y&&extent>0?(std::int64_t(t.tile_y)-y)%extent==0:t.tile_y==y;
-    if(sx&&sy&&(t.tile_flags&C3X_RENDERER_TILE_VISIBLE)&&(t.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))expected.push_back(i);}
+    if(sx&&sy&&(accepted||(t.tile_flags&C3X_RENDERER_TILE_VISIBLE))&&(t.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))expected.push_back(i);}
    assert(a==b&&a==expected);
+   }
   }
  }
  // Failure to admit either optional allocation retains the native linear iterator.
  for(auto bytes:{1024*sizeof(Occurrences::Bucket),tiles.size()*sizeof(unsigned)}){
   fail_bytes=bytes;Occurrences fallback(frame,true);fail_bytes=0;
   assert(fallback.table.empty()&&fallback.links.empty());
-  assert(fallback.next(fallback.key(INT_MIN,INT_MAX))==0);
+  assert(fallback.next(fallback.key(INT_MIN,INT_MAX),false)==0);
  }
  // Oversized metadata cannot expand the transient index budget or overflow its power-of-two sizing.
  tiles.resize(8193);frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
  Occurrences bounded(frame,true);assert(bounded.table.empty()&&bounded.links.empty());
- assert(bounded.next(bounded.key(INT_MIN,INT_MAX))==0);
+ assert(bounded.next(bounded.key(INT_MIN,INT_MAX),false)==0);
 }
 ''')
 
