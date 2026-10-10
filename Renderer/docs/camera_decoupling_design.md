@@ -405,6 +405,28 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
 6. **Far jumps (B).** No coarse view (the user, October 10). The whole
    explored world stays resident when it fits the memory tier, so a far jump
    lands in loaded geometry; larger maps may exceed Civ VI's memory figures.
+   **Whole-world residency plan (October 10, review 53–56).**
+   - Done: one appearance per explored tile (the seed reads fog as the
+     capture does; review 54), and shared components outlive their
+     dependents (review 55). Crossings build 96 tiles a run instead of 2,445.
+   - A crossing still costs about 4× a covered step, all of it the renderer
+     reacting to the window's resident set changing: band assembly (p5,
+     31 ms), shadow proofs for entering casters (31 ms), static band repair
+     (+12 ms), reflection and the rest of prepare (+30 ms). A window over the
+     whole explored world never changes its set, so crossings and far jumps
+     become covered steps.
+   - Prerequisite: per-step work bounded by the view, not the resident set.
+     A covered step costs about 5.7 µs more per resident tile (+80 ms at the
+     busy world's 16,900 tiles). Measured growth from 2,304 to 5,472 tiles:
+     membership admission +4.8 ms, static refinement and the water overlay
+     misses it causes +5.9 ms, shadow caster collection +2.1 ms, reflection
+     +1.9 ms, units and prepare +1.9 ms, window build and assembly +3 ms.
+   - Order: (1) the draw's set-dependent passes (static refinement and water
+     overlay validity, shadow casters, reflection), indexed by window block;
+     (2) membership admission revalidating only changed or view-near tiles;
+     (3) the window build and assembly; (4) the window grows to the explored
+     world when its geometry fits the tier; the VM's geometry budget has no
+     margin today, so stage 5's compaction follows.
    **Order agreed October 10** (after review, section 52): whole-world
    residency first, then the helper worker split, then stage 5 compaction.
    With the window on, block crossings are 28% of busy scroll steps but 43%

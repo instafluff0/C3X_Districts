@@ -2663,3 +2663,22 @@ membership admission, the window build and the draw's per-record work
 A larger window also evicts more while the VM's geometry budget has no
 margin.
 
+**Attribution** (reach ×3 rerun x4 against e2; covered camera draws only,
+pairing each `render-setup-phases` with the traces written before its
+`frame` line):
+
+| | ×1 | ×3 |
+| --- | --- | --- |
+| Setup | 12.1 ms | 19.5 ms |
+| …membership admission (p4) | 2.6 ms | 7.4 ms |
+| Draw | 23.1 ms | 37.1 ms |
+| …water | 2.2 ms (120 draws) | 5.4 ms (714 draws) |
+| …static (refinement appears) | 5.6 ms | 8.3 ms |
+| …shadow caster collection | 1.8 ms | 3.9 ms |
+| …reflection | 0 ms | 1.9 ms |
+| …units, prepare | 3.0, 2.8 ms | 4.0, 3.7 ms |
+
+The view is unchanged, so six times the water draws means water is culled
+against something that grows with the window. Order of work: water culling,
+membership admission, shadow caster collection, static refinement.
+
