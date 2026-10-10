@@ -60,5 +60,48 @@ int main(){
 ''')
 
 
+    def test_wrapped_copies_with_different_placement_rebuild_exactly(self):
+        # A small wrapping map inside the world window's wide capture margin
+        # holds one tile twice: on screen (RENDER) and as a wrapped copy past
+        # the zoom envelope (TOPOLOGY_HALO | PREFETCH). The receiver keeps one
+        # slot per coordinate and overwrites it while decoding, so judging
+        # "unchanged" against the previous frame rebuilt one copy with the
+        # other's flags. Every completion then differed from the request,
+        # was superseded, and Civ III adopted no step after the first
+        # (performance review, section 51: the light-save stall).
+        run_cpp(r'''
+#include "Renderer/native/camera_delta.h"
+#include <cassert>
+#include <cstdio>
+using namespace c3x_remote_scene;
+std::vector<unsigned char> encoded(c3x_renderer_frame_v1 const& f){c3x_inputs::Writer w;c3x_inputs::frame(w,f);return w.bytes;}
+int main(){
+ for(int halo_first=0;halo_first<2;++halo_first){
+  CameraDeltaSender sender;CameraDeltaReceiver receiver;
+  for(int step=0;step<4;++step){
+   c3x_renderer_tile_v1 shown{},wrapped{},other{};
+   shown.tile_x=10;shown.tile_y=4;shown.anchor_x=640+step*64;shown.anchor_y=128;shown.terrain_type=3;
+   shown.tile_flags=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_RENDER;
+   wrapped=shown;wrapped.anchor_x-=64*64;
+   wrapped.tile_flags=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_TOPOLOGY_HALO;
+   other=shown;other.tile_x=12;other.anchor_x+=128;
+   std::vector<c3x_renderer_tile_v1> tiles;
+   if(halo_first)tiles={wrapped,other,shown};else tiles={shown,other,wrapped};
+   c3x_renderer_frame_v1 f{};f.api_version=C3X_RENDERER_API_VERSION;f.struct_size=sizeof(f);f.tile_width=128;f.tile_height=64;
+   f.target_width=1000;f.target_height=600;f.world_width_tiles=64;f.world_height_tiles=72;f.world_wrap_x=1;
+   f.tiles=tiles.data();f.tile_count=unsigned(tiles.size());
+   c3x_inputs::Writer w;sender.encode(w,f);c3x_inputs::Reader r{w.bytes};c3x_inputs::Frame out;
+   assert(receiver.decode(r,out));r.done();sender.commit();
+   for(unsigned i=0;i<f.tile_count;++i)if(out.value.tiles[i].tile_flags!=tiles[i].tile_flags)
+    std::printf("order=%d step=%d occurrence=%u flags sent=%x rebuilt=%x\n",halo_first,step,i,tiles[i].tile_flags,out.value.tiles[i].tile_flags);
+   assert(encoded(out.value)==encoded(f));
+   if(step)assert(sender.reused_tiles==1); // the unique tile still travels as a reference
+  }
+ }
+ std::printf("PASS camera delta: wrapped copies rebuild exactly\n");
+}
+''')
+
+
 if __name__ == '__main__':
     unittest.main()

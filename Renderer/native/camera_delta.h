@@ -32,6 +32,13 @@ constexpr std::uint32_t camera_delta_base_missing=0x42415345u; // reply marker: 
 
 struct CameraDeltaSender {
     std::unordered_map<std::uint64_t,std::uint64_t> sent;
+    // The receiver's slot for each coordinate as of the current occurrence:
+    // a small wrapping map can hold one tile twice with different placement
+    // flags (on screen and a wrapped copy past the envelope), and the
+    // receiver overwrites the slot while it decodes. Judging the later copy
+    // against the previous frame rebuilt it with the other copy's flags
+    // (performance review, section 51).
+    std::unordered_map<std::uint64_t,std::uint64_t> written;
     std::vector<std::pair<std::uint64_t,std::uint64_t>> pending;
     std::uint32_t generation=0;
     std::uint64_t topology=0,pending_topology=0;
@@ -45,7 +52,7 @@ struct CameraDeltaSender {
         c3x_inputs::require(frame.tile_count<=8192&&frame.world_topology_count<=12800,"camera delta occurrence limit");
         c3x_inputs::require((!frame.tile_count||frame.tiles)&&(!frame.world_topology_count||frame.world_topology),"camera delta frame arrays");
         if(sent.size()+frame.tile_count>camera_delta_limit)reset();
-        pending.clear();full_tiles=reused_tiles=0;
+        pending.clear();written.clear();full_tiles=reused_tiles=0;
         auto fields=frame;c3x_inputs::frame_fields(out,fields);
         out.u32(generation);out.u32(base?1u:0u);out.u32(frame.tile_count);
         c3x_inputs::Writer scratch;
@@ -54,10 +61,11 @@ struct CameraDeltaSender {
             tile.anchor_x=tile.anchor_y=0;scratch.bytes.clear();c3x_inputs::c3x_renderer_tile_v1_fields(scratch,tile);
             auto key=camera_delta_key(tile.tile_x,tile.tile_y);
             auto hash=camera_delta_hash(scratch.bytes.data(),scratch.bytes.size());
-            auto found=base?sent.end():sent.find(key);
-            bool full=found==sent.end()||found->second!=hash;
+            auto held=written.find(key);bool full;
+            if(held!=written.end())full=held->second!=hash;
+            else{auto found=base?sent.end():sent.find(key);full=found==sent.end()||found->second!=hash;}
             out.u32(full?1u:0u);
-            if(full){c3x_inputs::c3x_renderer_tile_v1_fields(out,tile);pending.push_back({key,hash});++full_tiles;}
+            if(full){c3x_inputs::c3x_renderer_tile_v1_fields(out,tile);pending.push_back({key,hash});written[key]=hash;++full_tiles;}
             else ++reused_tiles;
         }
         pending_topology=frame.world_topology_count?camera_delta_hash(
