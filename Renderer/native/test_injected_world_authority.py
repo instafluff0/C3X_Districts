@@ -2,6 +2,14 @@
 
 This host C harness extracts the injected helpers plus Civ III's native city
 eligibility and remembered-overlay methods. It cannot dispatch a Windows build.
+
+Explored fog is seeded by the same full read as the per-step capture (October
+10): native Map_Renderer::m19 draws every tile with the same flags and m33
+draws a resource whenever Tile::get_resource_visible_to admits it, so the
+capture already drew those facts on fog. A seed without them was a second
+appearance for the same tile, and every block crossing into fogged land
+rebuilt it (performance review, section 53). Unexplored tiles keep the
+topology-only record.
 """
 from pathlib import Path
 import shutil
@@ -108,18 +116,36 @@ static unsigned capture_custom_renderer_visibility(Tile* tile,int viewer,int x,i
     if(visible)result|=C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE;
     return result;
 }
+static void capture_custom_renderer_city_body(c3x_renderer_tile_v1* record,City* city);
+static void capture_custom_renderer_overlay_body(c3x_renderer_tile_v1* record,Tile* tile,int viewer,int tile_x,int tile_y);
+// The full read's fields these cases exercise, in the production order: the
+// -1 defaults, viewer routes, live objects, city body and remembered overlays.
 static bool read_custom_renderer_tile(c3x_renderer_tile_v1* record,int viewer,int px,int py,
     int mask,int tile_x,int tile_y,Tile* tile,bool topology_only,bool capture_units){
-    assert(viewer==1&&px==0&&py==0&&mask==77&&tile_x==2&&tile_y==2&&tile==tile_at(tile_x,tile_y));
+    assert(viewer==1&&px==0&&py==0&&mask==77&&tile==tile_at(tile_x,tile_y));
     assert(!topology_only&&!capture_units);++full_reads;
-    *record=(c3x_renderer_tile_v1){0};record->tile_flags=capture_custom_renderer_visibility(tile,viewer,tile_x,tile_y)|C3X_RENDERER_TILE_RENDER;
+    *record=(c3x_renderer_tile_v1){0};
+    record->resource_id=record->resource_class=record->tile_building_id=-1;
+    record->city_id=record->city_owner_id=record->city_size=record->city_culture_group=record->city_era=-1;
+    record->unit_type_id=record->unit_owner_id=record->unit_class=record->unit_state=-1;
+    record->unit_damage=record->unit_direction=record->territory_owner_id=record->barbarian_tribe_id=-1;
+    record->tile_flags=capture_custom_renderer_visibility(tile,viewer,tile_x,tile_y);
     unsigned ground=topology[(tile_y*bic_data.Map.Width+tile_x)/2];
     record->tile_x=tile_x;record->tile_y=tile_y;
     record->terrain_type=ground&255u;record->real_terrain_type=(ground>>8)&255u;
     record->river_code=(ground>>16)&255u;
     /*PRODUCTION_FOREGROUND_SEED*/
+    record->road_mask=tile->vtable->m25_Check_Roads(tile,__,viewer)?1u:0u;
+    record->railroad_mask=tile->vtable->m23_Check_Railroads(tile,__,viewer)?1u:0u;
+    record->route_style=viewer>=0&&viewer<32?clamp(0,3,leaders[viewer].Era):0;
     /*PRODUCTION_FOREGROUND_FEATURES*/
-    record->resource_id=tile->live_resource;record->tile_building_id=tile->live_building;record->has_effect=tile->live_effect;
+    capture_custom_renderer_overlay_body(record,tile,viewer,tile_x,tile_y);
+    record->tile_building_id=tile->live_building;record->has_effect=tile->live_effect;
+    record->resource_id=tile->live_resource;
+    capture_custom_renderer_city_body(record,get_city_ptr(tile->vtable->m45_Get_City_ID(tile)));
+    if(record->tile_flags&C3X_RENDERER_TILE_EXPLORED)
+        record->tile_flags|=C3X_RENDERER_TILE_CITY_BODY_KNOWN|C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN;
+    record->tile_flags|=C3X_RENDERER_TILE_RENDER;
     return true;
 }
 '''
@@ -167,6 +193,15 @@ static void reset(void){
 static c3x_renderer_tile_v1 read_record(void){c3x_renderer_tile_v1 result;
     assert(read_custom_renderer_world_record(&result,1,77,2,2,tile_at(2,2)));return result;
 }
+// Explored fog: the capture's full read, as a prefetch world copy without units.
+static void full_fog(c3x_renderer_tile_v1 const* record,Tile const* tile){
+    assert(full_reads>0&&(record->tile_flags&C3X_RENDERER_TILE_PREFETCH));
+    assert((record->tile_flags&(C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE))==C3X_RENDERER_TILE_EXPLORED);
+    assert(!(record->tile_flags&C3X_RENDERER_TILE_RENDER)&&(record->tile_flags&C3X_RENDERER_TILE_TOPOLOGY_HALO));
+    assert(record->resource_id==tile->live_resource&&record->tile_building_id==tile->live_building&&record->has_effect==(unsigned)tile->live_effect);
+    assert(record->unit_type_id==-1&&record->unit_owner_id==-1&&record->unit_class==-1&&record->unit_state==-1);
+    assert(record->unit_damage==-1&&record->unit_direction==-1&&!record->unit_type_name[0]);
+}
 static void omitted(c3x_renderer_tile_v1 const* record){
     assert(!(record->tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)));
     assert(record->resource_id==-1&&record->resource_class==-1&&record->tile_building_id==-1&&!record->has_effect);
@@ -177,12 +212,12 @@ static void omitted(c3x_renderer_tile_v1 const* record){
 }
 static void hidden_city(void){
     reset();native_city(1,2,2,&bic_data.Map.Renderer,0,0);assert(native_draws==1);
-    c3x_renderer_tile_v1 old=read_record();omitted(&old);
+    c3x_renderer_tile_v1 old=read_record();full_fog(&old,tile_at(2,2));
     assert(old.city_id==4&&old.city_size==0&&old.city_owner_id==1&&old.city_culture_group==2&&old.city_era==1);
     assert((old.tile_flags&(C3X_RENDERER_TILE_CITY_BODY_KNOWN|C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN))==
        (C3X_RENDERER_TILE_CITY_BODY_KNOWN|C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN));
     city.Body.Population.Size=13;city.Body.CivID=2;
-    c3x_renderer_tile_v1 next=read_record();omitted(&next);
+    c3x_renderer_tile_v1 next=read_record();full_fog(&next,tile_at(2,2));
     assert(next.city_size==2&&next.city_owner_id==2&&next.city_culture_group==4&&next.city_era==3);
     assert(next.city_flags&C3X_RENDERER_CITY_CAPITAL);assert(!strcmp(next.city_owner,"Second"));
     city.Body.Population.Size=3;city.Body.CivID=1;wall=true;next=read_record();
@@ -205,7 +240,7 @@ static void remembered(void){
     reset();Tile* tile=tile_at(2,2);
     tile->Overlays=0;tile->Body.Visibile_Overlays[1]=0x3f;
     tile_at(1,1)->Body.Visibile_Overlays[1]=8;tile_at(3,3)->Body.Visibile_Overlays[1]=8;
-    c3x_renderer_tile_v1 record=read_record();omitted(&record);
+    c3x_renderer_tile_v1 record=read_record();full_fog(&record,tile);
     assert(record.road_mask==1&&record.railroad_mask==1&&record.irrigation_mask==9&&record.route_style==1);
     assert((record.improvement_flags&(C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_IRRIGATION|C3X_RENDERER_IMPROVEMENT_GOODY_HUT))==
        (C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_IRRIGATION|C3X_RENDERER_IMPROVEMENT_GOODY_HUT));
@@ -244,11 +279,11 @@ static void deterministic_seed(void){
     unsigned const expected[]={0x0a836984u,0x19d4f25bu,0xf57c967bu};
     for(unsigned i=0;i<sizeof seeds/sizeof *seeds;++i){
         reset();bic_data.Map.Seed=seeds[i];
-        c3x_renderer_tile_v1 record=read_record(),again=read_record();omitted(&record);
+        c3x_renderer_tile_v1 record=read_record(),again=read_record();full_fog(&record,tile_at(2,2));
         assert(record.variant_seed==expected[i]&&again.variant_seed==record.variant_seed);
         Tile* neighbor=tile_at(3,3);neighbor->Body.Fog_Of_War=2;
         c3x_renderer_tile_v1 moved;
-        assert(read_custom_renderer_world_record(&moved,1,77,3,3,neighbor));omitted(&moved);
+        assert(read_custom_renderer_world_record(&moved,1,77,3,3,neighbor));full_fog(&moved,neighbor);
         assert(moved.variant_seed!=record.variant_seed);
         visible=true;c3x_renderer_tile_v1 foreground=read_record();
         assert(foreground.variant_seed==record.variant_seed);
@@ -260,7 +295,7 @@ static void terrain_recipe(void){
         C3X_RENDERER_FEATURE_MARSH,C3X_RENDERER_FEATURE_VOLCANO,0};
     for(unsigned i=0;i<sizeof terrains/sizeof *terrains;++i){
         reset();topology[(2*bic_data.Map.Width+2)/2]=SQ_Grassland|((unsigned)terrains[i]<<8)|(9u<<16);
-        c3x_renderer_tile_v1 fog=read_record();omitted(&fog);
+        c3x_renderer_tile_v1 fog=read_record();full_fog(&fog,tile_at(2,2));
         assert((fog.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==
             (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED));
         assert(!(fog.tile_flags&C3X_RENDERER_TILE_VISIBLE));
@@ -271,13 +306,16 @@ static void terrain_recipe(void){
         assert(foreground.river_code==fog.river_code);
     }
 }
-static void hidden_objects(void){
-    reset();c3x_renderer_tile_v1 before=read_record();omitted(&before);
-    Tile* tile=tile_at(2,2);tile->live_resource=123;tile->live_building=456;tile->live_effect=0;
-    c3x_renderer_tile_v1 after=read_record();omitted(&after);
-    assert(!memcmp(&before,&after,sizeof before));
-    visible=true;after=read_record();
-    assert(full_reads==1&&after.resource_id==123&&after.tile_building_id==456&&!after.has_effect);
+static void fog_objects(void){
+    // Explored fog follows the same object facts as the capture and as the
+    // visible copy; only placement (visibility) differs.
+    reset();Tile* tile=tile_at(2,2);c3x_renderer_tile_v1 before=read_record();full_fog(&before,tile);
+    tile->live_resource=123;tile->live_building=456;tile->live_effect=0;
+    c3x_renderer_tile_v1 after=read_record();full_fog(&after,tile);
+    assert(after.resource_id==123&&after.tile_building_id==456&&!after.has_effect);
+    visible=true;c3x_renderer_tile_v1 shown=read_record();
+    assert(shown.resource_id==after.resource_id&&shown.tile_building_id==after.tile_building_id&&shown.has_effect==after.has_effect);
+    assert(shown.road_mask==after.road_mask&&shown.railroad_mask==after.railroad_mask&&shown.city_id==after.city_id);
 }
 int main(int argc,char** argv){
     assert(argc==2);
@@ -288,7 +326,7 @@ int main(int argc,char** argv){
     else if(!strcmp(argv[1],"visible"))full_visible();
     else if(!strcmp(argv[1],"seed"))deterministic_seed();
     else if(!strcmp(argv[1],"terrain"))terrain_recipe();
-    else if(!strcmp(argv[1],"hidden"))hidden_objects();
+    else if(!strcmp(argv[1],"fog"))fog_objects();
     else assert(false);
 }
 '''
@@ -362,8 +400,8 @@ class InjectedWorldAuthorityTests(unittest.TestCase):
     def test_explored_fog_terrain_features_match_foreground_recipe(self):
         self.contract("terrain")
 
-    def test_hidden_optional_objects_do_not_change_explored_fog_record(self):
-        self.contract("hidden")
+    def test_explored_fog_reads_objects_as_the_capture_does(self):
+        self.contract("fog")
 
 
 if __name__ == "__main__":

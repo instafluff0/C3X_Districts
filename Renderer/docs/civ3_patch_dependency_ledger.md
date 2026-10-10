@@ -2110,8 +2110,9 @@ infrastructure/source findings before extending a category.
   check `Map_Renderer` uses to draw a forest with its pine sheet. It is an
   existing vtable call that returns its flag in AL only, so the capture masks
   the result to 8 bits.
-- **What changes:** both forest capture paths (`read_custom_renderer_tile` and
-  the fogged branch of `read_custom_renderer_world_record`) add
+- **What changes:** both forest capture paths (`read_custom_renderer_tile`,
+  which also seeds explored fog since October 10, and the unexplored-topology
+  branch of `read_custom_renderer_world_record`) add
   `C3X_RENDERER_FEATURE_PINE`. The renderer then draws pine forest, or
   snow-covered pine forest on tundra.
 - **Not added:** no patch-table entry, injected-state field or new address.
@@ -2999,9 +3000,32 @@ packs without ground-state groups draw nothing new.
 injected-state entry is added. `capture_custom_renderer_topology` asks the
 renderer for an extra capture envelope (`C3X_NATIVE_CAPTURE_MARGIN`, tile
 coordinates past the visible tiles; 0 keeps the native envelope). The
-renderer returns a margin only with `C3X_RENDERER_WORLD_WINDOW=1` (stage 2a,
-off by default). Tiles past the zoom envelope are captured as appearance
+renderer returns a margin unless `C3X_RENDERER_WORLD_WINDOW=0` (stage 2a,
+on by default since October 10). Tiles past the zoom envelope are captured as appearance
 only, like the halo (visibility bits, `TOPOLOGY_HALO | PREFETCH`), so the
 injected HUD pass draws no unit status or city label for them, and the
 renderer reports replacement ownership only for RENDER tiles. Config-off
 delegation is unchanged: the query sits inside the custom zoom path.
+
+## Explored fog seeded by the capture's read
+
+`required_user_action: ["Re-run INSTALL.bat"]` (done for evaluation on
+October 10). No patch-table entry, injected-state field, signature or
+supported-build address is added.
+
+- **What changes:** `read_custom_renderer_world_record` reads explored but
+  not visible tiles with `read_custom_renderer_tile` (no units), as it
+  already read visible tiles, and marks them `TOPOLOGY_HALO | PREFETCH`.
+  Known but unexplored tiles keep the topology-only record.
+- **Why:** the per-step capture (`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`)
+  already reads resources, tile buildings, effects and territory for explored
+  fog, as native does: `Map_Renderer::m19` draws every tile with the same
+  flags, and `m33_Draw_Resource` draws whatever
+  `Tile::get_resource_visible_to` admits. The seed's narrower fog record was
+  a second appearance for the same tile, so the world prepared at load did
+  not match what the map draws, and block crossings into fogged land rebuilt
+  those tiles (performance review, section 53).
+- **Existing symbols relied on:** those `read_custom_renderer_tile` already
+  calls; nothing new.
+- **Config-off:** the world seed runs only for custom rendering.
+

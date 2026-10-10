@@ -29231,7 +29231,9 @@ read_custom_renderer_world_record (struct c3x_renderer_tile_v1 * record, int vie
 {
 	unsigned int visibility = capture_custom_renderer_visibility (tile, viewer, x, y);
 	if (! (visibility & C3X_RENDERER_TILE_VISIBILITY_KNOWN)) return false;
-	if (visibility & C3X_RENDERER_TILE_VISIBLE) {
+	// Explored fog is read as the per-step capture reads it, so the world
+	// prepared at load is the same content the map draws when it scrolls there.
+	if (visibility & (C3X_RENDERER_TILE_VISIBLE | C3X_RENDERER_TILE_EXPLORED)) {
 		if (! read_custom_renderer_tile (record, viewer, 0, 0, mask, x, y, tile, false, false)) return false;
 		record->tile_flags |= C3X_RENDERER_TILE_TOPOLOGY_HALO | C3X_RENDERER_TILE_PREFETCH;
 		record->tile_flags &= ~C3X_RENDERER_TILE_RENDER;
@@ -29260,17 +29262,6 @@ read_custom_renderer_world_record (struct c3x_renderer_tile_v1 * record, int vie
 		record->unit_state = record->unit_damage = record->unit_direction = -1;
 		record->territory_owner_id = record->barbarian_tribe_id = -1;
 		record->tile_flags = visibility | C3X_RENDERER_TILE_TOPOLOGY_HALO;
-		if (visibility & C3X_RENDERER_TILE_EXPLORED) {
-			// Native m25 draws the current city recipe on explored fog. Improvement
-			// methods independently choose remembered m42 overlays for this viewer.
-			// Neither permission admits live resources, units, buildings or effects.
-			capture_custom_renderer_city_body (record, get_city_ptr (tile->vtable->m45_Get_City_ID (tile)));
-			record->road_mask = tile->vtable->m25_Check_Roads (tile, __, viewer) ? 1u : 0u;
-			record->railroad_mask = tile->vtable->m23_Check_Railroads (tile, __, viewer) ? 1u : 0u;
-			record->route_style = viewer >= 0 && viewer < 32 ? clamp (0, 3, leaders[viewer].Era) : 0;
-			capture_custom_renderer_overlay_body (record, tile, viewer, x, y);
-			record->tile_flags |= C3X_RENDERER_TILE_CITY_BODY_KNOWN | C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN;
-		}
 	}
 	return true;
 }
