@@ -76,6 +76,8 @@ class Session {
     // Native image execution cost, summarized every 2 s at trace level 2.
     struct ExecuteProfile {
         LARGE_INTEGER reported{},frequency{};std::uint64_t calls=0,commands=0,uploads=0,upload_pixels=0;
+        // Commands recorded into map HUD items: city labels, units, others.
+        std::uint64_t hud_city=0,hud_units=0,hud_other=0;
         double submit_ms=0,record_ms=0,resource_ms=0,total_ms=0,max_ms=0;bool enabled=false;
         ExecuteProfile(){char value[4]={};enabled=GetEnvironmentVariableA("C3X_RENDERER_TRACE",value,sizeof(value))==1&&value[0]=='2';
             QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&reported);}
@@ -84,10 +86,11 @@ class Session {
         void report(){
             LARGE_INTEGER now={};QueryPerformanceCounter(&now);
             if(now.QuadPart-reported.QuadPart<2*frequency.QuadPart)return;
-            char line[320];std::snprintf(line,sizeof(line),
-                "[C3X renderer] stage=native-image-execution calls=%llu commands=%llu uploads=%llu upload_pixels=%llu total_ms=%.1f submit_ms=%.1f record_ms=%.1f resource_ms=%.1f max_ms=%.2f window_ms=%.0f\n",
+            char line[400];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-image-execution calls=%llu commands=%llu uploads=%llu upload_pixels=%llu total_ms=%.1f submit_ms=%.1f record_ms=%.1f resource_ms=%.1f max_ms=%.2f window_ms=%.0f hud_city=%llu hud_units=%llu hud_other=%llu\n",
                 (unsigned long long)calls,(unsigned long long)commands,(unsigned long long)uploads,(unsigned long long)upload_pixels,
-                total_ms,submit_ms,record_ms,resource_ms,max_ms,1000.*double(now.QuadPart-reported.QuadPart)/double(frequency.QuadPart));
+                total_ms,submit_ms,record_ms,resource_ms,max_ms,1000.*double(now.QuadPart-reported.QuadPart)/double(frequency.QuadPart),
+                (unsigned long long)hud_city,(unsigned long long)hud_units,(unsigned long long)hud_other);
             OutputDebugStringA(line);auto keep=enabled;auto rate=frequency;*this=ExecuteProfile{};enabled=keep;frequency=rate;reported=now;
         }
     } execute_profile;
@@ -95,6 +98,7 @@ class Session {
         if(!layers.accepting())return;
         if(hud_canvas&&(command.destination==hud_canvas||command.destination==hud_detail)){
             auto c=command;auto& item=hud.back();
+            ++(item.identity&0x80000000u?execute_profile.hud_city:item.unit_id>=0?execute_profile.hud_units:execute_profile.hud_other);
             if(c.kind==Kind::fill&&c.destination==item.canvas&&c.color==item.key)return;
             if(c.kind==Kind::fill&&c.destination==item.detail&&c.color==item.key_detail)return;
             auto snapshot=[&](Id& id){if(!id||id==hud_canvas||id==hud_detail)return;

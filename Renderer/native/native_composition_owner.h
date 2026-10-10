@@ -375,6 +375,17 @@ public:
             // an eligible future map canvas through native DC acquisition and
             // permanently sever its later animated map copies.
             if(!adapter->owns(image)&&!adapter->admit(image))return 0;
+            // A solid one-pixel axis-aligned stroke is exactly the half-open
+            // pixel run from its start toward its end (the tactical native
+            // line: +.5 centres, hard caps, full coverage on its own row).
+            // Fill it rather than rasterize a tactical capture; every city
+            // label draws four (review 49). Exact for black and white.
+            unsigned rgb=p->argb&0xffffffu;
+            if(p->width==1&&!p->dash&&(p->argb>>24)==255&&(rgb==0||rgb==0xffffffu)&&(p->x1==p->x2)!=(p->y1==p->y2)){
+                RECT run=p->y1==p->y2?RECT{p->x1<p->x2?p->x1:p->x2+1,p->y1,p->x1<p->x2?p->x2:p->x1+1,p->y1+1}:
+                    RECT{p->x1,p->y1<p->y2?p->y1:p->y2+1,p->x1+1,p->y1<p->y2?p->y2:p->y1+1};
+                if(adapter->operation(C3X_NATIVE_FILL,image,nullptr,nullptr,&run,rgb?0x80007fffu:0x80000000u)==1)return 1;
+            }
             Tactical capture;capture.native_line(float(p->x1),float(p->y1),float(p->x2),float(p->y2),p->width,p->dash,p->argb);
             if(tactical_draw(image,capture))return 1;
             adapter->operation(C3X_NATIVE_DC,image,nullptr,nullptr,nullptr,0);return 0;

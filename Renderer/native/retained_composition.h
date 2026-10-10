@@ -992,6 +992,9 @@ private:
         }
         n->seen=frame;
     }
+    // The first native operation that kept the last world view unprojected.
+    struct Refusal {int kind=-1;unsigned color=0;Rect area{};int output=0;} refusal;
+    bool view_projected=true;unsigned refusal_reports=0;
     bool projectable(Picture const& p,bool& scene,unsigned depth){
         if(depth>256||p.format!=Format::bgra32)return false;
         for(auto const& patch:p.patches){auto const& n=patch.node;
@@ -1008,10 +1011,12 @@ private:
                n->inputs[1].format!=Format::bgra32||
                !projectable(n->inputs[3],scene,depth+1)){
                 if(!n->map_dynamic)continue;
+                if(refusal.kind<0)refusal={n->operation?int(n->command.kind):100,n->command.color,n->area,int(patch.output)};
                 return false;
             }
             // The overlay source must be independent of its world underlay.
-            for(auto const& source:n->inputs[1].patches)if(source.node->map_dynamic)return false;
+            for(auto const& source:n->inputs[1].patches)if(source.node->map_dynamic){
+                if(refusal.kind<0)refusal={200+int(n->command.kind),n->command.color,n->area,int(patch.output)};return false;}
         }
         return true;
     }
@@ -1390,7 +1395,14 @@ public:
             n->view_native_format=native.format==Format::rgb565?2:1;write(native,n->area,n,1);
         }
         n->inputs[0]=read(source,extent(input));
-        bool scene=false;n->projects_scene=projectable(n->inputs[0],scene,0)&&scene;
+        bool scene=false;refusal={};n->projects_scene=projectable(n->inputs[0],scene,0)&&scene;
+        // Each change to an unprojected world view says why (kind 100: a
+        // non-operation map source; 200+: an overlay with a map-derived source).
+        if(n->projects_scene!=view_projected&&refusal_reports<256){++refusal_reports;char line[192];
+            std::snprintf(line,sizeof(line),"[C3X renderer] stage=world-view-projection projected=%d scene=%d kind=%d color=%u output=%d area=%d,%d,%d,%d\n",
+                int(n->projects_scene),int(scene),refusal.kind,refusal.color,refusal.output,
+                refusal.area.left,refusal.area.top,refusal.area.right,refusal.area.bottom);OutputDebugStringA(line);}
+        view_projected=n->projects_scene;
         for(auto const& patch:n->inputs[0].patches)n->map_dynamic|=patch.node->map_dynamic;
         write(target,n->area,n,0);
     }

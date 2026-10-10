@@ -2250,3 +2250,72 @@ own bar. The defender ends at yellow 2 of 3.
   facts"): fails on the old admission. The full-window upload case now
   expects ten 11.3 MB windows below the 7/8 watermark, where it expected
   eleven.
+
+## 49. Stage 4.3, step 3: city labels, measured; native strokes become fills (October 9)
+
+**What labels cost** (busy save, `near`, 88–150 s; new `hud_city` count in
+`native-image-execution`):
+- City-label HUD items received 19–26k commands: about 12–18% of native-image
+  commands while the camera moves, and none at idle.
+- The bridge's transport thread spent about 29 s of the 62 s:
+  - image batches: 1,702 posts at 8.6 ms each;
+  - presents: 779 posts at 9.2 ms each;
+  - state facts: 18,887 posts at 0.12 ms each;
+  - camera adoption: 56 posts at 35 ms each;
+  - tactical records: 889 posts at 2.1 ms each.
+- The cost per batch or present is mostly waiting for the renderer, not
+  label content.
+
+**Native strokes become fills.**
+- Civ III draws each city label's border as four one-pixel OpenGL lines,
+  which C3X turns into tactical captures.
+- The tactical native line, with +.5 centres and hard caps, covers exactly the
+  half-open run of pixels from its start toward its end. The GPU test checks
+  this in all four directions, black and white.
+- The owner now fills such strokes (solid, opaque, axis-aligned, black or
+  white) and skips the tactical raster.
+- Result:
+  - tactical records while the camera moves: 889 → 0;
+  - image-batch posts: 1,702 → 1,002, because strokes no longer split
+    batches.
+- Total transport time is unchanged within noise (29.8 → 29.0 s), because it
+  is mostly waiting.
+
+**A facts-based city label (not done; for the user's decision).** Civ III's
+`draw_city_hud` is now fully specified (geometry, colours, strings, fonts),
+and the bridge can rebuild labels from facts with Civ III's own fonts.
+- Font: `font+4 → +0x18` is the HFONT. Lucida Sans, lfHeight −size, weight
+  0 or 700, OUT_TT_ONLY_PRECIS, DEFAULT_QUALITY.
+- Text placement: TA_BASELINE at `top + (h − m)/2 + m`, where
+  m = tmAscent − tmInternalLeading.
+
+Replacing the native pass, though, needs `civ_prog_objects.csv` entries that
+do not exist:
+- the harbour, airport and veteran sprite globals (GOG 0xB3F380, 0xB3F354,
+  0xB3F328);
+- `City::spawns_veteran_ground_units`;
+- the advisor-form status check (0x9AFD98);
+- `Leader::is_tile_explored`.
+
+It also needs a large port into injected code. Because the bridge already
+translates each native label op (Civ III's own pixel work is skipped), moving
+the same work into the bridge saves little. The real win is labels as world
+state:
+- keep an unchanged label instead of re-recording it;
+- re-anchor it on camera moves instead of redrawing.
+
+**Soft zoomed scrolling: cause found** (`C3X_RENDERER_ROUTE_WITNESS=1`):
+- While scrolling at 2×, about 5.6 frames are presented per second, and 17 of
+  28 are stretched ×2. At 3×, 23 of 30 are stretched ×3.
+- The world view stays projectable: the new `world-view-projection` trace
+  never fired. The section 43 hypothesis is wrong.
+- Every camera step's scene renders at 1.0 (lane 0, mostly previews). The
+  ready-frame job, which renders at the presented zoom, returns while a camera
+  job is active or after a newer map publication (`gpu_serial` changed).
+- With a step every 66 ms and each 1× camera job longer than that, the zoomed
+  render never runs until the camera stops.
+
+**Tests.**
+- `test_native_stroke_fill`: runs, reversals and refusals. Fails without the
+  change.
+- `test_tactical_overlay` (GPU): exact stroke runs.

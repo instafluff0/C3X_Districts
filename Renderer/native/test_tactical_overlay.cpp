@@ -46,6 +46,18 @@ int test_tactical_overlay(){
     assert(alpha(59,38)>80&&alpha(59,42)>80&&alpha(56,40)<60);
     assert(alpha(98,18)>80&&alpha(102,18)>80&&alpha(100,18)<60);
     tactical_bmp("../lab/out/tactical-overlays/cursor-only.bmp",curled,200,80);
+    // A solid one-pixel axis-aligned native stroke covers exactly the half-open
+    // run from its start toward its end, so the owner may fill it (review 49).
+    struct Stroke {int x0,y0,x1,y1;unsigned argb;};
+    for(auto s:{Stroke{10,5,30,5,0xff000000u},Stroke{30,9,10,9,0xffffffffu},Stroke{40,2,40,20,0xff000000u},Stroke{44,20,44,2,0xffffffffu}}){
+        c3x_renderer::tactical::Input stroke;stroke.native_line(float(s.x0),float(s.y0),float(s.x1),float(s.y1),1,0,s.argb);
+        auto pixels=tactical_pixels(device.Get(),context.Get(),gpu.draw(device.Get(),context.Get(),stroke,{0,0,64,24},0));
+        int l=s.y0==s.y1?(s.x0<s.x1?s.x0:s.x1+1):s.x0,r=s.y0==s.y1?(s.x0<s.x1?s.x1:s.x0+1):s.x0+1;
+        int t=s.x0==s.x1?(s.y0<s.y1?s.y0:s.y1+1):s.y0,b=s.x0==s.x1?(s.y0<s.y1?s.y1:s.y0+1):s.y0+1;
+        for(int y=0;y<24;++y)for(int x=0;x<64;++x){auto p=pixels[y*64+x];bool in=x>=l&&x<r&&y>=t&&y<b;
+            if(in)assert((p>>24)==255&&(p&0xffffffu)==(s.argb&0xffffffu));else assert((p>>24)==0);}
+        ++checks;
+    }
     std::printf("PASS tactical GPU: %u zooms, curled cursor, eased quarter-turn and dark-white fade, shadowless route, antialias coverage and clear exterior\n",checks);return 0;
 }
 
