@@ -466,6 +466,11 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        shadows (31 ms), repairs static (12 ms) and rebuilds the region of
        interest (about 27 ms). Then resident-set membership (R2 and R3
        together).
+     - **One tick per busy covered step (review 61).** Paused the resident
+       world restructure for this: the bridge's single synchronous transport
+       makes camera requests wait behind adoptions and image batches. Next:
+       camera requests/polls on their own transport path; helper camera-begin
+       off the draw's lock.
      - Each stage keeps the 8,192 cap off the resident path, is measured on
        the busy, light and user saves, and gets a regression test.
    - Original order: (1) the draw's set-dependent passes (static refinement and water

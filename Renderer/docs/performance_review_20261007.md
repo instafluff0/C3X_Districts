@@ -2775,3 +2775,39 @@ Test: `test_view_consumers_native_frame.py`.
 No failures or draw failures on the busy, light (211 of 211 adopted, 0%
 soft) and user (205 of 205, 0% soft) saves.
 
+## 61. Why a busy covered step takes two ticks (October 10)
+
+**Civ III's cadence.** Civ III alternates ticks while scrolling: one tick
+moves the camera and requests the step, the next re-requests and polls; it
+moves again only after adoption. A step takes one tick only if its completion
+is ready within the tick it was requested (the light save does this). On the
+busy save a covered step completes 63 ms (p50) after its first request.
+
+| Busy covered step (v1) | p50 |
+| --- | --- |
+| completion → adoption draw starts | 63.5 ms |
+| adoption draw → publication | 41.9 ms |
+| publication → next completion | 62.4 ms |
+
+**Tried and reverted: camera first.** Starting a pending camera job ahead of
+a waiting independent command on the helper's worker (`C3X_RENDERER_CAMERA_FIRST`)
+did not speed completions (62.6 → 74.8 ms) and slowed the busy save (86 → 68
+adoptions; covered steps 177 → 227 ms; 2× 26.7 → 15.3 fps).
+
+**Where the request waits: the bridge transport** (`publication-latency`,
+cf0, busy):
+
+| Operation | Queue p50 / p90 | Service p50 / p90 |
+| --- | --- | --- |
+| camera-begin | 29.4 / 95.6 ms | 15.5 / 98.1 ms |
+| camera-adopt | 1.3 / 139 ms | 53.3 / 116.8 ms |
+| images | 0.1 / 105.7 ms | 13.0 / 31.7 ms |
+| present | 17.2 / 81.1 ms | 0.3 / 20.7 ms |
+
+One transport thread carries every command synchronously, so a camera request
+queues behind the adoption draw (53 ms, synchronous) and Civ III's image
+batches, then its own call can block on the helper. The next lever for one
+tick per covered step is the transport: camera requests and polls on their
+own path, and the helper's camera-begin not waiting on the draw. About 26 ms
+of image-batch worker time and 42 ms of adoption draw per step fit one tick.
+
