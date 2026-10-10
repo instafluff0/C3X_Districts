@@ -1896,3 +1896,50 @@ queries).
   ticks at 1× y.
 - Block crossings take 270–570 ms and are 25–30% of steps. Their cost is the
   entering band's geometry and shadow work (section 40).
+
+## 42. Stage 4.1: the wheel request reaches the next frame (October 9)
+
+**Baseline (busy save, default configuration, z0).**
+- From the wheel to the first presented frame at a new zoom: 44–316 ms
+  (`zoom_report.py`), typically 150–300.
+- During a transition: 6–20 fps, with gaps up to 255 ms.
+- Civ III handles the wheel within 1 ms.
+
+**Cause found.** The zoom target travelled in the ordered native stream.
+When a notch arrived, that stream held 300–600 ms of Civ III's queued
+interface batches. The target took effect about 190 ms later (z1).
+
+**Change.**
+- The bridge sequences each request. It sends the request in the ordered
+  stream as before (so recordings replay), and also publishes it at once in
+  the shared wire (`requested_zoom`).
+- The helper forwards a changed request before each display frame. For
+  400 ms after a request, its frames are not held for batch receipts or
+  publication pressure.
+- The frame applies the request as it starts, retargeting without sampling
+  the transition first. Before, that first frame did not move.
+- Only a newer sequence retargets, so the late ordered copy never undoes a
+  newer request.
+- Tests:
+  - `test_zoom_transition.py` (sequence rule; the first frame moves);
+  - `test_zoom_integration.py` (sequenced, published and ordered; forwarded
+    before frames);
+  - `test_retained_composition.cpp` (session: the newest request wins).
+
+**Result.**
+- The request is applied 6–25 ms after the wheel (z3).
+- Wheel to the first presented change did not improve: 29–317 ms (z4).
+- The first frame at a new zoom takes 50–125 ms to compose and present in the
+  VM: every world layer is re-projected at the new scale, and the scene is
+  re-rendered. In one notch the scene was ready 17 ms into the frame, and the
+  frame was presented 95 ms later.
+- Zoom-changing frames compose in 41 ms against 12.8 ms at a steady zoom,
+  with the same operation counts. Their display copy waits on the GPU (about
+  11 ms).
+- A drained GPU timeline (`C3X_RENDERER_PROFILE=3`) presented only 25 frames
+  in a whole run, too intrusive to attribute these frames.
+
+**Next (4.2).** Make frames during a transition cheap, for example by drawing
+them from one completed image of the world rather than re-projecting every
+layer at each intermediate scale. That is a visible change, so it needs the
+user's decision.

@@ -9,6 +9,19 @@ namespace c3x_renderer {
 // Latest requested map zoom. The retained static layer prepares its next
 // full-quality raster at this destination while the displayed zoom animates.
 inline std::atomic<float>& zoom_destination_hint(){static std::atomic<float> value{1.f};return value;}
+// A wheel request reaches the renderer twice: at once through the shared zoom
+// hint, and later in Civ III's ordered native stream, which waited 150-250 ms
+// behind queued interface work on busy maps (review, section 42). Requests
+// carry the bridge's sequence; only a newer one retargets, so a late ordered
+// copy never undoes a newer hint. Sequence zero (recorded inputs) always applies.
+struct ZoomRequests {
+    unsigned applied=0;
+    bool accept(unsigned sequence){
+        if(!sequence)return true;
+        if(sequence<=applied)return false;
+        applied=sequence;return true;
+    }
+};
 // Renderer-thread view state. Retargeting carries both position and velocity;
 // sampling depends on elapsed time, never on the number of frames submitted.
 // Native image versions and the gameplay camera are deliberately absent here.
@@ -42,6 +55,15 @@ public:
             throw std::invalid_argument("zoom target outside supported view");
         sample(ticks,frequency);destination=scale;
         zoom_destination_hint().store(float(scale),std::memory_order_relaxed);
+    }
+    // A request that arrived since the last sample: the next frame's sample
+    // integrates the whole interval toward it, so that frame already shows
+    // motion. target() samples first, which left the first frame unmoved
+    // (review, section 42).
+    void retarget(double scale){
+        if(!std::isfinite(scale)||scale<minimum||scale>maximum)
+            throw std::invalid_argument("zoom target outside supported view");
+        destination=scale;zoom_destination_hint().store(float(scale),std::memory_order_relaxed);
     }
     void reset(double scale=1.){
         if(!std::isfinite(scale)||scale<minimum||scale>maximum)

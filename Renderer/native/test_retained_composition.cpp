@@ -842,6 +842,15 @@ int test_retained_composition(){
         checked(device->CreateTexture2D(&desc,nullptr,&display));checked(device->CreateTexture2D(&desc,nullptr,&buffer));
         ComPtr<ID3D11RenderTargetView> target;checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
         LARGE_INTEGER now={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&now);
+        {   // A wheel request's shared hint applies at the next frame; its
+            // ordered copy, arriving later, never undoes a newer hint (review 42).
+            session.hint_zoom(98304,2,now.QuadPart,frequency.QuadPart);assert(session.zoom_target()==1.5);
+            send({{Kind::zoom_target,0,0,{}, {},1,0,196608}});assert(session.zoom_target()==1.5); // older notch, late
+            send({{Kind::zoom_target,0,0,{}, {},2,0,98304}});assert(session.zoom_target()==1.5);  // its own copy
+            session.hint_zoom(65536,3,now.QuadPart,frequency.QuadPart);assert(session.zoom_target()==1.);
+            session.hint_zoom(98304,3,now.QuadPart,frequency.QuadPart);assert(session.zoom_target()==1.); // repeated hint
+            std::puts("PASS shared zoom hint: newest request wins over late ordered copies");
+        }
         send({{Kind::fill,detail,0,full,full,0,0,0xff123456},{Kind::zoom_target,0,0,{}, {},0,0,196608}});
         assert(session.commit_display(1,detail,w,h,full));
         assert(session.visual_frame(now.QuadPart+frequency.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);

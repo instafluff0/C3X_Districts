@@ -46,6 +46,9 @@ public:
     Stats stats()const{return wire?Stats{wire->sequence,wire->service_us,wire->private_bytes}:Stats{};}
     bool alive()const{return process&&WaitForSingleObject(process,0)==WAIT_TIMEOUT;}
     unsigned frames()const{return wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->visual_frames),0,0)):0;}
+    void zoom_hint(unsigned q16,unsigned notch){
+        if(wire)InterlockedExchange64(&wire->requested_zoom,LONG64((std::uint64_t(notch)<<32)|q16));
+    }
     void publication_pressure(std::size_t records){
         if(wire)InterlockedExchange(reinterpret_cast<volatile LONG*>(&wire->native_queue_records),LONG(records));
     }

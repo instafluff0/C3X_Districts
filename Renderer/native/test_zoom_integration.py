@@ -48,6 +48,23 @@ int main(){int levels[]={64,80,96,112,128,160,192,224,256,320,384};
 }
 ''')
 
+    def test_wheel_hint_reaches_the_next_display_frame(self):
+        # The ordered zoom target waited 150-250 ms behind Civ III's queued
+        # interface work on busy maps; the shared hint is forwarded by the
+        # helper before each display frame and applied as that frame starts,
+        # without the batch-receipt or pressure holds (review, section 42).
+        helper=(ROOT/'Renderer/native/helper_trial/scene_workload.cpp').read_text()
+        cadence=helper.split('direct_cadence.enable_retrying([this]{',1)[1].split('report_direct_cadence(batch);\n            return code==C3X_RENDERER_RESULT_BUSY;',1)[0]
+        self.assertLess(cadence.index('zoom_hint('),cadence.index('auto batch=image_batches->status();'))
+        self.assertIn('if(batch.bytes&&!zooming){',cadence)
+        self.assertIn('if(pressure&&!priority&&!zooming&&',cadence)
+        renderer=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        frame=renderer.split('}else if(command==Command::trial_visual_shared||command==Command::trial_required_visual_shared){',1)[1]
+        self.assertLess(frame.index('hint_zoom('),frame.index('visual_frame(visual_ticks'))
+        session=(ROOT/'Renderer/native/gpu_composition_session.h').read_text()
+        self.assertIn('if(zoom_requests.accept(request))zoom->retarget(',session)
+        self.assertIn('if(zoom_requests.accept(unsigned(c.source_x)))zoom->target(',session)
+
     def test_bridge_target_and_helper_presented_range(self):
         owner=(ROOT/'Renderer/native/native_composition_owner.h').read_text()
         target=owner[owner.index('        if(op==C3X_NATIVE_ZOOM_TARGET){'):owner.index('        if(op==C3X_NATIVE_HUD_BEGIN||')]
@@ -56,26 +73,32 @@ int main(){int levels[]={64,80,96,112,128,160,192,224,256,320,384};
         run_cpp(r'''
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include "Renderer/native/scene_projection.h"
 #include "Renderer/native/gpu_image_commands.h"
 using namespace c3x_gpu_images;
 constexpr int C3X_NATIVE_ZOOM_TARGET=129;
 using LONG=std::int32_t;
 LONG InterlockedCompareExchange(volatile LONG* address,LONG,LONG){return *address;}
-struct Client{unsigned queued=0,flushed=0,value=0;
- void submit(Command const* command,int count){assert(count==1&&command->kind==Kind::zoom_target);value=command->color;++queued;}
+struct Client{unsigned queued=0,flushed=0,value=0;int sequence=0;
+ void submit(Command const* command,int count){assert(count==1&&command->kind==Kind::zoom_target);value=command->color;sequence=command->source_x;++queued;}
  void flush(){++flushed;}
 }transport;
-struct Owner {Client* client=&transport;int operation(int op,unsigned color){
+struct Owner {Client* client=&transport;
+ // The shared hint (review, 42): each request is sequenced, ordered, then published.
+ std::function<void(unsigned,unsigned)> zoom_hint;unsigned zoom_sequence=0;
+ int operation(int op,unsigned color){
 ''' + target + r'''
 return 0;}};
 struct Helper {struct Wire {volatile LONG presented_zoom_q16,presented_pan;} state{0,0};Wire* wire=&state;
 ''' + presented + r'''
 };
-int main(){Owner owner;Helper helper;
+int main(){Owner owner;Helper helper;unsigned hinted=0,hint_sequence=0;
+ owner.zoom_hint=[&](unsigned q16,unsigned sequence){hinted=q16;hint_sequence=sequence;};
  for(unsigned scale:{32768u,40960u,49152u,57344u,65536u,81920u,98304u,104857u,114688u,131072u,163840u,196608u}){
   unsigned prior=transport.queued;assert(owner.operation(129,scale)==1);
   assert(transport.queued==prior+1&&transport.flushed==transport.queued&&transport.value==scale);
+  assert(hinted==scale&&hint_sequence==transport.queued&&transport.sequence==int(hint_sequence));
   helper.state.presented_zoom_q16=LONG(scale);assert(helper.presented_zoom()==scale);
  }
  for(unsigned bad:{0u,32767u,196609u,~0u}){

@@ -121,6 +121,8 @@ public:
         return client.pack(path);}
     int set_units(int enabled){std::lock_guard<std::mutex> lock(gate);if(!enabled)unit_facts.clear();return client.set_units(enabled);}
     unsigned presented_zoom(){std::lock_guard<std::mutex> lock(gate);return client.presented_zoom();}
+    // A shared-memory write; no call gate, so a wheel request never waits.
+    void zoom_hint(unsigned q16,unsigned request){client.zoom_hint(q16,request);}
     int visual_policy(unsigned policy){
         LARGE_INTEGER began={},locked={},done={},rate={};if(trace_input)QueryPerformanceCounter(&began);
         std::lock_guard<std::mutex> lock(gate);if(trace_input)QueryPerformanceCounter(&locked);

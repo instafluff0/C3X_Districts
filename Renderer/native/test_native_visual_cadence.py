@@ -391,7 +391,8 @@ namespace c3x_inputs {
  struct Sink{template<class F>void emit(Kind,int,F const&){};};Sink& runtime(){static Sink s;return s;}
 }
 namespace c3x_renderer{std::atomic<float>& zoom_destination_hint(){static std::atomic<float> value{1.f};return value;}}
-struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;std::atomic<unsigned> presented_zoom_q16{65536};std::atomic<bool> trial_panning{false};
+struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;std::atomic<unsigned> presented_zoom_q16{65536};
+ std::atomic<std::uint64_t> zoom_hint_request{0};std::atomic<unsigned> zoom_hint_applied{0};std::atomic<bool> trial_panning{false};
  std::atomic<std::uint64_t> trial_visual_call_busy{0},trial_visual_state_busy{0};
  std::uint64_t trial_handle=0;unsigned trial_width=0,trial_height=0,submits=0;
  bool visual_allowed=true,replay_clock_seeded=false;long long visual_ticks=0,visual_frequency=0,visual_last=100;int result=C3X_RENDERER_RESULT_PENDING;

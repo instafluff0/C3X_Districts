@@ -101,6 +101,10 @@ public:
 public:
     CompositionOwner(c3x_renderer_gpu_render_fn r,c3x_renderer_gpu_images_fn i,c3x_renderer_gpu_present_fn p,
         c3x_renderer_gpu_unit_fn u,c3x_renderer_native_lifetime_fn l,void* b,void* end,bool direct_scene_units=false,bool diagnostic_trace=false):render(r),images(i),present(p),unit(u),lifetime(l),bits(b),release(end),scene_units(direct_scene_units),trace_success(diagnostic_trace){}
+    // Wheel zoom requests: each is sequenced, ordered in the native stream and
+    // also published at once through `zoom_hint` (review, section 42).
+    std::function<void(unsigned,unsigned)> zoom_hint;unsigned zoom_sequence=0;
+    void set_zoom_hint(std::function<void(unsigned,unsigned)> hint){zoom_hint=std::move(hint);}
     void set_camera(c3x_renderer_gpu_camera_begin_fn begin,c3x_renderer_gpu_camera_poll_view_fn poll,c3x_renderer_camera_cancel_fn cancel){
         camera_begin=begin;camera_poll=poll;camera_cancel=cancel;
     }
@@ -279,8 +283,11 @@ public:
         if(!adapter)return 0;
         if(op==C3X_NATIVE_ZOOM_TARGET){
             if(color<c3x_renderer::SceneProjection::minimum_q16||color>c3x_renderer::SceneProjection::maximum_q16)return -1;
-            Command command={Kind::zoom_target,0,0,{}, {},0,0,color};
-            client->submit(&command,1);client->flush();return 1;
+            auto sequence=++zoom_sequence;
+            Command command={Kind::zoom_target,0,0,{}, {},int(sequence),0,color};
+            client->submit(&command,1);client->flush();
+            if(zoom_hint)zoom_hint(color,sequence);
+            return 1;
         }
         if(op==C3X_NATIVE_HUD_BEGIN||op==C3X_NATIVE_HUD_END||op==C3X_NATIVE_UNIT_HUD_BEGIN){
             Command command={op==C3X_NATIVE_HUD_END?Kind::hud_end:Kind::hud_begin};

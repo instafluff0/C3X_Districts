@@ -45,5 +45,42 @@ int main(){
 ''')
 
 
+    def test_a_hinted_request_moves_in_the_first_frame_after_it(self):
+        # The hint is applied at the start of a display frame. Sampling at
+        # that frame's time first left the frame unmoved; the visible change
+        # waited for the next frame, 30-45 ms later near 1x (review, 42).
+        run_cpp(r'''
+#include "Renderer/native/zoom_transition.h"
+#include <cassert>
+using c3x_renderer::ZoomTransition;
+int main(){
+ ZoomTransition old_way,hinted;
+ for(auto* z:{&old_way,&hinted}){z->sample(1000,1000);z->sample(1020,1000);} // frames at rest, 20 ms apart
+ old_way.target(1.25,1040,1000);hinted.retarget(1.25);                         // request at the next frame's start
+ assert(old_way.sample(1040,1000)==1.);                                        // the old first frame does not move
+ double first=hinted.sample(1040,1000);assert(first>1.01 && first<1.25);       // the hinted one does
+ assert(hinted.target()==1.25);hinted.sample(5000,1000);assert(hinted.current()==1.25&&!hinted.moving());
+ bool rejected=false;try{hinted.retarget(3.5);}catch(std::invalid_argument const&){rejected=true;}assert(rejected);
+}
+''')
+
+    def test_late_ordered_requests_never_undo_a_newer_hint(self):
+        # The shared hint applies a wheel request at the next display frame;
+        # its ordered copy arrives 150-250 ms later on busy maps (review, 42).
+        run_cpp(r'''
+#include "Renderer/native/zoom_transition.h"
+#include <cassert>
+int main(){
+ c3x_renderer::ZoomRequests requests;
+ assert(requests.accept(1));                       // hint for notch 1
+ assert(requests.accept(2));                       // hint for notch 2
+ assert(!requests.accept(1)&&!requests.accept(2)); // their ordered copies arrive late
+ assert(requests.accept(3));                       // notch 3 ordered before its hint
+ assert(!requests.accept(3));                      // the hint repeats it: no restart
+ assert(requests.accept(0)&&requests.applied==3);  // recorded unsequenced inputs still apply
+}
+''')
+
+
 if __name__ == "__main__":
     unittest.main()

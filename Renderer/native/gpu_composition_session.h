@@ -14,6 +14,7 @@ class Session {
     Id resident_unit=0;ID3D11Texture2D* resident_unit_texture=nullptr;
     bool map_animation_expected=false;
     std::shared_ptr<c3x_renderer::ZoomTransition> zoom=std::make_shared<c3x_renderer::ZoomTransition>();
+    c3x_renderer::ZoomRequests zoom_requests;
     // Private retained IDs do not cross the image transport or own exact GPU
     // working textures. Each frame starts from the complete canonical map.
     static constexpr Id world_words=Id(1)<<63,world_detail=world_words+1,world_view_words=world_words+2,world_view_detail=world_words+3;
@@ -187,6 +188,12 @@ public:
         return gpu.display(map,target,width,height,{0,0,int(width),int(height)});
     }
 #endif
+    // The shared wheel hint, applied before a display frame (review, 42).
+    void hint_zoom(unsigned q16,unsigned request,long long ticks,long long frequency){
+        if(q16<c3x_renderer::SceneProjection::minimum_q16||q16>c3x_renderer::SceneProjection::maximum_q16||frequency<=0)return;
+        (void)ticks;if(zoom_requests.accept(request))zoom->retarget(double(q16)/65536.);
+    }
+    double zoom_target()const{return zoom->target();}
     double visual_scale()const{return layers.view_scale();}
     unsigned presented_zoom()const{return unsigned(zoom->last_presented()*65536.+.5);}
     void did_present(){zoom->did_present(rendered_zoom);}
@@ -326,7 +333,7 @@ public:
                 if(c.kind>=Kind::world_begin){
                     if(c.kind==Kind::zoom_target){LARGE_INTEGER now={},frequency={};
                         QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
-                        zoom->target(double(c.color)/65536.,now.QuadPart,frequency.QuadPart);
+                        if(zoom_requests.accept(unsigned(c.source_x)))zoom->target(double(c.color)/65536.,now.QuadPart,frequency.QuadPart);
                     }else if(c.kind==Kind::world_begin||c.kind==Kind::world_end)world(c);
                     else if(c.kind==Kind::hud_begin){
                         for(std::size_t i=hud.size();i-->0;)if(hud[i].canvas==c.destination&&hud[i].identity==c.color&&hud[i].unit_id==c.source_height-1&&

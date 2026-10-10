@@ -53,6 +53,7 @@ public:
     unsigned presented_zoom()const{return transport.presented_zoom();}
     void supersede_pending_camera(){transport.supersede_pending_camera();}
     void publication_pressure(std::size_t records){transport.publication_pressure(records);}
+    void zoom_hint(unsigned q16,unsigned request){transport.zoom_hint(q16,request);}
     void prepare_camera_receipt(){transport.prepare_camera_receipt();}
     bool camera_completion(c3x_renderer_i64 ticket,CameraOutput& result,int& code){
         c3x_inputs::Bytes bytes;

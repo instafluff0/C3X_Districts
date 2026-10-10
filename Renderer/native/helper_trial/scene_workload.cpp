@@ -101,6 +101,10 @@ struct Core {
     VisualShared visual_shared=nullptr;
     using PriorityFrontPending=int(*)();
     PriorityFrontPending priority_front_pending=nullptr;
+    // The bridge's shared wheel request, forwarded before display frames
+    // (review, section 42); the last forwarded value and when it changed.
+    using ZoomHint=int(*)(unsigned,unsigned);
+    ZoomHint zoom_hint=nullptr;std::int64_t forwarded_zoom=0;unsigned long long zoom_hint_ms=0;
     using VisualWait=int(*)(unsigned);
     VisualWait visual_wait=nullptr;
     using BindSurface=int(*)(std::uint64_t,unsigned,unsigned);
@@ -159,6 +163,7 @@ struct Core {
         required_present_shared=reinterpret_cast<PresentShared>(GetProcAddress(module,"c3x_renderer_trial_required_present_shared"));
         visual_shared=reinterpret_cast<VisualShared>(GetProcAddress(module,"c3x_renderer_trial_visual_shared"));
         priority_front_pending=reinterpret_cast<PriorityFrontPending>(GetProcAddress(module,"c3x_renderer_trial_priority_front_pending"));
+        zoom_hint=reinterpret_cast<ZoomHint>(GetProcAddress(module,"c3x_renderer_trial_zoom_hint"));
         // Pace ambient frames on the swap chain's frame-latency signal so each
         // frame starts at a vsync-aligned opportunity (timer remains fallback).
         visual_wait=reinterpret_cast<VisualWait>(GetProcAddress(module,"c3x_renderer_trial_visual_wait"));
@@ -281,12 +286,22 @@ struct Core {
         // static fronts return PENDING without drawing or presenting again.
         direct_cadence.enable_retrying([this]{
             ++cadence_counts.attempts;
+            // A wheel request starts its transition at this frame, not after
+            // Civ III's queued interface work; while it animates, frames are
+            // not held for batch receipts or publication pressure.
+            bool zooming=false;
+            if(telemetry&&zoom_hint){
+                auto requested=InterlockedCompareExchange64(&telemetry->requested_zoom,0,0);
+                if(requested!=forwarded_zoom){forwarded_zoom=requested;zoom_hint_ms=GetTickCount64();
+                    zoom_hint(unsigned(std::uint64_t(requested)&0xffffffffu),unsigned(std::uint64_t(requested)>>32));}
+                zooming=zoom_hint_ms&&GetTickCount64()-zoom_hint_ms<400;
+            }
             // The admitted image batch is one reliable prefix. Its operations
             // release the renderer call gate individually, but those gaps are
             // not ambient presentation opportunities. Let the receipt complete
             // before sampling the newly committed native front.
             auto batch=image_batches->status();
-            if(batch.bytes){
+            if(batch.bytes&&!zooming){
                 if(batch.ready)++cadence_counts.prefix_ready_unretired;else ++cadence_counts.prefix_active;
                 report_direct_cadence(batch);return true;
             }
@@ -303,7 +318,7 @@ struct Core {
             // ambient pressure throttle. Duplicate native commits do not. The
             // DLL clears this hint after successful Present, never on BUSY.
             bool priority=pressure&&priority_front_pending&&priority_front_pending()>0;
-            if(pressure&&!priority&&pressure_present_ticks&&now.QuadPart-pressure_present_ticks<frequency.QuadPart/4){
+            if(pressure&&!priority&&!zooming&&pressure_present_ticks&&now.QuadPart-pressure_present_ticks<frequency.QuadPart/4){
                 ++cadence_counts.pressure_holds;report_direct_cadence(batch);return true;
             }
             std::uint64_t handle=0;unsigned width=0,height=0;

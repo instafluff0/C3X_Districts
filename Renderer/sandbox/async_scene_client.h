@@ -172,6 +172,9 @@ template<class Transport>class AsyncSceneClient {
         value.prepare_camera_receipt();
     }
     template<class T>static void prepare_receipt(T&,long){}
+    template<class T>static auto send_zoom_hint(T& value,unsigned q16,unsigned request,int)
+        ->decltype(value.zoom_hint(q16,request),void()){value.zoom_hint(q16,request);}
+    template<class T>static void send_zoom_hint(T&,unsigned,unsigned,long){}
     template<class T>static auto completion(T& value,Id ticket,CameraOutput& output,int& code,int)
         ->decltype(value.camera_completion(ticket,output,code)){
         return value.camera_completion(ticket,output,code);
@@ -230,6 +233,8 @@ public:
     ~AsyncSceneClient(){publication.stop();}
     bool asynchronous()const{return enabled;}
     unsigned presented_zoom()const{return transport.presented_zoom();}
+    // Not ordered: the next display frame applies the newest wheel request.
+    void zoom_hint(unsigned q16,unsigned request){send_zoom_hint(transport,q16,request,0);}
     void observe_publication(std::function<void(char const*,double,double)> observer){
         publication.observe([this,observer=std::move(observer)](char const* label,double queued,double service){
             transport.publication_pressure(publication.status().records);

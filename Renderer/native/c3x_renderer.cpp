@@ -13465,7 +13465,8 @@ public:
         // frame, and so does a newly committed native front (an adopted scroll
         // step with its overlays): holding it delayed each step 10-20 ms.
         bool zooming=std::abs(double(c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed))*65536.-
-            double(presented_zoom_q16.load(std::memory_order_acquire)))>1.;
+            double(presented_zoom_q16.load(std::memory_order_acquire)))>1. ||
+            unsigned(zoom_hint_request.load(std::memory_order_acquire)>>32)!=zoom_hint_applied.load(std::memory_order_acquire);
         bool retained=renderer_state.completed_scene_retained.load(std::memory_order_relaxed);
         bool new_front=retained&&trial_front_pending.load(std::memory_order_acquire);
         // A/B measurement: C3X_RENDERER_JOB_FRAME_HZ sets the retained-view cap.
@@ -13683,6 +13684,8 @@ public:
             std::memory_order_release,std::memory_order_relaxed)){}
     }
     unsigned presented_zoom()const{return presented_zoom_q16.load(std::memory_order_acquire);}
+    void zoom_hint(unsigned q16,unsigned request){
+        zoom_hint_request.store((std::uint64_t(request)<<32)|q16,std::memory_order_release);}
     int images_gpu(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* readback,unsigned capacity){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         start_locked();
@@ -15049,6 +15052,9 @@ private:
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
     std::atomic<long long> visual_qpc_offset{LLONG_MIN}; // QPC minus visual clock, live only
     std::atomic<unsigned> presented_zoom_q16{65536};
+    // The newest wheel request from the shared hint (sequence << 32 | q16),
+    // and the sequence a display frame last applied (review, section 42).
+    std::atomic<std::uint64_t> zoom_hint_request{0};std::atomic<unsigned> zoom_hint_applied{0};
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     int last_visual_ready=-1;
 #ifdef C3X_HELPER_TRIAL
@@ -16504,6 +16510,14 @@ private:
                 }
             }else if(command==Command::trial_visual_shared||command==Command::trial_required_visual_shared){
                 result=C3X_RENDERER_RESULT_PENDING;
+                // A wheel request starts its transition in this frame instead
+                // of after Civ III's queued interface work (review, 42).
+                if(auto hint=zoom_hint_request.load(std::memory_order_acquire);hint&&renderer_state.gpu_composition&&visual_frequency>0){
+                    renderer_state.gpu_composition->hint_zoom(unsigned(hint&0xffffffffu),unsigned(hint>>32),visual_ticks,visual_frequency);
+                    if(zoom_hint_applied.exchange(unsigned(hint>>32),std::memory_order_acq_rel)!=unsigned(hint>>32)&&renderer_state.trace.level>=2){
+                        char detail[96];std::snprintf(detail,sizeof(detail),"sequence=%u q16=%u",unsigned(hint>>32),unsigned(hint&0xffffffffu));
+                        renderer_state.trace.write("zoom-hint-applied",detail,true);}
+                }
                 if(trial_surface_swap&&trial_surface_back&&trial_surface_view&&trial_surface_buffer&&renderer_state.gpu_composition&&visual_frequency>0){
                     LARGE_INTEGER started={},prepared={},sampled={},finished={};
                     char route[8]={};
@@ -18348,6 +18362,11 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_visual_shared(
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().trial_visual_shared(ticks,frequency,consumer_pid,*handle,*width,*height);
 }
+// The helper forwards the bridge's shared wheel hint before display frames.
+extern "C" __declspec(dllexport) int c3x_renderer_trial_zoom_hint(unsigned q16,unsigned request){
+    get_renderer_worker().zoom_hint(q16,request);
+    return C3X_RENDERER_RESULT_OK;
+}
 extern "C" __declspec(dllexport) int c3x_renderer_trial_priority_front_pending(){
     return get_renderer_worker().trial_priority_front_pending();
 }
@@ -18748,6 +18767,8 @@ bool ensure_native_composition(void* image){
     native_composition->set_tactical([](auto const& capture,auto const& target){return remote_renderer_requested()?
         remote_renderer_backend()->tactical(capture,target):get_renderer_worker().draw_tactical(capture,target);});
     native_composition->set_camera(begin_native_gpu_camera,c3x_renderer_gpu_camera_poll_view,c3x_renderer_camera_cancel);
+    native_composition->set_zoom_hint([](unsigned q16,unsigned sequence){
+        if(remote_renderer_requested())remote_renderer_backend()->zoom_hint(q16,sequence);});
     return true;
 }
 extern "C" __declspec(dllexport) int c3x_renderer_native_camera_request(void* image,

@@ -3,7 +3,7 @@
 #include "../camera_completion.h"
 
 namespace c3x_helper_trial {
-constexpr unsigned wire_magic=0x32483343,wire_version=16,wire_capacity=16*1024*1024;
+constexpr unsigned wire_magic=0x32483343,wire_version=17,wire_capacity=16*1024*1024;
 struct Wire {
     unsigned magic,version,sequence,kind,subtype,size,reply_size,status,code,shared_raw,expected_code,executed,live;
     unsigned width,height,rendered,fallback,hash[4],gpu_hash[4],gpu_hash_valid;
@@ -22,6 +22,9 @@ struct Wire {
     // Receipt-only cancellation mailbox. No reliable resource/action command
     // is displaced; the ordered request wire still owns admission/adoption.
     alignas(8) volatile std::int64_t obsolete_camera_through;
+    // Latest wheel zoom request (sequence << 32 | scale q16), read before each
+    // display frame. Its ordered copy follows in the native stream (review 42).
+    alignas(8) volatile std::int64_t requested_zoom;
     char error[128];
     unsigned char payload[wire_capacity];
     // Independent of the ordered request/reply slot. Its named mutex protects
