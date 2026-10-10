@@ -2811,3 +2811,31 @@ tick per covered step is the transport: camera requests and polls on their
 own path, and the helper's camera-begin not waiting on the draw. About 26 ms
 of image-batch worker time and 42 ms of adoption draw per step fit one tick.
 
+## 62. A bounded camera poll wait does not give one tick per step (October 10)
+
+Tried and reverted: Civ III's camera poll waited up to N ms for the
+completion mailbox (busy, `near`, same build):
+
+| Poll wait | Adoptions | Covered step p50 | Full step p50 |
+| --- | --- | --- | --- |
+| 0 ms (pw0) | 77 | 227 ms | 338 ms |
+| 30 ms (pw30) | 74 | 223 ms | 419 ms |
+| 60 ms (pw60) | 69 | 220 ms | 416 ms |
+
+Waiting blocks Civ III's thread without completing steps inside the tick: a
+covered step's serial chain on the helper (adoption draw about 42 ms, Civ III's
+image batches about 26 ms of service, the request's queue and lock waits)
+exceeds one 78 ms tick in this VM, and `begin(n+1)` cannot precede `adopt(n)`
+(it clears the ready camera). One tick per busy step needs less work per step,
+not reordering.
+
+The image batches' own execution is small (`native-image-execution`
+total_ms 40-200 per 2 s window, mostly city labels: up to 6,081 HUD commands
+per window); most of their service time is waiting for `call_mutex`, the
+worker and the round trip.
+
+This VM is Windows on ARM: Civ III (x86) and Renderer64 (x64) both run under
+emulation, so every CPU cost here is inflated. A native x64 measurement of the
+busy save would show how far the per-step chain is from one tick on real
+hardware.
+
