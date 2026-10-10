@@ -24,9 +24,10 @@ class RenderUnitFamilySheetTests(unittest.TestCase):
 
     def test_inferred_profile_covers_proof_pack_rigid_points(self) -> None:
         self.assertEqual(
-            {"Root", "ArmBand", "Hat", "WeaponPrimary", "WeaponSecondary", "Tool", "Shield"},
+            {"Root", "Backpack", "ArmBand", "Hat", "WeaponPrimary", "WeaponSecondary", "Tool", "Shield"},
             set(SOCKET_PROFILE),
         )
+        self.assertEqual("Pelvis", SOCKET_PROFILE["Backpack"]["bone"])
         self.assertEqual("Inven_R_Hand", SOCKET_PROFILE["Tool"]["bone"])
         self.assertEqual("Inven_L_Hand", SOCKET_PROFILE["Shield"]["bone"])
 
