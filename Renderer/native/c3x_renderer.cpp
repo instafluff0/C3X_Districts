@@ -15755,10 +15755,13 @@ private:
             prepared->source_generation=renderer_state.route_frame_sequence;
             std::weak_ptr<PreparedMapFrame> weak=prepared;
             auto prepare=[this,weak,capture,selected,origin,settings,geometry,x,y](long long ticks,long long frequency,float zoom){
-                auto job=weak.lock();if(!job)return;job->ready=false;
+                auto job=weak.lock();if(!job)return;
+                // A camera job that blocks preparation leaves the completed
+                // draw displayable (review 49); a stale source retires it.
                 if(((camera_active || !camera_scene_complete) && !completed_scene_usable()) ||
                     !capture->valid() || renderer_state.device_generation!=job->device_generation ||
                     renderer_state.gpu_serial!=job->serial)return;
+                job->ready=false;
                 auto completed_view=borrow_completed_scene();
                 struct BorrowedFrame {bool& flag;bool prior;~BorrowedFrame(){flag=prior;}}
                     borrowed_frame{renderer_state.borrowed_scene_frame,renderer_state.borrowed_scene_frame};
@@ -15875,7 +15878,12 @@ private:
                 // Preparation is a temporary hold. Retiring this sampler here
                 // prevents it from resuming when a same-view reveal completes,
                 // freezing actors until native overlays finish their import.
-                if((camera_active || !camera_scene_complete) && !completed_scene_usable())return Sampled::held();
+                // A completed draw at this zoom stays displayable: no prepare
+                // can replace it meanwhile. Holding instead showed a new
+                // step's canonical image magnified while scrolling zoomed in
+                // (review 49).
+                if((camera_active || !camera_scene_complete) && !completed_scene_usable() && !(job->ready && job->zoom==zoom))
+                    return Sampled::held();
                 if(!job->ready || job->zoom!=zoom)return job->pending_since?Sampled::held():Sampled{};
                 return Sampled::bgra(job->front.Get(),{x,y,x+w,y+h},sharpness,job->source_generation);
             };
@@ -16252,6 +16260,7 @@ private:
                             map_sample.prepare(visual_ticks,visual_frequency,1.f);
                             if(prepared_map && prepared_map->ready)initial=prepared_map->front.Get();
                         }
+                        auto zoomed_prepare=drawn_now?decltype(map_sample.prepare){}:map_sample.prepare;
 #endif
                         if(session.publish(initial,renderer_state.gpu_serial,
                             gpu_publication.source_x,gpu_publication.source_y,gpu_metadata.width,gpu_metadata.height,std::move(map_sample))){
@@ -16277,6 +16286,19 @@ private:
                             gpu_metadata.clip_right=job_frame.clip_right;gpu_metadata.clip_bottom=job_frame.clip_bottom;
                             gpu_view={sizeof(gpu_view),session.current_ticket(),static_cast<c3x_renderer_i64>(session.map_image()),gpu_metadata.width,gpu_metadata.height,gpu_metadata.device_generation,0,gpu_metadata.content_revision,session.session_identity(),unsigned(gpu_reused),gpu_publication.frame.presentation_time_ticks};
                             result=C3X_RENDERER_RESULT_OK;
+#ifdef C3X_RENDERER64_FRESH
+                            // Zoomed in, this step is displayed through its
+                            // projected sample. Draw it at the settled zoom now:
+                            // while Civ III keeps scrolling, the next camera job
+                            // blocks the display frame that would prepare it, so
+                            // every scrolled frame showed this step's canonical
+                            // image magnified (review 49). After the publish, so
+                            // the canonical import above is untouched.
+                            float presented=float(session.presented_zoom())/65536.f;
+                            float destination=c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed);
+                            if(zoomed_prepare&&presented!=1.f&&std::fabs(destination-presented)<1e-4f)
+                                zoomed_prepare(visual_ticks,visual_frequency,presented);
+#endif
                         }else result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
                     }
                     char detail[256];std::snprintf(detail,sizeof(detail),"result=%d prepared=%u sample_ticks=%lld requested_ticks=%lld map_readbacks=0 publication_bytes=%zu",

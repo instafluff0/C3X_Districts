@@ -2319,3 +2319,38 @@ state:
 - `test_native_stroke_fill`: runs, reversals and refusals. Fails without the
   change.
 - `test_tactical_overlay` (GPU): exact stroke runs.
+
+## 50. Scrolling zoomed in draws each step at the presented zoom (October 9)
+
+**Problem** (section 49): while scrolling at 2× and 3×, 60–75% of presented
+frames were the step's canonical (1×) image magnified, because the zoomed
+render waited for the camera to stop.
+
+**Changes** (`c3x_renderer.cpp`):
+- When Civ III adopts a step and the zoom is settled at a value other than 1,
+  the step is also prepared at that zoom right after its publication. The
+  canonical import is untouched.
+- The step's projected sampler returns that completed zoomed draw even while
+  the next camera job runs. Holding instead showed the canonical image
+  magnified.
+- A blocked `prepare` no longer clears the job's readiness. The compositor
+  calls it every display frame; clearing first discarded the zoomed draw.
+
+**Evidence** (busy save, `near`, `C3X_RENDERER_ROUTE_WITNESS=1`; new
+`Renderer/tools/zoom_sharpness_report.py`):
+
+| Zoomed scroll seconds | Soft frames before | Soft frames after |
+| --- | --- | --- |
+| 2× (42–46 s) | 17 of 28 | 1 of ~30 |
+| 3× (52–56 s) | 23 of 30 | 0 of ~35 |
+
+- Steady 2× and 3× stay at 59–61 fps. One run read 24–43 fps; a repeat
+  showed that was VM noise.
+- Scroll frame rate is unchanged and still low: about 4–11 fps at every zoom
+  on the busy save in the VM. That is the next problem: 3,000 composition
+  operations a frame, lock waits behind camera jobs and image batches.
+
+**Tests.** `test_zoomed_step_sample`:
+- the sampler returns the completed zoomed draw during a camera job, and
+  fails without the change;
+- a blocked `prepare` keeps readiness.
