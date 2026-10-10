@@ -15,12 +15,16 @@ class MapClickTraceTests(unittest.TestCase):
         hover = source[source.index("void __fastcall\npatch_Main_Screen_Form_process_mouse_hover"):
                        source.index("bool __fastcall\npatch_Unit_can_disembark_anything")]
         code = (trace + hover).replace("this", "screen")
+        # C++ needs the typed cast that the injected C gets implicitly from void *.
+        code = code.replace("(void *)(*p_GetProcAddress)", "(CursorInfo)(*p_GetProcAddress)")
         run_cpp(r'''
 #include <cassert>
 #include <cstdio>
 #include <string>
 #include <vector>
 #define __fastcall
+#define WINAPI
+typedef unsigned DWORD;typedef int BOOL;struct POINT{long x,y;};
 constexpr int __=0;
 struct Unit{struct{int ID=7;}Body;};
 struct City{struct{int ID=9;}Body;};
@@ -29,13 +33,14 @@ struct Main_Screen_Form{
  int mouse_x=12,mouse_y=34,Mode_Action=0,field_4ED0=0,field_4E80[6]={};
  int field_4DC0[25]={},camera_x=123,camera_y=-456;
  Unit* Current_Unit=nullptr;City* Selected_City=nullptr;
- Timer timer_1,timer_2;struct{unsigned Status1=0,Status2=1;}Base_Data;
+ Timer timer_1,timer_2;struct{unsigned Status1=0,Status2=1;int Cursor_Image=0;}Base_Data;
 };
 struct{struct{struct{int Status2=0;}Data;}Base;}city_form,*p_city_form=&city_form;
 struct State{
  struct{bool enable_custom_rendering=true;}current_config;
  int sb_activated_by_button=1,custom_renderer_zoom_tile_width=192,custom_renderer_zoom_native_tile_width=128;
  long long custom_renderer_zoom_translate_x_fp=-456,custom_renderer_zoom_translate_y_fp=789;
+ bool custom_renderer_trace_input=false;char custom_renderer_test_save[260]={};void* user32=nullptr;
 }state,*is=&state;
 struct LARGE_INTEGER{long long QuadPart;};
 int queries=0,clock_reads=0,native_clicks=0,native_hovers=0,hud_updates=0;
@@ -43,6 +48,11 @@ int pick_result=0;bool change_action=false;City target_city;
 std::vector<std::string> logs;
 void log_line(char* line){logs.emplace_back(line);}
 auto output=log_line;auto p_OutputDebugStringA=&output;
+using CursorInfo=BOOL(*)(void*);
+BOOL read_cursor(void* cursor){assert(cursor!=nullptr);return 1;}
+CursorInfo get_proc(void* module,char const* name){assert(module==state.user32&&std::string(name)=="GetCursorInfo");return read_cursor;}
+auto p_GetProcAddress=get_proc;
+void notify_custom_renderer_unit_selection(bool changed){assert(!changed);}
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=123456789LL;++clock_reads;}
 int patch_Main_Screen_Form_get_tile_coords_under_mouse(Main_Screen_Form*,int,int x,int y,int* tx,int* ty){
  assert(x==12&&y==34);++queries;*tx=6;*ty=8;return pick_result;

@@ -50,7 +50,7 @@ struct State {
 };
 State state={};State* is=&state;
 struct Main_Screen_Form {int camera_x=0,camera_y=0;bool is_now_loading_game=false;struct {Sprite* Cursor_Image=nullptr;PCX_Image Canvas;} Base_Data;
-    struct {struct {PCX_Image Canvas;} Data;} Units_Control;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
+    struct {struct {PCX_Image Canvas;int Status1=0;} Data;} Units_Control;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
 void custom_renderer_zoom_transform_point(int*,int*){}
 unsigned player_bits=1;unsigned* p_player_bits=&player_bits;
 struct {int ScreenWidth=2240,ScreenHeight=1192;bool is_zoomed_out=false;struct {void* Tiles=nullptr;struct {void* spotlight_on_city=nullptr;} Renderer;} Map;} bic_fixture;

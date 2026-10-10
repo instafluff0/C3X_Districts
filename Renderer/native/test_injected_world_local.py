@@ -50,11 +50,12 @@ PRELUDE = r'''
 #define __fastcall
 #define __ 0
 enum { IS_UNINITED, IS_OK, IS_INIT_FAILED };
+enum AnimatedEffect { AE_Disorder = 0x1, AE_Plague = 0xB };
 typedef struct City {
     struct {
         int ID, X, Y, CivID;
         struct { int Size; } Population;
-        int cultural_level, CultureIncome, Total_Cultures[32], FoodIncome;
+        int cultural_level, CultureIncome, Total_Cultures[32], FoodIncome, field_A4;
     } Body;
 } City;
 typedef struct Tile {
@@ -104,6 +105,8 @@ typedef struct State {
     c3x_renderer_world_reconcile_fn custom_renderer_world_reconcile;
     c3x_renderer_seed_world_fn custom_renderer_seed_world;
     bool custom_renderer_initial_world_capture, custom_renderer_capture_world_topology;
+    bool custom_renderer_loading_world_capture;
+    void *custom_renderer_module;
     bool custom_renderer_native_probe_active;
     void *custom_renderer_native_observe;
     unsigned (*custom_renderer_probe_thread_id)(void);
@@ -119,6 +122,13 @@ static Screen screen, *p_main_screen_form = &screen;
 static Leader leaders[32];
 static Race races[2]; static Era eras[2]; static Improvement improvements[2];
 static Tile native_tiles[320], null_tile, *p_null_tile = &null_tile;
+// Without the optional changed-world export the seed delegates to custom_renderer_seed_world.
+void *get_proc_address(void *module, char const *name) {
+    assert(module == state.custom_renderer_module && strcmp(name, "c3x_renderer_require_world_changes") == 0);
+    return NULL;
+}
+static void *(*get_proc_address_slot)(void *, char const *) = get_proc_address;
+static void *(**p_GetProcAddress)(void *, char const *) = &get_proc_address_slot;
 static Tile *native_tile_ptrs[320];
 static struct c3x_renderer_tile_v1 captured[2], output[128];
 static unsigned topology[320], debug_bits, *p_debug_mode_bits = &debug_bits;

@@ -60,10 +60,14 @@ int main(){try{
   assert(h.counters.source_expanded_bytes-expanded==(revision%64?4:257*128*4));
   if(n%30==0){Id saved=10000+n;retained.create(saved,image.width,image.height,image.format);retained.snapshot(saved,image.gpu);saves.push_back({saved,expected()});}
  }
- // A failed partial upload must neither commit the CPU cache nor leak its image.
- native.words[0]=0x777;auto revision=image.revision;auto before=image.cpu;
- h.gpu.reject=true;assert(!h.refresh(image));assert(image.revision==revision&&image.cpu==before&&!h.gpu.temporary);
- h.gpu.reject=false;assert(h.refresh(image));check();
+ // A failed partial upload must neither commit its revision nor leak its image.
+ // Since d1ed83cf the mirror's dirty rows are updated in place before the
+ // upload, so a failure instead stops trusting the mirror: the retry uploads
+ // the complete authoritative image.
+ native.words[0]=0x777;auto revision=image.revision;
+ h.gpu.reject=true;assert(!h.refresh(image));assert(image.revision==revision&&!image.cpu_uploaded&&!h.gpu.temporary);
+ h.gpu.reject=false;expanded=h.counters.source_expanded_bytes;assert(h.refresh(image));
+ assert(h.counters.source_expanded_bytes-expanded==257*128*4);check();
  // Wide changes and GPU-to-CPU invalidation use complete authoritative images.
  std::fill(native.words.begin(),native.words.end(),0x345);expanded=h.counters.source_expanded_bytes;
  assert(h.refresh(image));assert(h.counters.source_expanded_bytes-expanded==257*128*4);check();
