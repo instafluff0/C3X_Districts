@@ -2078,3 +2078,22 @@ they collide with the batches instead.
 - **During a zoom.** The map moves under a still cursor, so Civ III's hover
   handler fires about 7 times per notch and re-creates a 36×30 cursor
   surface each time.
+
+## 45. An injected unit-pass skip (tried and reverted); soft unit HUD at zoom (October 9)
+
+**Unit-pass skip.** We tried skipping Civ III's per-tick unit pass when the
+Animator's units, selection, camera and zoom were unchanged. On the busy save
+it never engaged. Idle ticks still sent every unit draw (16,896 in 20 s),
+because the check required every unit to be in its default animation, and
+units in other states (for example fortified) failed it. It also reached into
+unnamed Animator fields and steered `Animator::update_display` by zeroing its
+stored erase rectangle. We reverted it. The user's alternative supersedes it:
+the renderer draws the unit HUD, city labels and map messages itself (stage
+4.3, in `camera_decoupling_design.md`).
+
+**Soft unit HUD at zoom (user report).**
+- At a settled 2× (`stretch` = 1), the selection ring and the unit health bar
+  are drawn at twice their 1× thickness and soft. City labels next to them
+  stay crisp at their native size.
+- While scrolling at 2× and 3×, the whole canvas, labels included, is the
+  1× canvas magnified (section 43).
