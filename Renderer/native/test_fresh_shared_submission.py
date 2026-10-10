@@ -57,7 +57,8 @@ struct Harness {
  struct StaticRect {int left=0,top=0,right=0,bottom=0;} shadow_field;
  float tile_half_width=64,tile_half_height=32;struct {std::array<float,2> receiver_area{};} shadow;
  struct Options {bool shadow_tight=false;};Options sandbox_perf_options()const{return {};}
- float zoom_destination()const{return 1.f;}
+ float destination=1.f;bool moving=false;
+ float zoom_destination()const{return destination;}bool zoom_moving()const{return moving;}
  bool canonical_hidden()const{return false;}
  std::uint64_t view_revision()const{return membership;}
  template<class Visit>void contributors(ViewportShaderSettings const&,D3D11_RECT,bool,Visit visit){++queries;
@@ -109,6 +110,19 @@ int main(){
  assert(!list.add(h.renderer.shared_instances,1,GeometryDrawReference(main),h.renderer.shared_instance_draw_key(1,GeometryDrawReference(main))));
  assert(h.renderer.shared_instances.bytes()<=Owner::budget);
  pressure.reset();h.body_requirements.clear();assert(!h.renderer.shared_instances.bytes());
+ // A moving zoom-in keeps the wider shadow field, which covers every view
+ // it passes, and refits once settled; a zoom-out refits at once. A refit
+ // per notch cost the first transition frame 13-56 ms (review, 43).
+ {Harness z;z.all_visible[1]={main};z.guard[1]={main};
+  z.projection_zoom=z.destination=1.5f;assert(z.update_roi(settings,1000,800));
+  auto wide=z.shadow.receiver_area;auto revision=z.roi_revision;
+  z.destination=2.f;z.projection_zoom=1.6f;z.moving=true;assert(z.update_roi(settings,1000,800));
+  assert(z.roi_revision==revision && z.shadow.receiver_area==wide);
+  z.moving=false;z.projection_zoom=1.99f;assert(z.update_roi(settings,1000,800));
+  assert(z.roi_revision==revision+1 && z.shadow.receiver_area[0]<wide[0]);
+  auto narrow=z.shadow.receiver_area;
+  z.destination=1.25f;z.moving=true;assert(z.update_roi(settings,1000,800));
+  assert(z.roi_revision==revision+2 && z.shadow.receiver_area[0]>narrow[0]);}
 }
 ''')
 

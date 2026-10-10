@@ -23,6 +23,9 @@ public:
         std::uint64_t copied_pixels=0,assembly_pixels=0,avoided_copy_pixels=0,fused_source_pixels=0;
         // CPU submission time per visual-frame phase (diagnostic only).
         double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;
+        // Largest magnification of a displayed world image: its scale over the
+        // scale its pixels were drawn at (above 1 is a stretched, soft world).
+        float stretch=1.f;
         std::array<LONGLONG,8> display_ticks{}; // per call inside the final display draw
         std::string executed; // C3X_RENDERER_TRACE_EVALUATED=1: kind@area of each executed operation
     };
@@ -127,7 +130,7 @@ private:
         int anchor_x=0,anchor_y=0;
         Compositor::ImportTarget view_words;
         unsigned view_native_format=0;
-        float view_scale=0.f;
+        float view_scale=0.f,resolution=1.f; // resolution: the scale its pixels were drawn at
         std::shared_ptr<Node> projected;
         std::uint64_t projected_frame=0,prepared_frame=0,prepared_projected_frame=0;
         bool projects_scene=false;
@@ -781,7 +784,7 @@ private:
                 replay.recycle(source);
                 n->view_scale=scale;n->dependencies.swap(versions);n->revision=++serial;
             }
-            selected_view_scale=n->view_scale;
+            selected_view_scale=n->view_scale;work.stretch=std::max(work.stretch,n->view_scale);
         }else if(!n->batch.empty()){
             auto& versions=n->pending_dependencies;versions.clear();
             n->map_dynamic=false;bool dynamic=false;
@@ -1071,6 +1074,7 @@ private:
                     auto source=n->output[0]?n->output[0]:original->output[patch.output];
                     auto source_area=n->output[0]?n->area:original->area;
                     float relative=n->output[0]?scale/n->view_scale:scale;
+                    n->resolution=n->output[0]?std::min(n->resolution,n->view_scale):1.f;
                     auto id=replay.create(area.right-area.left,area.bottom-area.top,Format::bgra32,false);
                     if(!id)throw std::runtime_error("retired projected scene admission");
                     auto target=replay.release_import_target(id);
@@ -1081,17 +1085,20 @@ private:
                     n->sample_target=std::move(target);output(*n,0,n->sample_target.texture);
                     n->area=area;n->view_scale=scale;n->revision=++serial;
                 }
+                work.stretch=std::max(work.stretch,scale/n->resolution);
                 n->seen=frame;return n;
             }
             if(sampled.kind!=SampledImage::Kind::bgra)throw std::runtime_error("projected scene unavailable");
             if(n->output[0]&&n->sample_target.texture&&same_rect(n->area,area)&&n->view_scale==scale&&
                sampled.generation&&sampled.generation==n->source_generation&&n->publication==original->publication){
+                work.stretch=std::max(work.stretch,scale/n->resolution);
                 n->seen=frame;return n; // the same completed render at the same projection
             }
             projected_output(*n,area);
             if(!replay.import_bgra(n->sample_target,sampled.texture.Get(),sampled.area.left,sampled.area.top,sampled.sharpness))
                 throw std::runtime_error("projected scene import");
             n->publication=original->publication;n->source_generation=sampled.generation;n->map_source=original->map_source;
+            n->resolution=scale;
         }else if(original->operation&&(original->map_dynamic||retired_underlay)){
             // Unchanged inputs at the same projection keep the drawn overlay:
             // the underlay's projected parts, the source and key pictures, the

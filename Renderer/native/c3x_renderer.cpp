@@ -16278,7 +16278,7 @@ private:
                 // Drain-mode profiles (C3X_RENDERER_PROFILE=3) attribute image
                 // batch work per native operation like a visual frame.
                 auto& image_timeline=c3x_renderer::render_core::gpu_timeline();
-                image_timeline.configure();bool profile_images=image_timeline.draining();
+                image_timeline.configure();bool profile_images=image_timeline.detailing();
                 if(profile_images)image_timeline.begin(renderer_state.context);
                 result=image_scope_body?image_scope_body(image_scope_context,this,&RendererWorker::image_scope_execute):
                     C3X_RENDERER_RESULT_BAD_ARGUMENT;
@@ -16565,18 +16565,27 @@ private:
                         presented_zoom_q16.store(renderer_state.gpu_composition->presented_zoom(),std::memory_order_release);
                         if(route_witness){
                             auto proof=renderer_state.gpu_composition->visual_publication();
-                            char detail[768];sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu zoom_q16=%u result=1 mixed=%u frequency=%lld present_qpc=%lld",
+                            char detail[1024];sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu zoom_q16=%u result=1 mixed=%u frequency=%lld present_qpc=%lld",
                                 static_cast<unsigned long long>(proof.first),static_cast<unsigned long long>(proof.second),
                                 static_cast<unsigned long long>(++route_present_index),renderer_state.gpu_composition->presented_zoom(),unsigned(!proof.first),renderer_state.trace.frequency.QuadPart,finished.QuadPart);
                             renderer_state.trace.write("route-presented",detail,true);
                             auto work=renderer_state.gpu_composition->visual_work();
-                            sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu begin=%lld sampled=%lld end=%lld frequency=%lld compose_ms=%.3f present_ms=%.3f total_ms=%.3f operations=%u assemblies=%u copies=%u copied_pixels=%llu assembly_pixels=%llu selected_borrows=%u selected_owned=%u direct_native_images=%u avoided_copy_pixels=%llu",
+                            // Composition phases and the fused pass per frame:
+                            // zoom transitions are too short for sampled lines (review, 43).
+                            sprintf_s(detail,"source_serial=%llu source_generation=%llu present_index=%llu begin=%lld sampled=%lld end=%lld frequency=%lld compose_ms=%.3f present_ms=%.3f total_ms=%.3f operations=%u assemblies=%u copies=%u copied_pixels=%llu assembly_pixels=%llu selected_borrows=%u selected_owned=%u direct_native_images=%u avoided_copy_pixels=%llu compose_prepare_ms=%.3f compose_evaluate_ms=%.3f compose_assemble_ms=%.3f compose_display_ms=%.3f fused_frames=%llu fused_fallback=%u fence_denials=%llu permit_denials=%llu call_busy=%llu state_busy=%llu stretch=%.3f",
                                 static_cast<unsigned long long>(proof.first),static_cast<unsigned long long>(proof.second),static_cast<unsigned long long>(route_present_index),
                                 started.QuadPart,sampled.QuadPart,finished.QuadPart,renderer_state.trace.frequency.QuadPart,
                                 renderer_state.trace.milliseconds(sampled.QuadPart-started.QuadPart),renderer_state.trace.milliseconds(finished.QuadPart-sampled.QuadPart),
                                 renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart),work.operations,work.assemblies,work.copies,
                                 static_cast<unsigned long long>(work.copied_pixels),static_cast<unsigned long long>(work.assembly_pixels),
-                                work.selected_borrows,work.selected_owned,work.direct_native_images,static_cast<unsigned long long>(work.avoided_copy_pixels));
+                                work.selected_borrows,work.selected_owned,work.direct_native_images,static_cast<unsigned long long>(work.avoided_copy_pixels),
+                                work.prepare_ms,work.evaluate_ms,work.assemble_ms,work.display_ms,
+                                static_cast<unsigned long long>(renderer_state.gpu_composition->visual_fused_frames()),
+                                renderer_state.gpu_composition->visual_fused_fallback(),
+                                static_cast<unsigned long long>(visual_fence_denials.load(std::memory_order_relaxed)),
+                                static_cast<unsigned long long>(trial_visual_permit_denials.load(std::memory_order_relaxed)),
+                                static_cast<unsigned long long>(trial_visual_call_busy.load(std::memory_order_relaxed)),
+                                static_cast<unsigned long long>(trial_visual_state_busy.load(std::memory_order_relaxed)),double(work.stretch));
                             renderer_state.trace.write("route-frame-budget",detail,true);
                         }
                     }

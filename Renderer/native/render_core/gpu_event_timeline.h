@@ -26,7 +26,7 @@ class GpuEventTimeline {
     std::vector<Total> totals;
     LARGE_INTEGER frequency{},reported{};
     unsigned frames=0;double frame_ms=0,wait_ms=0;
-    bool configured=false,per_frame=false,drain=false,in_frame=false;
+    bool configured=false,per_frame=false,drain=false,detailed=false,in_frame=false;
     void add(char const* name,double ms){
         Total* total=nullptr;for(auto& t:totals)if(t.name==name){total=&t;break;}
         if(!total){totals.push_back({name});total=&totals.back();}
@@ -41,6 +41,7 @@ class GpuEventTimeline {
 public:
     bool enabled=false;
     bool draining()const{return drain;}
+    bool detailing()const{return detailed;}
     void configure(){
         if(configured)return;configured=true;
         char value[8]={};
@@ -48,14 +49,16 @@ public:
         // transitions vanish inside two-second averages). 3 also reports every
         // frame but waits for the GPU at each mark: a translation layer may
         // finish a batched frame at once, so in-order readbacks cannot split
-        // it, and a drain charges each phase its own (isolated) cost.
-        enabled=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",value,sizeof(value))&&(value[0]>='1'&&value[0]<='3');
-        per_frame=enabled&&value[0]!='1';drain=enabled&&value[0]=='3';
+        // it, and a drain charges each phase its own (isolated) cost. 4 drains
+        // only at the phase marks: per-operation drains slowed a run to 25
+        // presented frames, too few to see a zoom transition (review, 43).
+        enabled=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",value,sizeof(value))&&(value[0]>='1'&&value[0]<='4');
+        per_frame=enabled&&value[0]!='1';drain=enabled&&value[0]>='3';detailed=enabled&&value[0]=='3';
         QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&reported);
     }
     // Finer marks (per native operation) only in drain mode, where each one
     // is charged its isolated cost; in-order readbacks cannot split them.
-    void detail(ID3D11DeviceContext* context,char const* name){if(drain&&in_frame)mark(context,name);}
+    void detail(ID3D11DeviceContext* context,char const* name){if(detailed&&in_frame)mark(context,name);}
     void mark(ID3D11DeviceContext* context,char const* name){
         if(!enabled||!context||(drain&&!in_frame))return;
         Microsoft::WRL::ComPtr<ID3D11Device> device;context->GetDevice(&device);if(!device)return;

@@ -265,8 +265,9 @@ struct Session{
  std::pair<unsigned,unsigned> visual_publication(){return {7,8};}
  struct Work{unsigned operations=3,assemblies=1,copies=2,copied_pixels=64,assembly_pixels=32;
   unsigned selected_borrows=1,selected_owned=0,direct_native_images=1,avoided_copy_pixels=128;
-  double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;};
+  double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;float stretch=1.f;};
  Work visual_work(){return {};}
+ std::uint64_t visual_fused_frames()const{return 0;}unsigned visual_fused_fallback()const{return 0;}
 };
 struct Swap{HRESULT result=S_OK;unsigned presents=0;
  // Vsync-locked delivery: the cadence already holds a frame-latency grant.
@@ -292,7 +293,7 @@ struct Owner{
  std::unique_ptr<Swap> trial_surface_swap=std::make_unique<Swap>();
  std::atomic<unsigned> presented_zoom_q16{65536};std::atomic<int> presented_pan_packed{0};unsigned route_present_index=0;
  std::atomic<bool> trial_front_pending{true};std::uint64_t trial_presented_front_revision=0;
- std::atomic<std::uint64_t> trial_visual_permit_denials{0};
+ std::atomic<std::uint64_t> trial_visual_permit_denials{0},trial_visual_call_busy{0},trial_visual_state_busy{0};
  long long visual_ticks=17,visual_frequency=1000;
  int offer(){
   bool phase_probe=true,route_witness=true;

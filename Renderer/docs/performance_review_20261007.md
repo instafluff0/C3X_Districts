@@ -1943,3 +1943,97 @@ interface batches. The target took effect about 190 ms later (z1).
 them from one completed image of the world rather than re-projecting every
 layer at each intermediate scale. That is a visible change, so it needs the
 user's decision.
+
+## 43. Stage 4.2: where a zoom frame's time goes (October 9)
+
+**Instruments.**
+- Each presented frame's `route-frame-budget` line now also carries:
+  - the composition phases (prepare, evaluate, assemble, display);
+  - the fused-pass state;
+  - cumulative fence, permit and busy counters;
+  - `stretch`, the largest magnification of a displayed world image. It
+    exceeds 1 when a frame stretches pixels drawn at a smaller scale.
+- `C3X_RENDERER_PROFILE=4` drains the GPU only at the phase marks (scene
+  prepare, reflection, static, water, units, reconstruct, then the four
+  composition phases). Mode 3 also drained at every native operation, which
+  left 25 presented frames in a run (section 42).
+
+**CPU (z6, busy save, near scenario).**
+
+| Frames | Compose p50 | Prepare (scene render) | Evaluate | Display | Interval p50 |
+| --- | --- | --- | --- | --- | --- |
+| Zoom-changing (63) | 47.1 ms | 17.1 ms (12.8 ms) | 3.9 ms | stalls 15–90 ms on every other frame | 54.8 ms |
+| Steady (4687) | 15.5 ms | 9.1 ms (8.5 ms) | 1.7 ms | 0.2 ms | 24.6 ms |
+
+- The display stall is the bind of the swap-chain buffer, or its draw.
+  - In steady frames it is 60 Hz pacing. It appears only when a frame is
+    ready less than ~16 ms after the previous Present, and it waits about
+    9 ms.
+  - Zoom frames stall even 36–64 ms after the previous Present. They are
+    waiting on GPU work.
+
+**GPU, isolated per phase (z7, `PROFILE=4`).**
+
+| Frames | Static | Water | Reflection | Composition | Frame total |
+| --- | --- | --- | --- | --- | --- |
+| Zoom-changing | 42.7 ms (p90 115.6) | 12.0 ms | 2.7 ms | ~10 ms | 83.7 ms |
+| Steady | 0.3 ms | 21.4 ms | 4.9 ms | ~10 ms | 46.7 ms |
+
+(All values are p50 unless marked. Drains inflate absolute values; the
+comparison between rows holds.)
+
+**Cause.** Matched with `static-compose`, every expensive zoom frame refines
+the static raster toward the destination zoom.
+- With refinement: 27–177 ms of GPU per frame.
+- Preview only: 1–2 ms.
+
+Refinement's budget follows CPU time (an 8 ms target). Under Parallels its
+GPU cost is 8–15 times its CPU time, so each refining frame costs
+40–100 ms of GPU.
+
+Effect in z6:
+- A notch's first frame starts a refinement and shows 80–140 ms after the
+  wheel.
+- The transition shows 3–7 frames.
+- The destination is sharp 450–525 ms after the wheel.
+- The critically damped animation itself reaches its exact value after
+  ~350 ms; it is visually settled by ~120–150 ms.
+
+The composition is not the cost: re-projecting the layers adds 2–4 ms.
+
+**Changes tried (same-build A/B, busy save, near scenario, two runs each).**
+
+| Change | Effect | Kept |
+| --- | --- | --- |
+| Refinement hold: no refinement toward the destination while the zoom is more than 1% away from it (`C3X_RENDERER_ZOOM_REFINE_HOLD`, 0 turns it off) | p90 frame interval 84–102 ms, against 120–138 ms without it. Median interval, first change (49–69 ms) and time to sharp (~500 ms) unchanged. | Yes |
+| Shadow-field hold: a moving zoom-in keeps the wider shadow field until it settles; zooming out refits at once | The refit (13–56 ms of CPU) moves from the first frame to the settle point. It also removes the unshadowed edges a field shrunk at once left during zoom-in. | Yes |
+| Static budget steered by the presented surface's GPU backlog | No faster frames: interval p50 49 ms against 44–56. Refinement slowed: two zoom-ins were not sharp before the next notch. | No, reverted |
+
+**What limits a zoom frame in normal (undrained) runs.** Drains exaggerate the
+static layer: in normal runs its GPU work overlaps the CPU work. A
+transition frame at roughly 45–55 ms is made of:
+- 10–14 ms of CPU re-rendering the scene at the new scale. Within that,
+  unit selection at the new zoom takes ~2 ms.
+- 2–7 ms re-projecting the layers.
+- Display stalls of 12–28 ms on about every other frame, whether or not
+  any static work ran.
+- Up to ~26 ms between frames, while Civ III's own interface work holds
+  the renderer's lock: the frame's try-lock fails 2–11 times per frame.
+
+There is no single large lever left inside the scene. Smoother transitions
+would need:
+- display frames that do not wait on Civ III's native submissions;
+- or stand-in frames (the opt-in fallback agreed with the user).
+
+**Soft scrolling at 2×/3× (user report).** `stretch` shows that throughout
+the 2× and 3× scroll segments the displayed world is Civ III's 1× canvas
+magnified, by exactly 2 or 3:
+- 43 frames over 4.7 s at 2×;
+- 53 frames over 5.3 s at 3×.
+
+During those segments the scene renders at zoom 1.0: the map view takes its
+non-projected path. While Civ III scrolls, the view's world holds a
+map-derived operation that `projectable()` rejects. The scroll blit (a copy
+of the map canvas at the step offset) is the likely one; this is not yet
+confirmed. The fix is to keep the view projected during steps, drawing each
+step at the presented zoom.

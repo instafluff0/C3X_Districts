@@ -337,9 +337,29 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      it waited 150–250 ms in Civ III's ordered stream. The first presented
      change still takes 29–317 ms, because composing a frame at a new scale
      costs 50–125 ms in the VM.
-   - **4.2, cheap transition frames. Needs the user's decision:** stand-in
-     frames during the roughly 200 ms animation, drawn from one completed
-     world image.
+   - **4.2, cheap transition frames.** Agreed with the user on October 9:
+     make a frame at a changing zoom cheap. Stand-in frames remain only an
+     opt-in fallback.
+     - Attribution (review, section 43): the composition adds only 2–4 ms.
+       A transition frame (~45–55 ms in the VM) is:
+       - the scene re-rendered at the new scale (10–14 ms of CPU);
+       - re-projection (2–7 ms);
+       - display stalls on about every other frame (12–28 ms);
+       - waits while Civ III's interface work holds the renderer's lock
+         (up to ~26 ms).
+     - Kept:
+       - destination refinement waits while the zoom visibly moves
+         (`zoom_moving`), which cut the p90 frame interval from 120–138 to
+         84–102 ms;
+       - a zoom-in keeps the wider shadow field until it settles.
+     - A GPU-backlog-steered static budget was tried and reverted.
+     - Further smoothness needs one of:
+       - display frames that do not wait on Civ III's submissions;
+       - stand-in frames (opt-in).
+   - **Scrolling at 2×/3× is soft** (user report, October 9; measured in
+     section 43). While the camera moves, the zoomed scene is not drawn, so
+     frames stretch the step's 1× image. The fix is to draw each step at the
+     presented zoom. That comes after 4.2.
 5. **A compact, instanced world within a memory tier.**
    - A byte census by layer first (`world-streaming-cost`).
    - Picture-identical changes in order of bytes per risk: city building

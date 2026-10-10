@@ -663,6 +663,7 @@ struct SandboxPerfOptions {
     float bootstrap_scale=1.f;  // Native-resolution fallback; reduced scale is diagnostic only (0 disables).
     double refine_pixels=0;     // C3X_RENDERER_REFINE_PIXELS: fixed per-frame refinement budget
     bool shadow_tight=false;    // C3X_RENDERER_SHADOW_TIGHT_FIT=1: refit shadows to every view
+    float zoom_refine_hold=.01f; // C3X_RENDERER_ZOOM_REFINE_HOLD: no refinement while zoom is this fraction from its destination (0: off)
     SandboxPerfOptions(){
         char value[32]{};
         legacy=GetEnvironmentVariableA("C3X_RENDERER_STATIC_LEGACY",value,sizeof(value)) && value[0]=='1';
@@ -674,6 +675,9 @@ struct SandboxPerfOptions {
             double pixels=std::atof(value);refine_pixels=std::isfinite(pixels)?std::max(0.,pixels):0.;
         }
         shadow_tight=GetEnvironmentVariableA("C3X_RENDERER_SHADOW_TIGHT_FIT",value,sizeof(value)) && value[0]=='1';
+        if(GetEnvironmentVariableA("C3X_RENDERER_ZOOM_REFINE_HOLD",value,sizeof(value))){
+            float hold=float(std::atof(value));zoom_refine_hold=std::isfinite(hold)?std::clamp(hold,0.f,1.f):.01f;
+        }
     }
 };
 inline SandboxPerfOptions const& sandbox_perf_options(){static SandboxPerfOptions options;return options;}
@@ -3551,6 +3555,17 @@ struct SandboxFreshPipeline {
         if(!std::isfinite(value))return projection_zoom;
         return std::clamp(value,c3x_renderer::SceneProjection::minimum,c3x_renderer::SceneProjection::maximum);
     }
+    // The zoom still visibly moves toward its destination. Its frames show
+    // the static preview and keep the shadow field; work for the destination
+    // (refinement, an inward field refit) waits until the zoom is within the
+    // hold. A refining frame cost 27-177 ms of isolated GPU time in the VM;
+    // holding it cut the slowest transition frames (p90 interval 120-138 to
+    // 84-102 ms, review 43). A zoom that stops short counts as settled after
+    // three still frames.
+    bool zoom_moving()const{
+        float hold=sandbox_perf_options().zoom_refine_hold,hint=zoom_destination();
+        return hold>0 && lane_still[StaticRasters::lane_of(projection_zoom)]<3 && std::abs(projection_zoom-hint)>hold*hint;
+    }
     // Lane 0 is hidden only while a non-1x zoom is the destination *and* the
     // display lane was drawn recently (a stale hint cannot starve lane 0).
     bool canonical_hidden()const{
@@ -4179,6 +4194,9 @@ struct SandboxFreshPipeline {
         // 0 means "do not refine this lane" (it is animating back to 1x).
         float goal=lane==0?1.f:(!previewable || settled)?zoom:(hint!=1.f?hint:0.f);
         double budget=previewable?refinement_budget(lane):-1.;
+        // Its budget follows CPU time, while under Parallels a strip's GPU
+        // cost is 8-15 times that: no refinement while the zoom visibly moves.
+        bool moving=previewable && zoom_moving();
         StaticRect limits={0,0,int(region_width_px),int(region_height_px)};
         // The slot whose complete proof held this frame, and the ledger
         // checkpoint it held at; strips drawn after it carry it (review 41).
@@ -4309,7 +4327,7 @@ struct SandboxFreshPipeline {
                 auto& abandoned=static_rasters.back(lane);
                 if(abandoned.refining){abandoned.refining=false;abandoned.stale=true;}
             }
-            else if(budget!=0){static_decision.refine=1;if(timed(static_decision.refine_ms,[&]{return refine(goal,budget);})<0)return false;}
+            else if(budget!=0 && !moving){static_decision.refine=1;if(timed(static_decision.refine_ms,[&]{return refine(goal,budget);})<0)return false;}
         }
         // Strips the displayed raster needs now. Small (scroll) gaps are drawn
         // immediately; a large gap is filled progressively behind a preview.
@@ -4470,10 +4488,16 @@ struct SandboxFreshPipeline {
         static constexpr float ladder[]={.5f,.625f,.75f,.875f,1.f,1.25f,1.5f,1.75f,2.f,2.5f,3.f};
         // Keyed to the zoom destination, not the animating zoom, so the field
         // refits at most once per wheel input instead of at every ladder step
-        // the animation crosses (edges briefly lack shadows during zoom-in).
-        // Hidden 1x transactions share it, so lanes cannot alternate the field.
+        // the animation crosses. Hidden 1x transactions share it, so lanes
+        // cannot alternate the field.
         float wanted=zoom_destination(),shadow_zoom=1.f;
         if(projection_zoom==1.f && !canonical_hidden())wanted=1.f;
+        // A moving zoom-in keeps the wider field, which covers every view it
+        // passes (a field shrunk at once left the edges unshadowed), and
+        // refits once the zoom settles (review, 43). Zooming out needs the
+        // wider destination field at once.
+        {std::uint32_t bits=std::uint32_t(roi_key[8]);float field=0;std::memcpy(&field,&bits,sizeof(field));
+            if(body_requirements_valid && field>0 && wanted>field && zoom_moving())wanted=field;}
         for(float step:ladder)if(step<=wanted+1e-4f)shadow_zoom=step;
         std::uint32_t zoom_bits=0;std::memcpy(&zoom_bits,&shadow_zoom,sizeof(zoom_bits));
         std::uint64_t visibility_sequence=0;

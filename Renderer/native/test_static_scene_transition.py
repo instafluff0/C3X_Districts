@@ -37,7 +37,7 @@ int main(){assert(SandboxPerfOptions{}.bootstrap_scale==1.f);
         source = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
         methods = '\n'.join(method(source, signature) for signature in (
             '    bool render_bootstrap(', '    int resample_source(',
-            '    bool static_pixels_current(', '    bool compose_static('))
+            '    bool static_pixels_current(', '    bool zoom_moving(', '    bool compose_static('))
         run_cpp(r'''
 #include "Renderer/sandbox/static_raster_state.h"
 #include "Renderer/sandbox/scroll_region.h"
@@ -84,19 +84,24 @@ using StaticRasters=c3x_renderer::render_core::StaticRasterStates<Target>;
 using StaticState=c3x_renderer::render_core::StaticRasterState<Target>;
 using StaticRect=StaticState::Rect;
 struct ViewportShaderSettings{float translation[2]{},depth_translation=0,projection=1;};
-struct Options{bool legacy=false;float bootstrap_scale=1.f;};
+struct Revisions{struct Checkpoint{int owner=0,sequence=0;};Checkpoint checkpoint()const{return {};}};
+struct Options{bool legacy=false;float bootstrap_scale=1.f,zoom_refine_hold=.01f;};
 struct Pipeline {
  Context context;
- struct{Context* context;int device=1,content_view_width=4,content_view_height=4;std::int64_t scene_depth_origin=0;}renderer{&context};
+ struct{Context* context;int device=1,content_view_width=4,content_view_height=4;std::int64_t scene_depth_origin=0;
+  bool borrowed_scene_frame=false;Revisions raster_dependency_revisions;}renderer{&context};
  StaticRasters static_rasters;std::array<StaticState,2> bootstrap;std::array<StaticState const*,2> bootstrap_ring{};std::array<std::uint64_t,2> bootstrap_ring_revision{};
- struct RasterInputs{int version=0;bool complete=true;void clear(){version=0;complete=true;}std::size_t bytes()const{return 0;}};
+ struct RasterInputs{using Revisions=::Revisions;int version=0;bool complete=true;void clear(){version=0;complete=true;}std::size_t bytes()const{return 0;}
+  void carry(Revisions const&,int,Revisions::Checkpoint){}};
+ int raster_validation_key(ViewportShaderSettings const&,D3D11_RECT){return 0;}
+ std::chrono::steady_clock::time_point zoom_lane_used{};void release_zoom_lane(){}
  std::array<RasterInputs,4> raster_inputs;std::array<RasterInputs,2> bootstrap_inputs;
  std::array<std::array<std::uint64_t,6>,2> bootstrap_stamp{};
  bool restore_overlays=false,preview_overlays=false;
  struct OverlaySlot{Target layer;std::uint64_t revision=~0ull;};std::array<OverlaySlot,4> overlay_slots;
  bool overlay_enabled()const{return false;}
  std::array<std::uint64_t,6> bootstrap_identity()const{return {std::uint64_t(version),0,0,0,0,0};}
- Options options;Options const& sandbox_perf_options(){return options;}
+ Options options;Options const& sandbox_perf_options()const{return options;}
  struct ShadowChange{std::uint64_t serial=0;std::array<int,4> source{};};
  struct{bool atlas_complete=true;std::uint64_t change_serial=0,change_floor=0;std::vector<ShadowChange> shadow_changes;}shadow;
  std::vector<std::array<int,4>> shadow_dirty,repaired_dirty;float resident_basis_x=0,resident_basis_y=0;int wrap_pixels=0;
@@ -109,7 +114,8 @@ struct Pipeline {
  struct OverlayFrame{bool valid=false;unsigned slot=0;int move_x=0,move_y=0;float depth_shift=0;} overlay_frame;
  double last_static_ms=0;bool static_preview=false;
  struct {unsigned lane=0;int reusable=-1,recenter=0,shifted=0,refine=0,sync=0,preview=0,front_cover=0,home_cover=0,boot_cover=0;
-  long long missing=0;int camera_x=0,camera_y=0,slot_x=0,slot_y=0;unsigned entry=0,home_entry=0,repair=0;std::size_t input_bytes=0;double boot_draw_ms=0,boot_deps_ms=0;long long boot_area=0;} static_decision;
+  long long missing=0;int camera_x=0,camera_y=0,slot_x=0,slot_y=0;unsigned entry=0,home_entry=0,repair=0,key_diff=0;std::size_t input_bytes=0;double boot_draw_ms=0,boot_deps_ms=0;long long boot_area=0;
+  double proof_ms=0,repair_ms=0,recenter_ms=0,refine_ms=0,strip_ms=0,restore_ms=0;} static_decision;
  bool layout_reset=false;
  int camera_x=0,camera_y=0,region_margin_x=6,region_margin_y=6;
  unsigned region_width_px=16,region_height_px=16,scene_samples=1;
@@ -117,7 +123,7 @@ struct Pipeline {
  bool refine_worked=false;unsigned refine_restarts=0,refine_slices=0,cache_full_draws=0,refine_promotions=0,cache_scrolls=0,preview_frames=0,bootstrap_draws=0;
  int version=1;Plane world{};bool allow_repair=false;unsigned repairs=0;
  c3x_renderer::render_core::StaticRasterKey key{};
- auto static_key(){return key;}float zoom_destination(){return destination>0?destination:projection_zoom;}
+ auto static_key(){return key;}float zoom_destination()const{return destination>0?destination:projection_zoom;}
  double available_budget=0;double refinement_budget(unsigned){return available_budget;}
  struct ZoomScope{Pipeline& p;float old;ZoomScope(Pipeline& p,float zoom):p(p),old(p.projection_zoom){p.projection_zoom=zoom;}~ZoomScope(){p.projection_zoom=old;}};
  ViewportShaderSettings slot_settings(StaticState const& slot,ViewportShaderSettings s){s.projection=slot.projection;return s;}
@@ -235,7 +241,19 @@ int main(){unsigned frames=0;
   p.static_rasters.front(0).unshadowed={0,0,16,16};for(unsigned i=0;i<16;++i)p.world[i]+=50000;
   p.available_budget=500;p.check();assert(p.repairs==repairs+1);
   assert(p.static_rasters.front(0).valid&&p.static_rasters.front(0).unshadowed.empty());}
- std::printf("PASS semantic terrain transitions: intermediate_frames=%u zooms=4 repair_and_bootstrap=1 color_depth_coherent=1 cached_lane_return=1 shadow_journal_repair=1 unshadowed_ring=1\n",frames);
+ // Refinement toward a zoom destination waits while the zoom visibly moves:
+ // under Parallels its GPU cost made transition frames 30-180 ms (review, 43).
+ // Within the hold of the destination, and with the hold off, it refines.
+ for(float hold:{.01f,0.f}){
+  Pipeline p;p.options.zoom_refine_hold=hold;p.projection_zoom=1.25f;p.edit(0);p.seed();
+  p.destination=1.5f;p.lane_still={{0,0}};p.available_budget=500;
+  p.check();assert((p.refine_slices==0)==(hold>0));
+  p.projection_zoom=1.4951f;p.check();assert(p.refine_slices>0);
+ }
+ // A zoom that stops short of its destination refines toward where it is.
+ {Pipeline p;p.projection_zoom=1.25f;p.edit(0);p.seed();p.destination=1.5f;p.available_budget=500;
+  p.static_rasters.front(1).projection=1.1f;p.check();assert(p.refine_slices>0);}
+ std::printf("PASS semantic terrain transitions: intermediate_frames=%u zooms=4 repair_and_bootstrap=1 color_depth_coherent=1 cached_lane_return=1 shadow_journal_repair=1 unshadowed_ring=1 zoom_refine_hold=1\n",frames);
 }
 ''')
 
