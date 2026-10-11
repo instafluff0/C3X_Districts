@@ -3147,6 +3147,49 @@ to a shared node still reaches every producer that uses it (fails without the
 sharing); registration iterates unique generations (source contract); the
 extracted-registration fixtures include the sharing helper.
 
+## 71. Scrolling showed one frame per Civ III tick (October 11)
+
+**Cause.** A scroll step starts a camera job, and a job that moves the camera
+retires the retained scene view, so display frames hold until the step is
+adopted. Since 2c.1 most steps are deferred: the job completes at once and
+draws nothing until Civ III's next tick adopts it, so for about 50 ms of every
+78 ms tick the worker sat idle with the view frozen. Light save, `near`: 60 fps
+idle, 15.6-18.2 fps while scrolling, steps at one tick (78 ms).
+
+**Change.** A deferred step leaves the live scene as the shown one, so after
+its completion display frames keep animating that view and unit travel
+continues; the step's adoption then takes its frame's units at the current
+visual time (a frame shown meanwhile selected units for the old view, so an
+entering unit would otherwise miss the step's first frame). A frame must end before
+Civ III's next tick adopts the step (about 60 ms after the request, measured):
+a frame starts only if the median worker time of recent ambient frames (no
+newly committed front, settled zoom) ends it within 55 ms of the request.
+`C3X_RENDERER_DEFERRED_HOLD_CONTROL=1` always holds.
+
+**Measured first with the hold released unconditionally** (same build,
+control alternated):
+
+| | Released always | Held |
+| --- | --- | --- |
+| Light, scroll fps (1x x / 2x / 3x) | 31.6 / 27.0 / 27.7 | 18.2 / 15.7 / 15.6 |
+| Light, steps | 78 ms | 78 ms |
+| Busy (released unconditionally), adoptions in the scroll segments (traced) | 71 | 85 |
+| Busy, camera-adopt queue p90 | 157 ms | 85 ms |
+
+On the busy save a display frame costs the worker 13 ms (p50, p90 30 ms;
+light 2.3 / 4.4 ms), and frames started during the hold delayed adoptions:
+16% fewer steps when the hold was released unconditionally. Gating on the
+frame cost instead (below 8 or 10 ms) was tried and dropped: one zoom frame's
+cost closed the gate, and with frames held it was never re-measured (light
+scrolling 16-24 fps). With the adoption deadline (same build, control
+alternated):
+
+| | Deadline | Held |
+| --- | --- | --- |
+| Light, scroll fps (1x x / 2x / 3x), two runs | 27.8-29.5 / 24.3-25.0 / 23.7-27.2 | 15-18 |
+| Busy, steps in the four scroll segments, two runs | 79, 65 | 65, 58 |
+| Busy, 1x idle | 45-50 fps | 44-48 fps |
+
 ## 72. Rivers drew their whole tiles every frame (October 11)
 
 **Where busy idle GPU time goes** (`C3X_RENDERER_PROFILE=4`, drained marks
@@ -3200,46 +3243,3 @@ Diagnostics added with it: drained GPU marks inside the water span
 dynamic spans, `C3X_RENDERER_PROFILE=4`), water lighting cache builds and
 reuses in `fresh-overlay-layer`, and the step render's unit asset wait
 (`units_ms`, `unit_waits` in `render-setup-phases`: about zero after load).
-
-## 71. Scrolling showed one frame per Civ III tick (October 11)
-
-**Cause.** A scroll step starts a camera job, and a job that moves the camera
-retires the retained scene view, so display frames hold until the step is
-adopted. Since 2c.1 most steps are deferred: the job completes at once and
-draws nothing until Civ III's next tick adopts it, so for about 50 ms of every
-78 ms tick the worker sat idle with the view frozen. Light save, `near`: 60 fps
-idle, 15.6-18.2 fps while scrolling, steps at one tick (78 ms).
-
-**Change.** A deferred step leaves the live scene as the shown one, so after
-its completion display frames keep animating that view and unit travel
-continues; the step's adoption then takes its frame's units at the current
-visual time (a frame shown meanwhile selected units for the old view, so an
-entering unit would otherwise miss the step's first frame). A frame must end before
-Civ III's next tick adopts the step (about 60 ms after the request, measured):
-a frame starts only if the median worker time of recent ambient frames (no
-newly committed front, settled zoom) ends it within 55 ms of the request.
-`C3X_RENDERER_DEFERRED_HOLD_CONTROL=1` always holds.
-
-**Measured first with the hold released unconditionally** (same build,
-control alternated):
-
-| | Released always | Held |
-| --- | --- | --- |
-| Light, scroll fps (1x x / 2x / 3x) | 31.6 / 27.0 / 27.7 | 18.2 / 15.7 / 15.6 |
-| Light, steps | 78 ms | 78 ms |
-| Busy (released unconditionally), adoptions in the scroll segments (traced) | 71 | 85 |
-| Busy, camera-adopt queue p90 | 157 ms | 85 ms |
-
-On the busy save a display frame costs the worker 13 ms (p50, p90 30 ms;
-light 2.3 / 4.4 ms), and frames started during the hold delayed adoptions:
-16% fewer steps when the hold was released unconditionally. Gating on the
-frame cost instead (below 8 or 10 ms) was tried and dropped: one zoom frame's
-cost closed the gate, and with frames held it was never re-measured (light
-scrolling 16-24 fps). With the adoption deadline (same build, control
-alternated):
-
-| | Deadline | Held |
-| --- | --- | --- |
-| Light, scroll fps (1x x / 2x / 3x), two runs | 27.8-29.5 / 24.3-25.0 / 23.7-27.2 | 15-18 |
-| Busy, steps in the four scroll segments, two runs | 79, 65 | 65, 58 |
-| Busy, 1x idle | 45-50 fps | 44-48 fps |
