@@ -2927,3 +2927,26 @@ publication per emit), `test_fresh_map_idle` (a completed render stays sampled
 until its swap; the composition skips a repeated generation), and
 `test_resource_instances` (explored fog keeps the live clock, section 54).
 `residency_candidates.h` compares use times as 64-bit.
+
+## 65. Where the busy save's GPU memory goes (October 10)
+
+The memory census now counts the pulled pages (fresh_pipeline's batched
+ground submission) and prepared water parameters, which it previously left
+unattributed. Busy save during play (`memory-census`, MiB):
+
+| Item | MiB | Note |
+| --- | --- | --- |
+| Tile geometry | 1,600-1,900 | the whole explored world, loaded at start |
+| Pulled pages | 400-480 | GPU copies of visible ground vertex and index bytes (budget 512) |
+| Retained composition | 310-370 | |
+| Textures | 261 | |
+| Static slots and overlays | 209 | |
+| Shadow / scene targets / units | 100 / 92 / 94 | |
+
+Adapter usage peaks near 3.7 GB. The pulled pages exist to draw ground and
+water in a few calls instead of about 3,000 (about 3 us each); they copy each
+occurrence's vertex bytes at the source stride, so they are a second copy of
+the 168-byte ground layers. Two exact remedies, both picture-identical:
+compact the ground vertex (pages copy at the compact stride), then, in R3,
+pooled ground storage that both the input-assembler and pulled draws read
+directly, removing the copy.

@@ -363,14 +363,16 @@ void c3x_renderer64_memory_census(unsigned long long dxgi_usage){
     std::size_t units=sandbox_direct_units.gpu_preparation_bytes()+r.unit_bodies.gpu_content_bytes;
     std::size_t regions=r.render_regions.gpu_bytes+r.reflection_regions.gpu_bytes;
     std::size_t composition=r.composition_working_bytes();
-    std::size_t sum=slots+overlays+previews+cache+targets+shadow+frame+textures+geometry+instances+units+regions+composition;
+    // Pulled pages copy ground vertex and index bytes for batched submission.
+    std::size_t pulled=f.pulled_pages.bytes()+f.water_parameters.gpu_bytes();
+    std::size_t sum=slots+overlays+previews+cache+targets+shadow+frame+textures+geometry+instances+units+regions+composition+pulled;
     auto mb=[](std::size_t value){return double(value)/(1024.*1024.);};
     char detail[640];sprintf_s(detail,
         "adapter_mb=%.1f attributed_mb=%.1f unattributed_mb=%.1f static_slots_mb=%.1f static_overlays_mb=%.1f static_previews_mb=%.1f static_cache_mb=%.1f "
         "scene_targets_mb=%.1f shadow_mb=%.1f frame_targets_mb=%.1f textures_mb=%.1f geometry_mb=%.1f instances_mb=%.1f units_mb=%.1f "
-        "region_caches_mb=%.1f composition_mb=%.1f",
+        "region_caches_mb=%.1f composition_mb=%.1f pulled_mb=%.1f",
         mb(std::size_t(dxgi_usage)),mb(sum),dxgi_usage>sum?mb(std::size_t(dxgi_usage)-sum):0.,mb(slots),mb(overlays),mb(previews),mb(cache),
-        mb(targets),mb(shadow),mb(frame),mb(textures),mb(geometry),mb(instances),mb(units),mb(regions),mb(composition));
+        mb(targets),mb(shadow),mb(frame),mb(textures),mb(geometry),mb(instances),mb(units),mb(regions),mb(composition),mb(pulled));
     renderer.trace.write("memory-census",detail,true);
 }
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
