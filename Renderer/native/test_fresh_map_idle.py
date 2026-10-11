@@ -19,11 +19,17 @@ struct Worker {
  bool camera_scene_complete=false;void retire_completed_scene(){}
  long long visual_ticks=1000,visual_frequency=1000;
  struct {long long resumed=0;void resume_motion(long long t,long long){resumed=t;}} unit_instances;
- struct Frame {bool ready=false;float zoom=1.f;struct {Texture value;Texture* Get(){return &value;}} front;} frame;
+ struct Frame {bool ready=false;float zoom=1.f;long long completed_ticks=0;unsigned long long source_generation=0;
+  struct Front {Texture value;Texture* Get(){return &value;}Front& operator=(Texture*){return *this;}} front;} frame;
  Frame* prepared_map=&frame;
  Texture saved;
+ // Settled zoom (review 69): the canonical image is hidden, no 1x redraw.
+ float zoom_settled=1.f,deferred_step_zoom=1.f;float settled_zoom(){return zoom_settled;}
+ struct {Texture *zoomed_step_texture=nullptr,*zoomed_step_view=nullptr,*zoomed_step_target=nullptr;
+  unsigned long long route_frame_sequence=0;void release(Texture*& p){p=nullptr;}} renderer_state;
  void advance_visual_clock(){visual_ticks=1500;}
  Texture* adopt(bool resource_ready,bool const drawn_now=false){
+  bool ready=true;
   auto initial=&saved;
   struct {std::function<void(long long,long long,float)> prepare;} map_sample;
   map_sample.prepare=[&](long long t,long long f,float z){
@@ -41,6 +47,7 @@ int main(){
  assert(worker.adopt(false)==&worker.saved); // pending assets retain a complete image
  assert(worker.adopt(true,true)==&worker.saved&&!worker.frame.ready); // a step drawn just now is current
  worker.frame.zoom=2.f;assert(worker.adopt(true)==&worker.saved); // never a magnified image at 1x
+ worker.frame={};worker.zoom_settled=2.f;assert(worker.adopt(true)==&worker.saved&&!worker.frame.ready); // hidden canonical
 }
 ''')
 

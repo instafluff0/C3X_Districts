@@ -119,11 +119,13 @@ struct Trace {int writes=0,level=0;void write(char const*,char const*,bool){++wr
     double milliseconds(long long)const{return 0;}};
 enum class CancelAt {none,before,wave,texture,rtv,selection,assets,meshes,draw,capture};
 struct Harness;
+struct ID3D11ShaderResourceView {void Release(){delete this;}};
 struct Device {
     Harness* owner;
     int texture_calls=0,rtv_calls=0,rtv_created=0;
     int CreateTexture2D(D3D11_TEXTURE2D_DESC const*,void*,Texture**);
     int CreateRenderTargetView(Texture*,void*,ID3D11RenderTargetView**);
+    int CreateShaderResourceView(Texture*,void*,ID3D11ShaderResourceView** output){*output=new ID3D11ShaderResourceView();return 0;}
 };
 struct Coverage {int calls=0;bool capture(Frame const&){++calls;return true;}};
 struct Published {
@@ -156,6 +158,10 @@ struct Harness {
     Trace trace;
     Device owned_device{this};Device* device=&owned_device;
     Texture* gpu_map_texture=nullptr;
+    // A settled zoomed step's draw (review 69); this fixture draws at 1x.
+    float zoomed_step=1.f;Texture* zoomed_step_texture=nullptr;ID3D11RenderTargetView* zoomed_step_target=nullptr;
+    ID3D11ShaderResourceView* zoomed_step_view=nullptr;void* context=nullptr;
+    struct {template<class... T>bool draw(T...){return true;}} canonical_minify;
     long long frame_geometry_ticks=0,frame_draw_ticks=0;
     char const* frame_cache_path="prior";
     int waves=0,draws=0,fills=0,captures=0,selections=0,assets=0,meshes=0,consumes=0,warms=0;
@@ -179,7 +185,7 @@ struct Harness {
     ~Harness(){release(gpu_map_texture);}
     void event(CancelAt stage){if(cancel_at==stage)camera_cancelled.store(true);}
     bool prepare_wave_chunks(Frame const&){++waves;event(CancelAt::wave);return wave_ok;}
-    bool c3x_renderer64_render_fresh(Frame const&,ID3D11RenderTargetView*){++draws;event(CancelAt::draw);return draw_ok;}
+    bool c3x_renderer64_render_fresh(Frame const&,ID3D11RenderTargetView*,float=1.f){++draws;event(CancelAt::draw);return draw_ok;}
     bool fill_output(Frame const&,Output& output,unsigned,long long){++fills;output.filled=true;return true;}
     bool capture_gpu(Published& ready,Output const&,Frame const&,unsigned){
         ++captures;event(CancelAt::capture);
@@ -194,6 +200,7 @@ struct Harness {
         int width=128,height=64;
         std::vector<int> replacement_tile_flags{1,1};
         LARGE_INTEGER started={};QueryPerformanceCounter(&started);
+        Frame const& native_frame=frame; // R1: view consumers read the native frame
 '''
 
 MIDDLE = r'''

@@ -1064,6 +1064,7 @@ using UINT=unsigned;
 int main(){
  struct Input {
   bool world_ground=false,retain_ground_grids=false,reuse_nested_ground_grids=true,prewarming=false;
+  bool cull_river_reach=false,fidelity_profile=false; // river reach culling (review 72) is off here
  } input;
  struct Destination { std::vector<CachedGroundGrid> pending_grids; } destination;
  struct Frame {int tile_width=128,tile_height=64;} frame;
@@ -1172,7 +1173,8 @@ using Handle=c3x_renderer::render_core::ContentHandle;
 template<std::size_t N,class... A> int sprintf_s(char(&out)[N],char const*format,A...args){return std::snprintf(out,N,format,args...);}
 void c3x_renderer64_retire_geometry_selection(){}
 struct State {
-    struct Item {std::size_t byte_count;std::uint64_t last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding,natural_content;int signature=0;std::shared_ptr<int> mesh=std::make_shared<int>(0);};
+    bool geometry_tier=false,world_gpu_residency_ready=false; // the fixed tier (review 67) is off here
+    struct Item {std::size_t byte_count;std::uint64_t last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding,natural_content;int signature=0;std::shared_ptr<int> mesh=std::make_shared<int>(0);bool world_ground=false;};
     using CachedTileGeometry=Item;
     c3x_renderer::render_core::ResidentContent<Item> resident_content{2048};
     c3x_renderer::render_core::ResidencyCandidates residency_candidates;

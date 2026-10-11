@@ -36,7 +36,8 @@ struct Mesh {std::array<std::vector<Chunk>,geometry_layer_count> layers;};
 struct Owner {bool shared_natural=false;std::shared_ptr<Mesh> mesh;};
 struct State {
  std::unordered_map<unsigned,Owner> tile_geometry_cache;std::map<unsigned,ID3D11Buffer*> terrain_patch_indices;
- std::size_t tile_geometry_cache_bytes=1u<<30,terrain_patch_index_bytes=1u<<20;
+ std::size_t tile_geometry_cache_bytes=1u<<30,terrain_patch_index_bytes=1u<<20,tile_geometry_runtime_budget=1u<<31;
+ std::size_t canonical_geometry_bytes()const{return 1u<<29;} // the fixed tier's canonical content (review 67)
  struct {std::vector<std::pair<std::string,std::string>> lines;
   void write(char const* stage,char const* detail,bool){lines.emplace_back(stage,detail);}} trace;
 ''' + method + r'''};

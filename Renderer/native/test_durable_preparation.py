@@ -120,9 +120,10 @@ constexpr unsigned viewport_cache_capacity=8;
 template<std::size_t N,class... A>void sprintf_s(char(&b)[N],char const* f,A... a){std::snprintf(b,N,f,a...);}
 unsigned selection_retirements=0;void c3x_renderer64_retire_geometry_selection(){++selection_retirements;}
 struct Cache {unsigned signature=0;std::size_t byte_count=0;bool prefetched=false;
- std::uint64_t animation_epoch=0,last_used=0,natural_content=0;};
+ std::uint64_t animation_epoch=0,last_used=0,natural_content=0;bool world_ground=false;};
 using CachedTileGeometry=Cache;
 struct State {
+ bool geometry_tier=false,world_gpu_residency_ready=false; // the fixed tier (review 67) is off here
  std::unordered_multimap<unsigned,Cache> tile_geometry_cache;
  std::size_t tile_geometry_cache_bytes=0,prefetched_geometry_bytes=0,tile_geometry_runtime_budget=512;
  std::size_t terrain_patch_index_bytes=4,tile_geometry_cache_capacity=16;
