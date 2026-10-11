@@ -1,6 +1,7 @@
 #pragma once
 #include "../../lab/shared/natural/vertex.h"
 #include "projected_mesh_bounds.h"
+#include "integrated_vertex.h"
 #include <vector>
 #include <cstdint>
 #include <cstring>
@@ -53,6 +54,12 @@ struct PreparedMesh {
     std::array<std::int32_t,4> bounds{};
     std::array<float,3> world_low{},world_high{};
     ProjectedMeshBounds projected_bounds;
+    // Integrated (168-byte) elements elided from every vertex, and the full
+    // constant row they are read from (render_core/integrated_vertex.h).
+    // template_offset is that row's GPU placement, set by whoever uploads it.
+    std::uint32_t elided=0;
+    std::array<std::uint8_t,integrated_vertex_bytes> constants{};
+    unsigned template_offset=0;
     bool empty()const{return vertices.empty();}
     std::size_t bytes()const{return vertices.capacity()+indices.capacity();}
 };
@@ -63,6 +70,8 @@ struct MeshFormat {
     // Natural vertices drawn only through world reprojection
     // (natural_projection.z>0) may drop their position, uv and owner.
     bool world_projected=false;
+    // Integrated vertices drop elements constant across the mesh (exact).
+    bool elide_constants=false;
 };
 // Exact compact natural vertex: world xyz+valid, normal, four material
 // weights, relief height/blend, base terrain. Valid only for a world-projected
@@ -168,6 +177,28 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
                     std::memcpy(static_cast<char*>(output)+offset,&branches,sizeof(branches));
                 }
             }
+        }
+    }
+    if(format.elide_constants && format.pickup && !format.city && !format.natural && !format.feature &&
+       result.vertex_stride==integrated_vertex_bytes && count){
+        auto const* rows=result.vertices.data();
+        std::uint32_t elided=integrated_elidable;
+        for(std::size_t i=1;i<count && elided;++i)for(unsigned e=1;e<integrated_element_count;++e){
+            auto const& d=integrated_elements[e];
+            if(((elided>>e)&1u) && std::memcmp(rows+d.offset,rows+i*integrated_vertex_bytes+d.offset,d.bytes)!=0)elided&=~(1u<<e);
+        }
+        if(elided){
+            // Rows compact in place: every destination precedes its source.
+            std::memcpy(result.constants.data(),rows,integrated_vertex_bytes);
+            unsigned stride=integrated_stride(elided);auto* bytes=result.vertices.data();
+            for(std::size_t i=0;i<count;++i){
+                if((i&1023u)==0 && stop())return false;
+                unsigned packed=0;
+                for(unsigned e=0;e<integrated_element_count;++e){if((elided>>e)&1u)continue;auto const& d=integrated_elements[e];
+                    std::memmove(bytes+i*stride+packed,bytes+i*integrated_vertex_bytes+d.offset,d.bytes);packed+=d.bytes;}
+            }
+            result.vertices.resize(count*stride);result.vertices.shrink_to_fit();
+            result.vertex_stride=stride;result.elided=elided;
         }
     }
     for(std::size_t i=0;i<elements.size();++i){

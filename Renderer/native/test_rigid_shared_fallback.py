@@ -76,7 +76,7 @@ int main(){
 }
 ''')
         # Issue and merge follow each draw's own route.
-        flush = source[end:source.index('            selected.clear();return true;', end)]
+        flush = source[end:source.index('            selected.clear();return !integrated_failed;', end)]
         self.assertIn('bool shared=shared_front && chunk.content().rigid_source && rigid_shared[index];', flush)
         self.assertIn('rigid_shared[end]!=rigid_shared[i]', flush)
         self.assertNotIn('IASetInputLayout(shared_front?', flush)

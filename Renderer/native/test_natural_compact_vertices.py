@@ -127,10 +127,10 @@ int main(){
     def test_only_world_projected_meshes_compact(self):
         renderer = (NATIVE / 'c3x_renderer.cpp').read_text()
         compiler = (NATIVE / 'source_fidelity/terrain_compiler.h').read_text()
-        self.assertTrue('format.world_projected=natural_vertex && projection_kind && !record && compact_natural_vertices;' in renderer)
+        self.assertTrue('format.world_projected=natural_vertex && projection_kind && !record && compact_vertices;' in renderer)
         self.assertTrue('if(mesh.vertex_stride==c3x_renderer::render_core::natural_compact_stride && '
                         '(!projection_kind || record))return false;' in renderer)
-        self.assertTrue('input.world_projected=world_content && compact_natural_vertices;' in renderer)
+        self.assertTrue('input.world_projected=world_content && compact_vertices;' in renderer)
         self.assertTrue('std::uint64_t(input.world_projected)*32+' in renderer, 'terrain keys separate the two formats')
         self.assertTrue('format.world_projected=input.world_projected;' in compiler)
         # Natural chunks with a projection kind always receive natural_projection.

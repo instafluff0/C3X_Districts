@@ -70,6 +70,7 @@ inline GroundRecipeKey ground_recipe_key(fidelity::GroundPreparationInput const&
     auto const& input=ground.compile;auto const& tile=input.tile;
     add(tile.tile_x);add(tile.tile_y);add(tile.terrain_type);add(tile.real_terrain_type);add(tile.river_code);add(tile.has_effect!=0);
     add(input.world_ground);add(input.pickup_profile);add(input.fidelity_profile);add(input.draw_marsh);add(input.river_assets_ready);
+    add(input.compact_vertices);
     add(input.ground);add(input.uv_scale);add(input.flat_grid);add(input.tile_ground_grid);add(input.shadow_grid);
     // Canonical world vertices overwrite screen XY/depth/normals; pickup has
     // no light-dependent terrain-shadow output. Legacy keys keep these inputs.
@@ -142,6 +143,7 @@ inline std::size_t prepared_world_gpu_bytes(PreparedWorld const& result){
     std::size_t bytes=0;
     auto append=[&](auto const& mesh){if(mesh.empty())return;
         bytes=((bytes+3u)&~std::size_t(3u))+mesh.vertices.size();
+        if(mesh.elided)bytes=((bytes+3u)&~std::size_t(3u))+mesh.constants.size();
         if(!mesh.shared_grid && !mesh.indices.empty())
             bytes=((bytes+3u)&~std::size_t(3u))+mesh.indices.size();};
     if(result.ground)for(unsigned i=0;i<6;++i)if(i!=2 && i!=3)append(result.ground->meshes[i]);

@@ -1,6 +1,8 @@
 #pragma once
 #include "scene_projection.h"
+#include "render_core/integrated_vertex.h"
 #include <wrl/client.h>
+#include <map>
 #include <string>
 
 namespace c3x_renderer {
@@ -11,6 +13,10 @@ class TerritoryBorders {
     Ptr<ID3D11VertexShader> vertex;
     Ptr<ID3D11PixelShader> pixel;
     Ptr<ID3D11InputLayout> natural_layout,ground_layout,compact_layout;
+    // Ground chunks with elided integrated elements (by mask); the shader's
+    // bytecode is kept to create them on first use.
+    std::map<std::uint32_t,Ptr<ID3D11InputLayout>> elided_layouts;
+    Ptr<ID3DBlob> vertex_code;
     Ptr<ID3D11Buffer> constants;
     Ptr<ID3D11BlendState> blend;
     Ptr<ID3D11RasterizerState> raster;
@@ -97,6 +103,7 @@ float4 PS(P p,uint sample:SV_SampleIndex):SV_Target{
         // Compact natural vertices begin with world; the shader projects world.
         elements[1].AlignedByteOffset=0;
         if(FAILED(device->CreateInputLayout(elements,2,vs->GetBufferPointer(),vs->GetBufferSize(),&compact_layout)))return false;
+        vertex_code=vs;
         D3D11_BUFFER_DESC cb={};cb.ByteWidth=64;cb.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if(FAILED(device->CreateBuffer(&cb,nullptr,&constants)))return false;
         D3D11_BLEND_DESC bd={};auto& b=bd.RenderTarget[0];b.BlendEnable=TRUE;
@@ -109,6 +116,15 @@ float4 PS(P p,uint sample:SV_SampleIndex):SV_Target{
         D3D11_DEPTH_STENCIL_DESC ds={};ds.DepthEnable=FALSE;ds.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ZERO;
         if(FAILED(device->CreateDepthStencilState(&ds,&no_depth)))return false;
         samples=count;return true;
+    }
+    ID3D11InputLayout* elided_layout(ID3D11Device* device,std::uint32_t elided){
+        auto& layout=elided_layouts[elided];if(layout)return layout.Get();
+        D3D11_INPUT_ELEMENT_DESC elements[]={
+            {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
+            {"TEXCOORD",0,DXGI_FORMAT_R32G32B32_FLOAT,0,120,D3D11_INPUT_PER_VERTEX_DATA,0}};
+        if(!render_core::remap_integrated_layout(elements,2,elided,[](D3D11_INPUT_ELEMENT_DESC const&){return 12u;}) ||
+           FAILED(device->CreateInputLayout(elements,2,vertex_code->GetBufferPointer(),vertex_code->GetBufferSize(),&layout)))return nullptr;
+        return layout.Get();
     }
 public:
     template<class Records,class Settings,class Visible>
@@ -144,7 +160,12 @@ public:
             values[12]=float(r.territory_edges);values[13]=4.2f*std::pow(values[6]/128.f,.65f)/(values[6]*.4472136f);
             values[14]=20.f*float(height)/800.f;
             context->UpdateSubresource(cb,0,nullptr,values,0,0);
-            context->IASetInputLayout(chunk.vertex_stride==92?natural_layout.Get():chunk.vertex_stride==56?compact_layout.Get():ground_layout.Get());
+            // An elided ground chunk may share a natural stride: test its mask first.
+            auto* layout=chunk.elided?elided_layout(device,chunk.elided):
+                chunk.vertex_stride==92?natural_layout.Get():chunk.vertex_stride==56?compact_layout.Get():ground_layout.Get();
+            if(!layout)return false;
+            context->IASetInputLayout(layout);
+            if(chunk.elided){UINT none=0,offset=chunk.template_offset;context->IASetVertexBuffers(1,1,&chunk.buffer,&none,&offset);}
             context->IASetVertexBuffers(0,1,&chunk.buffer,&chunk.vertex_stride,&chunk.vertex_offset);
             context->IASetIndexBuffer(chunk.indices,chunk.index_format,chunk.index_offset);
             context->DrawIndexed(chunk.index_count,0,0);

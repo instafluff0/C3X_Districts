@@ -322,7 +322,7 @@ int main(){
         start=source.index('    bool draw_cached_geometry(')
         loop_start=source.index('            for(unsigned i=0;i<selected.size();){',start)
         fallback=source.index('                auto const& first_chunk=selected[i].content();',loop_start)
-        end=source.index('            selected.clear();return true;',fallback)
+        end=source.index('            selected.clear();return !integrated_failed;',fallback)
         # Execute the existing fallback merge after packet selection. The
         # packet consumer itself has its separate actual-shader native oracle.
         loop=source[loop_start:source.index('\n',loop_start)]+ '\n'+source[fallback:end]

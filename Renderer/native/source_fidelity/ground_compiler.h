@@ -92,6 +92,7 @@ struct GroundCompileInput {
     bool world_ground=false, pickup_profile=false, fidelity_profile=false, draw_marsh=false;
     bool river_assets_ready=false;
     bool retain_ground_grids=false, reuse_nested_ground_grids=false, prewarming=false;
+    bool compact_vertices=false; // integrated meshes elide constant elements (fidelity only)
     int ground=0;
     float half_w=0, half_h=0, uv_scale=1, relief_projection_scale=1;
     float key_light[3]={};

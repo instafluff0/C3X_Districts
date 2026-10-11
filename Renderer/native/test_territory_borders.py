@@ -59,6 +59,7 @@ int main(){for(float zoom:{.5f,.625f,.75f,.875f,1.f,1.5f,3.f}){
 #include "Renderer/native/gpu_territory_borders.h"
 #include <array>
 struct Chunk {ID3D11Buffer* buffer=nullptr,*indices=nullptr;unsigned vertex_stride=92,vertex_offset=0,index_count=6,index_offset=0;
+ std::uint32_t elided=0;unsigned template_offset=0;
  DXGI_FORMAT index_format=DXGI_FORMAT_R32_UINT;};
 struct Record {Chunk mesh;unsigned territory_edges=15,territory_rgb=0x20c080;int translation_x=0,translation_y=0;
  float natural_projection[4]={0,0,128,192};Chunk const& content()const{return mesh;}};

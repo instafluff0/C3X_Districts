@@ -414,8 +414,13 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        the busy save; mountains and decals stay 92); byte-identical Lab
        images; unique resident geometry −8.9%. The vertex stride still
        identifies the format (56 B is unique); an explicit `vertex_format`
-       arrives when two formats share a stride. Next: the 168-B ground
-       layers, then city 88-B.
+       arrives when two formats share a stride.
+       **Ground done (October 10, review 66):** integrated meshes elide
+       elements constant across the mesh (mask plus a 168-byte constant row
+       per chunk; the mask, not the stride, identifies the format); underlay
+       about 73 B on the busy save, byte-identical Lab images; unique geometry
+       per owner 161 → 104 KB with both steps. Next: city 88-B, then the
+       pulled pages' copy (pooled ground storage in R3).
      - Stage 2 (quantized, needs the user's visual acceptance): octahedral
        16-bit normals and city tangent frames, half or unorm16 weights,
        relief and hydrology. About 137 MB more (43% cumulative).

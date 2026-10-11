@@ -28,6 +28,7 @@ def program():
 #include <wrl/client.h>
 #include <d3d11shader.h>
 #include "Renderer/native/render_core/process_environment.h"
+#include "Renderer/native/render_core/integrated_vertex.h"
 #include "Renderer/sandbox/terrain_material_fast.h"
 #pragma comment(lib,"d3d11.lib")
 #pragma comment(lib,"d3dcompiler.lib")

@@ -327,6 +327,7 @@ struct CachedVertexChunk {
  struct {void const* value=nullptr;void const* get()const{return value;}} instances;float instance_material=40;
  int buffer=7,indices=8,index_count=9,index_format=16,vertex_stride=64;unsigned vertex_offset=128,index_offset=768;
  unsigned version=10,city_material=0xffffffffu;bool animation_texture=false,rigid_source=false;
+ std::uint32_t elided=0;
  c3x_renderer::render_core::SourceShadow::Bounds world_bounds;
 };
 #include "Renderer/native/render_core/geometry_draws.h"
@@ -385,6 +386,10 @@ int main(){
  s.dims.wrap_x=s.dims.wrap_y=false;s.fidelity_profile=true;
  {std::vector<C> fidelity;s.collect_shadow_casters(buffers,fidelity);assert(fidelity.size()==3);
   for(auto const& c:fidelity)assert(c.vertices!=101);}
+ // Elided integrated ground never casts (it exists only under fidelity).
+ {CachedVertexChunk elided;elided.elided=1u<<2;elided.buffer=600;buffers[4].push_back(elided);
+  std::vector<C> kept;s.collect_shadow_casters(buffers,kept);assert(kept.size()==3);
+  for(auto const& c:kept)assert(c.vertices!=600);buffers[4].pop_back();}
  s.fidelity_profile=false;
  for(auto& layer:buffers)layer.clear();std::vector<C> empty;s.collect_shadow_casters(buffers,empty);assert(empty.empty());
 }

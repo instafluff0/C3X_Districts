@@ -47,11 +47,15 @@ class WorldBackingCodec {
         w.pod(m.vertex_stride);w.pod(m.index_stride);w.pod(m.index_count);w.pod(m.shared_grid);
         w.pod(m.bounds);w.pod(m.world_low);w.pod(m.world_high);w.pod(m.projected_bounds);
         w.vector(m.vertices);w.vector(m.indices);
+        w.pod(m.elided);if(m.elided)w.pod(m.constants);
     }
     static void read_mesh(Reader& r,render_core::PreparedMesh& m){
         r.pod(m.vertex_stride);r.pod(m.index_stride);r.pod(m.index_count);r.pod(m.shared_grid);
         r.pod(m.bounds);r.pod(m.world_low);r.pod(m.world_high);r.pod(m.projected_bounds);
         r.vector(m.vertices);r.vector(m.indices);
+        r.pod(m.elided);if(m.elided)r.pod(m.constants);
+        if((m.elided & ~render_core::integrated_elidable) ||
+           (m.elided && m.vertex_stride!=render_core::integrated_stride(m.elided)))throw std::length_error("world backing mesh format");
         if(!m.vertices.empty() && (!m.vertex_stride || m.vertices.size()%m.vertex_stride ||
             (m.index_stride!=2 && m.index_stride!=4) || m.index_count!=m.indices.size()/m.index_stride))
             throw std::length_error("world backing mesh");
@@ -82,7 +86,7 @@ public:
     static std::vector<unsigned char> encode(PreparedWorld const& source){
         if(!source.complete())return {};
         try {
-            Writer w;w.pod(std::uint32_t(5));w.pod(source.kind);
+            Writer w;w.pod(std::uint32_t(6));w.pod(source.kind);
             if(world_preparation_needs_ground(source.kind)){
                 auto const& g=*source.ground;auto const& t=*source.terrain;
                 if(!g.pending_grids.empty() || !g.legacy_shadow.empty())return {};
@@ -108,7 +112,7 @@ public:
             WorldPreparationKind expected=WorldPreparationKind::combined){
         if(bytes.empty() || bytes.size()>limit || !world_preparation_kind_valid(expected))return {};
         try {
-            Reader r{bytes.data(),bytes.size()};std::uint32_t version=0;r.pod(version);if(version!=5)return {}; // 5: city effect parts stay animated
+            Reader r{bytes.data(),bytes.size()};std::uint32_t version=0;r.pod(version);if(version!=6)return {}; // 6: integrated meshes may elide constant elements
             auto result=std::make_unique<PreparedWorld>();
             r.pod(result->kind);if(result->kind!=expected)return {};
             fidelity::NaturalWorld accounting;

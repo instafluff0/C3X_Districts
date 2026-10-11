@@ -299,6 +299,10 @@ struct CachedVertexChunk {
     UINT vertex_stride = 120;
     UINT vertex_offset = 0, index_offset = 0;
     UINT vertex_count = 0; // vertices at vertex_offset; zero when unknown (no pulled submission)
+    // Elided integrated elements and the byte offset of the chunk's 168-byte
+    // constant row in `buffer` (render_core/integrated_vertex.h).
+    std::uint32_t elided = 0;
+    UINT template_offset = 0;
     std::size_t byte_count = 0;
     int translation_x = 0, translation_y = 0;
     D3D11_RECT bounds = {};
@@ -665,7 +669,7 @@ public:
     bool tight_natural_bounds=false;
     // Exact 56-byte natural vertices for world-projected terrain (stage 5);
     // C3X_RENDERER_COMPACT_VERTEX_CONTROL=1 keeps every natural vertex at 92.
-    bool compact_natural_vertices=true;
+    bool compact_vertices=true;
     int region_input_ring=2;
     // Stage 2a: resident geometry selected by a block-anchored world window
     // (render_core/world_window.h); on unless C3X_RENDERER_WORLD_WINDOW=0.
@@ -1045,6 +1049,10 @@ public:
     ID3D11InputLayout * resource_input_layout=nullptr;
     ID3D11InputLayout * input_layout = nullptr;
     ID3D11InputLayout * feature_input_layout = nullptr;
+    // VSIntegrated bytecode and its per-mask layouts for integrated meshes
+    // with elided constant elements (render_core/integrated_vertex.h).
+    ID3DBlob * integrated_code = nullptr;
+    std::map<std::uint32_t,ID3D11InputLayout*> integrated_layouts;
     ID3D11Buffer * terrain_settings_buffer = nullptr;
     ID3D11Buffer * viewport_settings_buffer = nullptr;
     c3x_renderer::render_core::DrawParameterStream draw_parameters;
@@ -1437,6 +1445,51 @@ public:
     }
 #endif
 
+    static std::array<D3D11_INPUT_ELEMENT_DESC,19> integrated_input_elements() {
+        return {{
+            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 1, DXGI_FORMAT_R32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 2, DXGI_FORMAT_R32G32_FLOAT, 0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 3, DXGI_FORMAT_R32G32_FLOAT, 0, 44, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 4, DXGI_FORMAT_R32_FLOAT, 0, 52, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 5, DXGI_FORMAT_R32_FLOAT, 0, 56, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 6, DXGI_FORMAT_R32_FLOAT, 0, 60, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 7, DXGI_FORMAT_R32_FLOAT, 0, 64, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 8, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 68, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 9, DXGI_FORMAT_R32G32_FLOAT, 0, 84, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 10, DXGI_FORMAT_R32_FLOAT, 0, 92, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 11, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 96, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 12, DXGI_FORMAT_R32_FLOAT, 0, 112, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 13, DXGI_FORMAT_R32_FLOAT, 0, 116, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 14, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 120, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 15, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 136, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 16, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 152, D3D11_INPUT_PER_VERTEX_DATA, 0}
+        }};
+    }
+    // Input layout for an integrated chunk's format; elided elements come
+    // from its constant row at slot 1 (stage 5, exact).
+    ID3D11InputLayout* integrated_layout(std::uint32_t elided) {
+        if(!elided)return input_layout;
+        auto found=integrated_layouts.find(elided);
+        if(found!=integrated_layouts.end())return found->second;
+        auto elements=integrated_input_elements();ID3D11InputLayout* layout=nullptr;
+        auto bytes=[](D3D11_INPUT_ELEMENT_DESC const& e){return e.Format==DXGI_FORMAT_R32_FLOAT?4u:e.Format==DXGI_FORMAT_R32G32_FLOAT?8u:
+            e.Format==DXGI_FORMAT_R32G32B32_FLOAT?12u:16u;};
+        if(!integrated_code || !c3x_renderer::render_core::remap_integrated_layout(elements.data(),unsigned(elements.size()),elided,bytes) ||
+           FAILED(device->CreateInputLayout(elements.data(),UINT(elements.size()),integrated_code->GetBufferPointer(),
+               integrated_code->GetBufferSize(),&layout)))return nullptr;
+        integrated_layouts.emplace(elided,layout);return layout;
+    }
+    // Binds an integrated chunk's layout (tracked in `bound`) and, when it
+    // elides elements, its constant row as a stride-0 slot 1.
+    bool bind_integrated(CachedVertexChunk const& chunk,ID3D11InputLayout*& bound) {
+        auto* layout=integrated_layout(chunk.elided);if(!layout)return false;
+        if(layout!=bound){context->IASetInputLayout(layout);bound=layout;}
+        if(chunk.elided){UINT none=0,offset=chunk.template_offset;context->IASetVertexBuffers(1,1,&chunk.buffer,&none,&offset);}
+        return true;
+    }
     template <typename T>
     void release(T *& value) {
         if (value != nullptr) {
@@ -1601,6 +1654,7 @@ public:
         release(reflection_terrain_blend);
         release(reflection_coverage_blend);
         release(input_layout); release(feature_input_layout);
+        release(integrated_code);for(auto& layout:integrated_layouts)release(layout.second);integrated_layouts.clear();
         release(resource_body_vertex_shader);release(resource_shadow_vertex_shader);release(resource_input_layout);
         release(terrain_settings_buffer);
         draw_parameters.clear();
@@ -1804,29 +1858,9 @@ public:
             desc.ByteWidth=sizeof(water_material);
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&water_frame);
         }
-        D3D11_INPUT_ELEMENT_DESC elements[] = {
-            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 1, DXGI_FORMAT_R32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 2, DXGI_FORMAT_R32G32_FLOAT, 0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 3, DXGI_FORMAT_R32G32_FLOAT, 0, 44, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 4, DXGI_FORMAT_R32_FLOAT, 0, 52, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 5, DXGI_FORMAT_R32_FLOAT, 0, 56, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 6, DXGI_FORMAT_R32_FLOAT, 0, 60, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 7, DXGI_FORMAT_R32_FLOAT, 0, 64, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 8, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 68, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 9, DXGI_FORMAT_R32G32_FLOAT, 0, 84, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 10, DXGI_FORMAT_R32_FLOAT, 0, 92, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 11, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 96, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 12, DXGI_FORMAT_R32_FLOAT, 0, 112, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 13, DXGI_FORMAT_R32_FLOAT, 0, 116, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 14, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 120, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 15, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 136, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 16, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 152, D3D11_INPUT_PER_VERTEX_DATA, 0}
-        };
+        auto elements=integrated_input_elements();
         if (SUCCEEDED(hr)) {
-            hr = device->CreateInputLayout(elements, static_cast<UINT>(std::size(elements) - (pickup_profile ? 0 : 3)),
+            hr = device->CreateInputLayout(elements.data(), static_cast<UINT>(elements.size() - (pickup_profile ? 0 : 3)),
                                             vertex_blob->GetBufferPointer(), vertex_blob->GetBufferSize(),
                                             &input_layout);
         }
@@ -1843,7 +1877,8 @@ public:
         release(feature_pixel_blob);
         release(feature_vertex_blob);
         release(pixel_blob);
-        release(vertex_blob);
+        release(integrated_code);integrated_code=vertex_blob;vertex_blob=nullptr;
+        for(auto& layout:integrated_layouts)release(layout.second);integrated_layouts.clear();
         if (FAILED(hr)) {
             char reason[96];sprintf_s(reason,"shader/layout HRESULT=0x%08lx",static_cast<unsigned long>(hr));
             trace.write("initialize-failed",reason,true);
@@ -3124,7 +3159,7 @@ public:
         region_receiver_shadows=GetEnvironmentVariableA("C3X_RENDERER_REGION_RECEIVER_SHADOWS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         composition_receiver_index=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_COMPOSITION_RECEIVER_INDEX");
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
-        compact_natural_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_COMPACT_VERTEX_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        compact_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_COMPACT_VERTEX_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
         region_input_ring=std::strcmp(control,"4")==0?4:2;
         // On unless C3X_RENDERER_WORLD_WINDOW=0. The light-save stall that
@@ -6342,7 +6377,10 @@ public:
             format.projection_kind=projection_kind;
             // Natural chunks with a projection kind always draw through
             // project_natural_chunk; the CPU record tier keeps 23 floats.
-            format.world_projected=natural_vertex && projection_kind && !record && compact_natural_vertices;
+            format.world_projected=natural_vertex && projection_kind && !record && compact_vertices;
+            // Ground layers only (layers below geometry_feature); under the
+            // fidelity profile they are never shadow casters.
+            format.elide_constants=!compact_feature && !natural_vertex && compact_vertices && fidelity_profile;
             // Shared cliffs use projection kind 4 but retain the feature shader's vertex layout.
             format.city=projection_kind==4 && !compact_feature;
             auto topology=cached?&cached_indices:grid_indices;
@@ -6357,7 +6395,7 @@ public:
         if(mesh.vertex_stride==c3x_renderer::render_core::natural_compact_stride && (!projection_kind || record))return false;
         CachedVertexChunk chunk;
         chunk.projection_kind=projection_kind;chunk.source_tile_width=(projection_kind==2 || projection_kind==3)?128:shadow_tile_width;
-        chunk.version=tile_geometry_version;chunk.vertex_stride=mesh.vertex_stride;
+        chunk.version=tile_geometry_version;chunk.vertex_stride=mesh.vertex_stride;chunk.elided=mesh.elided;
         chunk.vertex_count=mesh.vertex_stride?UINT(mesh.vertices.size()/mesh.vertex_stride):0;
         chunk.bounds={mesh.bounds[0],mesh.bounds[1],mesh.bounds[2],mesh.bounds[3]};
         std::copy(mesh.world_low.begin(),mesh.world_low.end(),chunk.world_bounds.low);
@@ -6409,8 +6447,11 @@ public:
             // the content was compiled (worker or foreground fallback); adopt
             // it directly instead of re-copying into the per-tile upload.
             chunk.buffer=prepared_buffer;prepared_buffer->AddRef();
-            chunk.vertex_offset=prepared_vertex_offset;
-        }else chunk.vertex_offset=upload.append(mesh.vertices.data(),mesh.vertices.size());
+            chunk.vertex_offset=prepared_vertex_offset;chunk.template_offset=mesh.template_offset;
+        }else{
+            chunk.vertex_offset=upload.append(mesh.vertices.data(),mesh.vertices.size());
+            if(mesh.elided)chunk.template_offset=upload.append(mesh.constants.data(),mesh.constants.size());
+        }
         auto shared=terrain_patch_indices.find(shared_grid);
         if(prepared_indices){
             chunk.indices=prepared_buffer;prepared_buffer->AddRef();chunk.index_offset=prepared_index_offset;
@@ -6434,7 +6475,8 @@ public:
         // regardless of upload path; frame_upload_bytes tracks only bytes this
         // call actually copied into the foreground per-tile upload buffer.
         auto foreground_bytes=upload.size()-before;
-        chunk.byte_count=foreground_bytes+(prepared_buffer?mesh.vertices.size():0)+(prepared_indices?mesh.indices.size()+3u:0);
+        chunk.byte_count=foreground_bytes+(prepared_buffer?mesh.vertices.size()+(mesh.elided?mesh.constants.size():0):0)+
+            (prepared_indices?mesh.indices.size()+3u:0);
         tile_geometry_cache_bytes+=chunk.byte_count;frame_upload_bytes+=foreground_bytes;
         output.push_back(chunk);vertices.clear();return true;
     }
@@ -6623,7 +6665,7 @@ public:
         }
         input.world_revision=world_coast.revision();input.detail=patch_detail;
         input.river_ready=river_assets_ready;input.skip_flat_shore=skip_shore;input.separate_relief=separate;input.indexed=indexed;input.retain_height=heights;
-        input.world_projected=world_content && compact_natural_vertices;
+        input.world_projected=world_content && compact_vertices;
         input.key={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(tile.real_terrain_type)*32+unsigned(ground),
             std::uint64_t(input.tile_width),std::uint64_t(input.tile_height),std::uint64_t(input.target_height),std::uint64_t(content_revision),
             std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
@@ -6793,8 +6835,9 @@ public:
             }
             begin=std::chrono::steady_clock::now();
             c3x_renderer::render_core::ImmutableMeshUpload upload;
-            auto append=[&](auto const& mesh,unsigned& vertices,unsigned& indices){if(mesh.empty())return;
+            auto append=[&](auto& mesh,unsigned& vertices,unsigned& indices){if(mesh.empty())return;
                 vertices=upload.append(mesh.vertices.data(),mesh.vertices.size());
+                if(mesh.elided)mesh.template_offset=upload.append(mesh.constants.data(),mesh.constants.size());
                 if(!mesh.shared_grid && !mesh.indices.empty())indices=upload.append(mesh.indices.data(),mesh.indices.size());};
             if(result->ground)for(unsigned i=0;i<6;++i){
                 // Bed/water adopt the underlay's identical ranges on the render owner.
@@ -6866,6 +6909,7 @@ public:
         c3x_renderer::render_core::ImmutableMeshUpload upload;
         auto append=[&](auto& part){if(part.mesh.empty())return;
             part.vertex_offset=upload.append(part.mesh.vertices.data(),part.mesh.vertices.size());
+            if(part.mesh.elided)part.mesh.template_offset=upload.append(part.mesh.constants.data(),part.mesh.constants.size());
             part.index_offset=upload.append(part.mesh.indices.data(),part.mesh.indices.size());};
         for(auto& part:result.layers)append(part);
         for(auto& part:result.city)append(part);
@@ -7362,6 +7406,8 @@ public:
         if(diagnostic_routes && layer==geometry_route)return true;
 #endif
         if(pickup_profile && layer<geometry_natural_terrain)context->IASetInputLayout(layer>=geometry_feature?feature_input_layout:input_layout);
+        // Ground chunks choose their integrated layout per elided format.
+        ID3D11InputLayout* integrated_bound=input_layout;bool integrated_failed=false;
         ViewportShaderSettings previous = {};
         bool first = true;
         for (D3D11_RECT const & rect : rectangles) {
@@ -7490,6 +7536,7 @@ public:
                 }
                 UINT stride = chunk.content().vertex_stride, offset = chunk.content().vertex_offset;
                 if(layer>=geometry_natural_terrain)natural.bind_format(context,stride);
+                else if(pickup_profile && layer<geometry_feature && !bind_integrated(chunk.content(),integrated_bound)){integrated_failed=true;return;}
                 context->IASetVertexBuffers(0, 1, &chunk.content().buffer, &stride, &offset);
                 context->IASetIndexBuffer(chunk.content().indices, chunk.content().index_format, chunk.content().index_offset);
                 if(chunk.content().rigid_source){
@@ -7588,7 +7635,7 @@ public:
                 }
                 issue(selected[i],parameters[i],i,end-i);i=end;
             }
-            selected.clear();return true;
+            selected.clear();return !integrated_failed;
         };
         for (GeometryDrawReference const & chunk : buffers[layer]) {
             ++frame_bounds_tests;
@@ -7633,7 +7680,8 @@ public:
         for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:buffers[layer]) {
             bool caster=(layer==geometry_land && !fidelity_profile) || (layer>=geometry_feature && layer!=geometry_natural_decal);
             if(chunk.content().city_material!=0xffffffffu && cities.library.materials[chunk.content().city_material].ground)caster=false;
-            if(!caster || chunk.content().animation_texture)continue;
+            // Elided ground is fidelity-only, where ground layers never cast.
+            if(!caster || chunk.content().animation_texture || chunk.content().elided)continue;
             for(int wy=dims.wrap_y?-1:0;wy<=(dims.wrap_y?1:0);++wy)
                 for(int wx=dims.wrap_x?-1:0;wx<=(dims.wrap_x?1:0);++wx) {
                     Shadow::Caster c;c.vertices=chunk.content().buffer;c.indices=chunk.content().indices;c.count=chunk.content().index_count;
@@ -9666,6 +9714,7 @@ public:
             c3x_renderer::fidelity::GroundPreparationInput job;
             auto& input=job.compile;
             input.tile=tile;input.world_ground=world_ground;input.pickup_profile=pickup_profile;input.fidelity_profile=fidelity_profile;
+            input.compact_vertices=compact_vertices;
             input.draw_marsh=marsh_assets_ready && tile.real_terrain_type==9;
             input.river_assets_ready=river_assets_ready;input.retain_ground_grids=retain_ground_grids;
             input.reuse_nested_ground_grids=reuse_nested_ground_grids;input.prewarming=prewarming;
@@ -9794,7 +9843,7 @@ public:
             input.separate_relief=separate_natural_relief;input.retain_height=retain_height_samples;
             input.route_ready=route_assets_ready;input.mine_ready=mine_assets_ready;input.farm_ready=farm_assets_ready;
             input.city_ready=city_assets_ready;input.composition_ready=cities.ready;
-            input.shared_rigid=shared_rigid;
+            input.shared_rigid=shared_rigid;input.compact_vertices=compact_vertices && fidelity_profile;
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
             input.routes_enabled=diagnostic_routes!=2;
 #endif
@@ -11189,6 +11238,7 @@ public:
             ground_compile_input.world_ground = world_ground;
             ground_compile_input.pickup_profile = pickup_profile;
             ground_compile_input.fidelity_profile = fidelity_profile;
+            ground_compile_input.compact_vertices = compact_vertices;
             ground_compile_input.draw_marsh = draw_marsh;
             ground_compile_input.river_assets_ready = river_assets_ready;
             ground_compile_input.retain_ground_grids = retain_ground_grids;

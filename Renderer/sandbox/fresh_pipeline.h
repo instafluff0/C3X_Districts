@@ -13,6 +13,7 @@
 #include "../native/render_core/prepared_draw_parameters.h"
 #include "../native/render_core/submission_census.h"
 #include "../native/render_core/pulled_mesh_pages.h"
+#include "../native/render_core/integrated_vertex.h"
 #include "../native/render_core/overlay_composite.h"
 #include "../native/render_core/gpu_event_timeline.h"
 #include <limits>
@@ -473,9 +474,15 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
             Element const* match=nullptr;
             for(auto const& e:elements)if(base==e.semantic&&index==e.index)match=&e;
             if(!match||match->offset+width*4>168)return false;
+            // Elided integrated elements come from the record's constant row.
+            auto element=unsigned(match-elements);
+            if(c3x_renderer::render_core::integrated_elements[element].offset!=match->offset)return false;
             decode+="    input."+name+"=asfloat(c3x_pulled_vertices.Load"+(width>1?std::to_string(width):std::string())+
-                "(base+"+std::to_string(match->offset)+"u));\n";
+                "(c3x_pulled_field(base,"+std::to_string(element)+"u,"+std::to_string(match->offset)+"u)));\n";
         }
+        std::string element_bytes;
+        for(auto const& e:c3x_renderer::render_core::integrated_elements)
+            element_bytes+=(element_bytes.empty()?"":",")+std::to_string(e.bytes)+"u";
         if(decode.empty())return false;
         // Shared by both pulled entries: redirect the occurrence terms after
         // the viewport cbuffer, then load one page record per vertex.
@@ -490,7 +497,7 @@ static float4 c3x_pulled_projection;
 #define c3x_content_projection c3x_pulled_projection
 )";
         std::string const helpers=R"(
-struct C3XPulledRecord {uint first,count,vertex_byte,index_byte;uint index16,stride,vertices,r1;float2 translation;float kind,r2;float4 projection;};
+struct C3XPulledRecord {uint first,count,vertex_byte,index_byte;uint index16,stride,vertices,elided;float2 translation;float kind;uint template_byte;float4 projection;};
 StructuredBuffer<C3XPulledRecord> c3x_pulled_records : register(t60);
 ByteAddressBuffer c3x_pulled_vertices : register(t61);
 ByteAddressBuffer c3x_pulled_indices : register(t62);
@@ -498,6 +505,8 @@ cbuffer C3XPulledBatch : register(b12) {
     float2 c3x_pulled_base_translation;float c3x_pulled_depth_base;uint c3x_pulled_vertex_base;
     uint c3x_pulled_record_first;uint c3x_pulled_record_last;uint2 c3x_pulled_batch_pad2;
 };
+static uint c3x_pulled_elided;
+static uint c3x_pulled_template;
 // Draw(count,0) plus an explicit base: D3D11 SV_VertexID excludes
 // StartVertexLocation. Every raw load is clamped to its record, so no
 // inconsistency can read outside a page. Selects the occurrence terms and
@@ -514,11 +523,23 @@ uint c3x_pulled_vertex_address(uint vertex) {
     c3x_pulled_depth_translation=c3x_pulled_depth_base+r.translation.y;
     c3x_pulled_kind=r.kind;
     c3x_pulled_projection=r.projection;
+    c3x_pulled_elided=r.elided;c3x_pulled_template=r.template_byte;
     return r.vertex_byte+min(index,r.vertices-1)*r.stride;
 }
 )";
         shader.insert(close+2,redirect);
-        shader+=helpers+R"(PixelInput VSIntegratedPulled(uint vertex : SV_VertexID) {
+        // An integrated element's address: its packed place in the vertex,
+        // or the record's 168-byte constant row when elided.
+        std::string const field_address=R"(
+static const uint c3x_pulled_element_bytes[19]={)"+element_bytes+R"(};
+uint c3x_pulled_field(uint base,uint element,uint full) {
+    if(((c3x_pulled_elided>>element)&1u)!=0)return c3x_pulled_template+full;
+    uint skipped=0;
+    [unroll] for(uint j=1;j<element;++j)if(((c3x_pulled_elided>>j)&1u)!=0)skipped+=c3x_pulled_element_bytes[j];
+    return base+full-skipped;
+}
+)";
+        shader+=helpers+field_address+R"(PixelInput VSIntegratedPulled(uint vertex : SV_VertexID) {
     uint base=c3x_pulled_vertex_address(vertex);
     IntegratedVertexInput input=(IntegratedVertexInput)0;
 )"+decode+R"(
@@ -2512,6 +2533,7 @@ struct SandboxFreshPipeline {
             source.buffer=m.buffer;source.indices=m.indices;source.version=m.version;
             source.vertex_offset=m.vertex_offset;source.index_offset=m.index_offset;source.index_count=m.index_count;
             source.vertex_count=m.vertex_count;source.stride=m.vertex_stride;source.index16=m.index_format==DXGI_FORMAT_R16_UINT;
+            source.elided=m.elided;source.template_offset=m.template_offset;
             source.tx=r.translation_x();source.ty=r.translation_y();source.kind=m.projection_kind;
             std::copy(std::begin(r.natural_projection()),std::end(r.natural_projection()),source.projection);}
         if(!pulled_pages.resolve(renderer.device,context,pulled_sources.data(),count,pulled_ranges)){++pulled_fallbacks;return false;}
@@ -2570,9 +2592,9 @@ struct SandboxFreshPipeline {
             visual.pulled_vertex && (layer==geometry_underlay || layer==geometry_land || layer==geometry_bed ||
             layer==geometry_water || layer==geometry_river || layer==geometry_shadow || layer==geometry_route));
         unsigned const pulled_stride=pulled_feature_layer?48u:168u;
-        auto pulled_eligible=[pulled_stride](GeometryDrawReference const& record){auto const& m=record.content();
+        auto pulled_eligible=[pulled_stride,pulled_feature_layer](GeometryDrawReference const& record){auto const& m=record.content();
             return !m.rigid_source && !m.animation_texture && !m.resource_instance && m.city_material==0xffffffffu &&
-                m.vertex_stride==pulled_stride && m.vertex_count && m.buffer && m.indices &&
+                (m.vertex_stride==pulled_stride || (!pulled_feature_layer && m.elided)) && m.vertex_count && m.buffer && m.indices &&
                 (m.index_format==DXGI_FORMAT_R16_UINT || m.index_format==DXGI_FORMAT_R32_UINT);};
         char emission_control[8]={};
         bool original_emission=c3x_renderer::render_core::cached_environment("C3X_SANDBOX_CITY_SUBMISSION_REFERENCE",emission_control,sizeof(emission_control)) && emission_control[0]=='1';
@@ -2594,6 +2616,9 @@ struct SandboxFreshPipeline {
         std::array<ViewportShaderSettings,c3x_renderer::render_core::DrawParameterStream::limit> generated_values{};
         std::vector<GeometryDrawReference> selected;
         selected.reserve(generated_values.size());
+        // bind_common bound the integrated layout; ground records switch it
+        // per elided format (render_core/integrated_vertex.h).
+        auto* integrated_bound=renderer.input_layout;
         auto flush=[&](PreparedParameters::Batch const* prepared=nullptr) {
             if(selected.empty())return true;
             auto const& values=prepared?prepared->values:generated_values;
@@ -2723,12 +2748,13 @@ struct SandboxFreshPipeline {
                     }
                     if(draw_pulled(selected.data()+i,end-i,layer,viewport,mirrored,pulled_feature_layer)){
                         if(water_layer){phase_constant_counts.water_records+=end-i;phase_constant_counts.water_hits+=end-i-1;}
-                        previous_valid=false;i=end;continue;
+                        integrated_bound=renderer.input_layout;previous_valid=false;i=end;continue;
                     }
                     }
                 }
                 UINT stride=mesh.vertex_stride,offset=mesh.vertex_offset;
                 if(layer>=geometry_natural_terrain)renderer.natural.bind_format(context,stride);
+                else if(renderer.pickup_profile && layer<geometry_feature && !renderer.bind_integrated(mesh,integrated_bound))return false;
                 context->IASetVertexBuffers(0,1,&mesh.buffer,&stride,&offset);
                 context->IASetIndexBuffer(mesh.indices,mesh.index_format,mesh.index_offset);
                 if(mesh.rigid_source){

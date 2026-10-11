@@ -117,6 +117,7 @@ struct Mesh {
  ID3D11Buffer *buffer=nullptr,*indices=nullptr,*resource_instance=nullptr;
  int* animation_texture=nullptr;
  unsigned vertex_offset=0,index_offset=0,index_count=6,vertex_count=4,index_format=0,projection_kind=3,vertex_stride=32;
+ std::uint32_t elided=0;unsigned template_offset=0;
  unsigned city_material=0xffffffffu,city_environment=0;float city_atlas[4]={};
  float instance_material=8,visual_time=-1;bool rigid_source=false;
  int translation_x=0,translation_y=0;float natural_projection[4]={};
@@ -125,6 +126,7 @@ using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<Mesh,geometry
 using GeometryDrawReference=GeometryDrawView::Reference;
 struct Renderer {
  struct {template<class... A>void bind_format(A...){assert(false);}} natural;
+ int integrated_binds=0;template<class M,class B>bool bind_integrated(M const&,B&){++integrated_binds;return true;}
  ID3D11Device device_value;ID3D11DeviceContext1 context_value;
  ID3D11Device* device=&device_value;ID3D11DeviceContext1* context=&context_value;
  std::uint64_t device_generation=1,content_revision=1;

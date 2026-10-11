@@ -34,7 +34,7 @@ struct PreparedGround {
 using GroundTask=render_core::ScopedPreparation<PreparedGround>;
 
 template<class Stop>
-bool pack_ground(GroundSurfaces& surfaces,bool pickup,bool world_ground,Stop stop,PreparedGround& result){
+bool pack_ground(GroundSurfaces& surfaces,bool pickup,bool world_ground,bool elide,Stop stop,PreparedGround& result){
     result.water_coverage=render_core::water_surface_can_contribute(surfaces.underlay_vertices);
     std::vector<MapVertex>* vertices[]={&surfaces.underlay_vertices,&surfaces.land_vertices,&surfaces.bed_vertices,
         &surfaces.water_vertices,&surfaces.river_vertices,&surfaces.shadow_vertices};
@@ -43,6 +43,7 @@ bool pack_ground(GroundSurfaces& surfaces,bool pickup,bool world_ground,Stop sto
     if(!pickup)result.legacy_shadow=std::move(surfaces.shadow_vertices);
     for(unsigned layer=0;layer<6;++layer){
         render_core::MeshFormat format;format.pickup=pickup;format.projection_kind=world_ground && layer<5?3u:0u;
+        format.elide_constants=elide;
         if(!render_core::prepare_mesh(*vertices[layer],indices[layer],format,result.meshes[layer],stop))return false;
         std::vector<MapVertex>().swap(*vertices[layer]);
         if(indices[layer])std::vector<unsigned>().swap(*indices[layer]);
@@ -186,7 +187,8 @@ std::unique_ptr<PreparedGround> prepare_ground(GroundCompileInput const& ground_
         ground_relief_at_world, ground_pickup_height_at, ground_pickup_ground_at, ground_river_distance, ground_material_weights_for,
         ground_signed_shore_distance, ground_water_family_depth, periodic_surface_uv, ground_shore_sample_at,
         ndc_x, ndc_y, ground_cancelled, ground_surfaces);
-    if(!c3x_renderer::fidelity::pack_ground(ground_surfaces,pickup_profile,world_ground,ground_cancelled,*result))return {};
+    if(!c3x_renderer::fidelity::pack_ground(ground_surfaces,pickup_profile,world_ground,
+        ground_compile_input.fidelity_profile && ground_compile_input.compact_vertices,ground_cancelled,*result))return {};
 
     result->compile_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
     return result;

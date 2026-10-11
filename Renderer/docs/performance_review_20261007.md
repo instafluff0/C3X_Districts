@@ -2950,3 +2950,46 @@ the 168-byte ground layers. Two exact remedies, both picture-identical:
 compact the ground vertex (pages copy at the compact stride), then, in R3,
 pooled ground storage that both the input-assembler and pulled draws read
 directly, removing the copy.
+
+## 66. Stage 5, step 2: integrated ground meshes elide constant elements (October 10)
+
+**Change.** An integrated (168-byte) mesh drops every input element whose
+bytes are the same on all its vertices, position excepted
+(`render_core/integrated_vertex.h`, `prepare_mesh`). The mesh keeps its full
+168-byte constant row (`PreparedMesh::constants`), uploaded beside its vertices
+and placed per chunk (`template_offset`); `elided` is the element mask. Input
+layouts are derived per mask from the full ones: an elided element reads the
+row through a stride-0 slot 1 (`integrated_layout`/`bind_integrated` for the
+legacy and fresh draws, border layouts per mask). Pulled pages copy the row
+after the vertices; the generated pulled shader reads an elided element from
+it and skips it otherwise, with element sizes generated from the same table.
+Ground, river, land and route meshes elide under the fidelity profile only,
+where ground layers never cast shadows; waves stay 168. Consumers test the
+mask before the stride, since a compact stride can equal a natural one. The
+world backing codec stores the mask and row (format 6). The same
+`C3X_RENDERER_COMPACT_VERTEX_CONTROL=1` keeps every mesh full.
+
+**Verification.**
+- `test_integrated_elision.py`: underlay- and river-like meshes packed both
+  ways; every input of the main, border and caster layouts and of the pulled
+  address helper (compiled as C++ from the generated shader text) fetches
+  the full format's bytes; codec round trip; mutating the helper fails it.
+- The GPU test compiles the generated pulled shaders on the VM's production
+  shader pack (`C3X_RENDERER_GPU_TESTS=1 test_runtime_shader_programs`).
+- Lab A/B (legacy draw path), byte-identical: grassland 3, floodplains 3,
+  transitions 2, seas and oceans 2, rivers 2, infrastructure 3, shorelines
+  detail and gameplay at four hours (23 pairs). Water scene geometry
+  6.69 → 4.23 MB (−37%). The rivers fixture's lifecycle witness fails on
+  both sides, independent of the format; its images match.
+- The Lab cannot run the fresh pipeline (the sandbox client's unit prewarm
+  and the reference build's trial configuration have drifted), so the fresh
+  path was checked by its parts and in game: pulled draws 156,577 with 0
+  fallbacks and 0 refusals, no draw or shader failures, frames normal at 1x
+  and zoomed out.
+
+**Busy save, in game.** Underlay vertices 60-80 bytes (about 73 on average,
+−56%), routes 52-80, river 76-116. The geometry cache stays at its budget
+(about 1.87 GB) while holding about 12,700 owners instead of about 9,000:
+unique geometry per owner 161 KB (no compaction) → 137 KB (natural terrain,
+section 64) → 104 KB. Pulled pages hold 6,604 entries in 380-410 MiB (was
+3,057 entries in 470 MiB).

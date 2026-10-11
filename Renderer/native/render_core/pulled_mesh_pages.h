@@ -27,8 +27,10 @@ public:
     // HLSL-visible record (C3XPulledRecord); 64 bytes.
     struct Record {
         std::uint32_t first=0,count=0,vertex_byte=0,index_byte=0;
-        std::uint32_t index16=0,stride=0,vertices=0,reserved1=0;
-        float translation[2]={},kind=0,reserved2=0;
+        // elided/template_byte: integrated elements read from the copied
+        // 168-byte constant row (render_core/integrated_vertex.h).
+        std::uint32_t index16=0,stride=0,vertices=0,elided=0;
+        float translation[2]={},kind=0;std::uint32_t template_byte=0;
         float projection[4]={};
     };
     static_assert(sizeof(Record)==64,"pulled record ABI");
@@ -36,6 +38,7 @@ public:
         ID3D11Buffer* buffer=nullptr;ID3D11Buffer* indices=nullptr;
         std::uint64_t version=0;
         unsigned vertex_offset=0,index_offset=0,index_count=0,vertex_count=0,stride=0;
+        std::uint32_t elided=0;unsigned template_offset=0;
         bool index16=false;
         int tx=0,ty=0;float projection[4]={};unsigned kind=0;
     };
@@ -47,17 +50,19 @@ public:
     struct Range {Page* page=nullptr;unsigned first_record=0,records=0,first_vertex=0,vertices=0;};
     static constexpr unsigned page_records=256;
     static constexpr std::size_t page_bytes=16u*1024u*1024u,budget=512u*1024u*1024u;
+    static constexpr unsigned row_bytes=168u; // an elided source's constant row
     std::uint64_t builds=0,reuses=0,refusals=0,draws=0,drawn_records=0,copied_bytes=0,retired=0,rebuilds=0;
 private:
     using Key=std::tuple<ID3D11Buffer*,ID3D11Buffer*,std::uint64_t,unsigned,unsigned,unsigned,unsigned,unsigned,bool,
-        int,int,std::uint32_t,std::uint32_t,std::uint32_t,std::uint32_t,unsigned>;
+        int,int,std::uint32_t,std::uint32_t,std::uint32_t,std::uint32_t,unsigned,std::uint32_t,unsigned>;
     struct Location {std::shared_ptr<Page> page;unsigned slot=0;};
     std::map<Key,Location> entries;
     std::uint64_t frame=0;std::size_t resident=0;
     static std::uint32_t bits(float value){std::uint32_t v=0;std::memcpy(&v,&value,4);return v;}
     static Key key(Source const& s){
         return Key{s.buffer,s.indices,s.version,s.vertex_offset,s.index_offset,s.index_count,s.vertex_count,s.stride,s.index16,
-            s.tx,s.ty,bits(s.projection[0]),bits(s.projection[1]),bits(s.projection[2]),bits(s.projection[3]),s.kind};
+            s.tx,s.ty,bits(s.projection[0]),bits(s.projection[1]),bits(s.projection[2]),bits(s.projection[3]),s.kind,
+            s.elided,s.template_offset};
     }
     static std::size_t align4(std::size_t n){return (n+3)&~std::size_t(3);}
     static bool raw_buffer(ID3D11Device* device,std::size_t bytes,Microsoft::WRL::ComPtr<ID3D11Buffer>& buffer,
@@ -76,7 +81,7 @@ private:
     std::shared_ptr<Page> build(ID3D11Device* device,ID3D11DeviceContext* context,Source const* const* sources,unsigned count){
         std::size_t vertex_bytes=0,index_bytes=0;
         for(unsigned n=0;n<count;++n){auto const& s=*sources[n];
-            vertex_bytes+=std::size_t(s.vertex_count)*s.stride;index_bytes+=align4(std::size_t(s.index_count)*(s.index16?2:4));}
+            vertex_bytes+=std::size_t(s.vertex_count)*s.stride+(s.elided?row_bytes:0);index_bytes+=align4(std::size_t(s.index_count)*(s.index16?2:4));}
         auto page=std::make_shared<Page>();page->table.resize(count);
         D3D11_BUFFER_DESC desc{};desc.ByteWidth=UINT(count*sizeof(Record));desc.Usage=D3D11_USAGE_DEFAULT;
         desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;desc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;desc.StructureByteStride=sizeof(Record);
@@ -85,7 +90,8 @@ private:
             r.first=first;r.count=s.index_count;r.vertex_byte=vertex_at;r.index_byte=index_at;
             r.index16=s.index16?1u:0u;r.stride=s.stride;r.vertices=s.vertex_count;r.translation[0]=float(s.tx);r.translation[1]=float(s.ty);
             r.kind=float(s.kind);std::copy(std::begin(s.projection),std::end(s.projection),r.projection);
-            first+=s.index_count;vertex_at+=std::uint32_t(std::size_t(s.vertex_count)*s.stride);
+            r.elided=s.elided;r.template_byte=vertex_at+std::uint32_t(std::size_t(s.vertex_count)*s.stride);
+            first+=s.index_count;vertex_at+=std::uint32_t(std::size_t(s.vertex_count)*s.stride+(s.elided?row_bytes:0));
             index_at+=std::uint32_t(align4(std::size_t(s.index_count)*(s.index16?2:4)));}
         D3D11_SUBRESOURCE_DATA data{};data.pSysMem=page->table.data();
         if(!raw_buffer(device,vertex_bytes,page->vertices,page->vertex_view)||
@@ -97,6 +103,8 @@ private:
         for(unsigned n=0;n<count;++n){auto const& s=*sources[n];auto const& r=page->table[n];
             D3D11_BOX vertices{s.vertex_offset,0,0,s.vertex_offset+UINT(std::size_t(s.vertex_count)*s.stride),1,1};
             context->CopySubresourceRegion(page->vertices.Get(),0,r.vertex_byte,0,0,s.buffer,0,&vertices);
+            if(s.elided){D3D11_BOX row{s.template_offset,0,0,s.template_offset+row_bytes,1,1};
+                context->CopySubresourceRegion(page->vertices.Get(),0,r.template_byte,0,0,s.buffer,0,&row);}
             D3D11_BOX indices{s.index_offset,0,0,s.index_offset+UINT(std::size_t(s.index_count)*(s.index16?2:4)),1,1};
             context->CopySubresourceRegion(page->indices.Get(),0,r.index_byte,0,0,s.indices,0,&indices);
         }
@@ -156,7 +164,7 @@ public:
             resident+=page->bytes;group.clear();bytes=0;return true;
         };
         for(auto* s:missing){
-            auto need=std::size_t(s->vertex_count)*s->stride+align4(std::size_t(s->index_count)*(s->index16?2:4));
+            auto need=std::size_t(s->vertex_count)*s->stride+(s->elided?row_bytes:0)+align4(std::size_t(s->index_count)*(s->index16?2:4));
             if(group.size()==page_records||bytes+need>page_bytes){if(!flush())return false;}
             group.push_back(s);bytes+=need;
         }
