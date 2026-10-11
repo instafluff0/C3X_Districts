@@ -2207,10 +2207,15 @@ struct SandboxFreshPipeline {
     }
     std::uint64_t view_revision()const{
 #ifdef C3X_RENDERER64_FRESH
+        // The whole store's revision: once the store is loaded a crossing
+        // inserts nothing, so it moves only when the world changes. Keying
+        // the blocks near the view instead rebuilt the capture 42 times in a
+        // busy run against 26 (review 74).
         if(renderer.resident_world_active)return renderer.resident_world.revision()|(std::uint64_t(1)<<63);
 #endif
         return window_revision();
     }
+
     // The caster scope a frame draws with. A scene render (a camera job or
     // an adoption, which Civ III waits for) whose window moved by at most a
     // block keeps the drawn casters once: the new view's casters lie inside

@@ -3352,6 +3352,43 @@ Crossing renders (busy, trace level 2, p50): 52 ms with the store against
 101 ms for the window (shadows 0 against 40 ms, preparation 14 against
 43 ms). Witnesses unchanged: 225 selections, 225 bases, 34 caster sets.
 
+**Measured with the crossing changes** (cadence, three runs per side
+alternated, same build; the VM's run-to-run variance is large, so totals
+matter more than single segments):
+
+| Busy step p50 (steps) | Store | Window |
+| --- | --- | --- |
+| 1x scroll x | 157-176 ms (29-31) | 161-169 ms (31-33) |
+| 1x scroll y | 155 ms each run | 160-228 ms |
+| 2x scroll | 140-155 ms (30-34) | 150-158 ms (28-34) |
+| 3x scroll | 79-80 ms (45-50) | 80-83 ms (42-47) |
+| Scroll steps in all | 121, 124, 129 | 116, 128, 121 |
+
+Light save: 78 ms steps either way; display frames while scrolling
+40 / 38 / 37 fps with the store against 34 / 31 / 33 (1x / 2x / 3x). The store
+is slightly ahead overall and steadier, and slightly behind at busy 1x
+horizontal scrolling.
+
+**Tried and reverted: a view revision local to the view.** Keying the
+view's caches by the store blocks under the camera window (as the caster
+scope does) instead of the whole store's revision rebuilt the capture 42
+times in a busy run against 26 (`fresh-scene-phases resident_builds`): once
+the store is loaded a crossing inserts nothing, so the global revision stays
+put across crossings and moves only when the world changes, while a local key
+moves with the window.
+
+**Validation across scenarios** (store on, witness on, one run each):
+
+| Scenario, save | Selections equal | Notes |
+| --- | --- | --- |
+| `units`, busy | 612 of 612 | 2 moved steps deferred, no failures |
+| `zoom-out`, busy | 105 of 155 | the 50 others have extra store contributors (up to 1,900), never missing ones: zoomed out the view outgrows the window, which the store covers; frames complete to the edges |
+| `reveal-scroll`, 4000 BC | 61 of 61 | 57 stored tiles rewritten as reveals and a new city changed them; two retained-memory refusals, also in window mode |
+| `turn`, start save | 1 of 1 | the scenario's research check fails in window mode too |
+
+Caster sets contained the window's in every check, the window basis matched
+throughout, and no deferred step's ownership disagreed with its draw.
+
 **The window basis across the wrap seam.** With no window draw records the
 window basis was taken from each capture's view; across the wrap seam Civ III
 re-bases the camera a world width while the window keeps its frame, so in 4
