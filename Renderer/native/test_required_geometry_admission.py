@@ -47,7 +47,7 @@ class RequiredGeometryAdmissionTests(unittest.TestCase):
 using namespace c3x_renderer::render_core;
 template<std::size_t N,class... A>void sprintf_s(char(&b)[N],char const* f,A... a){std::snprintf(b,N,f,a...);}
 struct CachedTileGeometry {std::uint64_t signature=0;std::size_t byte_count=0;bool prefetched=false;
- std::uint64_t last_used=0,animation_epoch=0;ContentHandle binding,natural_content;};
+ std::uint64_t last_used=0,animation_epoch=0;ContentHandle binding,natural_content;bool world_ground=false;};
 constexpr std::size_t tile_geometry_cache_capacity=8192;constexpr std::uint64_t viewport_cache_capacity=32;
 struct Retired {std::atomic<std::size_t> bytes{0};};
 struct Trace {std::vector<std::string> stages;void write(char const* stage,char const*,bool){stages.push_back(stage);}
@@ -60,6 +60,7 @@ struct Cache {
  std::size_t tile_geometry_cache_bytes=0,prefetched_geometry_bytes=0,terrain_patch_index_bytes=0;
  std::size_t tile_geometry_runtime_budget=0,tile_geometry_required_budget=0;
  std::uint64_t tile_geometry_epoch=1;bool loading_gpu_residency=false,world_gpu_capacity_refused=false;
+ bool geometry_tier=false,world_gpu_residency_ready=false;
  unsigned frame_tiles_evicted=0,cache_evictions=0;
  struct {unsigned clears=0;void clear(){++clears;}} shared_instances;struct {void reset(){}} resource_visibility_membership;
  Trace trace;
@@ -105,6 +106,23 @@ int main(){
   assert(!c.make_tile_cache_room(required) && c.trace.count("tile-cache-budget")==1);
  }
  {
+  // Fixed geometry tier: view-specific owners (zoomed-out builds) leave
+  // before the explored world's canonical content, even when newer.
+  Cache c;c.tile_geometry_epoch=3;c.tile_geometry_runtime_budget=100u*mib;c.tile_geometry_required_budget=100u*mib;
+  c.geometry_tier=c.world_gpu_residency_ready=true;
+  for(unsigned i=0;i<6;++i){c.add(i,10u*mib,1);c.tile_geometry_cache.find(i)->second.world_ground=true;}
+  for(unsigned i=6;i<10;++i)c.add(i,10u*mib,2);
+  assert(c.make_tile_cache_room(30u*mib));
+  unsigned canonical=0;for(auto const& entry:c.tile_geometry_cache)canonical+=entry.second.world_ground;
+  assert(c.frame_tiles_evicted==3 && canonical==6);
+  // Without the tier, least recently used goes first.
+  Cache plain;plain.tile_geometry_epoch=3;plain.tile_geometry_runtime_budget=100u*mib;plain.tile_geometry_required_budget=100u*mib;
+  for(unsigned i=0;i<6;++i){plain.add(i,10u*mib,1);plain.tile_geometry_cache.find(i)->second.world_ground=true;}
+  for(unsigned i=6;i<10;++i)plain.add(i,10u*mib,2);
+  assert(plain.make_tile_cache_room(30u*mib));
+  unsigned kept=0;for(auto const& entry:plain.tile_geometry_cache)kept+=entry.second.world_ground;assert(kept==3);
+ }
+ {
   // Older content is evicted before any overflow.
   Cache c;c.tile_geometry_epoch=2;c.tile_geometry_runtime_budget=100u*mib;c.tile_geometry_required_budget=400u*mib;
   for(unsigned i=0;i<10;++i)c.add(i,10u*mib,i<4?1:2);
@@ -143,6 +161,14 @@ int main(){
         self.assertIn('if(!prewarming && !loading_gpu_residency)\n'
                       '                    tile_geometry_required_budget=std::max(tile_geometry_runtime_budget,Budget::required_geometry(', budget)
         self.assertEqual(budget.count('tile_geometry_required_budget='), 2)
+
+
+    def test_tier_caps_the_budget_at_canonical_content_plus_view_allowance(self):
+        source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
+        self.assertTrue('if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency)\n'
+                        '            tile_geometry_runtime_budget=std::min(tile_geometry_runtime_budget,canonical_geometry_bytes()+\n'
+                        '                retired_content->bytes.load()+terrain_patch_index_bytes+view_geometry_allowance);' in source)
+        self.assertTrue('static constexpr std::size_t view_geometry_allowance=384u*1024u*1024u;' in source)
 
 
 if __name__ == '__main__':

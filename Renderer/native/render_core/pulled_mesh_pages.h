@@ -6,6 +6,7 @@
 #include <cstring>
 #include <map>
 #include <memory>
+#include <set>
 #include <tuple>
 #include <vector>
 
@@ -150,8 +151,11 @@ public:
         // scrolling does not recopy geometry every step.
         bool repack=fragments()>fragment_limit;
         if(repack)++rebuilds;
-        std::vector<Source const*> missing;
-        for(unsigned n=0;n<count;++n)if(repack||!located[n])missing.push_back(sources+n);
+        // A run may draw one occurrence twice; copy it once. A duplicate in one
+        // page group released the new page before counting it, so resident
+        // bytes underflowed and trim retired every page each frame.
+        std::vector<Source const*> missing;std::set<Key> queued;
+        for(unsigned n=0;n<count;++n)if((repack||!located[n]) && queued.insert(key(sources[n])).second)missing.push_back(sources+n);
         std::size_t bytes=0;std::vector<Source const*> group;
         auto flush=[&]{
             if(group.empty())return true;

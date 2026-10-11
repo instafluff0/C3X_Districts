@@ -670,6 +670,12 @@ public:
     // Exact 56-byte natural vertices for world-projected terrain (stage 5);
     // C3X_RENDERER_COMPACT_VERTEX_CONTROL=1 keeps every natural vertex at 92.
     bool compact_vertices=true;
+    // Fixed geometry tier (stage 5): in whole-world residency, geometry holds
+    // the explored world's canonical content plus a fixed allowance for
+    // view-specific content (zoomed-out builds), not whatever memory is free.
+    // C3X_RENDERER_GEOMETRY_TIER_CONTROL=1 keeps the free-memory budget alone.
+    bool geometry_tier=true;
+    static constexpr std::size_t view_geometry_allowance=384u*1024u*1024u;
     int region_input_ring=2;
     // Stage 2a: resident geometry selected by a block-anchored world window
     // (render_core/world_window.h); on unless C3X_RENDERER_WORLD_WINDOW=0.
@@ -963,6 +969,11 @@ public:
     // patch indices excluded); logical = vertices x stride + indices per chunk;
     // strides = up to four distinct vertex strides; aliases = chunks that
     // borrow another layer's buffers (byte_count 0, e.g. water and bed).
+    // Bytes of resident canonical world content (1x and closer builds).
+    std::size_t canonical_geometry_bytes()const{
+        std::size_t bytes=0;for(auto const& entry:tile_geometry_cache)if(entry.second.world_ground)bytes+=entry.second.byte_count;
+        return bytes;
+    }
     void geometry_census(){
         struct Row {std::uint64_t unique=0,logical=0,vertices=0,indices=0,instances=0;unsigned chunks=0,rigid=0,aliases=0;std::array<unsigned,4> strides{};};
         std::array<Row,geometry_layer_count> rows{};
@@ -985,7 +996,8 @@ public:
         for(auto const& row:rows){unique+=row.unique;logical+=row.logical;}
         std::string detail="owners="+std::to_string(owners)+" shared_owners="+std::to_string(shared_owners)+
             " unique_mb="+std::to_string(unique>>20)+" logical_mb="+std::to_string(logical>>20)+
-            " accounted_mb="+std::to_string(tile_geometry_cache_bytes>>20)+" grid_mb="+std::to_string(terrain_patch_index_bytes>>20);
+            " accounted_mb="+std::to_string(tile_geometry_cache_bytes>>20)+" grid_mb="+std::to_string(terrain_patch_index_bytes>>20)+
+            " canonical_mb="+std::to_string(canonical_geometry_bytes()>>20)+" budget_mb="+std::to_string(tile_geometry_runtime_budget>>20);
         // A trace line holds about 1 KB: continue the layers on further
         // geometry-census-more lines rather than truncating them.
         bool first=true;
@@ -3160,6 +3172,7 @@ public:
         composition_receiver_index=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_COMPOSITION_RECEIVER_INDEX");
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         compact_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_COMPACT_VERTEX_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        geometry_tier=!(GetEnvironmentVariableA("C3X_RENDERER_GEOMETRY_TIER_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
         region_input_ring=std::strcmp(control,"4")==0?4:2;
         // On unless C3X_RENDERER_WORLD_WINDOW=0. The light-save stall that
@@ -6284,8 +6297,10 @@ public:
                 // Static revisits can use their retained bitmap without meshes.
                 // Animated revisits still need geometry for depth/lighting.
                 // This is a bounded preference, never an additional pin/cap.
-                return tile.animation_epoch != 0 &&
-                    tile_geometry_epoch-tile.animation_epoch <= viewport_cache_capacity;
+                // Under the geometry tier the explored world outranks
+                // view-specific content, which is evicted first.
+                return (geometry_tier && world_gpu_residency_ready && tile.world_ground) ||
+                    (tile.animation_epoch != 0 && tile_geometry_epoch-tile.animation_epoch <= viewport_cache_capacity);
             };
             auto handle=residency_candidates.next(tile_geometry_cache,resident_content,tile_geometry_epoch,animation_priority,
                 [](CachedTileGeometry const& tile){return tile.natural_content;});
@@ -9029,6 +9044,9 @@ public:
             // optimistic measurement to allocate more optional world content.
             tile_geometry_runtime_budget=tile_geometry_cache_bytes+retired_content->bytes.load()+terrain_patch_index_bytes;
         }
+        if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency)
+            tile_geometry_runtime_budget=std::min(tile_geometry_runtime_budget,canonical_geometry_bytes()+
+                retired_content->bytes.load()+terrain_patch_index_bytes+view_geometry_allowance);
         if(cpu_terrain_workers!=requested_workers){terrain_preparation.clear();cpu_terrain_workers=requested_workers;}
         bool const cpu_terrain_enabled=cpu_terrain_workers && fidelity_profile && retained_world;
         unsigned active_terrain_workers=cpu_terrain_workers;

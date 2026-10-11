@@ -2993,3 +2993,47 @@ world backing codec stores the mask and row (format 6). The same
 unique geometry per owner 161 KB (no compaction) → 137 KB (natural terrain,
 section 64) → 104 KB. Pulled pages hold 6,604 entries in 380-410 MiB (was
 3,057 entries in 470 MiB).
+
+## 67. Memory by save, the fixed geometry tier and a page accounting fix (October 10)
+
+**Whole-world residency, measured** (`world-gpu-residency` at load):
+
+| Save | Map keys | World GPU bytes (required / admitted) | Adapter during play |
+| --- | --- | --- | --- |
+| Busy, 1498 AD | 16,900 (130x130) | 1,602 / 1,599 MB | 3.5-3.7 GB |
+| User, 3350 BC | 398 | 56 / 56 MB | 1.8 GB |
+| Light | 38 | 2 / 2 MB | 1.7 GB |
+
+After both compaction steps the busy world is essentially whole-resident.
+Small maps are dominated by fixed costs, not geometry. User save: static
+raster slots and overlays 419 MB, retained composition 370 MB, unattributed
+(driver, swap chain and other allocations) about 440 MB, textures 261 MB,
+shadow 100 MB, scene targets 92 MB, geometry 72 MB.
+
+**Fixed geometry tier.** In whole-world residency the geometry budget is now
+at most the explored world's canonical content plus a fixed 384 MiB allowance
+for view-specific content, and view-specific owners are evicted before
+canonical ones (`geometry_tier`, `canonical_geometry_bytes`;
+`C3X_RENDERER_GEOMETRY_TIER_CONTROL=1` keeps the free-memory budget alone).
+Renderer64 draws zoomed-out views from canonical content, so view-specific
+geometry is about zero today and on this VM the free-memory budget is the
+smaller one: the busy zoom-out run is unchanged (owners, budget, adapter).
+The tier guards larger-memory machines and future view content.
+`test_required_geometry_admission` covers the eviction order.
+
+**Accounting.** The cache charges owners' CPU metadata (dependency maps,
+proofs, receipts) to the geometry budget: busy save 1,879 MB accounted for
+1,474 MB of unique GPU buffers at load, 2,042 vs 1,599 MB in the residency
+receipt, so loading refuses world keys early. Next: account GPU bytes and
+CPU metadata separately.
+
+**Pulled page accounting.** A run that drew one occurrence twice put it in
+one page group twice; the second mapping released the new page before it was
+counted, so resident bytes underflowed and trim retired every page each frame.
+User save: 2,391 retirements and 519 MB of copies for 101 entries. Sources are
+now de-duplicated by key before packing (`test_pulled_mesh_pages.py`, on the
+VM's GPU; fails without the fix).
+
+**Captures.** The helper's in-module teardown crash (offset 0x147b3) kills it
+before a buffered trace is written; pass `C3X_RENDERER_TRACE_BUFFERED=0` in
+`-RendererOptions` when the core log is needed.
