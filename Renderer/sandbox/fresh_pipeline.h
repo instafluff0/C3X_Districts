@@ -698,6 +698,9 @@ struct SandboxSceneShadow {
     ID3D11InputLayout* layout = nullptr;
     ID3D11InputLayout* feature_layout = nullptr;
     ID3D11InputLayout* natural_layout = nullptr;
+    // Compact 56-byte natural vertices; their owner comes from zero_stream.
+    ID3D11InputLayout* natural_compact_layout = nullptr;
+    ID3D11Buffer* zero_stream = nullptr;
     ID3D11InputLayout* city_layout = nullptr;
     ID3D11InputLayout* instance_layout = nullptr;
     ID3D11Buffer* constants = nullptr;
@@ -818,6 +821,7 @@ struct SandboxSceneShadow {
         terrain_batches.clear();
         drop(texture); for(auto*& target:targets)drop(target); drop(view); drop(vertex); drop(instance_vertex); drop(rigid_vertex);
         drop(opaque); drop(cutout); drop(layout); drop(feature_layout); drop(natural_layout);
+        drop(natural_compact_layout); drop(zero_stream);
         drop(city_layout); drop(instance_layout); drop(constants); drop(maximum); drop(raster);
     }
     bool ensure() {
@@ -876,6 +880,14 @@ struct SandboxSceneShadow {
         e[1].AlignedByteOffset=72;e[2].AlignedByteOffset=12;
         e[2].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
         if (SUCCEEDED(hr)) hr=renderer.device->CreateInputLayout(e,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_layout);
+        e[0].AlignedByteOffset=0;e[1].AlignedByteOffset=52;e[2].AlignedByteOffset=0;
+        e[3].AlignedByteOffset=36;e[4].AlignedByteOffset=0;e[4].InputSlot=1;
+        if (SUCCEEDED(hr)) hr=renderer.device->CreateInputLayout(e,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_compact_layout);
+        e[4].InputSlot=0;
+        float zero[4]={};D3D11_BUFFER_DESC zero_desc={};zero_desc.ByteWidth=sizeof(zero);
+        zero_desc.Usage=D3D11_USAGE_IMMUTABLE;zero_desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+        D3D11_SUBRESOURCE_DATA zero_data={};zero_data.pSysMem=zero;
+        if (SUCCEEDED(hr)) hr=renderer.device->CreateBuffer(&zero_desc,&zero_data,&zero_stream);
         e[0].AlignedByteOffset=12;e[1].AlignedByteOffset=40;e[2].AlignedByteOffset=68;
         e[2].Format=DXGI_FORMAT_R32G32B32_FLOAT;e[3].AlignedByteOffset=52;
         e[4].AlignedByteOffset=80;e[4].Format=DXGI_FORMAT_R32G32_FLOAT;
@@ -1584,8 +1596,13 @@ struct SandboxSceneShadow {
             if(binding!=last_binding){last_cutout=bind_cutout(binding);last_binding=binding;}
             auto* pixel=last_cutout?cutout:opaque;
             if(pixel!=last_ps){context->PSSetShader(pixel,nullptr,0);last_ps=pixel;}
-            auto* input=caster.stride==88?city_layout:caster.stride==92?natural_layout:caster.stride==48?feature_layout:layout;
-            if(input!=last_layout){context->IASetInputLayout(input);last_layout=input;}
+            auto* input=caster.stride==88?city_layout:caster.stride==92?natural_layout:
+                caster.stride==56?natural_compact_layout:caster.stride==48?feature_layout:layout;
+            if(input!=last_layout){
+                context->IASetInputLayout(input);last_layout=input;
+                // Only this page's instance groups, drawn after, use slot 1.
+                if(caster.stride==56){UINT none=0;context->IASetVertexBuffers(1,1,&zero_stream,&none,&none);}
+            }
             if(caster.vertices!=last_vertices || caster.stride!=last_stride || caster.vertex_offset!=last_vertex_offset){
                 UINT stride=caster.stride,offset=caster.vertex_offset;
                 context->IASetVertexBuffers(0,1,&caster.vertices,&stride,&offset);
@@ -2711,6 +2728,7 @@ struct SandboxFreshPipeline {
                     }
                 }
                 UINT stride=mesh.vertex_stride,offset=mesh.vertex_offset;
+                if(layer>=geometry_natural_terrain)renderer.natural.bind_format(context,stride);
                 context->IASetVertexBuffers(0,1,&mesh.buffer,&stride,&offset);
                 context->IASetIndexBuffer(mesh.indices,mesh.index_format,mesh.index_offset);
                 if(mesh.rigid_source){

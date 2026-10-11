@@ -409,6 +409,13 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        panel/normal/visibility/owner) and pack per-tile integer codes into
        one R8G8B8A8_UINT; per-chunk bitwise checks with a counted legacy
        fallback. About 209 MB (26%).
+       **Natural terrain done (October 10, review 64):** 92 → 56 B where
+       uv equals world and the owner is zero (every natural terrain chunk on
+       the busy save; mountains and decals stay 92); byte-identical Lab
+       images; unique resident geometry −8.9%. The vertex stride still
+       identifies the format (56 B is unique); an explicit `vertex_format`
+       arrives when two formats share a stride. Next: the 168-B ground
+       layers, then city 88-B.
      - Stage 2 (quantized, needs the user's visual acceptance): octahedral
        16-bit normals and city tangent frames, half or unorm16 weights,
        relief and hydrology. About 137 MB more (43% cumulative).

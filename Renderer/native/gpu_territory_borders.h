@@ -10,7 +10,7 @@ class TerritoryBorders {
     template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
     Ptr<ID3D11VertexShader> vertex;
     Ptr<ID3D11PixelShader> pixel;
-    Ptr<ID3D11InputLayout> natural_layout,ground_layout;
+    Ptr<ID3D11InputLayout> natural_layout,ground_layout,compact_layout;
     Ptr<ID3D11Buffer> constants;
     Ptr<ID3D11BlendState> blend;
     Ptr<ID3D11RasterizerState> raster;
@@ -94,6 +94,9 @@ float4 PS(P p,uint sample:SV_SampleIndex):SV_Target{
         if(FAILED(device->CreateInputLayout(elements,2,vs->GetBufferPointer(),vs->GetBufferSize(),&natural_layout)))return false;
         elements[1].AlignedByteOffset=120;
         if(FAILED(device->CreateInputLayout(elements,2,vs->GetBufferPointer(),vs->GetBufferSize(),&ground_layout)))return false;
+        // Compact natural vertices begin with world; the shader projects world.
+        elements[1].AlignedByteOffset=0;
+        if(FAILED(device->CreateInputLayout(elements,2,vs->GetBufferPointer(),vs->GetBufferSize(),&compact_layout)))return false;
         D3D11_BUFFER_DESC cb={};cb.ByteWidth=64;cb.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if(FAILED(device->CreateBuffer(&cb,nullptr,&constants)))return false;
         D3D11_BLEND_DESC bd={};auto& b=bd.RenderTarget[0];b.BlendEnable=TRUE;
@@ -141,7 +144,7 @@ public:
             values[12]=float(r.territory_edges);values[13]=4.2f*std::pow(values[6]/128.f,.65f)/(values[6]*.4472136f);
             values[14]=20.f*float(height)/800.f;
             context->UpdateSubresource(cb,0,nullptr,values,0,0);
-            context->IASetInputLayout(chunk.vertex_stride==92?natural_layout.Get():ground_layout.Get());
+            context->IASetInputLayout(chunk.vertex_stride==92?natural_layout.Get():chunk.vertex_stride==56?compact_layout.Get():ground_layout.Get());
             context->IASetVertexBuffers(0,1,&chunk.buffer,&chunk.vertex_stride,&chunk.vertex_offset);
             context->IASetIndexBuffer(chunk.indices,chunk.index_format,chunk.index_offset);
             context->DrawIndexed(chunk.index_count,0,0);

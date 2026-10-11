@@ -110,7 +110,7 @@ unsigned cached_environment(char const* name,char* buffer,unsigned size){return 
 }}
 enum GeometryLayer:unsigned {geometry_underlay,geometry_land,geometry_bed,geometry_water,geometry_river,geometry_route,geometry_shadow,
  geometry_wave,geometry_feature,geometry_city,geometry_wall,geometry_mine,geometry_farm,geometry_site,geometry_cliff0,geometry_cliff7=geometry_cliff0+7,
- geometry_layer_count};
+ geometry_layer_count,geometry_natural_terrain=geometry_layer_count}; // no natural layers here
 struct Mesh {
  struct Bounds {float left=0,top=0,right=10,bottom=10;} bounds;
  struct World {float low[3]={},high[3]={};} world_bounds;
@@ -124,6 +124,7 @@ struct Mesh {
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<Mesh,geometry_layer_count>;
 using GeometryDrawReference=GeometryDrawView::Reference;
 struct Renderer {
+ struct {template<class... A>void bind_format(A...){assert(false);}} natural;
  ID3D11Device device_value;ID3D11DeviceContext1 context_value;
  ID3D11Device* device=&device_value;ID3D11DeviceContext1* context=&context_value;
  std::uint64_t device_generation=1,content_revision=1;

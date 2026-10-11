@@ -3,12 +3,16 @@
 #include "coast_join.h"
 #include "../render_core/instance_stream.h"
 #include "../render_core/shared_instance_submission.h"
+#include "../render_core/prepared_mesh.h"
 // Generic natural payload. Source-specific names and recipes are compiled offline.
 namespace c3x_renderer { namespace fidelity {
 struct Natural : NaturalWorld {
     std::vector<ID3D11ShaderResourceView*> textures;
     ID3D11VertexShader* vs[3]={};ID3D11PixelShader* ps[3]={};
-    ID3D11InputLayout* layout[3]={};ID3D11Buffer* frames[3]={};
+    ID3D11InputLayout* layout[3]={},*compact_layout[3]={};ID3D11Buffer* frames[3]={};
+    // Sixteen zero bytes at stride 0: the compact layouts' relief owner.
+    ID3D11Buffer* zero_stream=nullptr;
+    unsigned bound_provider=0;ID3D11InputLayout* bound_layout=nullptr;
     ID3D11DepthStencilState*decal_depth=nullptr;
     struct InstanceMesh {ID3D11Buffer*vertices=nullptr,*indices=nullptr;unsigned count=0;ID3D11Buffer*material=nullptr;};
     std::vector<InstanceMesh> instance_meshes;
@@ -30,7 +34,7 @@ struct Natural : NaturalWorld {
         for(auto&m:instance_meshes){drop(m.vertices);drop(m.indices);drop(m.material);}instance_meshes.clear();instance_mesh_bytes=0;instance_residency.clear();
         surface_bindings={};body_bindings.clear();
         drop(decal_depth);reset_world();for(auto&p:textures)drop(p);textures.clear();fields.clear();materials.clear();bodies.clear();recipes.clear();surface_recipes.clear();surface_vertices.clear();
-        for(int i=0;i<3;i++){drop(vs[i]);drop(ps[i]);drop(layout[i]);drop(frames[i]);}ready=false;}
+        for(int i=0;i<3;i++){drop(vs[i]);drop(ps[i]);drop(layout[i]);drop(compact_layout[i]);drop(frames[i]);}drop(zero_stream);bound_layout=nullptr;ready=false;}
     ~Natural(){reset();}
     template<class Read,class Upload>
     bool load(ID3D11Device*device,std::string const&root,Read read,Upload upload,
@@ -59,10 +63,18 @@ struct Natural : NaturalWorld {
                 {"TEXCOORD",4,DXGI_FORMAT_R32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"TEXCOORD",6,DXGI_FORMAT_R32G32B32A32_FLOAT,0,76,D3D11_INPUT_PER_VERTEX_DATA,0}};
             if(SUCCEEDED(hr))hr=device->CreateInputLayout(e,i<2?8:6,v->GetBufferPointer(),v->GetBufferSize(),&layout[i]);
+            // render_core::natural_compact_stride: position and uv alias world.
+            unsigned compact_offsets[]={0,0,16,0,28,44,52,0};
+            for(unsigned n=0;n<8;++n)e[n].AlignedByteOffset=compact_offsets[n];e[7].InputSlot=1;
+            if(SUCCEEDED(hr))hr=device->CreateInputLayout(e,i<2?8:6,v->GetBufferPointer(),v->GetBufferSize(),&compact_layout[i]);
             drop(v);drop(p);D3D11_BUFFER_DESC desc={};desc.ByteWidth=96;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&frames[i]);
             if(FAILED(hr))return false;
         }
+        float zero[4]={};D3D11_BUFFER_DESC zero_desc={};zero_desc.ByteWidth=sizeof(zero);
+        zero_desc.Usage=D3D11_USAGE_IMMUTABLE;zero_desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+        D3D11_SUBRESOURCE_DATA zero_data={};zero_data.pSysMem=zero;
+        if(FAILED(device->CreateBuffer(&zero_desc,&zero_data,&zero_stream)))return false;
         D3D11_DEPTH_STENCIL_DESC depth={};depth.DepthEnable=TRUE;depth.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ZERO;depth.DepthFunc=D3D11_COMPARISON_LESS_EQUAL;
         if(FAILED(device->CreateDepthStencilState(&depth,&decal_depth)))return false;
         // Immutable descriptors borrow textures from this asset owner. Clear
@@ -120,6 +132,7 @@ struct Natural : NaturalWorld {
     }
     void bind_instances(ID3D11DeviceContext*c,unsigned body,bool resident=false){
         c->VSSetConstantBuffers(9,1,&instance_meshes[body].material);c->VSSetShader(resident?resident_instance_vs:instance_vs,nullptr,0);c->IASetInputLayout(resident?resident_instance_layout:instance_layout);
+        bound_layout=nullptr;
     }
     void update(ID3D11DeviceContext*c,EnvironmentState const&e,float const*light){
         auto values=frame_settings(e,light);
@@ -148,6 +161,7 @@ struct Natural : NaturalWorld {
     void bind(ID3D11DeviceContext*c,unsigned provider,unsigned body=0){
         c->VSSetShader(vs[provider],nullptr,0);c->PSSetShader(ps[provider],nullptr,0);
         c->IASetInputLayout(layout[provider]);c->PSSetConstantBuffers(0,1,&frames[provider]);
+        bound_provider=provider;bound_layout=layout[provider];
         auto const& views=provider==2?body_bindings[body]:surface_bindings[provider];
         // t17 is always the shared atlas, never the source specular channel.
         c->PSSetShaderResources(0,17,views.data());c->PSSetShaderResources(18,13,views.data()+18);
@@ -155,6 +169,14 @@ struct Natural : NaturalWorld {
             ID3D11ShaderResourceView* flood_views[]={textures[floodplain[0]],textures[floodplain[1]],textures[floodplain[2]]};
             c->PSSetShaderResources(98,3,flood_views);
         }
+    }
+    // After bind(): the layout for one chunk's vertex format, before its
+    // vertex buffer is bound at slot 0.
+    void bind_format(ID3D11DeviceContext*c,unsigned stride){
+        bool compact=stride==render_core::natural_compact_stride;
+        auto* wanted=compact?compact_layout[bound_provider]:layout[bound_provider];
+        if(wanted!=bound_layout){c->IASetInputLayout(wanted);bound_layout=wanted;}
+        if(compact){UINT none=0;c->IASetVertexBuffers(1,1,&zero_stream,&none,&none);}
     }
 };
 } }

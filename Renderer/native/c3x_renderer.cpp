@@ -663,6 +663,9 @@ public:
     bool region_receiver_shadows=false;
     bool composition_receiver_index=false;
     bool tight_natural_bounds=false;
+    // Exact 56-byte natural vertices for world-projected terrain (stage 5);
+    // C3X_RENDERER_COMPACT_VERTEX_CONTROL=1 keeps every natural vertex at 92.
+    bool compact_natural_vertices=true;
     int region_input_ring=2;
     // Stage 2a: resident geometry selected by a block-anchored world window
     // (render_core/world_window.h); on unless C3X_RENDERER_WORLD_WINDOW=0.
@@ -979,13 +982,17 @@ public:
         std::string detail="owners="+std::to_string(owners)+" shared_owners="+std::to_string(shared_owners)+
             " unique_mb="+std::to_string(unique>>20)+" logical_mb="+std::to_string(logical>>20)+
             " accounted_mb="+std::to_string(tile_geometry_cache_bytes>>20)+" grid_mb="+std::to_string(terrain_patch_index_bytes>>20);
+        // A trace line holds about 1 KB: continue the layers on further
+        // geometry-census-more lines rather than truncating them.
+        bool first=true;
         for(unsigned layer=0;layer<geometry_layer_count;++layer){auto const& row=rows[layer];if(!row.chunks)continue;
+            if(detail.size()>700){trace.write(first?"geometry-census":"geometry-census-more",detail.c_str(),true);first=false;detail.clear();}
             char cell[220];std::snprintf(cell,sizeof(cell)," L%u=%llu,%llu,%u,%llu,%llu,%llu,%u,%u,%u/%u/%u/%u",layer,
                 static_cast<unsigned long long>(row.unique>>10),static_cast<unsigned long long>(row.logical>>10),row.chunks,
                 static_cast<unsigned long long>(row.vertices),static_cast<unsigned long long>(row.indices),
                 static_cast<unsigned long long>(row.instances),row.rigid,row.aliases,row.strides[0],row.strides[1],row.strides[2],row.strides[3]);
             detail+=cell;}
-        trace.write("geometry-census",detail.c_str(),true);
+        trace.write(first?"geometry-census":"geometry-census-more",detail.c_str(),true);
     }
     std::size_t world_owner_gpu_bytes(CachedTileGeometry const& owner)const{
         std::unordered_set<ID3D11Buffer*> unique;
@@ -3117,6 +3124,7 @@ public:
         region_receiver_shadows=GetEnvironmentVariableA("C3X_RENDERER_REGION_RECEIVER_SHADOWS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         composition_receiver_index=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_COMPOSITION_RECEIVER_INDEX");
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        compact_natural_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_COMPACT_VERTEX_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
         region_input_ring=std::strcmp(control,"4")==0?4:2;
         // On unless C3X_RENDERER_WORLD_WINDOW=0. The light-save stall that
@@ -6332,6 +6340,9 @@ public:
             c3x_renderer::render_core::MeshFormat format;
             format.pickup=pickup_profile;format.feature=compact_feature;format.natural=natural_vertex;
             format.projection_kind=projection_kind;
+            // Natural chunks with a projection kind always draw through
+            // project_natural_chunk; the CPU record tier keeps 23 floats.
+            format.world_projected=natural_vertex && projection_kind && !record && compact_natural_vertices;
             // Shared cliffs use projection kind 4 but retain the feature shader's vertex layout.
             format.city=projection_kind==4 && !compact_feature;
             auto topology=cached?&cached_indices:grid_indices;
@@ -6342,6 +6353,8 @@ public:
         }else{++frame_prepared_meshes;frame_prepared_vertex_bytes+=prepared->vertices.size();}
         auto const& mesh=*prepared;
         if(mesh.empty())return true;
+        // A compact natural mesh has no position or owner of its own.
+        if(mesh.vertex_stride==c3x_renderer::render_core::natural_compact_stride && (!projection_kind || record))return false;
         CachedVertexChunk chunk;
         chunk.projection_kind=projection_kind;chunk.source_tile_width=(projection_kind==2 || projection_kind==3)?128:shadow_tile_width;
         chunk.version=tile_geometry_version;chunk.vertex_stride=mesh.vertex_stride;
@@ -6610,11 +6623,12 @@ public:
         }
         input.world_revision=world_coast.revision();input.detail=patch_detail;
         input.river_ready=river_assets_ready;input.skip_flat_shore=skip_shore;input.separate_relief=separate;input.indexed=indexed;input.retain_height=heights;
+        input.world_projected=world_content && compact_natural_vertices;
         input.key={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(tile.real_terrain_type)*32+unsigned(ground),
             std::uint64_t(input.tile_width),std::uint64_t(input.tile_height),std::uint64_t(input.target_height),std::uint64_t(content_revision),
             std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
             std::uint64_t(frame.world_wrap_x)*2+unsigned(frame.world_wrap_y),std::uint64_t(patch_detail.identity()),
-            std::uint64_t(skip_shore)*16+unsigned(separate)*8+unsigned(indexed)*4+unsigned(heights)*2+unsigned(river_assets_ready)};
+            std::uint64_t(input.world_projected)*32+unsigned(skip_shore)*16+unsigned(separate)*8+unsigned(indexed)*4+unsigned(heights)*2+unsigned(river_assets_ready)};
         // The vegetation floor keeps the canopy's clearing.
         input.clearing=canopy_clearing(tile,lookup);input.key[12]=input.clearing.hash();
         return input;
@@ -7475,6 +7489,7 @@ public:
                     ++frame_parameter_updates;previous=settings;first=false;
                 }
                 UINT stride = chunk.content().vertex_stride, offset = chunk.content().vertex_offset;
+                if(layer>=geometry_natural_terrain)natural.bind_format(context,stride);
                 context->IASetVertexBuffers(0, 1, &chunk.content().buffer, &stride, &offset);
                 context->IASetIndexBuffer(chunk.content().indices, chunk.content().index_format, chunk.content().index_offset);
                 if(chunk.content().rigid_source){

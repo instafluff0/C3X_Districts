@@ -22,6 +22,9 @@ struct TerrainCompileInput {
     std::int64_t world_revision=0;
     PatchDetail detail;
     bool river_ready=false,skip_flat_shore=true,separate_relief=true,indexed=true,retain_height=true;
+    // Drawn only through world reprojection (world objects): exact compact
+    // natural vertices where a layer qualifies.
+    bool world_projected=false;
 };
 struct TerrainSurfaces {
     std::array<render_core::PreparedMesh,3> meshes;
@@ -165,7 +168,7 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     for(unsigned layer=0;layer<3;++layer){
         auto topology=layer==1 && tile.real_terrain_type==5 && compact_hill_decals?&hill_decal_indices:
             input.indexed && layer!=1?&natural_grid_indices[layer==0?0:1]:nullptr;
-        render_core::MeshFormat format;format.natural=true;
+        render_core::MeshFormat format;format.natural=true;format.world_projected=input.world_projected;
         format.shared_grid=layer==1?0:render_core::shared_mesh_grid(natural_vertices[layer].size(),topology,patch_layouts);
         if(!render_core::prepare_mesh(natural_vertices[layer],topology,format,result->meshes[layer],stop))return false;
         // Ready storage replaces raw compiler output before the next layer.

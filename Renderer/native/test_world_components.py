@@ -7,7 +7,7 @@ class WorldComponentTests(unittest.TestCase):
     def test_actual_gpu_receipt_deduplicates_exact_keys_and_distinguishes_partial_bytes(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         start=source.index('    struct WorldGpuRecord {')
-        record=source[start:source.index('    std::size_t world_owner_gpu_bytes(',start)]
+        record=source[start:source.index('    // Stage 5 byte census (C3X_RENDERER_MEMORY_CENSUS=1)',start)]
         start=source.index('    void world_gpu_report(')
         report=source[start:source.index('    c3x_renderer::fidelity::PatchLayouts',start)]
         run_cpp(r'''using UINT=unsigned;

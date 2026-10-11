@@ -86,11 +86,11 @@ struct TerrainCompileInput {
  using Key=std::array<std::uint64_t,13>;Key key{};CanopyClearing clearing;
  int tile_x,tile_y,real_terrain_type,ground,tile_width,tile_height,target_height;
  long long world_revision;Detail detail;
- bool river_ready,skip_flat_shore,separate_relief,indexed,retain_height;
+ bool river_ready,skip_flat_shore,separate_relief,indexed,retain_height,world_projected;
 };
 }}
 struct State {
- bool city_profile=true,retained_world=true,share_world_meshes=true,river_assets_ready=true;
+ bool city_profile=true,retained_world=true,share_world_meshes=true,river_assets_ready=true,compact_natural_vertices=true;
  int content_view_height=900;unsigned content_revision=13;
  c3x_renderer::fidelity::Detail patch_detail;
  struct Coast {long long value=0;long long revision()const{return value;}} world_coast;
@@ -115,7 +115,12 @@ int main(){
  state.patch_detail.value++;assert(first.key!=compile().key);state.patch_detail.value--;
  state.content_revision++;assert(first.key!=compile().key);state.content_revision--;
  tile.real_terrain_type=7;assert(first.key!=compile().key);tile.real_terrain_type=6;
- state.share_world_meshes=false;assert(compile().tile_width==224 && first.key!=compile().key);
+ // Compact natural vertices only where world reprojection draws them; the
+ // two formats never share a key.
+ assert(first.world_projected);
+ state.compact_natural_vertices=false;assert(!compile().world_projected && first.key!=compile().key);
+ state.compact_natural_vertices=true;
+ state.share_world_meshes=false;assert(compile().tile_width==224 && first.key!=compile().key && !compile().world_projected);
 }
 ''')
 

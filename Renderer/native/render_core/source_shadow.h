@@ -26,6 +26,8 @@ class SourceShadow {
     ID3D11PixelShader *opaque=nullptr,*cutout=nullptr;
     ID3D11VertexShader* rigid_vertex=nullptr,*resident_rigid_vertex=nullptr;
     ID3D11InputLayout *layout=nullptr,*feature_layout=nullptr,*natural_layout=nullptr,*city_layout=nullptr;
+    // Compact 56-byte natural vertices; their owner comes from zero_stream.
+    ID3D11InputLayout *natural_compact_layout=nullptr;ID3D11Buffer* zero_stream=nullptr;
     ID3D11Buffer* caster_settings=nullptr;
     ID3D11RasterizerState* raster=nullptr;
     ID3D11BlendState* maximum=nullptr;
@@ -71,7 +73,7 @@ public:
         borrowed_view=nullptr;
         instance_stream.clear();drop(instance_vertex);drop(resident_instance_vertex);drop(instance_layout);drop(resident_instance_layout);drop(rigid_vertex);drop(resident_rigid_vertex);
         drop(view);drop(texture);for(auto& t:targets)drop(t);
-        drop(vertex);drop(opaque);drop(cutout);drop(layout);drop(feature_layout);drop(natural_layout);drop(city_layout);drop(caster_settings);
+        drop(vertex);drop(opaque);drop(cutout);drop(layout);drop(feature_layout);drop(natural_layout);drop(city_layout);drop(natural_compact_layout);drop(zero_stream);drop(caster_settings);
         drop(table);drop(raster);drop(maximum);clear_cached_pages();
     }
     bool ensure(ID3D11Device* device,wchar_t const* path) {
@@ -101,6 +103,14 @@ public:
             elements[3].AlignedByteOffset=56;elements[0].AlignedByteOffset=40;elements[1].AlignedByteOffset=72;
             elements[2].AlignedByteOffset=12;elements[2].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
             if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_layout);
+            elements[0].AlignedByteOffset=0;elements[1].AlignedByteOffset=52;elements[2].AlignedByteOffset=0;
+            elements[3].AlignedByteOffset=36;elements[4].AlignedByteOffset=0;elements[4].InputSlot=1;
+            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_compact_layout);
+            elements[4].InputSlot=0;
+            float zero[4]={};D3D11_BUFFER_DESC zero_desc={};zero_desc.ByteWidth=sizeof(zero);
+            zero_desc.Usage=D3D11_USAGE_IMMUTABLE;zero_desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA zero_data={};zero_data.pSysMem=zero;
+            if(SUCCEEDED(hr))hr=device->CreateBuffer(&zero_desc,&zero_data,&zero_stream);
             elements[0].AlignedByteOffset=12;elements[1].AlignedByteOffset=40;
             elements[2].AlignedByteOffset=68;elements[2].Format=DXGI_FORMAT_R32G32B32_FLOAT;
             elements[3].AlignedByteOffset=52;elements[4].AlignedByteOffset=80;
@@ -449,8 +459,10 @@ public:
                     context->DrawIndexedInstanced(c.count,UINT(data.size()),0,0,0);++draws;continue;
                 }
                 context->VSSetShader(vertex,nullptr,0);
-                context->IASetInputLayout(c.stride==88?city_layout:c.stride==92?natural_layout:c.stride==48?feature_layout:layout);
+                context->IASetInputLayout(c.stride==88?city_layout:c.stride==92?natural_layout:c.stride==56?natural_compact_layout:
+                    c.stride==48?feature_layout:layout);
                 UINT stride=c.stride,offset=c.vertex_offset;context->IASetVertexBuffers(0,1,&c.vertices,&stride,&offset);
+                if(c.stride==56){UINT none=0;context->IASetVertexBuffers(1,1,&zero_stream,&none,&none);}
                 context->IASetIndexBuffer(c.indices,c.index_format,c.index_offset);context->DrawIndexed(c.count,0,0);++draws;
             }
             page={key.first,key.second,hash,epoch};++rebuilt;

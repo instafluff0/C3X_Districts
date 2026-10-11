@@ -2875,3 +2875,55 @@ with `byte_count=0`, so logical 945 MB double-counts about 86 MB and 813 MB
 unique is the resident figure. Vertex bytes: natural 425 MB, city 98.8 MB,
 168-B ground layers 208 MB. Plan in the design doc (stage 5).
 
+
+## 64. Stage 5, step 1: exact compact natural terrain vertices (October 10)
+
+**Change.** A natural mesh drawn only through world reprojection (world
+objects on; `natural_projection.z>0` in every natural vertex shader) whose uv
+equals world xy and whose relief owner is zero, bit for bit on every vertex,
+now packs 56 bytes instead of 92: world xyz+valid, normal, four material
+weights, relief height/blend, base terrain
+(`render_core/prepared_mesh.h`, `natural_compact_stride`). Its input layouts
+read position and uv from the world bytes and the owner from a 16-byte
+stride-0 zero stream: the terrain, mountain and object natural layouts
+(`source_fidelity/runtime.h`, chosen per chunk by `bind_format` in both draw
+loops), both shadow caster layouts (`source_shadow.h`, `fresh_pipeline.h`) and
+territory borders. No shader changed. Any vertex outside the rule keeps the
+mesh at 92 bytes: mountains (volcano owner) and hill decals (rotated uv) stay
+92. The CPU record tier, which stores 23 floats, never compacts and refuses a
+compact mesh; terrain compile keys separate the two formats.
+`C3X_RENDERER_COMPACT_VERTEX_CONTROL=1` keeps every natural vertex at 92.
+
+**Verification.**
+- `test_natural_compact_vertices.py` packs the same vertices both ways and
+  fetches every shader input through the layout offsets read from the source
+  (main, caster, border): identical bits. A wrong offset fails it.
+- Lab A/B, compact against the control, byte-identical BMPs in every pair that
+  rendered on both sides: grassland (3 cases), hills (2), mountains (3),
+  borders crimson-fine at 64 and 128 and crimson-brush at 64, transitions
+  gameplay, volcanoes detail at 128 and 224, floodplains detail (16 pairs).
+  The grassland detail scene's geometry: 28.6 → 23.4 MB.
+- The other Lab renders failed on both sides, the control included: a 32-bit
+  fail-fast (c0000409) that also fails `replay_composition.exe`
+  (`test_composition_recording`, already failing before this change), access
+  violations while another VM workload ran, and the shadows unit study's
+  "required unit source admission incomplete". Separate follow-up.
+
+**Busy save (1498 AD), census.** Every natural terrain chunk compacts (1,289
+chunks, 3.36 M vertices at 56 B); mountain and decal chunks stay 92 B. At equal
+vertex counts natural terrain vertices plus indices fall from 343 to about
+224 MiB (−35%). Unique resident geometry: 823 → 750 MB at 4,608 owners (−8.9%);
+about −8.6% later in the run at about 9,000 owners.
+
+**Census trace.** With exact strides the census line outgrew the 1 KB trace
+line and lost layers after 21, the natural layers among them; it now
+continues on `geometry-census-more` lines (`test_geometry_census.py`).
+
+**Test harness repairs.** Earlier changes today left stubs behind in
+`test_durable_preparation`, `test_required_geometry_admission`,
+`test_resident_mesh_ownership`, `test_zoom_mesh_cache` (residency
+dependencies), `test_unit_reflection_selection` (route source cache, now one
+publication per emit), `test_fresh_map_idle` (a completed render stays sampled
+until its swap; the composition skips a repeated generation), and
+`test_resource_instances` (explored fog keeps the live clock, section 54).
+`residency_candidates.h` compares use times as 64-bit.

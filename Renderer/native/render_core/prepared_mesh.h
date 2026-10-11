@@ -60,7 +60,20 @@ struct MeshFormat {
     bool pickup=true,feature=false,natural=false;
     unsigned projection_kind=0,source_tile_width=128,shared_grid=0;
     bool city=false;
+    // Natural vertices drawn only through world reprojection
+    // (natural_projection.z>0) may drop their position, uv and owner.
+    bool world_projected=false;
 };
+// Exact compact natural vertex: world xyz+valid, normal, four material
+// weights, relief height/blend, base terrain. Valid only for a world-projected
+// mesh whose uv equals world xy and whose relief owner is zero, bit for bit;
+// the input layouts alias position and uv to world and read the owner from
+// a stride-0 zero stream. Any other natural mesh keeps all 92 bytes.
+constexpr unsigned natural_vertex_stride=92u,natural_compact_stride=56u;
+inline bool natural_vertex_compact(Vertex const& v){
+    float zero[4]={},owner[]={v.relief_owner_u,v.relief_owner_v,v.relief_owner_coverage,v.relief_owner_state};
+    return std::memcmp(&v.u,&v.world_x,4)==0 && std::memcmp(&v.v,&v.world_y,4)==0 && std::memcmp(owner,zero,16)==0;
+}
 template<class Layouts>
 unsigned shared_mesh_grid(std::size_t vertices,std::vector<unsigned> const* indices,Layouts& layouts){
     if(!indices || vertices>65535u)return 0;
@@ -90,7 +103,10 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
     }
     auto const& elements=topology?*topology:indices;
     auto count=topology?source.size():unique.size();
-    result.vertex_stride=format.city?88u:format.pickup?(format.natural?92u:format.feature?48u:sizeof(Vertex)):120u;
+    bool compact=format.pickup && !format.city && format.natural && format.world_projected;
+    for(std::size_t i=0;compact && i<count;++i)compact=natural_vertex_compact(source[topology?i:unique[i]]);
+    result.vertex_stride=format.city?88u:format.pickup?(format.natural?(compact?natural_compact_stride:natural_vertex_stride):
+        format.feature?48u:sizeof(Vertex)):120u;
     result.index_stride=count<=65535u?2:4;result.index_count=unsigned(elements.size());
     result.shared_grid=format.shared_grid;
     result.vertices.resize(count*result.vertex_stride);result.indices.resize(elements.size()*result.index_stride);
@@ -125,6 +141,12 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
                 v.material_grass,v.material_plains,v.material_desert,
                 v.material_marsh,v.authored_relief_height,v.authored_relief_blend,
                 v.world_x,v.world_y,v.world_z,v.relief_owner_u,v.relief_owner_v};
+            std::memcpy(output,data,sizeof(data));
+        }else if(compact){
+            float data[]={v.world_x,v.world_y,v.world_z,v.world_valid,v.normal_x,v.normal_y,v.normal_z,
+                v.material_grass,v.material_plains,v.material_desert,v.material_marsh,
+                v.authored_relief_height,v.authored_relief_blend,v.base_terrain};
+            static_assert(sizeof(data)==natural_compact_stride,"compact natural vertex");
             std::memcpy(output,data,sizeof(data));
         }else if(format.natural){
             float data[]={x,y,z,v.world_x,v.world_y,v.world_z,v.world_valid,
