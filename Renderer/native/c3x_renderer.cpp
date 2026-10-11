@@ -150,6 +150,7 @@ bool c3x_renderer64_select_units(c3x_renderer_frame_v1 const& frame,
 #include "render_core/prepared_world_validity.h"
 #include "render_core/residency_candidates.h"
 #include "render_core/world_input_capture.h"
+#include "render_core/canonical_minify.h"
 #include "render_core/world_move_footprint.h"
 #include "render_core/world_preparation_region.h"
 #include "city_fidelity/glow.h"
@@ -591,6 +592,12 @@ public:
     std::vector<std::uint32_t> visibility_pixels;
     ID3D11Texture2D* gpu_map_texture=nullptr;
     bool gpu_map_valid=false;
+    // A settled zoomed step's one draw (review 69): the presented zoom, its
+    // target, and the minification that fills the hidden canonical image.
+    float zoomed_step=1.f;
+    ID3D11Texture2D* zoomed_step_texture=nullptr;ID3D11RenderTargetView* zoomed_step_target=nullptr;
+    ID3D11ShaderResourceView* zoomed_step_view=nullptr;
+    c3x_renderer::render_core::CanonicalMinify canonical_minify;
     std::uint64_t unit_scene_rejections=0;
     c3x_renderer::render_core::LinearTarget unit_scene_work;
     c3x_renderer::tactical::Gpu tactical_gpu;
@@ -1523,6 +1530,7 @@ public:
         release(block_readback); release(block_depth); release(block_depth_texture);
         release(block_target); release(block_texture);
         release(gpu_map_texture);gpu_map_valid=false;
+        release(zoomed_step_view);release(zoomed_step_target);release(zoomed_step_texture);canonical_minify.reset();
         release(readback_texture);
         release(animation_readback_texture);
         animation_readback_width=animation_readback_height=0;
@@ -12701,7 +12709,7 @@ public:
             }
             if(cancelled()){target->Release();return false;}
             auto candidates=fresh_unit_poses;
-            if(!select_frame_units(native_frame,candidates,fresh_unit_poses,1.f)){target->Release();return false;}
+            if(!select_frame_units(native_frame,candidates,fresh_unit_poses,zoomed_step)){target->Release();return false;}
             warm_unit_assets(candidates);
             for(;;){
                 if(cancelled()){target->Release();return false;}
@@ -12714,12 +12722,28 @@ public:
                 Sleep(1);
             }
             LARGE_INTEGER draw_start={},draw_end={};QueryPerformanceCounter(&draw_start);
-            if(trace.level>=2 && !prewarming){setup_marks[7]=draw_start;char phases[256];int used=std::snprintf(phases,sizeof(phases),"covered=%u",unsigned(covered_membership));
+            if(trace.level>=2 && !prewarming){setup_marks[7]=draw_start;char phases[256];int used=std::snprintf(phases,sizeof(phases),"covered=%u zoom=%.3f",unsigned(covered_membership),zoomed_step);
                 for(unsigned i=1;i<setup_marks.size();++i)used+=std::snprintf(phases+used,sizeof(phases)-used," p%u=%.3f",i,
                     setup_marks[i].QuadPart&&setup_marks[i-1].QuadPart?trace.milliseconds(setup_marks[i].QuadPart-setup_marks[i-1].QuadPart):-1.);
                 trace.write("render-setup-phases",phases,true);}
             route_map_serial=gpu_serial+1;
-            bool drawn=c3x_renderer64_render_fresh(native_frame,target);
+            bool drawn=false;
+            if(zoomed_step!=1.f){
+                // Drawn once at the presented zoom; the canonical centre is its
+                // minification, the only part read while zoomed (review 69).
+                D3D11_TEXTURE2D_DESC scratch={};if(zoomed_step_texture)zoomed_step_texture->GetDesc(&scratch);
+                if(!zoomed_step_texture || scratch.Width!=UINT(width) || scratch.Height!=UINT(height)){
+                    release(zoomed_step_view);release(zoomed_step_target);release(zoomed_step_texture);
+                    gpu_map_texture->GetDesc(&scratch);
+                    if(FAILED(device->CreateTexture2D(&scratch,nullptr,&zoomed_step_texture)) ||
+                       FAILED(device->CreateRenderTargetView(zoomed_step_texture,nullptr,&zoomed_step_target)) ||
+                       FAILED(device->CreateShaderResourceView(zoomed_step_texture,nullptr,&zoomed_step_view))){
+                        release(zoomed_step_view);release(zoomed_step_target);release(zoomed_step_texture);
+                    }
+                }
+                drawn=zoomed_step_target && c3x_renderer64_render_fresh(native_frame,zoomed_step_target,zoomed_step) &&
+                    canonical_minify.draw(device,context,zoomed_step_view,target,UINT(width),UINT(height),zoomed_step);
+            }else drawn=c3x_renderer64_render_fresh(native_frame,target);
             target->Release();QueryPerformanceCounter(&draw_end);
             if(cancelled())return false;
             if(!drawn){
@@ -15294,6 +15318,8 @@ private:
     // World origin of the last adopted step; only a moved camera needs the
     // adoption-time zoomed draw (review 51).
     long long adopted_camera=LLONG_MIN;
+    // The zoom the last deferred step was drawn at (1 = the canonical draw).
+    float deferred_step_zoom=1.f;
     DWORD camera_notify_thread=0;UINT camera_notify_message=0;
     c3x_renderer_camera_completion_fn camera_completion_observer=nullptr;
     void* camera_completion_context=nullptr;
@@ -16232,9 +16258,24 @@ private:
     // already drawn its layers with the step's reported ownership; a draw
     // that disagrees is traced. A failed draw retries once without the
     // retained scene pins, as a camera job does under memory pressure.
+    // The presented zoom while zoomed in and settled at its destination, else
+    // 1. The canonical (1x) image is hidden then (review 69);
+    // C3X_RENDERER_ZOOMED_STEP_CONTROL=1 keeps drawing it.
+    float settled_zoom(){
+        char control[4]={};
+        float presented=renderer_state.gpu_composition?float(renderer_state.gpu_composition->presented_zoom())/65536.f:1.f;
+        float destination=c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed);
+        bool zoomed=presented>1.f && std::fabs(destination-presented)<1e-4f &&
+            !(c3x_renderer::render_core::cached_environment("C3X_RENDERER_ZOOMED_STEP_CONTROL",control,sizeof(control)) && control[0]=='1');
+        return zoomed?presented:1.f;
+    }
     bool draw_deferred_step(){
         if(job_camera_ticket!=camera_ticket)return false;
         auto promised=gpu_publication.replacements;
+        // Settled zoomed in, the step is drawn once at the presented zoom and
+        // the hidden canonical image is its minification.
+        struct ZoomLease {float& value;~ZoomLease(){value=1.f;}} zoom_lease{renderer_state.zoomed_step};
+        renderer_state.zoomed_step=deferred_step_zoom=settled_zoom();
         auto draw=[this]{
             c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};
             GpuOutputMode mode(renderer_state,true);
@@ -16392,13 +16433,27 @@ private:
                         advance_visual_clock();unit_instances.resume_motion(visual_ticks,visual_frequency);
                         // A step drawn just now is current: travel was held
                         // since its job started, so no newer pose was shown.
-                        if(map_sample.prepare && !drawn_now){
+                        // Settled zoomed in, the canonical image is hidden: the
+                        // job's draw stands and the zoomed draw below follows.
+                        if(map_sample.prepare && !drawn_now && settled_zoom()==1.f){
                             map_sample.prepare(visual_ticks,visual_frequency,1.f);
                             if(prepared_map && prepared_map->ready && prepared_map->zoom==1.f)initial=prepared_map->front.Get();
                         }
                         // A deferred step was just drawn canonically; zoomed in
                         // it still needs its presented-zoom draw below.
                         auto zoomed_prepare=map_sample.prepare;
+                        // Unless the step was drawn at the presented zoom: that
+                        // draw is the new map's first zoomed front, and the
+                        // next zoomed step draws into a new target (review 69).
+                        bool zoomed_front=drawn_now && ready && deferred_step_zoom!=1.f && map_sample.prepare &&
+                            prepared_map && renderer_state.zoomed_step_texture;
+                        if(zoomed_front){
+                            prepared_map->front=renderer_state.zoomed_step_texture;prepared_map->zoom=deferred_step_zoom;
+                            prepared_map->completed_ticks=visual_ticks;prepared_map->source_generation=renderer_state.route_frame_sequence;
+                            prepared_map->ready=true;
+                            renderer_state.release(renderer_state.zoomed_step_view);renderer_state.release(renderer_state.zoomed_step_target);
+                            renderer_state.release(renderer_state.zoomed_step_texture);
+                        }
 #endif
                         if(session.publish(initial,renderer_state.gpu_serial,
                             gpu_publication.source_x,gpu_publication.source_y,gpu_metadata.width,gpu_metadata.height,std::move(map_sample))){
@@ -16440,7 +16495,7 @@ private:
                             if(shown.tile_count&&shown.tiles)camera=(static_cast<long long>(shown.tiles[0].anchor_x-shown.tiles[0].tile_x*shown.tile_width/2)<<32)^
                                 static_cast<unsigned>(shown.tiles[0].anchor_y-shown.tiles[0].tile_y*shown.tile_height/2);
                             bool moved=camera!=adopted_camera;adopted_camera=camera;
-                            if(zoomed_prepare&&moved&&presented!=1.f&&std::fabs(destination-presented)<1e-4f)
+                            if(zoomed_prepare&&moved&&!zoomed_front&&presented!=1.f&&std::fabs(destination-presented)<1e-4f)
                                 zoomed_prepare(visual_ticks,visual_frequency,presented);
 #endif
                         }else result=C3X_RENDERER_RESULT_BAD_ARGUMENT;

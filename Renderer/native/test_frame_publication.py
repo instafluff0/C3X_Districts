@@ -446,7 +446,7 @@ struct Session {
  template<class... T> int visual_frame(T...){return unexpected_gpu();}
  Session(Device*,Context*){unexpected_gpu();}
  c3x_renderer_i64 current_ticket(){return unexpected_gpu();}std::uint64_t upload_count(){return unexpected_gpu();}
- int map_image(){return unexpected_gpu();}int session_identity(){return unexpected_gpu();}
+ int map_image(){return unexpected_gpu();}int session_identity(){return unexpected_gpu();}unsigned presented_zoom(){return unexpected_gpu();}
  template<class... T> bool publish(T...){return unexpected_gpu();}
  template<class... T> int execute(T&&...){return unexpected_gpu();}
  template<class... T> int draw_dynamic(T...){return unexpected_gpu();}
@@ -565,6 +565,7 @@ struct RendererState {
     Device owned_device;Context owned_context;Device* device=&owned_device;Context* context=&owned_context;
     bool gpu_output_mode=false,gpu_map_valid=false,cpu_output_stale=false,scene_surface_requested=false,city_profile=false;
     ID3D11Texture2D* gpu_map_texture=nullptr;unsigned frame_output_readbacks=0;std::uint64_t gpu_serial=0;std::int64_t camera_serial=0;
+    float zoomed_step=1.f;
     struct {bool enabled=false;} reflection;std::unique_ptr<c3x_gpu_images::Session> gpu_composition;
     unsigned cache_hits=0,device_recoveries=0,frame_tiles_built=0,frame_tiles_reused=0,prepared_blocks=0,visible_resource_animations=0;
     unsigned content_revision=1,device_generation=1;

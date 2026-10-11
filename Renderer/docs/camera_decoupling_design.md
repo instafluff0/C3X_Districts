@@ -235,7 +235,9 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
      frame-level camera update; the new edge's strips and shadow pages are
      filled in bounded slices; jobs remain for content changes and far
      jumps, and frames keep animating while they run. The hidden canonical
-     1× lane is not redrawn on zoomed steps. Today a covered step still
+     1× lane is not redrawn on zoomed steps (**done October 11**, review 69:
+     a settled zoomed step is drawn once at its zoom and the canonical centre
+     is its minification; busy 3× steps 295-350 → 153-189 ms). Today a covered step still
      costs about 100 ms from request to adoption: about 20 ms before the
      worker starts the job (it is composing a display frame, 21 ms p50 on
      the busy save), 14 ms of synchronous delivery, the job, and the wait

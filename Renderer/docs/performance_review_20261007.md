@@ -3037,3 +3037,73 @@ VM's GPU; fails without the fix).
 **Captures.** The helper's in-module teardown crash (offset 0x147b3) kills it
 before a buffered trace is written; pass `C3X_RENDERER_TRACE_BUFFERED=0` in
 `-RendererOptions` when the core log is needed.
+
+## 68. Busy save pass ablation (October 10)
+
+Busy save, `near`, cadence only, one run each (same build; the per-pass skips
+are the sandbox's `C3X_SANDBOX_SKIP_*` switches):
+
+| Run | 1x idle | 1x scroll x (fps / step p50 / adopt p50) | 2x scroll | 3x scroll | 3x idle | 1x idle, end |
+| --- | --- | --- | --- | --- | --- | --- |
+| Base | 44.2 fps | 5.9 / 260 / 191 ms | 4.0 / 454 / 340 | 4.0 / 354 / 256 | 55.9 | 26.7 |
+| No water pass | 54.6 | 5.8 / 182 / 129 | 4.4 / 287 / 250 | 6.7 / 226 / 178 | 53.6 | 41.5 |
+| No vegetation | 45.0 | 5.9 / 214 / 121 | 4.6 / 250 / 197 | 5.2 / 246 / 202 | 53.7 | 38.7 |
+
+The reflection run failed to start (no session). Run-to-run noise is about
+±30% on the scroll segments (the base run's 1x y segment: 31.1 fps, steps
+157 ms), so only large effects count: the water pass costs about 10 fps of
+busy 1x idle (it is the largest single GPU pass), vegetation little. Neither
+pass explains the scroll steps: zoomed steps take 250-450 ms with or without
+them, because a zoomed adoption draws the step twice (the canonical 1x image,
+then the presented zoom).
+
+## 69. A settled zoomed step is drawn once, at its presented zoom (October 11)
+
+**Why zoomed steps were slow.** Zoomed in, every adopted step drew the
+hidden canonical (1x) image before its presented-zoom draw. The canonical
+lane's caches are cold while zoomed (its static raster refines at a quarter
+budget and its retained water overlays do not match), so that draw redrew
+every layer near water: the water phase took 36-80 ms against 3.5 ms at 1x
+(busy save, trace level 2). A block-crossing job then redrew the canonical
+image a second time at adoption.
+
+**What reads the canonical image while zoomed.** With the zoomed draw ready,
+the displayed frame does not sample it. The fallbacks that do (a new step
+whose zoomed draw is still pending, the unprojected view, no projected
+sampler) magnify it about the frame centre, so they read only the centred
+rectangle the zoomed view covers. Civ III's commit-time quantize and copy read
+the whole image, but their result is shown only by the native fallback
+display (game loading, a failed retained graph). Zooming back to 1x draws a
+fresh 1x frame.
+
+**Change.** A deferred step adopted while the zoom is settled at its
+destination (above 1x) is drawn once, at the presented zoom, and the
+canonical centre is filled by minifying that draw
+(`render_core/canonical_minify.h`: a box average of the zoomed pixels each
+canonical pixel covers about the `SceneProjection` centre; exact at whole
+zooms). That draw becomes the new map's first zoomed front instead of being
+drawn again after publication. A full camera job (a block crossing) keeps its
+canonical draw, but its adoption no longer redraws it at 1x while the zoom is
+settled. `C3X_RENDERER_ZOOMED_STEP_CONTROL=1` restores the old path.
+
+**Measured** (busy save, `near`, cadence, same build, control alternated;
+one control run disturbed by the host and excluded):
+
+| Step p50 | New (4 runs) | Old path (3 runs) |
+| --- | --- | --- |
+| 3x scroll | 153-189 ms, 21-28 steps in 5 s | 295-350 ms, 14-17 steps |
+| 2x scroll | 253-491 ms (median about 300), 10-18 steps | 278-433 ms (median about 380), 7-12 steps |
+
+1x is unchanged. With buffered traces, a covered zoomed step's draw now takes
+26 ms at 2x and 18 ms at 3x (it was the full canonical render). 2x gains
+less because about a quarter of its steps are block crossings, which still
+run full camera jobs (shadow rebuild 40-110 ms, membership 32 ms p50).
+Window frames during zoomed scrolling and after zooming back out are complete
+and sharp.
+
+**Tests.** `test_zoomed_step_canonical.py`: on the VM's GPU, a zoomed image
+built by replicating canonical pixels over their projection footprints
+minifies back to exactly those pixels at 2x and 3x, and nothing outside the
+covered rectangle is written (a one-pixel centre error fails it); a source
+contract for the settled-zoom draw, the first-front hand-off and the skipped
+1x redraw (fails on the previous code).
