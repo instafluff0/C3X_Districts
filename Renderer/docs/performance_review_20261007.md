@@ -3243,3 +3243,17 @@ Diagnostics added with it: drained GPU marks inside the water span
 dynamic spans, `C3X_RENDERER_PROFILE=4`), water lighting cache builds and
 reuses in `fresh-overlay-layer`, and the step render's unit asset wait
 (`units_ms`, `unit_waits` in `render-setup-phases`: about zero after load).
+
+## 73. A zoomed block crossing is drawn at its zoom too (October 11)
+
+A camera job that moves the camera retires its retained view, so no display
+frame runs until its adoption. Settled zoomed in, such a job (a block
+crossing) is now drawn at the presented zoom with the canonical centre
+minified from it, as deferred steps are (section 69); a same-view content job
+keeps its canonical draw, since display frames run during it. Busy save,
+trace level 2, crossing jobs: at 2x 153 ms p50 with a 1.9 ms water phase
+(the cold canonical lane's water phase was 36-80 ms), at 3x 98 ms. Cadence
+runs at this hour were too disturbed by the host to compare step periods
+(one run showed 28 fps at 3x idle). Window frames during zoomed scrolling and
+the zoom-out transition are complete. `C3X_RENDERER_ZOOMED_STEP_CONTROL=1`
+restores the canonical draw for both.

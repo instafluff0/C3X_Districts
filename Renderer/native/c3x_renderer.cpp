@@ -17494,6 +17494,13 @@ private:
                         else if(!initial_world && defer_scroll_step(ready))result=C3X_RENDERER_RESULT_OK;
                         else {
                             GpuOutputMode mode(renderer_state,true);
+                            // A job that moved the camera shows no frame before its
+                            // adoption (its retained view is retired): settled zoomed
+                            // in, it too is drawn at the presented zoom (review 73).
+#ifdef C3X_RENDERER64_FRESH
+                            struct ZoomLease {float& value;~ZoomLease(){value=1.f;}} zoom_lease{renderer_state.zoomed_step};
+                            if(!initial_world && !completed_scene_usable())renderer_state.zoomed_step=settled_zoom();
+#endif
                             struct LoadingLease {
                                 bool& flag;bool prior;
                                 LoadingLease(bool& value,bool required):flag(value),prior(value){flag=required;}

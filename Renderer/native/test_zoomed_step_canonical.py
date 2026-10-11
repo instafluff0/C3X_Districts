@@ -90,6 +90,12 @@ int main(){
         self.assertRegex(settled, r"presented>1\.f && std::fabs\(destination-presented\)<1e-4f")
         self.assertIn("C3X_RENDERER_ZOOMED_STEP_CONTROL", settled)
         self.assertIn("renderer_state.zoomed_step=deferred_step_zoom=settled_zoom();", deferred)
+        # A camera job that moved the camera (its retained view retired, so no
+        # display frame runs during it) is drawn at the settled zoom too.
+        job = source[source.index("else if(!initial_world && defer_scroll_step(ready))result=C3X_RENDERER_RESULT_OK;"):]
+        job = job[:job.index("bool complete=renderer_state.render(job_frame")]
+        self.assertIn("if(!initial_world && !completed_scene_usable())renderer_state.zoomed_step=settled_zoom();", job)
+        self.assertIn("struct ZoomLease {float& value;~ZoomLease(){value=1.f;}} zoom_lease{renderer_state.zoomed_step};", job)
         # A full camera job's canonical draw is not redrawn at 1x on adoption
         # while the zoom is settled: the zoomed draw follows it.
         self.assertIn("if(map_sample.prepare && !drawn_now && settled_zoom()==1.f){", source)
