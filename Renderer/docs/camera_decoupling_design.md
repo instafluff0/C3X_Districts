@@ -386,8 +386,8 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        - the unit status, as facts drawn by the renderer (section 47). It
          matches native, and idle ticks went from about 930 to about 240
          renderer commands.
-     - Next: city labels, deferred by the user on October 10. They need new
-       hook entries in `civ_prog_objects.csv`.
+     - City labels: not now (the user, October 11). They would need new hook
+       entries in `civ_prog_objects.csv`; Civ III keeps drawing them.
      - Every other vanilla interface element (minimap, panels) is unchanged.
        So is the configuration-off path.
    - **Scrolling at 2×/3× is soft** (user report, October 9; measured in
@@ -426,7 +426,7 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        about 73 B on the busy save, byte-identical Lab images; unique geometry
        per owner 161 → 104 KB with both steps. Next: city 88-B, then the
        pulled pages' copy (pooled ground storage in R3).
-     - Stage 2 (quantized, needs the user's visual acceptance): octahedral
+     - Stage 2 (quantized; approved by the user on October 11): octahedral
        16-bit normals and city tangent frames, half or unorm16 weights,
        relief and hydrology. About 137 MB more (43% cumulative).
      - Stage 3: grid-exact natural world.xy, narrower UVs; about 50%.
@@ -512,6 +512,56 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        off the draw's lock.
      - Each stage keeps the 8,192 cap off the resident path, is measured on
        the busy, light and user saves, and gets a regression test.
+   - **Whole-world restructure design (October 11, user go-ahead; code maps
+     from two audits).**
+     - *What couples drawing to the camera today.* All explored tiles' meshes
+       are already GPU-resident and reachable per tile
+       (`topology_cache.retained(key)->compiled_views`). What is drawn is
+       `geometry_vertex_buffers`: one flat, occurrence-sorted record array per
+       layer for the window's tiles, copied whole on write, with one global
+       revision (`view_revision()`). Dozens of producer arrays are indexed by
+       window position. Every crossing re-diffs, re-sorts and bumps that
+       revision, which rebuilds the region index and `resident_tiles`,
+       re-collects every shadow caster, misses the static raster, ROI, water
+       lighting, unit and bootstrap keys. Caps sized for a window block a
+       whole-world array: region index 4,096 cells and 4,096 px queries,
+       16 MiB shadow metadata, 16,384 owners per selection, the 32 MiB
+       completed-view fork.
+     - *Target.* A renderer-owned **resident world**: draw records grouped by
+       8x8 world block (the topology's block size), in a fixed world pixel
+       basis (occurrence anchor = canonical tile coordinate x half tile),
+       built per tile from the retained record and its resident binding,
+       changed only when the world changes (publications, completed world
+       preparation, eviction). Blocks are copy-on-write; a generation is the
+       block map, so publishing and forking cost O(blocks), not O(records).
+       Queries return the records of blocks meeting a world rectangle, with
+       x-wrap turns, in today's draw order (layer, occurrence y, x, ordinal
+       within the tile, turn). Civ III's frame keeps only the view's work:
+       observations, ownership flags, units, waves, visibility coverage.
+     - *Increments* (each behind `C3X_RENDERER_RESIDENT_WORLD`, the window path
+       unchanged until the new one is complete and measured faster):
+       1. The store (`render_core/resident_world.h`): blocks, copy-on-write
+          generations, owner leases per block, ordered wrapped queries,
+          per-block revisions; host tests including order equivalence with
+          the flat sorted array.
+       2. The builder: populate from the retained world when GPU residency is
+          ready; update changed tiles from publications and preparation;
+          per-tile records exactly as `append_tile_geometry` makes them.
+       3. Fresh pipeline reads: `contributors()`/`each_resident` query
+          blocks (no region index rebuild, no 4,096 px limit, so `update_roi`
+          and slot work stay view-bounded); `tile_resident` from the store;
+          `view_revision()` becomes the store revision (world edits only).
+       4. Shadows per block: casters, producers and page occurrences only for
+          blocks within the shadow field; placement sources likewise.
+       5. `render()` with the resident world: no window build, membership
+          diff or assembly per step; ownership flags and resource anchors
+          for Civ III's frame from the store; tiles not yet resident compile
+          and enter the store. Camera steps then never change membership, so
+          every step is covered and crossings disappear.
+       6. Default on; retire the window path's per-step membership work.
+     - *Expected.* Busy scroll: no 100-300 ms crossing jobs; steady steps at
+       the covered cost (two ticks today, about 156 ms). Memory: records for
+       the explored world (about 88 B each), not new GPU geometry.
    - Original order: (1) the draw's set-dependent passes (static refinement and water
      overlay validity, shadow casters, reflection), indexed by window block;
      (2) membership admission revalidating only changed or view-near tiles;
