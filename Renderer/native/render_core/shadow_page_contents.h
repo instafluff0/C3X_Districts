@@ -10,6 +10,7 @@
 #include <functional>
 #include <iterator>
 #include <cstring>
+#include <chrono>
 #include "raster_contributors.h"
 
 namespace c3x_renderer { namespace render_core {
@@ -70,12 +71,14 @@ template<class Proof> struct ShadowCasterProofs {
         values.push_back(value);return true;
     }
     bool watch(Revisions::Domain domain,std::uint64_t id){
-        ++validation_counts.dependency_watch_calls;
+        ++validation_counts.dependency_watch_calls;if(expanding)++validation_counts.source_watch_calls;
         if(!registering)return complete=false;
         return append(expanding?source_scratch:registering->dependencies,Revisions::Key{domain,id});
     }
     static void normalize(std::vector<Revisions::Key>& keys){
-        std::sort(keys.begin(),keys.end(),Less{});keys.erase(std::unique(keys.begin(),keys.end()),keys.end());
+        // Proofs emit their keys in order when their inputs are sorted.
+        if(!std::is_sorted(keys.begin(),keys.end(),Less{}))std::sort(keys.begin(),keys.end(),Less{});
+        keys.erase(std::unique(keys.begin(),keys.end()),keys.end());
     }
     static std::uint64_t dependency_hash(std::vector<Revisions::Key> const& keys){
         std::uint64_t hash=14695981039346656037ull;
@@ -118,10 +121,13 @@ template<class Proof> struct ShadowCasterProofs {
             catch(std::bad_alloc const&){allocated-=sizeof(Source)+sizeof(void const*)+64;return complete=false;}
             found->second.owner=owner;
             expanding=&found->second;++validation_counts.source_expansions;
+            auto expansion=std::chrono::steady_clock::now();
             bool result=false;
             try{result=register_inputs(*owner);}catch(std::bad_alloc const&){complete=false;}
             expanding=nullptr;
-            if(!result || !complete || !intern_source(found->second)){
+            bool interned=result && complete && intern_source(found->second);
+            validation_counts.source_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-expansion).count();
+            if(!interned){
                 erase_source(found);release_scratch();return complete=false;
             }
         }else ++validation_counts.source_reuses;
@@ -157,7 +163,9 @@ template<class Proof> struct ShadowCasterProofs {
             registering=&producer;++validation_counts.proof_registrations;
             bool result=register_inputs(*producer.proof,*this);registering=nullptr;
             if(!result || !complete){erase(found,true);return complete=false;}
+            auto sorting=std::chrono::steady_clock::now();
             normalize(producer.dependencies);
+            validation_counts.normalize_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-sorting).count();
             ++validation_counts.content;++validation_counts.visibility;
             producer.valid=valid(*producer.proof); // one exact check, never append then recheck all producers
         }else if(found->second.visibility!=visibility){

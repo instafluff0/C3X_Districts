@@ -723,6 +723,26 @@ public:
     std::string fidelity_root,shader_root,natural_pack_root;
     std::string combat_effects_root; // CombatEffectsRuntime beside the unit pack
     c3x_renderer::fidelity::Natural natural;
+    // River page inputs equal in content are one dependency source for proof
+    // registration. Decoded and recompiled pages are distinct objects, so
+    // each entering shadow caster expanded its own copies (review 69).
+    std::unordered_multimap<std::uint64_t,std::weak_ptr<c3x_renderer::fidelity::NaturalWorld::PageInputs>> shared_river_pages;
+    std::shared_ptr<c3x_renderer::fidelity::NaturalWorld::PageInputs> shared_river_inputs(
+            std::shared_ptr<c3x_renderer::fidelity::NaturalWorld::PageInputs> const& inputs){
+        static bool const control=[]{char value[4]={};
+            return c3x_renderer::render_core::cached_environment("C3X_RENDERER_PROOF_SHARING_CONTROL",value,sizeof(value))&&value[0]=='1';}();
+        if(control || !inputs)return inputs;
+        auto hash=inputs->hash();auto range=shared_river_pages.equal_range(hash);
+        for(auto i=range.first;i!=range.second;){
+            auto shared=i->second.lock();
+            if(!shared){i=shared_river_pages.erase(i);continue;}
+            if(shared==inputs || (shared->values==inputs->values && shared->flow==inputs->flow))return shared;
+            ++i;
+        }
+        if(shared_river_pages.size()>=65536)for(auto i=shared_river_pages.begin();i!=shared_river_pages.end();)
+            i=i->second.expired()?shared_river_pages.erase(i):std::next(i);
+        shared_river_pages.emplace(hash,inputs);return inputs;
+    }
     c3x_renderer::fidelity::TerrainPreparation terrain_preparation;
     c3x_renderer::fidelity::GroundTask::Queue ground_preparation;
     c3x_renderer::fidelity::GroundPreparation selected_ground_preparation;
@@ -6946,19 +6966,22 @@ public:
     std::array<unsigned,7> raster_proof_rejections{};
     template<class Inputs>bool watch_raster_dependencies(CachedGeometryProof const& proof,Inputs& inputs){
         using Domain=c3x_renderer::render_core::RasterDependencyRevisions::Domain;
+        // In domain order: a proof whose inputs are sorted registers already
+        // normalized keys.
         for(auto const& input:proof.appearance_dependencies)if(!inputs.watch(Domain::appearance,input.first))return false;
         for(auto const& input:proof.dependencies)if(!inputs.watch(Domain::semantic,input.first))return false;
+        if(!inputs.watch(Domain::visibility,proof.tile))return false;
         for(auto const& input:proof.coast_dependencies)if(!inputs.watch(Domain::coast,input.first))return false;
         for(auto const& input:proof.world_dependencies)if(!inputs.watch(Domain::world,input.first))return false;
         for(auto const& input:proof.river_dependencies){
             if(!input.second||!input.second->inputs){inputs.complete=false;return false;}
-            if(!inputs.watch_source(input.second->inputs,[&](auto const& source){
+            if(!inputs.watch_source(shared_river_inputs(input.second->inputs),[&](auto const& source){
                 for(auto const& value:source.values)
                     if(!inputs.watch(Domain::world,value.first)||!inputs.watch(Domain::flow,value.first))return false;
                 return true;
             }))return false;
         }
-        return inputs.watch(Domain::visibility,proof.tile);
+        return true;
     }
     bool raster_content_valid(CachedGeometryProof const& proof){
         auto reject=[&](unsigned reason){++raster_proof_rejections[reason];return false;};

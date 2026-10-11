@@ -22,7 +22,10 @@ template<class Proof,std::size_t KeyWords=14> struct RasterContributors {
         std::uint64_t visibility_rejects=0;
         // Why a complete proof ran: its key changed, or the ledger did.
         std::uint64_t key_misses=0,revision_misses=0,carried=0;
-        double append_ms=0;};
+        double append_ms=0;
+        // Where proof registration goes: watches made while expanding shared
+        // sources, and the time spent normalizing and expanding (review 69).
+        std::uint64_t source_watch_calls=0;double normalize_ms=0,source_ms=0;};
     struct Hash {std::size_t operator()(Key const& key)const{
         std::uint64_t h=14695981039346656037ull;
         for(auto value:key){h^=value;h*=1099511628211ull;}return std::size_t(h);

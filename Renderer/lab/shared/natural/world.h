@@ -17,6 +17,16 @@ struct NaturalWorld : NaturalData {
         std::vector<unsigned char> flow;
         render_core::WorldTopology const* checked_world=nullptr;
         std::int64_t checked_revision=-1;bool current=false;
+        // Content identity for sharing equal inputs between proofs; 0 = not
+        // yet computed. values and flow never change after construction.
+        mutable std::uint64_t content_hash=0;
+        std::uint64_t hash()const{
+            if(!content_hash){std::uint64_t h=14695981039346656037ull;
+                for(auto const& value:values){h^=value.first;h*=1099511628211ull;h^=value.second;h*=1099511628211ull;}
+                for(auto f:flow){h^=f;h*=1099511628211ull;}
+                content_hash=h?h:1;}
+            return content_hash;
+        }
         bool valid(render_core::WorldTopology const& world,std::int64_t revision){
             if(checked_world!=&world || checked_revision!=revision){
                 current=true;for(std::size_t i=0;i<values.size();++i){auto const& input=values[i];

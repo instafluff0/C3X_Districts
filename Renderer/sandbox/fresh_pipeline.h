@@ -1370,12 +1370,18 @@ struct SandboxSceneShadow {
             auto begin=std::chrono::steady_clock::now();
             try{
                 atlas_inputs.begin(context,renderer.raster_dependency_revisions,[&](auto bytes){return shadow_metadata_admit(bytes,page_contents.bytes());});
-                for(auto const& caster:caster_inputs)atlas_inputs.mark(caster.content_generation);
+                // A producer is a mesh generation: its proof, tile and visibility
+                // are the same for every caster drawn from it (about 7 casters
+                // each on the busy save), so each is marked and added once.
+                std::vector<std::uint64_t> generations;generations.reserve(caster_inputs.size());
+                for(auto const& caster:caster_inputs)generations.push_back(caster.content_generation);
+                std::sort(generations.begin(),generations.end());generations.erase(std::unique(generations.begin(),generations.end()),generations.end());
+                for(auto generation:generations)atlas_inputs.mark(generation);
                 atlas_inputs.finish(false); // retire leaving producers; share charged input registrations with entering producers
-                for(auto const& caster:caster_inputs){
-                    auto mesh=std::static_pointer_cast<CachedMeshGeneration>(caster_lease->content.get({0,caster.content_generation}));
+                for(auto generation:generations){
+                    auto mesh=std::static_pointer_cast<CachedMeshGeneration>(caster_lease->content.get({0,generation}));
                     auto tile=mesh&&mesh->proof?mesh->proof->tile:0;auto observed=renderer.topology_cache.retained(tile);
-                    if(!atlas_inputs.add(caster.content_generation,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0,
+                    if(!atlas_inputs.add(generation,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0,
                         [&](auto const& proof,auto& owner){return renderer.watch_raster_dependencies(proof,owner);},
                         [&](auto const& proof){return renderer.raster_content_valid(proof);}))break;
                 }

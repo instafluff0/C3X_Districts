@@ -17,6 +17,13 @@ def method(source, signature):
     return source[start:end]
 
 
+def RIVER_INTERNING(source):
+    """The renderer's content interning of river page inputs (member and method)."""
+    member = source[source.index("    std::unordered_multimap<std::uint64_t,std::weak_ptr<c3x_renderer::fidelity::NaturalWorld::PageInputs>> shared_river_pages;"):]
+    member = member[:member.index("\n") + 1]
+    return member + method(source, "    std::shared_ptr<c3x_renderer::fidelity::NaturalWorld::PageInputs> shared_river_inputs(") + "\n"
+
+
 class StaticDependencyReuseTests(unittest.TestCase):
     def test_scroll_strips_carry_a_held_proof_to_the_extended_rectangle(self):
         # Scroll strips grew a slot's covered rectangle at every camera step.
@@ -246,17 +253,20 @@ int main(){
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         proof = method(source, "struct CachedGeometryProof {") + ";"
         registration = method(source, "    template<class Inputs>bool watch_raster_dependencies(")
+        interning = RIVER_INTERNING(source)
         run_cpp(r'''
 #include "Renderer/native/render_core/raster_contributors.h"
 #include "Renderer/native/render_core/resident_content.h"
 #include "Renderer/lab/shared/natural/world.h"
 #include <cassert>
+#include <unordered_map>
+namespace c3x_renderer { namespace render_core { inline unsigned cached_environment(char const*,char*,unsigned){return 0;} } }
 using namespace c3x_renderer::render_core;
 using NaturalWorld=c3x_renderer::fidelity::NaturalWorld;
 using Domain=RasterDependencyRevisions::Domain;
 ''' + proof + r'''
 struct State {
-''' + registration + r'''
+''' + interning + registration + r'''
 };
 struct RecordingInputs {
  unsigned calls=0,refuse=~0u;bool complete=true;
@@ -330,17 +340,20 @@ int main(){
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         proof = method(source, "struct CachedGeometryProof {") + ";"
         registration = method(source, "    template<class Inputs>bool watch_raster_dependencies(")
+        interning = RIVER_INTERNING(source)
         run_cpp(r'''
 #include "Renderer/native/render_core/raster_contributors.h"
 #include "Renderer/native/render_core/resident_content.h"
 #include "Renderer/lab/shared/natural/world.h"
 #include <cassert>
+#include <unordered_map>
+namespace c3x_renderer { namespace render_core { inline unsigned cached_environment(char const*,char*,unsigned){return 0;} } }
 using namespace c3x_renderer::render_core;
 using NaturalWorld=c3x_renderer::fidelity::NaturalWorld;
 using Domain=RasterDependencyRevisions::Domain;
 ''' + proof + r'''
 struct State {
-''' + registration + r'''
+''' + interning + registration + r'''
 };
 int main(){
  State state;using Inputs=RasterContributors<CachedGeometryProof>;Inputs pixels;
@@ -406,6 +419,85 @@ int main(){
  assert(!failed.watch_source(cell->inputs,[](auto const&){return true;}));assert(failed.dependency_sources.size()==owners);
 }
 ''')
+
+    def test_equal_river_inputs_from_distinct_owners_expand_once(self):
+        # Decoded and recompiled river pages are distinct objects with equal
+        # content; each entering shadow caster expanded its own copy (about
+        # 1,800 expansions per busy block crossing, review 69).
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        proof = method(source, "struct CachedGeometryProof {") + ";"
+        registration = method(source, "    template<class Inputs>bool watch_raster_dependencies(")
+        interning = RIVER_INTERNING(source)
+        run_cpp(r'''
+#include "Renderer/native/render_core/shadow_page_contents.h"
+#include "Renderer/native/render_core/resident_content.h"
+#include "Renderer/lab/shared/natural/world.h"
+#include <cassert>
+#include <unordered_map>
+namespace c3x_renderer { namespace render_core { inline unsigned cached_environment(char const*,char*,unsigned){return 0;} } }
+using namespace c3x_renderer::render_core;
+using NaturalWorld=c3x_renderer::fidelity::NaturalWorld;
+using Domain=RasterDependencyRevisions::Domain;
+''' + proof + r'''
+struct State {
+''' + interning + registration + r'''
+};
+std::shared_ptr<NaturalWorld::PageInputs> page(std::size_t first,unsigned char flow){
+ auto p=std::make_shared<NaturalWorld::PageInputs>();
+ for(std::size_t i=0;i<256;++i)p->values.push_back({first+i*7%256,std::uint32_t(i)});
+ p->flow.assign(256,flow);return p;
+}
+std::shared_ptr<CachedGeometryProof const> caster(std::uint64_t tile,std::shared_ptr<NaturalWorld::PageInputs> inputs){
+ auto p=std::make_shared<CachedGeometryProof>();p->tile=tile;p->world_dependencies={{tile*1000,1}};
+ auto cell=std::make_shared<NaturalWorld::CellContent>();cell->inputs=std::move(inputs);
+ p->river_dependencies={{{0,0,int(tile),0},cell}};return p;
+}
+int main(){
+ State state;RasterDependencyRevisions revisions;
+ // a and b: equal content, distinct owners; c: same values, other flow.
+ auto a=page(100,1),b=page(100,1),c=page(100,2);assert(a!=b&&a->values==b->values);
+ std::vector<std::shared_ptr<CachedGeometryProof const>> proofs={caster(1,a),caster(2,b),caster(3,c)};
+ ShadowCasterProofs<CachedGeometryProof> atlas;
+ auto valid_calls=std::make_shared<std::vector<std::uint64_t>>();
+ auto add_all=[&]{
+  atlas.begin({1,1,1,1},revisions,[](std::size_t){return true;});
+  for(std::size_t i=0;i<proofs.size();++i)assert(atlas.add(i+1,proofs[i],proofs[i]->tile,0,
+   [&](auto const& proof,auto& owner){return state.watch_raster_dependencies(proof,owner);},
+   [&](auto const& proof){valid_calls->push_back(proof.tile);return true;}));
+  atlas.finish();
+ };
+ add_all();
+ auto const& counts=atlas.validation_counts;
+ assert(counts.source_expansions==2&&counts.source_reuses==1&&atlas.sources.size()==2);
+ assert(counts.source_watch_calls==2*256*2);
+ // Each producer still answers for the shared keys: a page node edit reaches
+ // both equal-page casters and not the other flow's caster's own keys alone.
+ assert(atlas.validate(revisions,[&](auto const& proof){valid_calls->push_back(proof.tile);return true;},[](std::uint64_t){return 0;}));
+ valid_calls->clear();revisions.touch(Domain::flow,100);
+ assert(atlas.validate(revisions,[&](auto const& proof){valid_calls->push_back(proof.tile);return true;},[](std::uint64_t){return 0;}));
+ std::sort(valid_calls->begin(),valid_calls->end());assert((*valid_calls==std::vector<std::uint64_t>{1,2,3}));
+ valid_calls->clear();revisions.touch(Domain::world,2000);
+ assert(atlas.validate(revisions,[&](auto const& proof){valid_calls->push_back(proof.tile);return true;},[](std::uint64_t){return 0;}));
+ assert((*valid_calls==std::vector<std::uint64_t>{2}));
+ // Released owners leave no stale sharing: a later equal page registers itself.
+ std::weak_ptr<NaturalWorld::PageInputs> released=a;
+ atlas.clear();proofs.clear();a.reset();b.reset();c.reset();assert(released.expired());
+ auto d=page(100,1);proofs={caster(4,d)};add_all();
+ assert(atlas.sources.size()==1&&atlas.sources.begin()->first==d.get());
+}
+''')
+
+    def test_shadow_atlas_registers_each_mesh_generation_once(self):
+        # A producer's proof, tile and visibility come from its mesh generation;
+        # the busy save draws about 7 casters per generation, and adding each
+        # caster cost 12 ms per block crossing after river inputs were shared.
+        source = (ROOT / "Renderer/sandbox/fresh_pipeline.h").read_text()
+        append = method(source, "    bool atlas_dependencies(bool append){")
+        self.assertIn("std::sort(generations.begin(),generations.end());generations.erase(std::unique(", append)
+        self.assertIn("for(auto generation:generations)atlas_inputs.mark(generation);", append)
+        self.assertIn("for(auto generation:generations){", append)
+        self.assertNotIn("atlas_inputs.mark(caster.content_generation)", append)
+        self.assertNotIn("atlas_inputs.add(caster.content_generation", append)
 
     def test_exact_local_changes_missing_inputs_and_bounded_revision_window(self):
         run_cpp(r'''

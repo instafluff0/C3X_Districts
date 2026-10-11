@@ -3107,3 +3107,42 @@ minifies back to exactly those pixels at 2x and 3x, and nothing outside the
 covered rectangle is written (a one-pixel centre error fails it); a source
 contract for the settled-zoom draw, the first-front hand-off and the skipped
 1x redraw (fails on the previous code).
+
+## 70. A block crossing re-registered every river page it entered (October 11)
+
+**Where crossing proofs went.** At a block crossing the shadow atlas
+registers its entering casters' dependencies (busy save, trace level 2, per
+crossing p50): about 250 new producers, 1,543 river-source expansions and
+854,000 dependency watches, of which 836,000 came from expanding river
+sources; 38 ms of registration (p90 96 ms). River page inputs are shared per
+page in memory, but decoded and recompiled pages are distinct objects with
+equal content, and sources were keyed by object.
+
+**Change** (exact; each producer keeps the same normalized keys):
+- River page inputs equal in content (values and flow) are one source for
+  registration (`RendererState::shared_river_inputs`, a content hash memoised
+  on `PageInputs`, weakly held);
+  `C3X_RENDERER_PROOF_SHARING_CONTROL=1` turns this off.
+- The atlas adds each producer once per mesh generation instead of once per
+  caster (about 7 casters per generation).
+- Keys are emitted in domain order and normalization skips its sort when a
+  list is already ordered.
+
+**Measured** (busy `near`, trace level 2, one run each; per crossing):
+
+| | Old path | Sharing | Sharing + once per generation |
+| --- | --- | --- | --- |
+| Source expansions | 1,543 | 4 | 4 |
+| Dependency watches | 854k | 16k | 26k |
+| Shadow build, p50 / p90 | 63 / 120 ms | 53 / 94 ms | 48 / 92 ms |
+
+Registration itself fell to 12-19 ms; the rest of the crossing's shadow
+build is caster refresh (10-12 ms), page proofs and selection, and the page
+draws. `static-validation-counts` now reports `atlas_source_watches`,
+`atlas_normalize_ms` and `atlas_source_ms`.
+
+**Tests.** `test_static_dependency_reuse.py`: distinct owners with equal
+river inputs expand once in the production `ShadowCasterProofs` and an edit
+to a shared node still reaches every producer that uses it (fails without the
+sharing); registration iterates unique generations (source contract); the
+extracted-registration fixtures include the sharing helper.
