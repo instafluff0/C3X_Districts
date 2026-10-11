@@ -14,10 +14,11 @@ In order. Details for each are under "Stages" and in the review sections cited.
    whose window moves is deferred like a covered step; the window keeps no
    draw records while the store drives the draw. Left: the rest of the
    window assembly at crossings (about 14 ms), with resource anchors from the
-   store; caster collection and proof registration cached per store block,
-   so a crossing's shadow refresh costs only its entering and leaving blocks
-   (a wider, sticky caster box was tried and did not help, review 74); then
-   default on and the window path retired. About 1-2 sessions.
+   store. Casters are cached per store block, a window change no longer
+   retires the pipeline's selection, and a crossing keeps the drawn casters
+   while the next frame refreshes them: a crossing's render is about 52 ms
+   against 101 ms on the window path (review 74). Then default on and the
+   window path retired. About 1 session.
 2. **Animated effects during zoom** (added October 11 at the user's
    request). City smoke, flames, night lights and volcano plumes share the
    city effect layer, which zoom preview frames skip (drawn over the rescaled

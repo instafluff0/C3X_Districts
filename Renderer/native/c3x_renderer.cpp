@@ -577,6 +577,9 @@ public:
     // camera job. That view is an immutable snapshot, so its shadow atlas stays
     // exact after the job publishes newer topology (FreshPipeline::atlas_reusable).
     bool borrowed_scene_frame=false;
+    // Set while render() draws its scene (a camera job or an adoption, which
+    // Civ III waits for); display frames draw without it.
+    bool scene_render=false;
     // Set when a frame other than a borrowed one draws shadows; cleared as a
     // camera job starts. Inside a job that is the job's own render: the shared
     // shadow and static state now hold its new scene, so the borrowed view
@@ -9655,8 +9658,12 @@ public:
         if (!reuse_geometry && !prewarming) {
 #ifdef C3X_RENDERER64_FRESH
             // A same-view reveal keeps one bounded renderable front while its
-            // replacement is assembled. Other view changes retire as before.
-            if(!completed_scene_retained.load(std::memory_order_relaxed))
+            // replacement is assembled. Other view changes retire as before,
+            // except while the resident world drives the draw: the pipeline's
+            // records and casters then own their meshes through the store and
+            // borrow nothing from the window, so a window change keeps its
+            // capture, region of interest and shadow casters (review 74).
+            if(!completed_scene_retained.load(std::memory_order_relaxed) && !resident_world_feed)
                 c3x_renderer64_retire_geometry_selection();
 #endif
             if(incremental_membership){
@@ -13043,9 +13050,11 @@ public:
                         release(zoomed_step_view);release(zoomed_step_target);release(zoomed_step_texture);
                     }
                 }
+                struct SceneRender {bool& flag;~SceneRender(){flag=false;}} scene{scene_render};scene_render=true;
                 drawn=zoomed_step_target && c3x_renderer64_render_fresh(native_frame,zoomed_step_target,zoomed_step) &&
                     canonical_minify.draw(device,context,zoomed_step_view,target,UINT(width),UINT(height),zoomed_step);
-            }else drawn=c3x_renderer64_render_fresh(native_frame,target);
+            }else{struct SceneRender {bool& flag;~SceneRender(){flag=false;}} scene{scene_render};scene_render=true;
+                drawn=c3x_renderer64_render_fresh(native_frame,target);}
             target->Release();QueryPerformanceCounter(&draw_end);
             if(cancelled())return false;
             if(!drawn){

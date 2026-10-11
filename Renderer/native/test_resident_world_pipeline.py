@@ -272,6 +272,10 @@ int main(){
         self.assertNotIn('renderer.resident_world_feed', pipeline)
         self.assertIn('renderer.resident_world_active', pipeline)
         self.assertIn('if(!prewarming)resident_world_active=resident_world_feed;', renderer)
+        # A window change retires the pipeline's borrowed selection only when
+        # it borrows the window's records; with the store it owns its meshes.
+        self.assertIn('if(!completed_scene_retained.load(std::memory_order_relaxed) && !resident_world_feed)\n'
+                      '                c3x_renderer64_retire_geometry_selection();', renderer)
         defer = method(renderer, '    bool defer_scroll_step(PublishedMapFrame& ready){')
         self.assertIn('store_moves=state.resident_world_active', defer)
         self.assertIn('store_moves && state.resident_world_ownership(', defer)
@@ -305,6 +309,119 @@ int main(){
  p.renderer.window_frame_serial=1;p.renderer.geometry_viewport_settings.translation[0]=p.camera_x-3040;
  p.update_window_basis();assert(p.window_basis_x==-3040);
  std::puts("PASS window basis");
+}
+""")
+
+    def test_casters_are_collected_once_per_store_block(self):
+        source = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
+        begin = source.index('    using WorldRecords=c3x_renderer::render_core::ResidentWorld<GeometryDrawRecord,geometry_layer_count>;')
+        cache = source[begin:source.index('#endif\n    bool refresh_casters(std::uint64_t scene) {', begin)]
+        run_cpp(r"""
+#include "Renderer/native/render_core/scene_membership.h"
+#include "Renderer/native/render_core/resident_world.h"
+#include <cassert>
+#include <cstdio>
+#include <map>
+#include <set>
+#include <unordered_set>
+using namespace c3x_renderer;
+struct Chunk {struct Bounds {int left,top,right,bottom;} bounds{};int translation_x=0,translation_y=0;float natural_projection[4]={};
+ std::shared_ptr<std::vector<int>> instances;};
+constexpr unsigned geometry_layer_count=2;
+using GeometryDrawRecord=render_core::GeometryDrawRecord<Chunk>;
+using GeometryDrawView=render_core::GeometryDrawView<Chunk,geometry_layer_count>;
+struct Shadow {struct Caster {unsigned ordinal=0;int tile_x=0,tile_y=0;};};
+struct AtlasInputs {using Key=std::array<std::uint64_t,2>;struct Hash{std::size_t operator()(Key const& k)const{return std::size_t(k[0]*31+k[1]);}};};
+struct Dimensions {int width=0,height=0;bool wrap_x=false,wrap_y=false;};
+struct Renderer {
+ render_core::ResidentWorld<GeometryDrawRecord,geometry_layer_count> resident_world;int resident_world_half[2]={64,32};
+ struct Coast {Dimensions value;Dimensions dimensions()const{return value;}};
+ struct {Coast coast;Coast const& world()const{return coast;}} world_coast;
+ unsigned collections=0;std::size_t collected=0;
+ void collect_shadow_casters(GeometryDrawView view,std::vector<Shadow::Caster>& out){++collections;
+  for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& r:view[layer]){out.push_back({r.occurrence->ordinal,r.occurrence->tile_x,r.occurrence->tile_y});++collected;}}
+};
+struct Pipeline {
+ using Membership=render_core::SceneMembership<Chunk,geometry_layer_count>;
+ Renderer& renderer;std::array<std::int64_t,4> caster_box{};bool caster_box_valid=true;
+ AtlasInputs::Key caster_key(Shadow::Caster const& c)const{return {std::uint64_t(c.ordinal),std::uint64_t(c.tile_x)*1000+std::uint64_t(c.tile_y)};}
+""" + cache + r"""
+};
+int main(){
+ Renderer renderer;renderer.world_coast.coast.value={40,32,true,false};
+ Chunk plain,forest;forest.instances=std::make_shared<std::vector<int>>(3,1);
+ std::map<std::pair<int,int>,std::weak_ptr<int>> meshes;
+ auto put=[&](int x,int y,unsigned ordinal){render_core::ResidentWorld<GeometryDrawRecord,geometry_layer_count>::Tile t;t.tile_x=x;t.tile_y=y;
+  auto mesh=std::make_shared<int>(x);meshes[{x,y}]=mesh;render_core::ContentHandle h{std::size_t(y*40+x),std::uint64_t(1+y*40+x)};
+  t.owners.push_back({h,mesh});GeometryDrawRecord r((x%4)?plain:forest);r.owner=h;r.ordinal=ordinal;r.tile_x=x;r.tile_y=y;
+  t.add(0,r,{});renderer.resident_world.set(std::move(t));};
+ for(int y=0;y<16;++y)for(int x=(y&1);x<40;x+=2)put(x,y,1);
+ Pipeline p{renderer};
+ // Blocks (row 0, columns 0 and 1): tiles x 0..15, y 0..7.
+ p.caster_box={0,0,16*64,8*32};
+ std::vector<Shadow::Caster> casters;std::vector<AtlasInputs::Key> keys;Pipeline::Membership::Lease lease;
+ assert(p.world_casters(casters,keys,lease) && casters.size()==64 && keys.size()==64);
+ assert(p.block_caster_builds==2 && p.block_caster_reuses==0 && renderer.collections==2);
+ assert(lease->content.size()==64 && lease->records[0].size()==16); // owners of all; records only instanced (x%4==0)
+ // Unchanged blocks are reused, with the same casters.
+ auto first=keys;casters.clear();keys.clear();
+ assert(p.world_casters(casters,keys,lease) && keys==first && p.block_caster_builds==2 && p.block_caster_reuses==2);
+ // An edit recollects only its block.
+ put(10,4,7);casters.clear();keys.clear();
+ assert(p.world_casters(casters,keys,lease) && p.block_caster_builds==3 && p.block_caster_reuses==3 && keys.size()==64);
+ // Moving the box a block collects only the entering block; the leaving
+ // block's meshes are released once nothing borrows them.
+ p.caster_box={8*64,0,24*64,8*32};casters.clear();keys.clear();
+ assert(p.world_casters(casters,keys,lease) && p.block_caster_builds==4 && p.block_caster_reuses==4 && casters.size()==64);
+ assert(p.block_casters.size()==2);
+ renderer.resident_world.clear();
+ assert((meshes[{0,0}].expired() && !meshes[{8,0}].expired())); // block 0 left; block 1 is still borrowed
+ lease.reset();p.block_casters.clear();assert((meshes[{8,0}].expired()));
+ // Across the seam the box's canonical blocks are found once each.
+ for(int y=0;y<16;++y)for(int x=(y&1);x<40;x+=2)put(x,y,1);
+ p.caster_box={32*64,0,48*64,8*32};casters.clear();keys.clear();
+ assert(p.world_casters(casters,keys,lease) && casters.size()==64); // columns 32..39 and 0..7
+ std::puts("PASS casters per block");
+}
+""")
+
+    def test_a_scene_render_keeps_the_drawn_casters_for_a_one_block_move(self):
+        source = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
+        frame_scope = method(source, '    std::uint64_t frame_caster_scope(){')
+        run_cpp(r"""
+#define C3X_RENDERER64_FRESH
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+namespace c3x_renderer{namespace render_core{struct WorldWindow{static constexpr int block=8;};
+ inline bool cached_environment(char const*,char*,unsigned){return false;}}}
+struct Pipeline {
+ struct {bool resident_world_active=true,scene_render=true;int resident_world_half[2]={64,32};
+  struct {int level=0;void write(char const*,char const*,bool){}} trace;} renderer;
+ struct {std::array<std::int64_t,4> caster_box{},selected_box{};bool atlas_complete=true;std::uint64_t caster_signature=1;} shadow;
+ std::uint64_t current=1;std::uint64_t caster_scope()const{return current;}
+ bool caster_refresh_owed=false;std::uint64_t caster_refreshes_deferred=0;
+""" + frame_scope.replace('    bool caster_refresh_owed=false;std::uint64_t caster_refreshes_deferred=0;\n', '') + r"""
+};
+int main(){
+ Pipeline p;std::int64_t bx=8*64,by=8*32;
+ p.shadow.selected_box={0,0,4*bx,3*by};
+ // A crossing adoption: the window moved a block; keep the drawn casters.
+ p.shadow.caster_box={bx,0,5*bx,3*by};p.current=2;
+ assert(p.frame_caster_scope()==1 && p.caster_refresh_owed);
+ // The next frame (a display frame) collects the new set.
+ p.renderer.scene_render=false;assert(p.frame_caster_scope()==2 && !p.caster_refresh_owed);
+ // Without a display frame between them, the next scene render refreshes.
+ p.renderer.scene_render=true;p.current=3;assert(p.frame_caster_scope()==1);assert(p.frame_caster_scope()==3);
+ // A far jump, no drawn selection or a frame outside a scene render refresh at once.
+ p.caster_refresh_owed=false;p.shadow.caster_box={3*bx,0,7*bx,3*by};assert(p.frame_caster_scope()==3);
+ p.shadow.caster_box={bx,0,5*bx,3*by};p.shadow.caster_signature=~std::uint64_t(0);assert(p.frame_caster_scope()==3); // nothing drawn yet
+ p.shadow.caster_signature=1;p.renderer.scene_render=false;assert(p.frame_caster_scope()==3);
+ // Unchanged scope: nothing to defer.
+ p.renderer.scene_render=true;p.current=1;assert(p.frame_caster_scope()==1 && !p.caster_refresh_owed);
+ std::puts("PASS caster refresh deferral");
 }
 """)
 

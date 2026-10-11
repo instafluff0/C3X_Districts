@@ -1008,6 +1008,64 @@ struct SandboxSceneShadow {
 #endif
         return renderer.geometry_vertex_buffers.publish();
     }
+#ifdef C3X_RENDERER64_FRESH
+    // Casters per store block (camera decoupling stage 6): a block's casters
+    // and keys are collected once per block generation, so a crossing
+    // collects only its entering blocks. The selection owns every selected
+    // tile's meshes; its records are only the instanced ones, the placement
+    // sources. Blocks are whole: across a seam a canonical block that the box
+    // covers only in part adds its other tiles too (pages cull casters to the
+    // sampled field). The cache holds only the box's blocks, so it survives
+    // retire_geometry_selection, which runs at every camera step.
+    using WorldRecords=c3x_renderer::render_core::ResidentWorld<GeometryDrawRecord,geometry_layer_count>;
+    struct BlockCasters {WorldRecords::BlockPtr block;std::vector<Shadow::Caster> casters;std::vector<AtlasInputs::Key> keys;
+        std::vector<std::pair<c3x_renderer::render_core::ContentHandle,std::shared_ptr<void>>> owners;
+        std::vector<std::pair<unsigned,GeometryDrawRecord>> instanced;};
+    std::map<WorldRecords::BlockKey,BlockCasters> block_casters;
+    std::uint64_t block_caster_builds=0,block_caster_reuses=0;
+    std::array<std::int64_t,4> selected_box{}; // the caster box of the current selection
+    bool world_casters(std::vector<Shadow::Caster>& next,std::vector<AtlasInputs::Key>& keys,Membership::Lease& lease){
+        auto world=renderer.resident_world.publish();auto dims=renderer.world_coast.world().dimensions();
+        std::int64_t const hw=renderer.resident_world_half[0],hh=renderer.resident_world_half[1];
+        if(!world || !caster_box_valid || hw<=0 || hh<=0 || dims.width<=0 || dims.height<=0)return false;
+        selected_box=caster_box;
+        std::vector<WorldRecords::BlockKey> order;std::set<WorldRecords::BlockKey> seen;
+        for(auto oy=caster_box[1]/hh;oy<caster_box[3]/hh;++oy)for(auto ox=caster_box[0]/hw;ox<caster_box[2]/hw;++ox){
+            if((ox+oy)&1)continue;
+            auto cx=ox,cy=oy;
+            if(dims.wrap_x){cx%=dims.width;if(cx<0)cx+=dims.width;}
+            if(dims.wrap_y){cy%=dims.height;if(cy<0)cy+=dims.height;}
+            auto key=WorldRecords::key_of(int(cx),int(cy));if(seen.insert(key).second)order.push_back(key);
+        }
+        Membership selection;std::map<WorldRecords::BlockKey,BlockCasters> next_cache;
+        for(auto const& key:order){
+            auto found=world->blocks.find(key);if(found==world->blocks.end())continue;
+            auto cached=block_casters.find(key);BlockCasters entry;
+            if(cached!=block_casters.end() && cached->second.block==found->second){entry=std::move(cached->second);++block_caster_reuses;}
+            else{
+                entry.block=found->second;++block_caster_builds;
+                GeometryDrawView::Records records{};
+                for(auto const& tile:found->second->tiles){
+                    entry.owners.insert(entry.owners.end(),tile->owners.begin(),tile->owners.end());
+                    for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto i=tile->begin_of(layer);i<tile->end_of(layer);++i){
+                        auto const& record=tile->records[i];records[layer].push_back(record);
+                        if(record.content().instances && !record.content().instances->empty())entry.instanced.push_back({layer,record});
+                    }
+                }
+                std::vector<Shadow::Caster> collected;renderer.collect_shadow_casters(records,collected);
+                std::unordered_set<AtlasInputs::Key,AtlasInputs::Hash> unique;unique.reserve(collected.size());
+                for(auto const& caster:collected){auto k=caster_key(caster);
+                    if(unique.insert(k).second){entry.casters.push_back(caster);entry.keys.push_back(k);}}
+            }
+            next.insert(next.end(),entry.casters.begin(),entry.casters.end());keys.insert(keys.end(),entry.keys.begin(),entry.keys.end());
+            for(auto const& owner:entry.owners)if(!selection.retain(owner.first,owner.second))return false;
+            for(auto const& item:entry.instanced)selection.edit(item.first).push_back(item.second);
+            next_cache.emplace(key,std::move(entry));
+        }
+        block_casters=std::move(next_cache);lease=selection.publish();
+        return true;
+    }
+#endif
     bool refresh_casters(std::uint64_t scene) {
         if(caster_signature==scene)return true;
         // Production may replace or evict vertex chunks without changing the
@@ -1017,9 +1075,17 @@ struct SandboxSceneShadow {
         UINT strides[]={0,0},offsets[]={0,0};
         renderer.context->IASetVertexBuffers(0,2,empty,strides,offsets);
         renderer.context->IASetIndexBuffer(nullptr,DXGI_FORMAT_UNKNOWN,0);
-        std::vector<Shadow::Caster> next;
-        auto selection=caster_selection();
-        renderer.collect_shadow_casters(selection->records,next);++caster_collections;
+        auto refresh_begin=std::chrono::steady_clock::now();
+        std::vector<Shadow::Caster> next;std::vector<AtlasInputs::Key> block_keys;
+        decltype(caster_selection()) selection;bool blocks=false;
+#ifdef C3X_RENDERER64_FRESH
+        if(renderer.resident_world_active){
+            blocks=world_casters(next,block_keys,selection);
+            if(!blocks){next.clear();block_keys.clear();}
+        }
+#endif
+        if(!blocks){selection=caster_selection();renderer.collect_shadow_casters(selection->records,next);}
+        ++caster_collections;
 #ifdef C3X_RENDERER64_FRESH
         // Development witness (C3X_RENDERER_RESIDENT_WORLD_CHECK=1): the
         // store's casters equal the window's, by key.
@@ -1032,13 +1098,15 @@ struct SandboxSceneShadow {
             renderer.trace.write("resident-world-casters",detail,true);
         }
 #endif
+        auto selected_at=std::chrono::steady_clock::now();
         // collect_shadow_casters already includes cliffs. Their old extra
         // submission duplicated identical maximum-height samples.
         std::unordered_set<AtlasInputs::Key,AtlasInputs::Hash> unique;unique.reserve(next.size());
         std::vector<AtlasInputs::Key> keys;keys.reserve(next.size());std::size_t kept=0;
-        for(std::size_t i=0;i<next.size();++i){auto key=caster_key(next[i]);
+        for(std::size_t i=0;i<next.size();++i){auto key=blocks?block_keys[i]:caster_key(next[i]);
             if(!unique.insert(key).second)continue;next[kept++]=next[i];keys.push_back(key);}
         next.resize(kept);
+        auto deduped_at=std::chrono::steady_clock::now();
         bool same=caster_inputs.size()==keys.size() && input_keys==keys;
         if(same)++caster_reuses;
         else if(input_keys==keys && input_sources.size()==keys.size())caster_inputs=std::move(next); // re-borrowed after retirement
@@ -1071,6 +1139,15 @@ struct SandboxSceneShadow {
         }
         caster_lease=std::move(selection);
         caster_signature=scene;
+#ifdef C3X_RENDERER64_FRESH
+        if(renderer.trace.level>=2){auto now=std::chrono::steady_clock::now();
+            auto ms=[](auto a,auto b){return std::chrono::duration<double,std::milli>(b-a).count();};
+            char detail[192];std::snprintf(detail,sizeof(detail),"select_ms=%.2f dedupe_ms=%.2f journal_ms=%.2f casters=%zu blocks=%u",
+                ms(refresh_begin,selected_at),ms(selected_at,deduped_at),ms(deduped_at,now),caster_inputs.size(),unsigned(blocks));
+            renderer.trace.write("caster-refresh",detail,true);}
+#else
+        (void)refresh_begin;(void)selected_at;(void)deduped_at;
+#endif
         return true;
     }
     Submission::Key shared_caster_placement_key(Shadow::Caster const& caster)const{
@@ -2133,6 +2210,34 @@ struct SandboxFreshPipeline {
         if(renderer.resident_world_active)return renderer.resident_world.revision()|(std::uint64_t(1)<<63);
 #endif
         return window_revision();
+    }
+    // The caster scope a frame draws with. A scene render (a camera job or
+    // an adoption, which Civ III waits for) whose window moved by at most a
+    // block keeps the drawn casters once: the new view's casters lie inside
+    // the previous box, which reaches 8 tiles past the view, and the next
+    // frame collects the new set while Civ III runs. A far jump refreshes at
+    // once. C3X_RENDERER_CASTER_DEFER=0 always refreshes at once.
+    bool caster_refresh_owed=false;std::uint64_t caster_refreshes_deferred=0;
+    std::uint64_t frame_caster_scope(){
+        auto scope=caster_scope();
+#ifdef C3X_RENDERER64_FRESH
+        char option[4]={};
+        auto const& now=shadow.caster_box;auto const& drawn=shadow.selected_box;
+        std::int64_t const block_x=std::int64_t(c3x_renderer::render_core::WorldWindow::block)*renderer.resident_world_half[0];
+        std::int64_t const block_y=std::int64_t(c3x_renderer::render_core::WorldWindow::block)*renderer.resident_world_half[1];
+        bool const adjacent=std::llabs(now[0]-drawn[0])<=block_x && std::llabs(now[2]-drawn[2])<=block_x &&
+            std::llabs(now[1]-drawn[1])<=block_y && std::llabs(now[3]-drawn[3])<=block_y;
+        bool const control=c3x_renderer::render_core::cached_environment("C3X_RENDERER_CASTER_DEFER",option,sizeof(option)) && option[0]=='0';
+        if(renderer.resident_world_active && scope!=shadow.caster_signature && renderer.trace.level>=2){
+            char detail[160];std::snprintf(detail,sizeof(detail),"scene=%u owed=%u adjacent=%u drawn=%u control=%u",unsigned(renderer.scene_render),
+                unsigned(caster_refresh_owed),unsigned(adjacent),unsigned(shadow.caster_signature!=~std::uint64_t(0)),unsigned(control));
+            renderer.trace.write("caster-scope-frame",detail,true);}
+        if(renderer.resident_world_active && renderer.scene_render && !caster_refresh_owed && adjacent && !control &&
+           shadow.caster_signature!=~std::uint64_t(0) && scope!=shadow.caster_signature){
+            caster_refresh_owed=true;++caster_refreshes_deferred;return shadow.caster_signature;}
+        caster_refresh_owed=false;
+#endif
+        return scope;
     }
     // The shadow caster selection's identity (SandboxSceneShadow::caster_selection).
     std::uint64_t caster_scope()const{
@@ -4988,17 +5093,19 @@ struct SandboxFreshPipeline {
             auto scope=caster_scope();
             if(scope!=traced_caster_scope){
                 auto const& b=shadow.caster_box;char detail[256];
-                std::snprintf(detail,sizeof(detail),"box=%lld,%lld,%lld,%lld box_changed=%u store_revision=%llu inserts=%llu",
+                std::snprintf(detail,sizeof(detail),"box=%lld,%lld,%lld,%lld box_changed=%u store_revision=%llu inserts=%llu block_builds=%llu block_reuses=%llu deferred=%llu",
                     static_cast<long long>(b[0]),static_cast<long long>(b[1]),static_cast<long long>(b[2]),static_cast<long long>(b[3]),
                     unsigned(b!=traced_caster_box),static_cast<unsigned long long>(renderer.resident_world.revision()),
-                    static_cast<unsigned long long>(renderer.resident_world_inserts));
+                    static_cast<unsigned long long>(renderer.resident_world_inserts),
+                    static_cast<unsigned long long>(shadow.block_caster_builds),static_cast<unsigned long long>(shadow.block_caster_reuses),
+                    static_cast<unsigned long long>(caster_refreshes_deferred));
                 renderer.trace.write("caster-scope",detail,true);
                 traced_caster_scope=scope;traced_caster_box=b;
             }
         }
 #endif
         if(!shadow.render(tight_shadows?all_visible:roi_shadow_records,raster_scope(),
-                tight_shadows?static_receiver_revision:roi_revision,caster_scope(),body_inputs,retire_completed_instance_plans))
+                tight_shadows?static_receiver_revision:roi_revision,frame_caster_scope(),body_inputs,retire_completed_instance_plans))
             return fail("shadow");
 #ifdef C3X_RENDERER64_FRESH
         if(shared_front!=shadow.shared_front){instance_plans={};instance_plans.begin();instance_plan_bytes=0;shared_front=shadow.shared_front;}

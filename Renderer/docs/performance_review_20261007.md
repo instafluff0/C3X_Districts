@@ -3328,6 +3328,30 @@ Two changes were tried:
   (2x adopt p50 42 against 28 ms). Reverted to the window box. The fix is
   caster collection cached per block, so a change costs its blocks only.
 
+**Crossings without the window's costs** (store on):
+- *Casters per store block.* A block's casters and keys are collected once
+  per block generation (`world_casters`); a refresh reuses 84% of blocks.
+  Caster refresh at 1x crossings fell to 4.7-16 ms; most of what remains is
+  copying and keying the whole set (about 12,600 casters with wrap copies:
+  selection 6.9, dedupe 2.5, journal 4.0 ms p50).
+- *No retirement at a window change.* A crossing's render retired the
+  pipeline's whole selection (capture, region of interest, lights, shadow
+  casters and placement groups) because the pipeline borrowed the window's
+  records; with the store it owns its meshes, so a window change keeps them.
+  The caster witness found the reason: every crossing started from no
+  caster selection.
+- *The caster refresh leaves the crossing.* A scene render (a camera job or
+  an adoption, which Civ III waits for) whose window moved by at most a
+  block keeps the drawn casters once, since the new view's casters lie
+  inside the previous box (8 tiles past the view); the next frame collects
+  the new set. A far jump refreshes at once; `C3X_RENDERER_CASTER_DEFER=0`
+  always does. In a run, 27 refreshes were deferred, 22 of them then ran in
+  display frames.
+
+Crossing renders (busy, trace level 2, p50): 52 ms with the store against
+101 ms for the window (shadows 0 against 40 ms, preparation 14 against
+43 ms). Witnesses unchanged: 225 selections, 225 bases, 34 caster sets.
+
 **The window basis across the wrap seam.** With no window draw records the
 window basis was taken from each capture's view; across the wrap seam Civ III
 re-bases the camera a world width while the window keeps its frame, so in 4
@@ -3405,7 +3429,13 @@ Civ III's order, adds the owner's resource replacement, ignores placement
 and visibility flags, and refuses changed content, a missing tile or unready
 site art (fails without the content key or the resource bit); a source
 contract keeps prefetch renders from switching the draw off the store (fails
-on the previous pipeline). The window basis keeps its frame when the camera
+on the previous pipeline). Casters are collected once per store block
+generation: an edit or an entering block recollects only that block, a
+leaving block's meshes are released (fails with the cache bypassed); a scene
+render keeps the drawn casters for a one-block move once, display frames,
+repeats and far jumps refresh (fails without the adjacency test); a source
+contract that store mode keeps the selection at window changes (fails on the
+previous code). The window basis keeps its frame when the camera
 re-bases across the seam (fails with the per-capture basis); region
 revisions change only for blocks under the region, across the seam; the
 caster box with and without a margin.
