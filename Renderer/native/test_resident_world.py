@@ -106,7 +106,17 @@ int main(){
   World w;auto bad=t;bad.records.pop_back();bool refused=false;
   try{w.set(bad);}catch(std::invalid_argument const&){refused=true;}assert(refused && w.view().tiles==0);
   w.set(t);assert(w.view().records==5);}
- std::puts("PASS resident world: order, culling, wrap, copy-on-write, owners, layout");
+ // 7. A region's revision follows only the blocks under it, across the seam.
+ {World w;auto put=[&](int x,int y,int id){World::Tile t;t.tile_x=x;t.tile_y=y;t.add(0,{id,x,y},{});w.set(std::move(t));};
+  for(int y=0;y<24;++y)for(int x=(y&1);x<40;x+=2)put(x,y,x*100+y);
+  auto region=[&]{return World::region_revision(w.view(),32,0,48,16,40,true,24,false);}; // columns 32..39, then 0..7
+  auto before=region();
+  put(20,10,1);assert(region()==before);   // outside: unchanged
+  put(4,6,2);assert(region()!=before);     // wrapped columns 0..7 are inside
+  before=region();put(34,14,3);assert(region()!=before);
+  before=region();put(34,16,4);assert(region()==before);  // row 16 is outside
+  assert(w.erase(4,6) && region()!=before);}
+ std::puts("PASS resident world: order, culling, wrap, copy-on-write, owners, layout, regions");
 }
 ''')
 

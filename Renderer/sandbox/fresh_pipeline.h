@@ -966,18 +966,30 @@ struct SandboxSceneShadow {
         return true;
     }
     // The caster selection. With the resident world (camera decoupling stage
-    // 6, increment 4) it is built from the store's tiles under the camera
-    // window: the canonical tiles and records the window holds, in its
-    // occurrence order, owning their meshes, with footprints in the world
-    // basis. Otherwise it is the window's own lease.
+    // 6, increment 4) it is built from the store's tiles under caster_box:
+    // canonical tiles once each, in occurrence order, owning their meshes,
+    // with footprints in the world basis. Otherwise it is the window's lease.
+    // caster_box (occurrence pixels) holds the camera window grown by
+    // `margin` (a margin keeps it while the window stays inside). A one-block
+    // margin halved the caster set's changes on the busy save but made each
+    // about 50% dearer, with no less shadow work in all (review 74), so the
+    // pipeline passes none.
+    std::array<std::int64_t,4> caster_box{};bool caster_box_valid=false;
+    bool update_caster_box(std::array<std::int64_t,4> const& window,std::int64_t margin_x,std::int64_t margin_y){
+        if(caster_box_valid && window[0]>=caster_box[0] && window[1]>=caster_box[1] &&
+           window[2]<=caster_box[2] && window[3]<=caster_box[3] &&
+           (margin_x || margin_y || window==caster_box))return false;
+        caster_box={window[0]-margin_x,window[1]-margin_y,window[2]+margin_x,window[3]+margin_y};caster_box_valid=true;
+        return true;
+    }
     Membership::Lease caster_selection()const{
 #ifdef C3X_RENDERER64_FRESH
         if(renderer.resident_world_active){
             Membership selection;
             auto world=renderer.resident_world.publish();
-            auto const& window=renderer.world_window.box;auto dims=renderer.world_coast.world().dimensions();
+            auto const& window=caster_box;auto dims=renderer.world_coast.world().dimensions();
             std::int64_t const hw=renderer.resident_world_half[0],hh=renderer.resident_world_half[1];
-            if(world && renderer.world_window.valid && hw>0 && hh>0 && dims.width>0 && dims.height>0){
+            if(world && caster_box_valid && hw>0 && hh>0 && dims.width>0 && dims.height>0){
                 std::unordered_set<std::uint64_t> seen;
                 for(auto oy=window[1]/hh;oy<window[3]/hh;++oy)for(auto ox=window[0]/hw;ox<window[2]/hw;++ox){
                     if((ox+oy)&1)continue;
@@ -1888,6 +1900,8 @@ struct SandboxFreshPipeline {
     // Shadow caster footprints to draw-record space: the window basis, or 0
     // for casters from the store (SandboxSceneShadow::caster_selection).
     float caster_basis_x=0,caster_basis_y=0;
+    std::uint64_t traced_caster_scope=0;std::array<std::int64_t,4> traced_caster_box{};
+    std::uint64_t window_serial=~std::uint64_t(0);
     // Tiles with records in resident_lease (contributor key word 2).
     std::unordered_set<std::uint64_t> resident_tiles;
     bool tile_resident(RasterInputs::Key const& key)const{
@@ -2124,8 +2138,13 @@ struct SandboxFreshPipeline {
     std::uint64_t caster_scope()const{
 #ifdef C3X_RENDERER64_FRESH
         if(renderer.resident_world_active){
-            std::uint64_t value=renderer.resident_world.revision()*0x9e3779b97f4a7c15ull;
-            for(auto edge:renderer.world_window.box)value=(value^std::uint64_t(edge))*0x100000001b3ull;
+            // The caster box and the revisions of the store blocks under it:
+            // evictions and edits elsewhere in the world keep the casters.
+            auto const& b=shadow.caster_box;auto dims=renderer.world_coast.world().dimensions();
+            std::int64_t const hw=renderer.resident_world_half[0],hh=renderer.resident_world_half[1];
+            std::uint64_t value=hw>0 && hh>0?c3x_renderer::render_core::ResidentWorld<GeometryDrawRecord,geometry_layer_count>::region_revision(
+                renderer.resident_world.view(),b[0]/hw,b[1]/hh,b[2]/hw,b[3]/hh,dims.width,dims.wrap_x,dims.height,dims.wrap_y):0;
+            for(auto edge:b)value=(value^std::uint64_t(edge))*0x100000001b3ull;
             return value|(std::uint64_t(1)<<63);
         }
 #endif
@@ -2168,6 +2187,25 @@ struct SandboxFreshPipeline {
         shadow.caster_signature=~std::uint64_t(0);shadow.prepared_signature=~std::uint64_t(0);
         shadow.caster_lease.reset();resident_lease.reset();world_lease.reset();
         resident_signature=0;visibility_valid=false;
+    }
+    // With the store driving the draw the window keeps no draw records, so
+    // its revision no longer follows it: the window basis is tracked on the
+    // renderer's window serial instead. It is not this view's: across the wrap
+    // seam Civ III re-bases the camera a world width while the window keeps
+    // its frame. The witness (which keeps the records) compares the two.
+    void update_window_basis(){
+#ifdef C3X_RENDERER64_FRESH
+        if(window_signature!=window_revision()){
+            tracked_basis_x=renderer.geometry_viewport_settings.translation[0]-camera_x;
+            tracked_basis_y=renderer.geometry_viewport_settings.translation[1]-camera_y;
+            window_signature=window_revision();
+        }
+        if(window_serial!=renderer.window_frame_serial){
+            window_basis_x=renderer.geometry_viewport_settings.translation[0]-camera_x;
+            window_basis_y=renderer.geometry_viewport_settings.translation[1]-camera_y;
+            window_serial=renderer.window_frame_serial;
+        }
+#endif
     }
     bool capture(ViewportShaderSettings const& settings,
             ViewportShaderSettings const& reflected,int width,int height,int next_wrap_pixels) {
@@ -2214,19 +2252,9 @@ struct SandboxFreshPipeline {
             ++resident_builds;
         }
 #ifdef C3X_RENDERER64_FRESH
-        // With the store driving the draw the window keeps no draw records, so
-        // its revision no longer follows it: take the basis from this view.
-        // The witness (which keeps them) compares it with the tracked one.
-        if(world_lease){
-            if(window_signature!=window_revision()){
-                tracked_basis_x=renderer.geometry_viewport_settings.translation[0]-camera_x;
-                tracked_basis_y=renderer.geometry_viewport_settings.translation[1]-camera_y;
-                window_signature=window_revision();
-            }
-            window_basis_x=renderer.geometry_viewport_settings.translation[0]-camera_x;
-            window_basis_y=renderer.geometry_viewport_settings.translation[1]-camera_y;
-        }
+        if(world_lease)update_window_basis();
         caster_basis_x=world_lease?0.f:window_basis_x;caster_basis_y=world_lease?0.f:window_basis_y;
+        if(world_lease && renderer.world_window.valid)shadow.update_caster_box(renderer.world_window.box,0,0);
 #endif
         if(resident_water_scene!=renderer.water_scene_active){
             static_rasters.invalidate_all(c3x_renderer::render_core::raster_classification);
@@ -4953,6 +4981,22 @@ struct SandboxFreshPipeline {
         if(!update_city_lights())return fail("city_lights");
         if(renderer.trace.level>=2){double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-lights_begin).count();
             if(ms>1){char detail[64];sprintf_s(detail,"ms=%.2f lights=%zu",ms,selected_lighting.size());renderer.trace.write("fresh-city-lights",detail);}}
+#ifdef C3X_RENDERER64_FRESH
+        if(renderer.resident_world_active && renderer.trace.level>=2){
+            // Why the caster selection changes (store on): its box, or the
+            // store blocks under it (region), and the store's own counters.
+            auto scope=caster_scope();
+            if(scope!=traced_caster_scope){
+                auto const& b=shadow.caster_box;char detail[256];
+                std::snprintf(detail,sizeof(detail),"box=%lld,%lld,%lld,%lld box_changed=%u store_revision=%llu inserts=%llu",
+                    static_cast<long long>(b[0]),static_cast<long long>(b[1]),static_cast<long long>(b[2]),static_cast<long long>(b[3]),
+                    unsigned(b!=traced_caster_box),static_cast<unsigned long long>(renderer.resident_world.revision()),
+                    static_cast<unsigned long long>(renderer.resident_world_inserts));
+                renderer.trace.write("caster-scope",detail,true);
+                traced_caster_scope=scope;traced_caster_box=b;
+            }
+        }
+#endif
         if(!shadow.render(tight_shadows?all_visible:roi_shadow_records,raster_scope(),
                 tight_shadows?static_receiver_revision:roi_revision,caster_scope(),body_inputs,retire_completed_instance_plans))
             return fail("shadow");

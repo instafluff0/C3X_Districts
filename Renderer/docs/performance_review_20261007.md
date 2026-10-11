@@ -3311,6 +3311,31 @@ which keeps the records, found it equal to the tracked basis in all 208
 captures. A crossing's assembly fell from 21.6 to 14.3 ms (p50, trace level
 2); a covered step's render setup is about 9 ms.
 
+**Crossing shadows.** The largest remaining crossing cost is the shadow
+rebuild when the caster set changes (busy, trace level 2, p50 of crossing
+builds): caster refresh 9-11 ms, atlas proof registration 9.5 ms, caster
+selection 3.8 ms, page draws 6-7 ms (16-24 pages); with the moved-step
+deferral it runs inside Civ III's synchronous adoption (1x adopt p90 186 ms).
+Two changes were tried:
+- The caster scope keyed the store's global revision, which evictions
+  anywhere bump; it now keys the revisions of the store blocks under the
+  caster box (`ResidentWorld::region_revision`). Correct, but not the cause:
+  caster-set rebuilds stayed at 22-25 per run.
+- A caster box one block wider than the window, kept while the window stays
+  inside it (`caster-scope` trace): the caster set changed only 21 times in a
+  run (the box moving two blocks at a time), but each refresh cost about 50%
+  more (17-21 ms) and unfinished builds repeat, so shadow work did not fall
+  (2x adopt p50 42 against 28 ms). Reverted to the window box. The fix is
+  caster collection cached per block, so a change costs its blocks only.
+
+**The window basis across the wrap seam.** With no window draw records the
+window basis was taken from each capture's view; across the wrap seam Civ III
+re-bases the camera a world width while the window keeps its frame, so in 4
+of 235 captures that basis was a world width (8,320 px) off, which would
+place resource poses and waves off screen. The basis now follows a renderer
+serial bumped whenever the window changes (`window_frame_serial`); the
+witness then found it equal to the tracked basis in all 222 captures.
+
 **Store layout.** A tile keeps one record array with layer offsets instead
 of two vectors per layer (geometry has about 40 layers): the busy save's
 store fell from 20.8 MB to 5.0 MB for about 28,000 records.
@@ -3322,7 +3347,7 @@ store fell from 20.8 MB to 5.0 MB for about 28,000 records.
 | Every window record has its store copy (feed) | 0 missing, 0 differing, one offset, all runs |
 | Visible selection, store against the window's by exact test | equal in 120, 133 and 134 captures (no extra, missing or reordered contributor) |
 | Shadow casters, store against window, by key | equal in all 29-46 refreshes per run |
-| Window basis per capture against the tracked one | equal in all 208 captures |
+| Window basis against the tracked one | equal in all 208 and 222 captures (after the seam fix below) |
 | Promised ownership of deferred steps against the adoption's draw | no disagreement (20-27 moved steps per run) |
 
 **Measured** (cadence, same build, control alternated; increment 3):
@@ -3380,4 +3405,7 @@ Civ III's order, adds the owner's resource replacement, ignores placement
 and visibility flags, and refuses changed content, a missing tile or unready
 site art (fails without the content key or the resource bit); a source
 contract keeps prefetch renders from switching the draw off the store (fails
-on the previous pipeline).
+on the previous pipeline). The window basis keeps its frame when the camera
+re-bases across the seam (fails with the per-capture basis); region
+revisions change only for blocks under the region, across the seam; the
+caster box with and without a margin.

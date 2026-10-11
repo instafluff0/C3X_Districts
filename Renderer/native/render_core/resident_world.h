@@ -157,6 +157,25 @@ public:
         for(auto const& c:found){int shift=c.turn==0?0:c.turn==1?-wrap_pixels:wrap_pixels;visit(c.layer,*c.record,c.turn,shift);}
         return true;
     }
+    // The revisions of the blocks holding the canonical tiles under an
+    // occurrence rectangle [x0,x1) x [y0,y1) (tile coordinates, wrapped by
+    // the world's width and height when it wraps), combined in visit order: a
+    // key for content near the camera that edits elsewhere do not change.
+    static std::uint64_t region_revision(Generation const& generation,std::int64_t x0,std::int64_t y0,std::int64_t x1,std::int64_t y1,
+            int width,bool wrap_x,int height,bool wrap_y){
+        std::uint64_t value=1469598103934665603ull;
+        auto mix=[&](std::uint64_t v){value=(value^v)*1099511628211ull;};
+        auto canonical=[](std::int64_t v,int size,bool wrap){if(!wrap || size<=0)return v;auto r=v%size;return r<0?r+size:r;};
+        // A segment runs to the end of its canonical block or to the seam.
+        auto segment=[](std::int64_t c,int size,bool wrap){std::int64_t end=(c>=0?c/block+1:-((-c+block-1)/block)+1)*block;
+            if(wrap && size>0)end=std::min<std::int64_t>(end,size);return end-c;};
+        for(auto y=y0;y<y1;){auto cy=canonical(y,height,wrap_y);auto rows=segment(cy,height,wrap_y);
+            for(auto x=x0;x<x1;){auto cx=canonical(x,width,wrap_x);auto columns=segment(cx,width,wrap_x);
+                auto found=generation.blocks.find(key_of(int(cx),int(cy)));
+                mix(found==generation.blocks.end()?0:found->second->revision);x+=columns;}
+            mix(~std::uint64_t(0));y+=rows;}
+        return value;
+    }
     // Every record of `generation` in draw order, without wrap copies.
     template<class Visit>static void each(Generation const& generation,unsigned layer,Visit visit){
         struct Item {int y,x;std::uint32_t sequence;Record const* record;};

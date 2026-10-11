@@ -1310,7 +1310,7 @@ public:
     // The window keeps its draw records: off while the store drives the draw,
     // unless the development witness compares them (RESIDENT_WORLD_CHECK).
     bool resident_world_window_records=true;
-    std::uint64_t resident_world_current=0;
+    std::uint64_t resident_world_current=0,window_frame_serial=0;
     std::uint64_t resident_world_inserts=0,resident_world_rewrites=0,resident_world_preloads=0;
     // One current immutable membership proof, replaced before state updates.
     decltype(geometry_vertex_buffers)::Lease resource_visibility_membership;
@@ -12902,6 +12902,9 @@ public:
             }
             frame_tiles_reused = textured_tile_count;
         }
+        // A changed window (not a covered step) may re-base its frame, e.g.
+        // across the wrap seam; the store's window basis follows it.
+        if(fresh_scene_path && !prewarming && !covered_membership)++window_frame_serial;
         if(fresh_scene_path && !prewarming){char detail[512];sprintf_s(detail,
             "covered=%u incremental=%u required=%u entering=%u leaving=%u omitted_guard=0 revision=%llu records=%zu leases=%zu stored=%ld,%ld,%ld,%ld requested=%lld,%lld,%lld,%lld",
             unsigned(covered_membership),unsigned(incremental_membership),membership_diff.required,membership_diff.entering,membership_diff.leaving,

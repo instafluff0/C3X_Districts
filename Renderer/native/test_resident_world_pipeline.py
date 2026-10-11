@@ -133,6 +133,7 @@ int main(){
     def test_store_caster_selection_follows_the_window_box(self):
         source = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
         selection = method(source, '    Membership::Lease caster_selection()const{')
+        box = method(source, '    bool update_caster_box(std::array<std::int64_t,4> const& window,std::int64_t margin_x,std::int64_t margin_y){')
         run_cpp(r"""
 #define C3X_RENDERER64_FRESH
 #include "Renderer/native/render_core/scene_membership.h"
@@ -157,7 +158,8 @@ struct Renderer {
 struct Shadow {
  using Membership=SceneMembership<Chunk,geometry_layer_count>;
  Renderer& renderer;
-""" + selection + r"""
+ std::array<std::int64_t,4> caster_box{};bool caster_box_valid=false;
+""" + box + selection + r"""
 };
 int main(){
  Renderer renderer;renderer.world_coast.coast.value={20,40,true,false};
@@ -171,7 +173,9 @@ int main(){
   renderer.resident_world.set(std::move(t));}
  Shadow shadow{renderer};
  // A box across the seam: occurrence columns 16..23 (pixels 1024..1536), rows 2..5.
- renderer.world_window.box={16*64,2*32,24*64,6*32};
+ // No caster box yet: no casters.
+ assert(shadow.caster_selection()->records[0].empty());
+ shadow.caster_box={16*64,2*32,24*64,6*32};shadow.caster_box_valid=true;
  auto lease=shadow.caster_selection();
  std::vector<unsigned> got;for(auto const& r:lease->records[1])got.push_back(r.ordinal);
  std::vector<unsigned> want;
@@ -179,10 +183,10 @@ int main(){
  assert(got==want && lease->records[0].size()==want.size());
  assert(lease->content.size()==want.size() && lease->content.get(lease->records[1][0].owner));
  // A box wider than the world holds each canonical tile once.
- renderer.world_window.box={-4*64,0,30*64,2*32};
+ shadow.caster_box={-4*64,0,30*64,2*32};
  lease=shadow.caster_selection();assert(lease->records[0].size()==20);
  // The selection owns its meshes after the store forgets them.
- renderer.world_window.box={0,0,64,32};lease=shadow.caster_selection();
+ shadow.caster_box={0,0,64,32};lease=shadow.caster_selection();
  assert(lease->records[0].size()==1 && lease->records[0][0].ordinal==0);
  renderer.resident_world.clear();
  for(std::size_t i=0;i<meshes.size();++i)assert(meshes[i].expired()==(i!=0));
@@ -190,6 +194,19 @@ int main(){
  // Without the store the window's own lease is the selection.
  renderer.resident_world_active=false;
  assert(shadow.caster_selection()==renderer.geometry_vertex_buffers.publish());
+ // The caster box grows the window by a block and holds while the window
+ // stays inside it, so a crossing inside it keeps the caster set.
+ shadow.caster_box_valid=false;std::int64_t bx=8*64,by=8*32;
+ std::array<std::int64_t,4> window{0,0,4*bx,3*by};
+ assert(shadow.update_caster_box(window,bx,by) && (shadow.caster_box==std::array<std::int64_t,4>{-bx,-by,5*bx,4*by}));
+ window={bx,0,5*bx,3*by};assert(!shadow.update_caster_box(window,bx,by));      // one block right: kept
+ window={0,-by,4*bx,2*by};assert(!shadow.update_caster_box(window,bx,by));     // one block up: kept
+ window={2*bx,0,6*bx,3*by};assert(shadow.update_caster_box(window,bx,by) &&    // two blocks: regrown
+  (shadow.caster_box==std::array<std::int64_t,4>{bx,-by,7*bx,4*by}));
+ // Without a margin the box is the window itself.
+ window={0,0,4*bx,3*by};assert(shadow.update_caster_box(window,0,0) && shadow.caster_box==window);
+ assert(!shadow.update_caster_box(window,0,0));
+ window={bx,0,5*bx,3*by};assert(shadow.update_caster_box(window,0,0) && shadow.caster_box==window);
  std::puts("PASS store caster selection");
 }
 """)
@@ -259,6 +276,37 @@ int main(){
         self.assertIn('store_moves=state.resident_world_active', defer)
         self.assertIn('store_moves && state.resident_world_ownership(', defer)
         self.assertNotIn('resident_world_feed', defer)
+
+    def test_window_basis_follows_the_window_not_the_camera(self):
+        source = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
+        update = method(source, '    void update_window_basis(){')
+        run_cpp(r"""
+#define C3X_RENDERER64_FRESH
+#include <cassert>
+#include <cstdint>
+#include <cstdio>
+struct Renderer {struct {float translation[2]={};} geometry_viewport_settings;std::uint64_t window_frame_serial=0,records_revision=0;};
+struct Pipeline {
+ Renderer renderer;int camera_x=0,camera_y=0;
+ float window_basis_x=0,window_basis_y=0,tracked_basis_x=0,tracked_basis_y=0;
+ std::uint64_t window_signature=~std::uint64_t(0),window_serial=~std::uint64_t(0);
+ std::uint64_t window_revision()const{return renderer.records_revision;}
+""" + update + r"""
+};
+int main(){
+ Pipeline p;p.renderer.geometry_viewport_settings.translation[0]=-3000+5280;p.camera_x=-3000;
+ p.update_window_basis();assert(p.window_basis_x==5280 && p.tracked_basis_x==5280);
+ // A covered step keeps the window: the viewport follows the camera.
+ p.camera_x=-3128;p.renderer.geometry_viewport_settings.translation[0]=-3128+5280;p.update_window_basis();assert(p.window_basis_x==5280);
+ // Across the wrap seam Civ III re-bases the camera a world width (8320 px)
+ // while the window keeps its frame: the basis must not follow the camera.
+ p.camera_x=-3128+8320;p.update_window_basis();assert(p.window_basis_x==5280);
+ // A changed window re-bases it.
+ p.renderer.window_frame_serial=1;p.renderer.geometry_viewport_settings.translation[0]=p.camera_x-3040;
+ p.update_window_basis();assert(p.window_basis_x==-3040);
+ std::puts("PASS window basis");
+}
+""")
 
 
 if __name__ == '__main__':
