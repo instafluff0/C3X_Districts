@@ -19,8 +19,8 @@ if not exist "Renderer\packs\TerrainNormalized\manifest.json" (
   echo Renderer packs are missing. Copy the local Renderer\packs folder before testing. 1>&2
   goto fail
 )
-if not exist "Renderer\packs\UnitAnimationRuntime" (
-  echo The copied Renderer packs are missing UnitAnimationRuntime. 1>&2
+if not exist "Renderer\packs\UnitAnimationFidelity\bindings.json" (
+  echo The copied Renderer packs are missing UnitAnimationFidelity. 1>&2
   goto fail
 )
 if not exist "Renderer\packs\NaturalFidelityRuntime\natural.bin" (
