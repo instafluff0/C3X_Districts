@@ -771,6 +771,7 @@ using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexC
 using GeometryDrawReference=GeometryDrawView::Reference;
 
 struct c3x_renderer_tile_v1 {int tile_flags=1,anchor_x=0,anchor_y=0,tile_x=0,tile_y=0;unsigned territory_edge_mask=0,territory_color_rgb=0;};
+struct c3x_renderer_frame_v1 {int world_width_tiles=0,world_height_tiles=0;};
 struct Anchor {int anchor_x=0,anchor_y=0,tile_x=0,tile_y=0;};
 struct CachedTileGeometry {
  bool prefetched=false,shared_natural=false,world_ground=false;int tile_x=0,tile_y=0;std::size_t byte_count=0;
@@ -795,9 +796,12 @@ struct State {
  void index_world_content(CachedTileGeometry const&){}
  // The resident world feed (camera decoupling, stage 6) is off here.
  using ResidentWorldRecords=c3x_renderer::render_core::ResidentWorld<GeometryDrawRecord,geometry_layer_count>;
- int resident_world_half[2]={64,32};bool resident_world_feed=false;
- void resident_world_put(ResidentWorldRecords::Tile){assert(false);}
+ int resident_world_half[2]={64,32};bool resident_world_feed=false,resident_world_control=false,resident_world_preloading=false;
+ unsigned puts=0;std::uint64_t resident_world_preloads=0,resident_world_current=0;ResidentWorldRecords::Tile last_put;
+ ResidentWorldRecords resident_world;bool resident_world_window_records=true;
+ void resident_world_put(ResidentWorldRecords::Tile tile){assert(resident_world_control);++puts;last_put=tile;resident_world.set(std::move(tile));}
  bool resident_water_visible(int,int)const{return true;}
+ std::uint64_t terrain_content_key(c3x_renderer_tile_v1 const& t)const{return std::uint64_t(t.tile_x)*7+1;}
  ResidentWorldRecords::Extent resident_world_extent(unsigned,GeometryDrawRecord const&)const{return {};}
  int tile_footprint(CachedTileGeometry const&,c3x_renderer_tile_v1 const&){return 1;}
  GeometryDrawRecord project_natural_chunk(GeometryDrawRecord chunk,c3x_renderer_tile_v1 const&){chunk.natural_projection[0]=1;return chunk;}
@@ -836,6 +840,33 @@ int main(){
  // Caster-only records must not publish resource anchors or pin indefinitely.
  state.tile_geometry_epoch=6;state.append_tile_geometry(tile,{0,0,0},false);
  assert(state.resource_anchors.size()==4000 && owner.last_used==6 && owner.animation_epoch==5);
+ // Preparation and prefetch preload the resident world only: no window
+ // records, anchors, footprints, use stamps or prefetch accounting change.
+ state.resident_world_control=state.resident_world_preloading=true;
+ tile.prefetched=true;state.prefetched_geometry_bytes=20;state.tile_geometry_epoch=7;
+ auto records=state.geometry_vertex_buffers[0].size(),anchors=state.resource_anchors.size(),footprints=state.geometry_footprints.size();
+ c3x_renderer_frame_v1 frame;frame.world_width_tiles=80;frame.world_height_tiles=50;
+ state.resident_world_preload(tile,{1,0,0,12,3},frame);
+ assert(state.puts==1 && state.last_put.tile_x==12 && state.last_put.tile_y==3 && state.last_put.owners.size()==2);
+ assert(state.last_put.count(0)==1 && state.last_put.count(1)==1 && state.last_put.records[0].translation_x==12*64);
+ assert(state.last_put.content==12*7+1); // keyed by the content it was built from
+ assert(state.geometry_vertex_buffers[0].size()==records && state.resource_anchors.size()==anchors && state.geometry_footprints.size()==footprints);
+ assert(tile.prefetched && state.prefetched_geometry_bytes==20 && tile.last_used==6 && owner.last_used==6);
+ // Unwrapped halo coordinates and ordinary renders are not preloaded.
+ state.resident_world_preload(tile,{1,0,0,-2,3},frame);state.resident_world_preload(tile,{1,0,0,80,3},frame);
+ state.resident_world_preloading=false;state.resident_world_preload(tile,{1,0,0,12,3},frame);
+ assert(state.puts==1 && state.resident_world_preloads==1);
+ // While the store drives the draw the window keeps no draw records but
+ // still its anchors, footprints and use stamps; a stored tile built from
+ // the same owners and content is not rebuilt.
+ state.resident_world_feed=true;state.resident_world_window_records=false;state.tile_geometry_epoch=8;
+ records=state.geometry_vertex_buffers[0].size();anchors=state.resource_anchors.size();footprints=state.geometry_footprints.size();
+ state.append_tile_geometry(tile,{1,24,40,12,3},true);
+ assert(state.puts==1 && state.resident_world_current==1); // stored by the preload above
+ assert(state.geometry_vertex_buffers[0].size()==records && state.resource_anchors.size()==anchors+1 && state.geometry_footprints.size()==footprints+1);
+ assert(!tile.prefetched && tile.last_used==8 && owner.last_used==8);
+ state.append_tile_geometry(tile,{1,26,40,13,3},true);
+ assert(state.puts==2 && state.last_put.tile_x==13 && state.geometry_vertex_buffers[0].size()==records);
 }
 '''
         with tempfile.TemporaryDirectory(prefix="c3x-shared-draws-") as directory:

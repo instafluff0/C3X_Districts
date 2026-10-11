@@ -104,7 +104,7 @@ struct Pipeline {
  Options options;Options const& sandbox_perf_options()const{return options;}
  struct ShadowChange{std::uint64_t serial=0;std::array<int,4> source{};};
  struct{bool atlas_complete=true;std::uint64_t change_serial=0,change_floor=0;std::vector<ShadowChange> shadow_changes;}shadow;
- std::vector<std::array<int,4>> shadow_dirty,repaired_dirty;float resident_basis_x=0,resident_basis_y=0;int wrap_pixels=0;
+ std::vector<std::array<int,4>> shadow_dirty,repaired_dirty;float caster_basis_x=0,caster_basis_y=0;int wrap_pixels=0;
  struct Work{bool enabled=false;struct Counts{std::uint64_t target_pixels=0;}counts;
   void draw(unsigned){}void clear(Plane*){}void copy(Plane*,bool){}Counts& row(){return counts;}}work;
  struct Restore{bool draw(Context*,Target& target,Plane* color,Plane* depth,int,int,std::vector<int>,void*,unsigned,unsigned,
@@ -216,10 +216,10 @@ int main(){unsigned frames=0;
   p.check();++frames;assert(p.repairs==repairs+1&&p.static_rasters.front(lane).shadow_serial==1);
   p.check();++frames;assert(p.repairs==repairs+1);
  }
- // Footprints are chunk coordinates: repairs add the resident basis that
- // draw records use, plus both wrapped copies on a wrapping map.
+ // Footprints are caster chunk coordinates: repairs add the caster basis
+ // that converts them to draw records, plus both wrapped copies.
  {Pipeline p;p.projection_zoom=p.destination=1.f;p.edit(0);p.seed();p.allow_repair=true;p.check();
-  p.resident_basis_x=-5280;p.resident_basis_y=-1900;p.wrap_pixels=7680;
+  p.caster_basis_x=-5280;p.caster_basis_y=-1900;p.wrap_pixels=7680;
   for(unsigned i=0;i<16;++i)p.world[i]+=50000;
   p.shadow.shadow_changes.push_back({1,{10,20,30,40}});p.shadow.change_serial=1;p.check();
   assert(p.repaired_dirty.size()==3);

@@ -592,6 +592,7 @@ struct State {
  struct Content {std::shared_ptr<CachedMeshGeneration> mesh=std::make_shared<CachedMeshGeneration>();
   template<class Handle>std::shared_ptr<void> get(Handle)const{return mesh;}};
  struct Lease {Content content;};std::shared_ptr<Lease> resident_lease=std::make_shared<Lease>();
+ struct World {template<class Handle>std::shared_ptr<void const> owner(int,int,Handle)const{return nullptr;}};std::shared_ptr<World> world_lease;
  float projection_zoom=1,resident_basis_x=0,resident_basis_y=0;int wrap_pixels=0;
  unsigned membership=1;mutable unsigned contributor_visits=0;std::vector<GeometryDrawRecord> records={GeometryDrawRecord{}};
  unsigned view_revision()const{return membership;}

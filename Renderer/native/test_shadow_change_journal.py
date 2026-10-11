@@ -35,6 +35,7 @@ class ShadowChangeJournalTests(unittest.TestCase):
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <unordered_set>
 #include <vector>
 struct ID3D11Buffer;
@@ -47,11 +48,12 @@ struct Harness{
   decltype(context_value)* context=&context_value;
   struct{int publish(){return 1;}}geometry_vertex_buffers;
   std::vector<Shadow::Caster> world;
-  template<class View>void collect_shadow_casters(View&,std::vector<Shadow::Caster>& out){out=world;}}renderer;
+  template<class View>void collect_shadow_casters(View const&,std::vector<Shadow::Caster>& out){out=world;}}renderer;
+ struct Selection{int records=0;};std::shared_ptr<Selection> caster_selection()const{return std::make_shared<Selection>();}
  std::vector<Shadow::Caster> caster_inputs;std::vector<AtlasInputs::Key> input_keys;std::vector<std::array<int,4>> input_sources;
  struct ShadowChange{std::uint64_t serial=0;std::array<int,4> source{};};
  std::vector<ShadowChange> shadow_changes;std::uint64_t change_serial=0,change_floor=0;
- std::uint64_t caster_signature=~std::uint64_t(0),caster_collections=0,caster_reuses=0;int caster_lease=0;
+ std::uint64_t caster_signature=~std::uint64_t(0),caster_collections=0,caster_reuses=0;std::shared_ptr<Selection> caster_lease;
  AtlasInputs::Key caster_key(Shadow::Caster const& c)const{return {std::uint64_t(c.id),std::uint64_t(c.source[0])};}
 ''' + refresh + r'''
 };

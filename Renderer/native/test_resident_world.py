@@ -38,7 +38,7 @@ int main(){
    for(unsigned i=0;i<count;++i){Record r{next_id++,x,y};
     double px=x*64.,py=y*32.;Extent e{px-40-double(rng()%30),py-30,px+40+double(rng()%30),py+30+double(rng()%40),
      float(rng()%100)/100.f,float(rng()%100)/100.f+1.f};
-    tile.records[layer].push_back(r);tile.extents[layer].push_back(e);
+    tile.add(layer,r,e);
     reference[layer].push_back({y,x,int(i),r.id,e});}}
   world.set(std::move(tile));
  }
@@ -66,8 +66,7 @@ int main(){
  }
  // 3. Wrap turns: copies at -/+wrap in effective column order, turn last.
  {World w;int wrap_tiles=20,wrap=wrap_tiles*64;
-  for(int x:{0,2,18}){World::Tile t;t.tile_x=x;t.tile_y=0;t.records[0].push_back({x,x,0});
-   t.extents[0].push_back({x*64.-32,-16,x*64.+32,16,0,0});w.set(std::move(t));}
+  for(int x:{0,2,18}){World::Tile t;t.tile_x=x;t.tile_y=0;t.add(0,{x,x,0},{x*64.-32,-16,x*64.+32,16,0,0});w.set(std::move(t));}
   // A view across the seam: columns 16..22 in world pixels 1000..1440.
   std::vector<std::tuple<int,unsigned,int>> got;
   World::query(w.view(),1000,-10,1440,10,wrap,wrap_tiles,none,[&](unsigned,Record const& r,unsigned turn,int shift){got.push_back({r.id,turn,shift});});
@@ -79,14 +78,14 @@ int main(){
  {auto before=world.publish();auto revision=world.revision();
   auto first=before->blocks.begin();auto untouched=std::next(first)->second;
   World::Tile t=*first->second->tiles.front();int tx=t.tile_x,ty=t.tile_y;
-  auto original=t.records[0].size()+1;t.records[0].push_back({-1,tx,ty});t.extents[0].push_back({});
-  world.set(t);t.records[0].clear();t.extents[0].clear();world.set(std::move(t));
+  auto original=t.count(0)+1;t.add(0,{-1,tx,ty},{});
+  world.set(t);World::Tile cleared;cleared.tile_x=tx;cleared.tile_y=ty;world.set(std::move(cleared));
   assert(world.revision()!=revision);
-  assert(before->tile(tx,ty)->records[0].size()==original-1); // unchanged by both edits
+  assert(before->tile(tx,ty)->count(0)==original-1); // unchanged by both edits
   auto after=world.publish();
   assert(after->blocks.at(std::next(first)->first)==untouched); // shared, not copied
   assert(after->blocks.at(first->first)!=first->second);        // copied
-  assert(after->tile(tx,ty)->records[0].empty());
+  assert(after->tile(tx,ty)->count(0)==0 && after->tile(tx,ty)->records.empty());
   assert(before->tile(tx,ty)==first->second->tiles.front().get());}
  // 5. Owners live while any generation borrows the tile.
  {World w;auto mesh=std::make_shared<int>(5);std::weak_ptr<int> weak=mesh;
@@ -97,7 +96,17 @@ int main(){
   assert(!weak.expired());lease.reset();assert(weak.expired());
   // Erasing the last tile drops its block.
   assert(w.erase(4,4)&&w.view().blocks.empty()&&w.view().tiles==0&&!w.erase(4,4));}
- std::puts("PASS resident world: order, culling, wrap, copy-on-write, owners");
+ // 6. A tile's layers may arrive in any order (a tile's own mesh, then its
+ // shared natural mesh); each layer keeps its append order. A tile whose
+ // layout does not match its records is refused.
+ {World::Tile t;t.add(2,{1},{});t.add(0,{2},{});t.add(2,{3},{});t.add(1,{4},{});t.add(0,{5},{});
+  assert(t.count(0)==2&&t.count(1)==1&&t.count(2)==2&&t.count(3)==0);
+  std::vector<int> ids;for(auto const& r:t.records)ids.push_back(r.id);
+  assert((ids==std::vector<int>{2,5,4,1,3}));
+  World w;auto bad=t;bad.records.pop_back();bool refused=false;
+  try{w.set(bad);}catch(std::invalid_argument const&){refused=true;}assert(refused && w.view().tiles==0);
+  w.set(t);assert(w.view().records==5);}
+ std::puts("PASS resident world: order, culling, wrap, copy-on-write, owners, layout");
 }
 ''')
 

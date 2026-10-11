@@ -580,6 +580,8 @@ public:
             record.compiled_views[0]=handle;
         }
     }
+    // Every retained record, as visit(key, record).
+    template<class Visit>void each_retained(Visit visit)const{for(auto const& entry:records)visit(entry.first,entry.second);}
     Record const* retained(std::uint64_t id) const {
         auto found=records.find(id);return found==records.end()?nullptr:&found->second;
     }

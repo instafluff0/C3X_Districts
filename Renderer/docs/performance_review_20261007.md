@@ -3257,3 +3257,127 @@ runs at this hour were too disturbed by the host to compare step periods
 (one run showed 28 fps at 3x idle). Window frames during zoomed scrolling and
 the zoom-out transition are complete. `C3X_RENDERER_ZOOMED_STEP_CONTROL=1`
 restores the canonical draw for both.
+
+## 74. The fresh pipeline draws from the resident world (October 11)
+
+Whole-world restructure, increments 3 and 4 (camera decoupling design,
+stage 6), behind `C3X_RENDERER_RESIDENT_WORLD=1`.
+
+**Draw reads.** With the store on, the pipeline's contributor queries read
+the resident world (`ResidentWorld::query`, wrapped turns, the mirrored pass's
+height extents) instead of the camera window's lease and region index; a
+capture no longer rebuilds the region index or the resident tile set, and
+`view_revision()` is the store's revision, which moves only when stored
+content changes. Records are in the world basis (resident basis 0). Window
+records that still come from the camera assembly (resource poses, aquatic
+bounds, waves) use the window basis.
+
+**Shadow casters.** The caster selection is built from the store's tiles
+under the camera window box (each canonical tile once, in occurrence order,
+owning its meshes) instead of the window's lease, so caster footprints are in
+the world basis and the static repair converts them with basis 0. The caster
+set is unchanged.
+
+**Loading the store.** On the first gameplay frame of a scope, every
+explored tile whose resident content passes the window's own admission test
+enters the store from the retained world (`resident_world_load`): busy save,
+8,450 tiles, 37,004 records, 77-96 ms once, none refused. Over whole runs no
+camera assembly then rewrote a stored tile (0 rewrites), so a crossing no
+longer changes the store; only evictions do (the VM's geometry budget). A
+preload during the loading-time preparation was tried first: its frames have
+another view height, which the projections depend on, so the store's scope
+discarded it.
+
+**Moved-window steps are deferred** (increment 5a). A step whose window box
+moves used to be a full camera job, then drawn again at adoption. With the
+store, its Civ III ownership can come from the store instead of the last drawn
+window: every window tile must be stored from its current content (a content
+key per stored tile), and its flags are its content's replacement flags (one
+helper now shared with the render loop) plus its owner's resource
+replacement. The step then completes at once and is drawn once, at adoption.
+Witness run: 20 moved steps deferred; the adoption's promised-against-drawn
+ownership check (`deferred-step-ownership`) found no disagreement. The
+remaining refusals were evicted tiles (9-13 missing) and steps that came after
+an idle prefetch render, which recomputed the per-render store flag as off:
+the draw and the deferral now read a flag only gameplay renders set.
+
+**No window draw records** (5b). While the store drives the draw, a camera
+assembly keeps the window's anchors, footprints, use stamps and topology
+attachments but builds no draw records, and a stored tile built from the same
+owners and content is not rebuilt (13,202 skips in a busy run). With the
+window's revision no longer following the window, the window basis (resource
+poses, aquatic bounds, waves) is taken from each capture's view; the witness,
+which keeps the records, found it equal to the tracked basis in all 208
+captures. A crossing's assembly fell from 21.6 to 14.3 ms (p50, trace level
+2); a covered step's render setup is about 9 ms.
+
+**Store layout.** A tile keeps one record array with layer offsets instead
+of two vectors per layer (geometry has about 40 layers): the busy save's
+store fell from 20.8 MB to 5.0 MB for about 28,000 records.
+
+**Witnesses** (`C3X_RENDERER_RESIDENT_WORLD_CHECK=1`, busy save, `near`):
+
+| Check | Result |
+| --- | --- |
+| Every window record has its store copy (feed) | 0 missing, 0 differing, one offset, all runs |
+| Visible selection, store against the window's by exact test | equal in 120, 133 and 134 captures (no extra, missing or reordered contributor) |
+| Shadow casters, store against window, by key | equal in all 29-46 refreshes per run |
+| Window basis per capture against the tracked one | equal in all 208 captures |
+| Promised ownership of deferred steps against the adoption's draw | no disagreement (20-27 moved steps per run) |
+
+**Measured** (cadence, same build, control alternated; increment 3):
+
+| Busy step p50 (steps) | Store | Window |
+| --- | --- | --- |
+| 1x scroll x | 171 ms (27) | 170 ms (29), 157 ms (30) |
+| 2x scroll | 158 ms (27) | 169 ms (20), 151 ms (33) |
+| 3x scroll | 155 ms (33) | 152 ms (34), 81 ms (44) |
+
+Light save: 78 ms steps either way (73 and 74 steps at 1x). The store is
+neutral so far, as expected: crossings still build the camera window.
+
+**Measured with all of the above** (store against window, cadence, busy
+alternated, same build):
+
+| Busy step p50 (steps) | Store | Window |
+| --- | --- | --- |
+| 1x scroll x | 215 ms (25), 206 ms (25) | 160 ms (31), 165 ms (32) |
+| 1x scroll y | 155 ms (15), 155 ms (15) | 159 ms (15), 233 ms (15) |
+| 2x scroll | 105 ms (36), 81 ms (38) | 153 ms (29), 155 ms (29) |
+| 3x scroll | 81 ms (44), 80 ms (48) | 236 ms (21), 149 ms (35) |
+
+Zoomed in, busy steps now take one Civ III tick (78 ms) with the store, a
+first on this save. 1x horizontal scrolling, which crosses a block every few
+steps, is slower: a crossing still assembles the window and replaces the
+caster set, now inside the adoption. Light save: 78 ms steps either way;
+display frames while scrolling 47 / 40 / 37 fps with the store against
+38 / 34 / 34 (1x / 2x / 3x). Deferring moved steps alone (store on, the
+deferral switched by `C3X_RENDERER_STORE_MOVED_STEPS`) was neutral within the
+noise: 104-123 scroll steps per run with it, 104-115 without.
+
+**Where a busy step goes** (trace level 2, store on). A covered step's
+adoption draw now takes about 25 ms (render setup about 10 ms, p50), and a
+crossing's 50-125 ms (membership assembly 26 ms p50, shadows 15-47 ms). The
+request itself waits for Civ III's next tick: the helper completes the
+deferred step within 4 ms and draws it at adoption, about 60 ms after the
+request, so a busy step still spans two ticks when the adoption draw, Civ
+III's image batches and the transport waits exceed one (review 61-62).
+Crossing adoptions are the long ones (camera-adopt service 44-240 ms in a
+traced run), which increment 5 removes.
+
+**Tests.** `test_resident_world_pipeline.py`: the extracted production
+`contributors()` returns the same records in the same order from the store as
+from the window's lease and region index on equal data, across the wrap seam
+and in the mirrored pass (fails without the wrap shift or the mirrored
+extent); the caster selection takes each canonical tile under the window box
+once in occurrence order and owns its meshes (fails without the wrap or the
+per-tile dedupe). `test_resident_world.py` covers the flat tile layout
+(layers added in any order, refused inconsistent layouts);
+`test_zoom_mesh_cache.py` checks that a store-only append changes no window
+records, anchors, footprints, use stamps or prefetch accounting, and keys the
+tile by its content. A moved window's ownership from stored content maps to
+Civ III's order, adds the owner's resource replacement, ignores placement
+and visibility flags, and refuses changed content, a missing tile or unready
+site art (fails without the content key or the resource bit); a source
+contract keeps prefetch renders from switching the draw off the store (fails
+on the previous pipeline).

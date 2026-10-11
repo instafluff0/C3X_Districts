@@ -30,21 +30,32 @@ public:
     // A record's pass-0 extent in record space (bounds plus translation, plus
     // any lighting radius) and its world height range for mirrored extents.
     struct Extent {double left=0,top=0,right=0,bottom=0;float low_z=0,high_z=0;};
+    // One flat record array per tile (two vectors per layer cost about
+    // 1.9 KB per tile before any record): layer L holds [first[L], first[L+1]).
     struct Tile {
         int tile_x=0,tile_y=0;
-        std::array<std::vector<Record>,Layers> records;
-        std::array<std::vector<Extent>,Layers> extents;
+        std::vector<Record> records;
+        std::vector<Extent> extents; // parallel to records
+        std::array<std::uint16_t,Layers+1> first{};
         std::vector<std::pair<ContentHandle,std::shared_ptr<void>>> owners;
         std::uint32_t flags=0;
+        std::uint64_t content=0; // the caller's key of the tile content the records were built from
+        // Appends to a layer; layers may arrive in any order.
+        void add(unsigned layer,Record const& record,Extent const& extent){
+            if(records.size()>=0xffff)throw std::length_error("resident world tile");
+            auto at=std::ptrdiff_t(first[layer+1]);
+            records.insert(records.begin()+at,record);extents.insert(extents.begin()+at,extent);
+            for(unsigned l=layer+1;l<=Layers;++l)++first[l];
+        }
+        std::size_t begin_of(std::size_t layer)const{return first[layer];}
+        std::size_t end_of(std::size_t layer)const{return first[layer+1];}
+        std::size_t count(std::size_t layer)const{return std::size_t(first[layer+1]-first[layer]);}
         std::shared_ptr<void const> owner(ContentHandle handle)const{
             for(auto const& item:owners)if(item.first.slot==handle.slot && item.first.generation==handle.generation)return item.second;
             return nullptr;
         }
         std::size_t bytes()const{
-            std::size_t result=sizeof(Tile)+owners.capacity()*sizeof(owners[0]);
-            for(unsigned layer=0;layer<Layers;++layer)
-                result+=records[layer].capacity()*sizeof(Record)+extents[layer].capacity()*sizeof(Extent);
-            return result;
+            return sizeof(Tile)+owners.capacity()*sizeof(owners[0])+records.capacity()*sizeof(Record)+extents.capacity()*sizeof(Extent);
         }
     };
     using TilePtr=std::shared_ptr<Tile const>;
@@ -80,8 +91,10 @@ public:
     // Replaces (or inserts) a tile's records; the tile's previous owners are
     // released when no generation borrows them. Extents parallel the records.
     void set(Tile tile){
-        for(unsigned layer=0;layer<Layers;++layer)
-            if(tile.extents[layer].size()!=tile.records[layer].size())throw std::invalid_argument("resident world extents");
+        bool valid=tile.extents.size()==tile.records.size() && tile.first[0]==0 && tile.first[Layers]==tile.records.size();
+        for(unsigned layer=0;valid && layer<Layers;++layer)valid=tile.first[layer]<=tile.first[layer+1];
+        if(!valid)throw std::invalid_argument("resident world tile layout");
+        tile.records.shrink_to_fit();tile.extents.shrink_to_fit();tile.owners.shrink_to_fit();
         auto& generation=writable();auto key=key_of(tile.tile_x,tile.tile_y);
         auto& slot=generation.blocks[key];
         auto next=slot?std::make_shared<Block>(*slot):std::make_shared<Block>();
@@ -128,10 +141,10 @@ public:
             for(auto const& entry:generation.blocks){auto const& b=*entry.second;
                 if(b.empty || !meets(b.extent,l,top,r,bottom,mirror))continue;
                 for(auto const& tile:b.tiles)for(unsigned layer=0;layer<Layers;++layer){
-                    auto const& records=tile->records[layer];auto const& extents=tile->extents[layer];
-                    for(std::size_t i=0;i<records.size();++i)
-                        if(meets(extents[i],l,top,r,bottom,mirror))
-                            found.push_back({layer,tile->tile_y,tile->tile_x+tile_shift,std::uint32_t(i),turn,&records[i]});
+                    auto const begin=tile->begin_of(layer),end=tile->end_of(layer);
+                    for(std::size_t i=begin;i<end;++i)
+                        if(meets(tile->extents[i],l,top,r,bottom,mirror))
+                            found.push_back({layer,tile->tile_y,tile->tile_x+tile_shift,std::uint32_t(i-begin),turn,&tile->records[i]});
                 }
             }
         }
@@ -149,8 +162,8 @@ public:
         struct Item {int y,x;std::uint32_t sequence;Record const* record;};
         std::vector<Item> items;
         for(auto const& entry:generation.blocks)for(auto const& tile:entry.second->tiles){
-            auto const& records=tile->records[layer];
-            for(std::size_t i=0;i<records.size();++i)items.push_back({tile->tile_y,tile->tile_x,std::uint32_t(i),&records[i]});
+            auto const begin=tile->begin_of(layer),end=tile->end_of(layer);
+            for(std::size_t i=begin;i<end;++i)items.push_back({tile->tile_y,tile->tile_x,std::uint32_t(i-begin),&tile->records[i]});
         }
         std::sort(items.begin(),items.end(),[](Item const& a,Item const& b){
             return a.y!=b.y?a.y<b.y:a.x!=b.x?a.x<b.x:a.sequence<b.sequence;});
@@ -174,12 +187,12 @@ private:
         return *current;
     }
     static void account(Generation& g,Tile const& tile,int sign){
-        std::size_t records=0;for(auto const& layer:tile.records)records+=layer.size();
+        std::size_t records=tile.records.size();
         if(sign>0){g.records+=records;g.bytes+=tile.bytes();}else{g.records-=records;g.bytes-=tile.bytes();}
     }
     void finish(Generation& generation,BlockPtr& slot,std::shared_ptr<Block> next){
         Extent e{1e300,1e300,-1e300,-1e300,1e30f,-1e30f};bool empty=true;
-        for(auto const& tile:next->tiles)for(auto const& layer:tile->extents)for(auto const& x:layer){
+        for(auto const& tile:next->tiles)for(auto const& x:tile->extents){
             e.left=std::min(e.left,x.left);e.top=std::min(e.top,x.top);
             e.right=std::max(e.right,x.right);e.bottom=std::max(e.bottom,x.bottom);
             e.low_z=std::min(e.low_z,x.low_z);e.high_z=std::max(e.high_z,x.high_z);empty=false;

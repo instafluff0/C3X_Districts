@@ -4,6 +4,45 @@ Status: staged plan agreed with the user on October 8, 2026 (see "Stages").
 Goal G1 in [performance_goals.md](performance_goals.md); measurements in the
 [performance review](performance_review_20261007.md), sections 12–25.
 
+## Plan at a glance (October 11, 2026)
+
+In order. Details for each are under "Stages" and in the review sections cited.
+
+1. **Whole-world restructure** (in progress, stage 6, review 74). Done: the
+   resident world store; the draw reads it; shadow casters come from it; it
+   is loaded from the retained world on the first gameplay frame; a step
+   whose window moves is deferred like a covered step; the window keeps no
+   draw records while the store drives the draw. Left: the rest of the
+   window assembly at crossings (about 14 ms), with resource anchors from the
+   store; a caster set that no longer changes at crossings (casters per block
+   within the shadow field); then default on and the window path retired.
+   About 1-2 sessions.
+2. **Animated effects during zoom** (added October 11 at the user's
+   request). City smoke, flames, night lights and volcano plumes share the
+   city effect layer, which zoom preview frames skip (drawn over the rescaled
+   cached image's depth they flashed), so they vanish for the whole zoom and
+   return once the camera settles. Draw that layer on preview frames against
+   depth that matches the preview, or without the cached depth, so they stay
+   visible without flashing. Small; can go alongside item 1 or 3. Item 4
+   removes the case entirely.
+3. **Cheaper geometry** (added October 11; the 16-bit vertex quantization
+   was approved the same day, stage 5 step 2), plus fewer draw calls. Less
+   GPU memory means fewer evictions (which also churn the store) and a
+   cheaper full draw, which item 4 needs.
+4. **Per-frame zoom drawing** (added October 11). While zooming, draw the
+   visible scene directly every frame at the current zoom, as Civilization VI
+   does, instead of showing the rescaled cached image: no blur and no popping
+   during zoom. If a full draw does not fit a frame, use reduced detail while
+   moving and full detail once settled. First step: measure a full per-frame
+   draw at zoom on the busy save (20-60 ms in this VM today against a 16 ms
+   frame). About 3-5 sessions after item 1, together with item 3.
+5. **Parked.** Renderer-drawn city labels (the user: not now); they would
+   remove Civ III's image batches from each busy step. One-tick busy scroll
+   steps depend on the per-step work left after items 1 and 3 (reviews
+   61-62, 74).
+
+Standing decisions: no scroll glide; no coarse view for far jumps.
+
 ## Aim
 
 Move Renderer64 toward the Civilization VI model: the world stays resident on
@@ -559,6 +598,19 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
           and enter the store. Camera steps then never change membership, so
           every step is covered and crossings disappear.
        6. Default on; retire the window path's per-step membership work.
+     - *Progress (October 11, review 74).* Increments 1-4 are in, and the
+       first part of 5: the store is loaded from the retained world on the
+       first gameplay frame and fed by camera assemblies and prefetch;
+       evicting an owner drops the tiles that borrow it. The pipeline's draw
+       reads and its shadow casters (store tiles under the window box) come
+       from the store; resource poses, aquatic bounds and waves still come
+       from the window, converted by the window basis. A step whose window
+       moved is deferred when every window tile is stored from its current
+       content (ownership from the store), and the window keeps no draw
+       records while the store drives the draw (window basis per capture).
+       Still per crossing: the rest of the window assembly (about 14 ms) and
+       the caster set change. Next: resource anchors from the store, casters
+       per block within the shadow field.
      - *Expected.* Busy scroll: no 100-300 ms crossing jobs; steady steps at
        the covered cost (two ticks today, about 156 ms). Memory: records for
        the explored world (about 88 B each), not new GPU geometry.
