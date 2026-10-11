@@ -43,14 +43,14 @@ public:
                 auto shared=dependency(value);if(!shared.generation)continue;
                 auto& newest=held[shared.slot];
                 if(newest.first!=shared.generation)newest={shared.generation,0};
-                newest.second=std::max(newest.second,value.last_used);}
+                newest.second=std::max<std::uint64_t>(newest.second,value.last_used);}
             for(auto const& entry:cache){auto const& value=entry.second;
                 if(!value.binding.generation || value.last_used==current)continue;
                 auto found=held.find(value.binding.slot);
                 bool component=found!=held.end() && found->second.first==value.binding.generation;
                 if(component && found->second.second==current)continue; // a dependent is in this frame
                 candidates.push_back({value.binding,value.last_used,
-                    component?std::max(value.last_used,found->second.second):value.last_used,bool(priority(value)),component});}
+                    component?std::max<std::uint64_t>(value.last_used,found->second.second):value.last_used,bool(priority(value)),component});}
             std::stable_sort(candidates.begin(),candidates.end(),[](auto const& a,auto const& b){
                 return a.animated!=b.animated?a.animated<b.animated:a.order!=b.order?a.order<b.order:a.component<b.component;});
             ++rebuilds;

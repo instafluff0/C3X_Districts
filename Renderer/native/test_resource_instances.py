@@ -63,12 +63,14 @@ int main(){
  assert(sampler.sample(frame) && sampler.posed.size()==1);auto first=sampler.posed[0];
  frame.presentation_time_ticks=750;assert(sampler.sample(frame) && sampler.visibility_coverage.captures==1);
  assert(sampler.resource_preparation.pose_samples==1 && sampler.posed[0].first>first.first && sampler.posed[0].second>first.second);
- // Explored fog retains the seed's fixed pose; hide removes it. Revealing the
- // same occurrence samples the absolute live clock rather than restarting it.
- tile.tile_flags&=~C3X_RENDERER_TILE_VISIBLE;assert(sampler.sample(frame));first=sampler.posed[0];
- frame.presentation_time_ticks=1500;assert(sampler.sample(frame) && sampler.posed[0]==first);
+ // Explored fog keeps the live clock, like water (review 54); hide removes
+ // it. Revealing the same occurrence samples that same absolute clock.
+ auto visible=sampler.posed[0];
+ tile.tile_flags&=~C3X_RENDERER_TILE_VISIBLE;assert(sampler.sample(frame) && sampler.posed[0]==visible);
+ frame.presentation_time_ticks=1500;assert(sampler.sample(frame) && sampler.posed[0].first>visible.first);
+ auto fogged=sampler.posed[0];
  tile.tile_flags&=~C3X_RENDERER_TILE_EXPLORED;assert(sampler.sample(frame) && sampler.posed.empty() && !sampler.resource_preparation.pose_samples);
- tile.tile_flags|=C3X_RENDERER_TILE_VISIBILITY_BITS;assert(sampler.sample(frame) && sampler.posed[0].first>1 && sampler.posed[0].second>first.second);
+ tile.tile_flags|=C3X_RENDERER_TILE_VISIBILITY_BITS;assert(sampler.sample(frame) && sampler.posed[0]==fogged);
  sampler.visibility_pass=false;tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBILITY_KNOWN;
  assert(sampler.sample(frame) && sampler.resource_preparation.pose_samples==1);
 }

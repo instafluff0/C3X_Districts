@@ -120,7 +120,7 @@ constexpr unsigned viewport_cache_capacity=8;
 template<std::size_t N,class... A>void sprintf_s(char(&b)[N],char const* f,A... a){std::snprintf(b,N,f,a...);}
 unsigned selection_retirements=0;void c3x_renderer64_retire_geometry_selection(){++selection_retirements;}
 struct Cache {unsigned signature=0;std::size_t byte_count=0;bool prefetched=false;
- std::uint64_t animation_epoch=0,last_used=0;};
+ std::uint64_t animation_epoch=0,last_used=0,natural_content=0;};
 using CachedTileGeometry=Cache;
 struct State {
  std::unordered_multimap<unsigned,Cache> tile_geometry_cache;
@@ -131,7 +131,7 @@ struct State {
  struct Retired {std::atomic<std::size_t> bytes{32};};std::shared_ptr<Retired> retired_content=std::make_shared<Retired>();
  struct {void write(char const*,char const*,bool){}}trace;
  struct {Cache* resolve(Cache* value){return value;}}resident_content;
- struct Candidates {template<class M,class R,class F>Cache* next(M& map,R&,std::uint64_t,F){return map.empty()?nullptr:&map.begin()->second;}}residency_candidates;
+ struct Candidates {template<class M,class R,class F,class D>Cache* next(M& map,R&,std::uint64_t,F,D){return map.empty()?nullptr:&map.begin()->second;}}residency_candidates;
  void release_resident_content(Cache&){++releases;}
  struct Instances {State* owner;std::size_t held=0;void clear(){owner->retired_content->bytes-=held;held=0;}} shared_instances{this};
  std::shared_ptr<int> resource_visibility_membership=std::make_shared<int>(0);

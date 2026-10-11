@@ -47,7 +47,7 @@ class RequiredGeometryAdmissionTests(unittest.TestCase):
 using namespace c3x_renderer::render_core;
 template<std::size_t N,class... A>void sprintf_s(char(&b)[N],char const* f,A... a){std::snprintf(b,N,f,a...);}
 struct CachedTileGeometry {std::uint64_t signature=0;std::size_t byte_count=0;bool prefetched=false;
- std::uint64_t last_used=0,animation_epoch=0;ContentHandle binding;};
+ std::uint64_t last_used=0,animation_epoch=0;ContentHandle binding,natural_content;};
 constexpr std::size_t tile_geometry_cache_capacity=8192;constexpr std::uint64_t viewport_cache_capacity=32;
 struct Retired {std::atomic<std::size_t> bytes{0};};
 struct Trace {std::vector<std::string> stages;void write(char const* stage,char const*,bool){stages.push_back(stage);}

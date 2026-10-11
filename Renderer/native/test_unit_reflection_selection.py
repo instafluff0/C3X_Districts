@@ -160,7 +160,12 @@ int main(){Direct direct;setup(direct);c3x_renderer_frame_v1 frame{};frame.targe
 struct Record {c3x_renderer_unit_v1 draw{};UnitInstances::ScenePose instance{};bool main=true,shadow=true,reflected=true;};
 struct {std::vector<Record> prepared_units;} sandbox_direct_units;
 struct Witness {std::uint64_t facts,poses,ordered,source;bool complete;};
+// The source digest is cached per publication (route_map_serial); every emit
+// here models a new publication of the edited capture.
+struct {struct {std::int64_t serial=0;c3x_renderer_frame_v1 key{};std::uint64_t digest=0;bool valid=false;} route_source;
+ std::int64_t route_map_serial=0;} renderer;
 Witness emit(c3x_renderer_frame_v1 const& frame){
+ ++renderer.route_map_serial;
 '''+witness+r'''
  return {facts,poses,ordered,source,source_complete};
 }

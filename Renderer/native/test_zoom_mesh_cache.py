@@ -1167,7 +1167,7 @@ using Handle=c3x_renderer::render_core::ContentHandle;
 template<std::size_t N,class... A> int sprintf_s(char(&out)[N],char const*format,A...args){return std::snprintf(out,N,format,args...);}
 void c3x_renderer64_retire_geometry_selection(){}
 struct State {
-    struct Item {std::size_t byte_count;unsigned last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding;int signature=0;std::shared_ptr<int> mesh=std::make_shared<int>(0);};
+    struct Item {std::size_t byte_count;std::uint64_t last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding,natural_content;int signature=0;std::shared_ptr<int> mesh=std::make_shared<int>(0);};
     using CachedTileGeometry=Item;
     c3x_renderer::render_core::ResidentContent<Item> resident_content{2048};
     c3x_renderer::render_core::ResidencyCandidates residency_candidates;

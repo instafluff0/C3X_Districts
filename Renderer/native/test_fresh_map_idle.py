@@ -19,7 +19,7 @@ struct Worker {
  bool camera_scene_complete=false;void retire_completed_scene(){}
  long long visual_ticks=1000,visual_frequency=1000;
  struct {long long resumed=0;void resume_motion(long long t,long long){resumed=t;}} unit_instances;
- struct Frame {bool ready=false;struct {Texture value;Texture* Get(){return &value;}} front;} frame;
+ struct Frame {bool ready=false;float zoom=1.f;struct {Texture value;Texture* Get(){return &value;}} front;} frame;
  Frame* prepared_map=&frame;
  Texture saved;
  void advance_visual_clock(){visual_ticks=1500;}
@@ -40,6 +40,7 @@ int main(){
  assert(worker.adopt(true)==worker.frame.front.Get()); // never re-import the old pose
  assert(worker.adopt(false)==&worker.saved); // pending assets retain a complete image
  assert(worker.adopt(true,true)==&worker.saved&&!worker.frame.ready); // a step drawn just now is current
+ worker.frame.zoom=2.f;assert(worker.adopt(true)==&worker.saved); // never a magnified image at 1x
 }
 ''')
 
@@ -206,12 +207,20 @@ int main(){
  worker.ambient();auto sample=worker.make();++worker.renderer_state.gpu_serial;
  worker.renderer_state.visible_water_animations=1; // A cached different view grants no eligibility.
  unsigned imports=0;long long tick=1000;
- auto step=[&](Kind expected,float zoom=1.f){tick+=100;
+ auto step=[&](Kind expected,float zoom=1.f){tick+=100;auto rendered=renders;
   sample.prepare(tick,1000,zoom);auto canonical=sample(tick,1000);
-  assert(canonical.kind==(zoom==1.f||expected==Kind::frozen||expected==Kind::held?expected:Kind::unchanged));
   auto projected=sample.projected(tick,1000,zoom);
-  assert(projected.kind==(expected==Kind::unchanged?Kind::held:expected));
-  imports+=projected.kind==Kind::bgra;
+  // A completed render stays displayable until its swap (review 58).
+  // Sampling it again returns that render's own generation, which the
+  // composition skips without an import, exactly like unchanged/held.
+  bool fresh=renders!=rendered;
+  auto canonical_expected=zoom==1.f||expected==Kind::frozen||expected==Kind::held?expected:Kind::unchanged;
+  if(canonical.kind==Kind::bgra&&!fresh)assert(canonical_expected==Kind::unchanged||canonical_expected==Kind::held);
+  else assert(canonical.kind==canonical_expected);
+  auto projected_expected=expected==Kind::unchanged?Kind::held:expected;
+  if(projected.kind==Kind::bgra&&!fresh)assert(projected_expected==Kind::held);
+  else assert(projected.kind==projected_expected);
+  imports+=projected.kind==Kind::bgra&&fresh;
  };
  // Unknown water and its later clock samples do not touch assets or GPU output.
  for(int i=0;i<3;++i)step(Kind::unchanged);
@@ -320,6 +329,16 @@ int main(){
  assert(imports==renders&&worker.visual_map_samples==renders);
 }
 ''')
+
+    def test_every_completed_render_has_its_own_generation(self):
+        # A completed render stays sampled until its swap; the composition skips
+        # a repeated sample only because each render carries a new generation.
+        source = Path(__file__).with_name("c3x_renderer.cpp").read_text()
+        resident = (Path(__file__).parent.parent / "sandbox/resident_scene.cpp").read_text()
+        fresh = resident.split("bool c3x_renderer64_render_fresh(", 1)[1].split("char route[8]", 1)[0]
+        self.assertTrue("if(!sandbox_fresh.draw(" in fresh and "++renderer.route_frame_sequence;" in fresh)
+        self.assertTrue("job->zoom=zoom;job->completed_ticks=ticks;job->ready=true;++visual_map_samples;\n"
+                        "                job->source_generation=renderer_state.route_frame_sequence;" in source)
 
     def test_fresh_metadata_reports_actual_animation_demand(self):
         source = Path(__file__).with_name("c3x_renderer.cpp").read_text()
