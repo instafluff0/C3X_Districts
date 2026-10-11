@@ -15350,6 +15350,33 @@ private:
     long long adopted_camera=LLONG_MIN;
     // The zoom the last deferred step was drawn at (1 = the canonical draw).
     float deferred_step_zoom=1.f;
+    // Whether the shown view keeps animating while the pending deferred step
+    // awaits adoption, when that step was requested, and the worker time of
+    // recent display frames (review 71): a frame then starts only if it ends
+    // before Civ III's next tick adopts the step. Only ambient frames (no newly
+    // committed front) at a settled zoom count, as the median of the last
+    // eight; none for two seconds counts as none.
+    // Frames of a moving zoom re-render at a new scale; only a settled zoom's
+    // frames are sampled, and a new settled zoom starts the samples again.
+    std::array<double,8> visual_frame_samples{};unsigned visual_frame_count=0;long long visual_sampled_at=0;
+    unsigned visual_sample_zoom=0;
+    std::uint64_t visual_front_seen=0;bool deferred_animating=false;long long deferred_requested_at=0;
+    double display_frame_ms()const{ // -1: none recent
+        LARGE_INTEGER now={};QueryPerformanceCounter(&now);
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        if(!visual_frame_count || now.QuadPart-visual_sampled_at>frequency.QuadPart*2)return -1;
+        auto samples=visual_frame_samples;auto count=std::min<unsigned>(visual_frame_count,8);
+        std::nth_element(samples.begin(),samples.begin()+count/2,samples.begin()+count);
+        return samples[count/2];
+    }
+    // Civ III adopts a deferred step on its next tick, about 60 ms after the
+    // request (78 ms ticks); a frame still running then delayed the adoption
+    // (busy save, review 71), so the shown view animates only until 55 ms.
+    bool frame_ends_before_adoption()const{
+        LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+        double estimate=display_frame_ms();if(estimate<0)estimate=4.;
+        return now.QuadPart+(long long)(estimate*double(frequency.QuadPart)/1000.)<deferred_requested_at+frequency.QuadPart*55/1000;
+    }
     DWORD camera_notify_thread=0;UINT camera_notify_message=0;
     c3x_renderer_camera_completion_fn camera_completion_observer=nullptr;
     void* camera_completion_context=nullptr;
@@ -16284,13 +16311,13 @@ private:
         drawn_window.remember(renderer_state.world_window,renderer_state.window_content_flags,
             renderer_state.device_generation,renderer_state.content_revision);
     }
-    // The adopted step's one draw, before anything publishes it. Civ III has
-    // already drawn its layers with the step's reported ownership; a draw
-    // that disagrees is traced. A failed draw retries once without the
-    // retained scene pins, as a camera job does under memory pressure.
     // The presented zoom while zoomed in and settled at its destination, else
     // 1. The canonical (1x) image is hidden then (review 69);
     // C3X_RENDERER_ZOOMED_STEP_CONTROL=1 keeps drawing it.
+    bool deferred_hold_control(){
+        char control[4]={};
+        return c3x_renderer::render_core::cached_environment("C3X_RENDERER_DEFERRED_HOLD_CONTROL",control,sizeof(control)) && control[0]=='1';
+    }
     float settled_zoom(){
         char control[4]={};
         float presented=renderer_state.gpu_composition?float(renderer_state.gpu_composition->presented_zoom())/65536.f:1.f;
@@ -16299,6 +16326,10 @@ private:
             !(c3x_renderer::render_core::cached_environment("C3X_RENDERER_ZOOMED_STEP_CONTROL",control,sizeof(control)) && control[0]=='1');
         return zoomed?presented:1.f;
     }
+    // The adopted step's one draw, before anything publishes it. Civ III has
+    // already drawn its layers with the step's reported ownership; a draw
+    // that disagrees is traced. A failed draw retries once without the
+    // retained scene pins, as a camera job does under memory pressure.
     bool draw_deferred_step(){
         if(job_camera_ticket!=camera_ticket)return false;
         auto promised=gpu_publication.replacements;
@@ -16306,6 +16337,11 @@ private:
         // the hidden canonical image is its minification.
         struct ZoomLease {float& value;~ZoomLease(){value=1.f;}} zoom_lease{renderer_state.zoomed_step};
         renderer_state.zoomed_step=deferred_step_zoom=settled_zoom();
+        // Display frames kept animating the shown view while the step awaited
+        // adoption and selected units for that view: take this frame's units
+        // at the current visual time, never older than a pose already shown.
+        if(deferred_animating){advance_visual_clock();snapshot_fresh_units(job_frame,visual_ticks,visual_frequency);}
+        deferred_animating=false;
         auto draw=[this]{
             c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};
             GpuOutputMode mode(renderer_state,true);
@@ -16792,15 +16828,23 @@ private:
                     // transfer to every ambient opportunity.
                     bool presentation_ready=trial_surface_permit.ready();
                     if(!presentation_ready)trial_visual_permit_denials.fetch_add(1,std::memory_order_relaxed);
+                    else if(command==Command::trial_visual_shared&&deferred_animating&&!frame_ends_before_adoption())presentation_ready=false;
                     else if(command==Command::trial_visual_shared&&!visual_gpu_ready()){
                         presentation_ready=false;visual_fence_denials.fetch_add(1,std::memory_order_relaxed);
                     }
                     auto& gpu_timeline=c3x_renderer::render_core::gpu_timeline();
                     if(presentation_ready)gpu_timeline.begin(renderer_state.context);
-                    LARGE_INTEGER gated={},framed={};if(phase_probe)QueryPerformanceCounter(&gated);
+                    LARGE_INTEGER gated={},framed={};QueryPerformanceCounter(&gated);
+                    auto committed_front=renderer_state.gpu_composition->committed_revision();
                     int drawn=presentation_ready?renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
                         trial_surface_view.Get(),trial_surface_back.Get(),trial_retain_surface()?trial_surface_buffer.Get():nullptr):0;
-                    if(phase_probe)QueryPerformanceCounter(&framed);
+                    QueryPerformanceCounter(&framed);
+                    if(drawn==1){double ms=renderer_state.trace.milliseconds(framed.QuadPart-gated.QuadPart);
+                        unsigned zoom=renderer_state.gpu_composition->presented_zoom();
+                        bool settled=std::fabs(c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed)-float(zoom)/65536.f)<1e-4f;
+                        if(settled && zoom!=visual_sample_zoom){visual_frame_count=0;visual_sample_zoom=zoom;}
+                        if(settled && committed_front==visual_front_seen){visual_frame_samples[visual_frame_count++%8]=ms;visual_sampled_at=framed.QuadPart;}
+                        visual_front_seen=committed_front;}
                     if(presentation_ready&&gpu_timeline.enabled){auto summary=gpu_timeline.collect(renderer_state.context);
                         if(!summary.empty())renderer_state.trace.write("gpu-event-timeline",summary.c_str(),true);}
                     if(phase_probe)QueryPerformanceCounter(&sampled);
@@ -17403,7 +17447,8 @@ private:
                     if(gpu_publication.matches_projection(job_frame,job_camera_identity))retain_completed_scene();
                     else retire_completed_scene();
 #endif
-                    camera_scene_complete=false;renderer_state.borrowed_scene_stale=false;
+                    camera_scene_complete=false;renderer_state.borrowed_scene_stale=false;deferred_animating=false;
+                    {LARGE_INTEGER requested={};QueryPerformanceCounter(&requested);deferred_requested_at=requested.QuadPart;}
                     // Only a view without a renderable front holds travel.
                     // Navigation keeps its existing bounded allowance; ordinary
                     // reveal preparation continues sampling the completed view.
@@ -17513,6 +17558,23 @@ private:
                         camera_scene_complete=true;retire_completed_scene();
                         advance_visual_clock();unit_instances.resume_motion(visual_ticks,visual_frequency);
                     }
+                    // A deferred step draws nothing before its adoption: the live
+                    // scene is still the shown one, so display frames keep
+                    // animating it (and travel continues) until Civ III's next
+                    // tick adopts the step. Holding them showed one frame per
+                    // tick while scrolling (about 15 fps on the light save).
+                    // Only frames that end before the adoption: on the busy save
+                    // a frame (13 ms p50) still running delayed it and cost 16%
+                    // of the steps (frame_ends_before_adoption, review 71).
+                    // C3X_RENDERER_DEFERRED_HOLD_CONTROL=1 holds them again.
+                    else if(gpu_ticket==camera_ticket && camera_result==C3X_RENDERER_RESULT_OK && !camera_pending &&
+                            camera_ready.deferred && !deferred_hold_control()){
+                        camera_scene_complete=true;unit_instances.resume_motion(visual_ticks,visual_frequency);
+                        deferred_animating=true;
+                    }
+                    if(camera_ready.deferred && gpu_ticket==camera_ticket && renderer_state.trace.level>=2){
+                        char hold[96];std::snprintf(hold,sizeof(hold),"ticket=%lld animating=%u samples=%u median_ms=%.2f",gpu_ticket,unsigned(deferred_animating),visual_frame_count,display_frame_ms());
+                        renderer_state.trace.write("deferred-hold",hold,true);}
 #endif
                     // A completion message is only a wake hint. The caller must
                     // still poll its current ticket and validate the atomic view.

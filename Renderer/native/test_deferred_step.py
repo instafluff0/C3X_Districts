@@ -108,9 +108,42 @@ int main(){
         self.assertIn('if(ready && gpu_publication.deferred)ready=draw_deferred_step();', adoption)
         self.assertLess(adoption.index('draw_deferred_step()'), adoption.index('retain_visual_map(job_frame)'))
         # A drawn step is current: no second draw for the adoption.
-        self.assertIn('if(map_sample.prepare && !drawn_now)', adoption)
+        self.assertIn('if(map_sample.prepare && !drawn_now && settled_zoom()==1.f)', adoption)
         job = source.split('bool supported=renderer_state.scene_surface_requested', 1)[1].split('capture_gpu(ready,output', 1)[0]
         self.assertIn('defer_scroll_step(ready)', job)
+
+    def test_the_shown_view_keeps_animating_until_a_deferred_step_is_adopted(self):
+        # A deferred step draws nothing before its adoption at Civ III's next
+        # tick. Holding display frames meanwhile showed one frame per tick
+        # while scrolling (about 15 fps on the light save, review 71).
+        source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
+        completion = source.split('renderer_state.trace.write("camera-complete",detail,true);\n                    camera_active=false;', 1)[1]
+        completion = completion[:completion.index('notify_camera_completion_locked(gpu_ticket);')]
+        # Only frames that end before Civ III's next tick adopts the step: on
+        # the busy save a frame still running delayed the adoption (16% fewer steps).
+        self.assertIn('camera_ready.deferred && !deferred_hold_control()){\n'
+                      '                        camera_scene_complete=true;unit_instances.resume_motion(visual_ticks,visual_frequency);\n'
+                      '                        deferred_animating=true;', completion)
+        self.assertIn('C3X_RENDERER_DEFERRED_HOLD_CONTROL', source)
+        # Measured on ambient frames only: held, a step's first frame (costlier)
+        # was the only frame drawn, and the gate never opened on the light save.
+        self.assertIn('if(settled && committed_front==visual_front_seen){visual_frame_samples[visual_frame_count++%8]=ms;visual_sampled_at=framed.QuadPart;}', source)
+        # A moving zoom's frames re-render at a new scale (15-18 ms on the
+        # light save) and are not sampled; a new settled zoom samples afresh.
+        self.assertIn('if(settled && zoom!=visual_sample_zoom){visual_frame_count=0;visual_sample_zoom=zoom;}', source)
+        # A spike cannot close it for good: the median of eight, and a stale
+        # estimate (frames held throughout) releases the hold to re-measure.
+        cheap = source.split('double display_frame_ms()const{', 1)[1].split('\n    }', 1)[0]
+        self.assertIn('now.QuadPart-visual_sampled_at>frequency.QuadPart*2)return -1;', cheap)
+        self.assertIn('return samples[count/2];', cheap)
+        ends = source.split('bool frame_ends_before_adoption()const{', 1)[1].split('\n    }', 1)[0]
+        self.assertIn('<deferred_requested_at+frequency.QuadPart*55/1000;', ends)
+        self.assertIn('else if(command==Command::trial_visual_shared&&deferred_animating&&!frame_ends_before_adoption())presentation_ready=false;', source)
+        self.assertIn('deferred_requested_at=requested.QuadPart;', source)
+        # Its draw reselects units from the step's own frame at the current
+        # time: frames shown meanwhile selected units for the old view.
+        deferred = source.split('bool draw_deferred_step(){', 1)[1].split('auto draw=[this]{', 1)[0]
+        self.assertIn('if(deferred_animating){advance_visual_clock();snapshot_fresh_units(job_frame,visual_ticks,visual_frequency);}', deferred)
 
     def test_steps_report_ownership_by_content_not_the_drawn_mask(self):
         # A draw clears ownership of tiles Civ III did not capture to draw

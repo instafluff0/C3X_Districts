@@ -234,7 +234,10 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
    - 2c. **Steps without camera jobs.** A step inside the resident world is a
      frame-level camera update; the new edge's strips and shadow pages are
      filled in bounded slices; jobs remain for content changes and far
-     jumps, and frames keep animating while they run. The hidden canonical
+     jumps, and frames keep animating while they run (**deferred steps,
+     October 11**, review 71: the shown view animates until Civ III adopts
+     the step, within a deadline; light save scrolling 15-18 → 24-30 fps).
+     The hidden canonical
      1× lane is not redrawn on zoomed steps (**done October 11**, review 69:
      a settled zoomed step is drawn once at its zoom and the canonical centre
      is its minification; busy 3× steps 295-350 → 153-189 ms). Today a covered step still
