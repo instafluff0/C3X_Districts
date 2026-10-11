@@ -677,6 +677,7 @@ public:
     // Exact 56-byte natural vertices for world-projected terrain (stage 5);
     // C3X_RENDERER_COMPACT_VERTEX_CONTROL=1 keeps every natural vertex at 92.
     bool compact_vertices=true;
+    bool cull_river_reach=true; // C3X_RENDERER_RIVER_CULL_CONTROL=1 keeps whole river grids (review 72)
     // Fixed geometry tier (stage 5): in whole-world residency, geometry holds
     // the explored world's canonical content plus a fixed allowance for
     // view-specific content (zoomed-out builds), not whatever memory is free.
@@ -3200,6 +3201,7 @@ public:
         composition_receiver_index=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_COMPOSITION_RECEIVER_INDEX");
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         compact_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_COMPACT_VERTEX_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        cull_river_reach=!(GetEnvironmentVariableA("C3X_RENDERER_RIVER_CULL_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         geometry_tier=!(GetEnvironmentVariableA("C3X_RENDERER_GEOMETRY_TIER_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
         region_input_ring=std::strcmp(control,"4")==0?4:2;
@@ -9763,7 +9765,7 @@ public:
             c3x_renderer::fidelity::GroundPreparationInput job;
             auto& input=job.compile;
             input.tile=tile;input.world_ground=world_ground;input.pickup_profile=pickup_profile;input.fidelity_profile=fidelity_profile;
-            input.compact_vertices=compact_vertices;
+            input.compact_vertices=compact_vertices;input.cull_river_reach=cull_river_reach;
             input.draw_marsh=marsh_assets_ready && tile.real_terrain_type==9;
             input.river_assets_ready=river_assets_ready;input.retain_ground_grids=retain_ground_grids;
             input.reuse_nested_ground_grids=reuse_nested_ground_grids;input.prewarming=prewarming;
@@ -11288,6 +11290,7 @@ public:
             ground_compile_input.pickup_profile = pickup_profile;
             ground_compile_input.fidelity_profile = fidelity_profile;
             ground_compile_input.compact_vertices = compact_vertices;
+            ground_compile_input.cull_river_reach = cull_river_reach;
             ground_compile_input.draw_marsh = draw_marsh;
             ground_compile_input.river_assets_ready = river_assets_ready;
             ground_compile_input.retain_ground_grids = retain_ground_grids;
@@ -12733,7 +12736,9 @@ public:
             if(cancelled()){target->Release();return false;}
             auto candidates=fresh_unit_poses;
             if(!select_frame_units(native_frame,candidates,fresh_unit_poses,zoomed_step)){target->Release();return false;}
+            LARGE_INTEGER units_start={};QueryPerformanceCounter(&units_start);
             warm_unit_assets(candidates);
+            unsigned unit_waits=0;
             for(;;){
                 if(cancelled()){target->Release();return false;}
                 auto ready=prepare_frame_unit_assets(fresh_unit_poses);
@@ -12742,10 +12747,12 @@ public:
                 if(cancelled()){target->Release();return false;}
                 if(ready==C3X_RENDERER_RESULT_OK)break;
                 if(ready!=C3X_RENDERER_RESULT_PENDING){target->Release();return false;}
-                Sleep(1);
+                ++unit_waits;Sleep(1);
             }
             LARGE_INTEGER draw_start={},draw_end={};QueryPerformanceCounter(&draw_start);
-            if(trace.level>=2 && !prewarming){setup_marks[7]=draw_start;char phases[256];int used=std::snprintf(phases,sizeof(phases),"covered=%u zoom=%.3f",unsigned(covered_membership),zoomed_step);
+            if(trace.level>=2 && !prewarming){setup_marks[7]=draw_start;char phases[320];int used=std::snprintf(phases,sizeof(phases),
+                "covered=%u zoom=%.3f units_ms=%.3f unit_waits=%u",unsigned(covered_membership),zoomed_step,
+                trace.milliseconds(draw_start.QuadPart-units_start.QuadPart),unit_waits);
                 for(unsigned i=1;i<setup_marks.size();++i)used+=std::snprintf(phases+used,sizeof(phases)-used," p%u=%.3f",i,
                     setup_marks[i].QuadPart&&setup_marks[i-1].QuadPart?trace.milliseconds(setup_marks[i].QuadPart-setup_marks[i-1].QuadPart):-1.);
                 trace.write("render-setup-phases",phases,true);}

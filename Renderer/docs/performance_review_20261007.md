@@ -3146,3 +3146,57 @@ river inputs expand once in the production `ShadowCasterProofs` and an edit
 to a shared node still reaches every producer that uses it (fails without the
 sharing); registration iterates unique generations (source contract); the
 extracted-registration fixtures include the sharing helper.
+
+## 72. Rivers drew their whole tiles every frame (October 11)
+
+**Where busy idle GPU time goes** (`C3X_RENDERER_PROFILE=4`, drained marks
+inside the water span; busy save, 1x idle, p50 per frame of 54 ms):
+the river layer 21.7 ms, units 5.4, interface evaluation 4.7, reflections
+4.5, assembly 3.0, the sea surface 2.2, the retained near-water overlay
+composite 1.3. At 3x idle the river layer is 5.4 ms of 34.
+
+**Cause.** The river layer of every tile with or near a river is the tile's
+whole ground grid (32 x 32 cells, 2,048 triangles at gameplay tile size), and
+the river shader decides that a pixel lies beyond its bank only after about
+fifteen texture samples, then discards it. Rivers run along tile edges, so
+most of each river tile, and nearly all of a tile that is only near a river,
+is shaded and thrown away every frame.
+
+**Change** (exact). Every river shader variant discards a pixel at least
+20.7 screen pixels (1x) from the channel, and the continuous-river material
+at 11.7 plus its bank antialiasing width max(fwidth(distance), .35) (grit at
+14.7). The ground compiler leaves out a river triangle whose three vertices
+are all beyond that reach (one pixel of margin), with the width taken from the
+triangle's own screen-space distance gradient (world ground projects as
+`project_world_content` does) at the smallest presented zoom, and keeps only
+the vertices the remaining triangles use. Fidelity profile only;
+`C3X_RENDERER_RIVER_CULL_CONTROL=1` keeps whole grids; the flag is part of
+the ground recipe key.
+
+**Verified.**
+- Lab, byte-identical with and without the cull: every rivers and shorelines
+  case at every recipe hour. With the reach deliberately cut to 4 px the
+  rivers image differs in 3,321 pixels, so the comparison exercises the cull.
+  (The rivers fixture's water-lifecycle witness fails on both sides, as before.)
+- `test_river_reach_cull.py`: the bound against the shader's own discard
+  arithmetic for 20,000 random noise samples and widths, with the shader
+  constants it relies on asserted; the compiler and recipe key contract.
+- In game (busy, drained GPU marks, p50 per frame):
+
+| Busy | River layer | GPU frame |
+| --- | --- | --- |
+| 1x idle | 21.7 → 13.8 ms | 54.0 → 50.5 ms |
+| 1x idle, last segment | 20.8 → 12.5 ms | 59.2 → 50.6 ms |
+| 3x idle | 5.4 → 5.1 ms | 34.4 → 30.7 ms |
+
+The floor keeps the widest (legacy, 20.7 px) variant; every shipped pack uses
+the continuous or static-optics material, so a 15.7 px floor would also be
+exact for them, but it would tie the geometry to the pack's shader variant.
+Cadence runs (idle 39-49 fps either way) are within this VM's noise; the
+remaining river cost is the corridor the shader really draws.
+
+Diagnostics added with it: drained GPU marks inside the water span
+(`water_surface_water`, `_river`, `_overlay`, `water_city_effects` and the
+dynamic spans, `C3X_RENDERER_PROFILE=4`), water lighting cache builds and
+reuses in `fresh-overlay-layer`, and the step render's unit asset wait
+(`units_ms`, `unit_waits` in `render-setup-phases`: about zero after load).

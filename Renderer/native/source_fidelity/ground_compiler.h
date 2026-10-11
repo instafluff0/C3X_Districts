@@ -93,6 +93,7 @@ struct GroundCompileInput {
     bool river_assets_ready=false;
     bool retain_ground_grids=false, reuse_nested_ground_grids=false, prewarming=false;
     bool compact_vertices=false; // integrated meshes elide constant elements (fidelity only)
+    bool cull_river_reach=false; // river triangles beyond every variant's bank reach are left out
     int ground=0;
     float half_w=0, half_h=0, uv_scale=1, relief_projection_scale=1;
     float key_light[3]={};
@@ -370,10 +371,47 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
         if(record){pending.vertices=grid_vertices;destination.pending_grids.push_back(std::move(pending));}
         if(indices){
             indices->clear();indices->reserve(std::size_t(subdivisions)*subdivisions*6);
+            // The river layer is the whole tile grid, but every river shader
+            // variant discards a pixel beyond its bank: at a distance of at
+            // least 20.7 screen pixels (1x), and at 11.7 plus the bank's
+            // antialiasing width max(fwidth(distance), .35) for continuous
+            // rivers (hydrology.hlsl, q3_water_material). A triangle whose
+            // vertices are all beyond that reach, with the width taken from
+            // its own screen-space distance gradient at the smallest
+            // presented zoom (.5), draws no pixel, so it is left out and the
+            // grid keeps only the vertices it still uses (review 72).
+            bool cull=layer==9.f && input.cull_river_reach && input.fidelity_profile;
+            float const width=float(frame.tile_width);
+            auto screen=[&](MapVertex const& p,float& x,float& y){
+                if(input.world_ground){float h=p.world_z*112.f-2.5f;
+                    x=(p.world_x+p.world_y)*width*.5f;y=(p.world_x-p.world_y+1.f)*width*.25f-h*(width/224.f*.82f);}
+                else{x=p.x;y=p.y;}
+            };
+            auto drawn=[&](UINT i0,UINT i1,UINT i2){
+                auto const& a=grid_vertices[i0];auto const& b=grid_vertices[i1];auto const& c=grid_vertices[i2];
+                float least=std::min(a.river_distance,std::min(b.river_distance,c.river_distance));
+                if(!(least>=21.7f))return true;
+                float ax,ay,bx,by,cx,cy;screen(a,ax,ay);screen(b,bx,by);screen(c,cx,cy);
+                float e1x=bx-ax,e1y=by-ay,e2x=cx-ax,e2y=cy-ay,det=e1x*e2y-e1y*e2x;
+                if(!(std::fabs(det)>1e-4f))return true;
+                float d1=b.river_distance-a.river_distance,d2=c.river_distance-a.river_distance;
+                float gx=(d1*e2y-e1y*d2)/det,gy=(e1x*d2-e2x*d1)/det;
+                float aa=std::max(.35f,2.f*(std::fabs(gx)+std::fabs(gy)));
+                return !(least>=std::max(21.7f,12.7f+aa));
+            };
             for(int y=0;y<subdivisions;++y)for(int x=0;x<subdivisions;++x){
                 UINT a=UINT(y*row_width+x),b=a+1,c=b+UINT(row_width),d=a+UINT(row_width);
                 UINT triangles[]={a,b,c,a,c,d};
-                indices->insert(indices->end(),std::begin(triangles),std::end(triangles));
+                for(int t=0;t<6;t+=3)if(!cull || drawn(triangles[t],triangles[t+1],triangles[t+2]))
+                    indices->insert(indices->end(),triangles+t,triangles+t+3);
+            }
+            if(cull && indices->size()<std::size_t(subdivisions)*subdivisions*6){
+                std::vector<UINT> remap(grid_vertices.size(),~0u);std::vector<MapVertex> used;
+                for(auto& index:*indices){
+                    if(remap[index]==~0u){remap[index]=UINT(used.size());used.push_back(grid_vertices[index]);}
+                    index=remap[index];
+                }
+                grid_vertices.swap(used);
             }
             return;
         }

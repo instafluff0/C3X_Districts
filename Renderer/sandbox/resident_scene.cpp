@@ -556,13 +556,14 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             static_cast<unsigned long long>(pulled.refusals),static_cast<unsigned long long>(pulled.retired),
             static_cast<unsigned long long>(pulled.copied_bytes),pulled.bytes(),pulled.entry_count());
         renderer.trace.write("fresh-pulled-submission",detail,true);
-        sprintf_s(detail,"hits=%llu misses=%llu strips=%llu refusals=%llu miss_unshifted=%llu miss_revision=%llu miss_layer=%llu miss_last_layer=%u retired_mismatch=%llu retired_failure=%llu preview_hits=%llu",
+        sprintf_s(detail,"hits=%llu misses=%llu strips=%llu refusals=%llu miss_unshifted=%llu miss_revision=%llu miss_layer=%llu miss_last_layer=%u retired_mismatch=%llu retired_failure=%llu preview_hits=%llu water_lighting_builds=%llu water_lighting_reuses=%llu",
             static_cast<unsigned long long>(sandbox_fresh.overlay_hits),static_cast<unsigned long long>(sandbox_fresh.overlay_misses),
             static_cast<unsigned long long>(sandbox_fresh.overlay_strips),static_cast<unsigned long long>(sandbox_fresh.overlay_refusals),
             static_cast<unsigned long long>(sandbox_fresh.overlay_miss_unshifted),static_cast<unsigned long long>(sandbox_fresh.overlay_miss_revision),
             static_cast<unsigned long long>(sandbox_fresh.overlay_miss_layer),sandbox_fresh.overlay_miss_last_layer,
             static_cast<unsigned long long>(sandbox_fresh.overlay_retired_mismatch),static_cast<unsigned long long>(sandbox_fresh.overlay_retired_failure),
-            static_cast<unsigned long long>(sandbox_fresh.overlay_preview_hits));
+            static_cast<unsigned long long>(sandbox_fresh.overlay_preview_hits),
+            static_cast<unsigned long long>(sandbox_fresh.water_lighting_builds),static_cast<unsigned long long>(sandbox_fresh.water_lighting_reuses));
         renderer.trace.write("fresh-overlay-layer",detail,true);
         auto const& packets=renderer.ordered_rigid_packets;
         sprintf_s(detail,"builds=%llu reuses=%llu refusals=%llu draws=%llu submitted_records=%llu uploaded_bytes=%llu placement_copies=%llu pages=%u resident_bytes=%zu metadata_bytes=%zu peak_bytes=%zu",

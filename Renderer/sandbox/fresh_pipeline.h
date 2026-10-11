@@ -4946,6 +4946,9 @@ struct SandboxFreshPipeline {
         }
         LARGE_INTEGER dynamic_previous=ticks[3];auto dynamic_previous_calls=work.calls;
         auto mark_dynamic=[&](DynamicSpan span){
+            // Profiling only (C3X_RENDERER_PROFILE=4 isolates each span's GPU time).
+            static char const* const gpu_names[dynamic_span_count]={"water_depth_setup","water_aquatic","water_surface","water_resources","water_waves"};
+            c3x_renderer::render_core::gpu_timeline().mark(renderer.context,gpu_names[span]);
             if(!renderer.trace.level)return;
             LARGE_INTEGER now{};QueryPerformanceCounter(&now);
             dynamic_subspans[span]=double(now.QuadPart-dynamic_previous.QuadPart)*1000/frequency.QuadPart;
@@ -5033,13 +5036,19 @@ struct SandboxFreshPipeline {
                     if(!water_visible[layer].empty() && layer!=geometry_water && layer!=geometry_river &&
                        layer!=geometry_wave && !overlay_layer(layer)){covered=false;++overlay_miss_layer;overlay_miss_last_layer=layer;}
                 if(covered){
-                    if(!draw_layer(water_visible,geometry_water,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale)) ||
-                       !draw_layer(water_visible,geometry_river,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale)))
+                    // Profiling marks only (C3X_RENDERER_PROFILE=4).
+                    auto& timeline=c3x_renderer::render_core::gpu_timeline();
+                    if(!draw_layer(water_visible,geometry_water,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale)))
                         return fail("water_scene");
+                    timeline.mark(context,"water_surface_water");
+                    if(!draw_layer(water_visible,geometry_river,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale)))
+                        return fail("water_scene");
+                    timeline.mark(context,"water_surface_river");
                     auto const& c=slot.covered;
                     if(!overlay_composite.draw(context,glow.linear,retained.layer,overlay_frame.move_x,overlay_frame.move_y,
                             {c.left,c.top,c.right,c.bottom},overlay_frame.depth_shift))return fail("water_overlay");
                     work.draw(3);
+                    timeline.mark(context,"water_surface_overlay");
                     char wave_control[8]{};
                     bool skip_scene_wave=c3x_renderer::render_core::cached_environment("C3X_SANDBOX_SKIP_WAVE",
                         wave_control,sizeof(wave_control)) && std::strcmp(wave_control,"1")==0;
@@ -5117,6 +5126,7 @@ struct SandboxFreshPipeline {
         // resampled color and depth they flashed as bright bursts in game.
         if(!static_preview && !effect_visible[geometry_city].empty() && !draw_layer(effect_visible,geometry_city,settings,full,
                 glow.linear.target,glow.linear.depth,false,float(scene_scale)))return fail("city_effects");
+        c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"water_city_effects");
         // World overlays finish before the foreground unit layer.
         auto border_clip=source_bounds(settings,full,false);
         for(auto const* visible_scene:{&static_visible,&water_visible})
