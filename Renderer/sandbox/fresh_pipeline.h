@@ -5419,12 +5419,19 @@ struct SandboxFreshPipeline {
                     glow.linear.depth,false,float(scene_scale)))return fail("coastal_waves");
         }
         mark_dynamic(dynamic_waves);
-        // Flames, smoke and night lights above city bodies, below units. A
-        // static preview (resampled from another zoom while the new static
-        // layer builds) skips them for its one or two frames: drawn over the
-        // resampled color and depth they flashed as bright bursts in game.
-        if(!static_preview && !effect_visible[geometry_city].empty() && !draw_layer(effect_visible,geometry_city,settings,full,
-                glow.linear.target,glow.linear.depth,false,float(scene_scale)))return fail("city_effects");
+        // Flames, smoke, night lights and volcano plumes above city bodies,
+        // below units. A static preview is resampled from another zoom while
+        // the new static layer builds, and a zoom is many previews: tested
+        // against the resampled depth these effects flashed as bright bursts,
+        // and skipped they vanished for the whole zoom (the user, October 11).
+        // Previews draw them without that depth: the quads face the camera
+        // above their own bodies, and their shaders read no scene depth.
+        // C3X_RENDERER_PREVIEW_EFFECTS=0 skips them on previews again.
+        char preview_effects[4]={};
+        bool const skip_preview_effects=c3x_renderer::render_core::cached_environment("C3X_RENDERER_PREVIEW_EFFECTS",
+            preview_effects,sizeof(preview_effects)) && preview_effects[0]=='0';
+        if(!(static_preview && skip_preview_effects) && !effect_visible[geometry_city].empty() && !draw_layer(effect_visible,geometry_city,settings,full,
+                glow.linear.target,static_preview?nullptr:glow.linear.depth,false,float(scene_scale)))return fail("city_effects");
         c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"water_city_effects");
         // World overlays finish before the foreground unit layer.
         auto border_clip=source_bounds(settings,full,false);

@@ -3439,3 +3439,23 @@ previous code). The window basis keeps its frame when the camera
 re-bases across the seam (fails with the per-capture basis); region
 revisions change only for blocks under the region, across the seam; the
 caster box with and without a margin.
+
+## 75. Smoke and flames stay visible through a zoom (October 11)
+
+**Cause** (reported by the user). A zoom, and the first frames after a jump,
+show static previews: the new zoom's static layer is still being drawn, so the
+frame resamples the cached image (color and depth) from another zoom. The
+attached effect layer (flames, smoke, night lights, volcano plumes) was
+skipped on every preview, because tested against the resampled depth these
+effects had flashed as bright bursts. A zoom is many previews, so the effects
+vanished for the whole zoom and returned once the camera settled.
+
+**Change.** Previews draw the effect layer without the resampled depth. Its
+quads face the camera above their own bodies and its shaders read no scene
+depth. `C3X_RENDERER_PREVIEW_EFFECTS=0` skips them on previews again.
+
+**Checked** (busy save, `near`, 10 frames/s): mid-zoom preview frames keep
+every city's smoke columns, with no bursts; the first frame after a minimap
+jump shows smoke at once. Test: `test_preview_effects.py` (source contract,
+fails on the previous pipeline; the effect shaders must keep reading no scene
+depth).

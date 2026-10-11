@@ -20,13 +20,10 @@ In order. Details for each are under "Stages" and in the review sections cited.
    against 101 ms on the window path (review 74). Then default on and the
    window path retired. About 1 session.
 2. **Animated effects during zoom** (added October 11 at the user's
-   request). City smoke, flames, night lights and volcano plumes share the
-   city effect layer, which zoom preview frames skip (drawn over the rescaled
-   cached image's depth they flashed), so they vanish for the whole zoom and
-   return once the camera settles. Draw that layer on preview frames against
-   depth that matches the preview, or without the cached depth, so they stay
-   visible without flashing. Small; can go alongside item 1 or 3. Item 4
-   removes the case entirely.
+   request; done, review 75). City smoke, flames, night lights and volcano
+   plumes share the city effect layer, which zoom preview frames skipped, so
+   they vanished for the whole zoom and after jumps. Previews now draw that
+   layer without the resampled depth. Item 4 removes the case entirely.
 3. **Cheaper geometry** (added October 11; the 16-bit vertex quantization
    was approved the same day, stage 5 step 2), plus fewer draw calls. Less
    GPU memory means fewer evictions (which also churn the store) and a
