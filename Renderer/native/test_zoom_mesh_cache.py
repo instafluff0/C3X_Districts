@@ -765,6 +765,7 @@ struct CachedVertexChunk {
  Ref *buffer=nullptr,*indices=nullptr;void* instances=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned city_material=0xffffffffu,projection_kind=0;int source_tile_width=128;};
 #include "Renderer/native/render_core/geometry_draws.h"
 #include "Renderer/native/render_core/scene_membership.h"
+#include "Renderer/native/render_core/resident_world.h"
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
 using GeometryDrawReference=GeometryDrawView::Reference;
@@ -792,6 +793,12 @@ struct State {
  c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count> geometry_vertex_buffers;
  c3x_renderer::render_core::ResidentSelection geometry_content;
  void index_world_content(CachedTileGeometry const&){}
+ // The resident world feed (camera decoupling, stage 6) is off here.
+ using ResidentWorldRecords=c3x_renderer::render_core::ResidentWorld<GeometryDrawRecord,geometry_layer_count>;
+ int resident_world_half[2]={64,32};bool resident_world_feed=false;
+ void resident_world_put(ResidentWorldRecords::Tile){assert(false);}
+ bool resident_water_visible(int,int)const{return true;}
+ ResidentWorldRecords::Extent resident_world_extent(unsigned,GeometryDrawRecord const&)const{return {};}
  int tile_footprint(CachedTileGeometry const&,c3x_renderer_tile_v1 const&){return 1;}
  GeometryDrawRecord project_natural_chunk(GeometryDrawRecord chunk,c3x_renderer_tile_v1 const&){chunk.natural_projection[0]=1;return chunk;}
 ''' + append + r'''

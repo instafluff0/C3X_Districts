@@ -151,6 +151,7 @@ bool c3x_renderer64_select_units(c3x_renderer_frame_v1 const& frame,
 #include "render_core/residency_candidates.h"
 #include "render_core/world_input_capture.h"
 #include "render_core/canonical_minify.h"
+#include "render_core/resident_world.h"
 #include "render_core/world_move_footprint.h"
 #include "render_core/world_preparation_region.h"
 #include "city_fidelity/glow.h"
@@ -1291,6 +1292,18 @@ public:
     std::shared_ptr<c3x_renderer::render_core::ResidentRetirement> retired_content=
         std::make_shared<c3x_renderer::render_core::ResidentRetirement>();
     c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count> geometry_vertex_buffers{retired_content};
+    // The explored world's draw records in a fixed world basis, by world block
+    // (camera decoupling, stage 6). Camera assemblies add every tile they
+    // place; nothing leaves when the window moves on. Owners index the tiles
+    // borrowing each mesh, so an eviction drops exactly those.
+    // C3X_RENDERER_RESIDENT_WORLD=1 (in development).
+    using ResidentWorldRecords=c3x_renderer::render_core::ResidentWorld<GeometryDrawRecord,geometry_layer_count>;
+    ResidentWorldRecords resident_world;
+    std::unordered_map<std::uint64_t,std::vector<std::pair<int,int>>> resident_world_owners;
+    std::array<std::uint64_t,6> resident_world_scope{};
+    std::uint64_t resident_world_visibility=0;
+    int resident_world_half[2]={};
+    bool resident_world_control=false,resident_world_feed=false;
     // One current immutable membership proof, replaced before state updates.
     decltype(geometry_vertex_buffers)::Lease resource_visibility_membership;
     std::uint64_t resource_visibility_revision=0;
@@ -3201,6 +3214,7 @@ public:
         composition_receiver_index=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_COMPOSITION_RECEIVER_INDEX");
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         compact_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_COMPACT_VERTEX_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        resident_world_control=GetEnvironmentVariableA("C3X_RENDERER_RESIDENT_WORLD",control,sizeof(control)) && std::strcmp(control,"1")==0;
         cull_river_reach=!(GetEnvironmentVariableA("C3X_RENDERER_RIVER_CULL_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         geometry_tier=!(GetEnvironmentVariableA("C3X_RENDERER_GEOMETRY_TIER_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
@@ -4874,6 +4888,7 @@ public:
         // resident set (a new revision, and every cache keyed by it rebuilt)
         // at most camera steps; with the world window, camera jobs and visual
         // frames disagreed about it on every step (review, section 28).
+        if(resident_world_control)resident_world_refresh_visibility();
         if(resource_visibility_membership && resource_visibility_membership->revision==geometry_vertex_buffers.revision() &&
            resource_visibility_revision==topology_cache.visibility_sequence() && resource_visibility_enabled==visibility_pass){
             resource_preparation.occurrence_reuses=1;
@@ -6260,7 +6275,70 @@ public:
         scene_static_signature=0;
     }
 
+    void resident_world_clear(){resident_world.clear();resident_world_owners.clear();resident_world_visibility=0;}
+    // A record's culling extent, as the region index measured it.
+    ResidentWorldRecords::Extent resident_world_extent(unsigned layer,GeometryDrawRecord const& record)const{
+        auto const& chunk=record.content();
+        double radius=layer==geometry_city && chunk.city_lighting?std::ceil(shadow_tile_width*.85f)+8:0;
+        return {double(record.bounds.left)+record.translation_x-radius,double(record.bounds.top)+record.translation_y-radius,
+            double(record.bounds.right)+record.translation_x+radius,double(record.bounds.bottom)+record.translation_y+radius,
+            chunk.world_bounds.low[2],chunk.world_bounds.high[2]};
+    }
+    // A tile's retained visibility, as the water refresh reads it.
+    bool resident_water_visible(int tile_x,int tile_y)const{
+        if(!visibility_pass)return true;
+        auto record=topology_cache.retained(topology_cache.key(tile_x,tile_y));
+        return record && (record->visibility_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) &&
+            (record->visibility_flags&(C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE));
+    }
+    void resident_world_put(ResidentWorldRecords::Tile tile){
+        auto same=[](GeometryDrawRecord const& a,GeometryDrawRecord const& b){
+            return a.source==b.source && a.owner==b.owner && a.ordinal==b.ordinal && a.translation_x==b.translation_x &&
+                a.translation_y==b.translation_y && !std::memcmp(&a.bounds,&b.bounds,sizeof(a.bounds)) &&
+                !std::memcmp(a.natural_projection,b.natural_projection,sizeof(a.natural_projection)) && a.tile_x==b.tile_x &&
+                a.tile_y==b.tile_y && a.territory_edges==b.territory_edges && a.territory_rgb==b.territory_rgb &&
+                a.water_dependent==b.water_dependent && a.water_visible==b.water_visible;};
+        if(auto old=resident_world.view().tile(tile.tile_x,tile.tile_y)){
+            bool equal=old->owners.size()==tile.owners.size();
+            for(unsigned layer=0;equal && layer<geometry_layer_count;++layer)
+                equal=old->records[layer].size()==tile.records[layer].size() &&
+                    std::equal(old->records[layer].begin(),old->records[layer].end(),tile.records[layer].begin(),same);
+            if(equal)return;
+            for(auto const& owner:old->owners){auto& tiles=resident_world_owners[owner.first.generation];
+                tiles.erase(std::remove(tiles.begin(),tiles.end(),std::make_pair(tile.tile_x,tile.tile_y)),tiles.end());
+                if(tiles.empty())resident_world_owners.erase(owner.first.generation);}
+        }
+        for(auto const& owner:tile.owners)resident_world_owners[owner.first.generation].push_back({tile.tile_x,tile.tile_y});
+        resident_world.set(std::move(tile));
+    }
+    void resident_world_release(c3x_renderer::render_core::ContentHandle handle){
+        auto found=resident_world_owners.find(handle.generation);if(found==resident_world_owners.end())return;
+        auto tiles=std::move(found->second);resident_world_owners.erase(found);
+        for(auto const& at:tiles){
+            if(auto old=resident_world.view().tile(at.first,at.second))for(auto const& owner:old->owners){
+                auto other=resident_world_owners.find(owner.first.generation);if(other==resident_world_owners.end())continue;
+                auto& list=other->second;list.erase(std::remove(list.begin(),list.end(),at),list.end());
+                if(list.empty())resident_world_owners.erase(other);}
+            resident_world.erase(at.first,at.second);
+        }
+    }
+    // Water occurrences follow retained visibility, as the window's refresh does.
+    void resident_world_refresh_visibility(){
+        if(resident_world_visibility==topology_cache.visibility_sequence())return;
+        resident_world_visibility=topology_cache.visibility_sequence();
+        std::vector<ResidentWorldRecords::Tile> changed;
+        for(auto const& entry:resident_world.view().blocks)for(auto const& tile:entry.second->tiles){
+            bool visible=resident_water_visible(tile->tile_x,tile->tile_y),differs=false;
+            for(auto layer:{geometry_water,geometry_river})for(auto const& record:tile->records[layer])differs=differs || record.water_visible!=visible;
+            if(!differs)continue;
+            auto next=*tile;for(auto layer:{geometry_water,geometry_river})for(auto& record:next.records[layer])record.water_visible=visible;
+            changed.push_back(std::move(next));
+        }
+        for(auto& tile:changed)resident_world.set(std::move(tile));
+    }
+
     void release_resident_content(CachedTileGeometry& owner){
+        resident_world_release(owner.binding);
         if(owner.shared_natural)world_pass_index.erase(owner.version);
         resident_content.release(owner.binding);
         if(owner.mesh->proof.use_count()>1 || owner.mesh.use_count()>1)
@@ -6284,7 +6362,7 @@ public:
         // Capacity retirement keeps the authoritative world, immutable sources and
         // compressed prepared backing. Selected fronts hold their old leases until
         // release, and retired_content accounts those generations in admission.
-        world_preparation_queue.clear();discard_scene_view();
+        world_preparation_queue.clear();discard_scene_view();resident_world_clear();
         residency_candidates.clear();natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
         ground_grid_cache.clear();ground_grid_cache_bytes=0;
         for(auto& entry:tile_geometry_cache)release_resident_content(entry.second);
@@ -6297,7 +6375,7 @@ public:
     }
 
     void clear_tile_geometry_cache() {
-        world_gpu_residency_ready=false;world_gpu_records.clear();world_gpu_current.clear();
+        world_gpu_residency_ready=false;world_gpu_records.clear();world_gpu_current.clear();resident_world_clear();
         sandbox_shadow_meshes.clear();
         residency_candidates.clear();
         natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
@@ -6643,8 +6721,13 @@ public:
             (natural_tile && natural_tile->shared_natural &&
              (!natural_tile->mesh->layers[geometry_natural_terrain].empty() ||
               !natural_tile->mesh->layers[geometry_natural_mountain].empty()));
+        // The same records in the world basis: the occurrence anchor is the
+        // canonical coordinate times half a tile (camera decoupling, stage 6).
+        ResidentWorldRecords::Tile stored;stored.tile_x=record.tile_x;stored.tile_y=record.tile_y;
+        int const world_x=record.tile_x*resident_world_half[0],world_y=record.tile_y*resident_world_half[1];
         auto append=[&](CachedTileGeometry& source,bool natural_world){
         source.last_used=tile_geometry_epoch;
+        if(resident_world_feed)stored.owners.push_back({source.binding,resident_content.lease(source.binding)});
         if(!geometry_vertex_buffers.retain(source.binding,resident_content.lease(source.binding)))throw std::bad_alloc();
         if(animated_view)source.animation_epoch=tile_geometry_epoch;
         for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
@@ -6689,6 +6772,12 @@ public:
                 chunk.translation_x = anchor_x - source.anchor_x;
                 chunk.translation_y = anchor_y - source.anchor_y;
                 geometry_vertex_buffers.edit(layer).push_back(chunk);
+                if(resident_world_feed){
+                    auto world=chunk;world.translation_x=world_x-source.anchor_x;world.translation_y=world_y-source.anchor_y;
+                    world.water_visible=resident_water_visible(record.tile_x,record.tile_y);
+                    stored.extents[layer].push_back(resident_world_extent(unsigned(layer),world));
+                    stored.records[layer].push_back(world);
+                }
                 // The current epoch protects this immutable owner from eviction.
                 // Draw records acquire no buffer or material references.
             }
@@ -6697,6 +6786,7 @@ public:
         append(tile,false);
         if(natural_tile && natural_tile->shared_natural){index_world_content(*natural_tile);append(*natural_tile,true);}
         topology_cache.attach(record,tile.binding);
+        if(resident_world_feed)resident_world_put(std::move(stored));
     }
 
     template<class Lookup> c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(c3x_renderer_tile_v1 const& tile,
@@ -8872,6 +8962,15 @@ public:
 #else
         bool const fresh_scene_path = false;
 #endif
+        // Camera assemblies feed the resident world; its records depend on the
+        // scope, assets, device, tile size and view height (natural projection).
+        resident_world_feed=resident_world_control && fresh_scene_path && prewarm_index<0 && !content_view && world_window.valid;
+        if(resident_world_feed){
+            std::array<std::uint64_t,6> scope={topology_cache.scope_sequence(),content_revision,device_generation,
+                std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),std::uint64_t(content_view_height)};
+            if(scope!=resident_world_scope){resident_world_clear();resident_world_scope=scope;}
+            resident_world_half[0]=frame.tile_width/2;resident_world_half[1]=frame.tile_height/2;
+        }
         // The 32-bit Huge-map pressure campaign exhausts address space at the
         // configured 768 MiB ceiling. Its smaller working set is independent
         // of Renderer64's address space and normal GPU cache tier.
@@ -12678,6 +12777,36 @@ public:
             -static_cast<long long>(geometry_translation_x),-static_cast<long long>(geometry_translation_y),
             static_cast<long long>(frame.target_width)-geometry_translation_x,static_cast<long long>(frame.target_height)-geometry_translation_y);
             trace.write("canonical-membership",detail,true);QueryPerformanceCounter(&setup_marks[5]);
+        }
+        // Development witness (C3X_RENDERER_RESIDENT_WORLD_CHECK=1): every window
+        // record has its world-basis copy in the resident world, equal but for
+        // a translation that differs by one constant (modulo the wrap).
+        if(resident_world_feed){char check[4]={};
+            if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_RESIDENT_WORLD_CHECK",check,sizeof(check)) && check[0]=='1'){
+                std::size_t records=0,missing=0,differ=0,offsets=0;bool first=true;long long dx0=0,dy0=0;
+                long long const wrap=frame.world_wrap_x?static_cast<long long>(frame.world_width_tiles)*resident_world_half[0]:0;
+                auto const& world=resident_world.view();
+                for(unsigned layer=0;layer<geometry_layer_count;++layer){
+                    if(layer==geometry_wave)continue;
+                    for(auto const& draw:geometry_vertex_buffers[layer]){++records;
+                        auto tile=world.tile(draw.tile_x,draw.tile_y);
+                        GeometryDrawRecord const* match=nullptr;
+                        if(tile)for(auto const& candidate:tile->records[layer])
+                            if(candidate.owner==draw.owner && candidate.ordinal==draw.ordinal){match=&candidate;break;}
+                        if(!match){++missing;continue;}
+                        long long dx=static_cast<long long>(match->translation_x)-draw.translation_x,dy=static_cast<long long>(match->translation_y)-draw.translation_y;
+                        if(wrap){dx%=wrap;if(dx<0)dx+=wrap;}
+                        if(first){dx0=dx;dy0=dy;first=false;}else if(dx!=dx0 || dy!=dy0)++offsets;
+                        if(match->source!=draw.source || std::memcmp(&match->bounds,&draw.bounds,sizeof(draw.bounds)) ||
+                           std::memcmp(match->natural_projection,draw.natural_projection,sizeof(draw.natural_projection)) ||
+                           match->territory_edges!=draw.territory_edges || match->territory_rgb!=draw.territory_rgb ||
+                           match->water_dependent!=draw.water_dependent)++differ;
+                    }
+                }
+                char detail[256];std::snprintf(detail,sizeof(detail),"records=%zu missing=%zu differ=%zu offsets=%zu world_tiles=%zu world_records=%zu world_mb=%.1f revision=%llu",
+                    records,missing,differ,offsets,world.tiles,world.records,double(world.bytes)/1048576.,static_cast<unsigned long long>(world.revision));
+                trace.write("resident-world-check",detail,true);
+            }
         }
 #ifdef C3X_RENDERER64_FRESH
         if (fresh_scene_path) {
