@@ -3225,7 +3225,9 @@ public:
         composition_receiver_index=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_COMPOSITION_RECEIVER_INDEX");
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         compact_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_COMPACT_VERTEX_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
-        resident_world_control=GetEnvironmentVariableA("C3X_RENDERER_RESIDENT_WORLD",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        // The resident world drives the draw by default (camera decoupling
+        // stage 6, review 74); C3X_RENDERER_RESIDENT_WORLD=0 keeps the window.
+        resident_world_control=!(GetEnvironmentVariableA("C3X_RENDERER_RESIDENT_WORLD",control,sizeof(control)) && std::strcmp(control,"0")==0);
         cull_river_reach=!(GetEnvironmentVariableA("C3X_RENDERER_RIVER_CULL_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         geometry_tier=!(GetEnvironmentVariableA("C3X_RENDERER_GEOMETRY_TIER_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));

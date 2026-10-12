@@ -8,7 +8,8 @@ Goal G1 in [performance_goals.md](performance_goals.md); measurements in the
 
 In order. Details for each are under "Stages" and in the review sections cited.
 
-1. **Whole-world restructure** (in progress, stage 6, review 74). Done: the
+1. **Whole-world restructure** (stage 6, review 74; the store is the default
+   since October 11, `C3X_RENDERER_RESIDENT_WORLD=0` keeps the window). Done: the
    resident world store; the draw reads it; shadow casters come from it; it
    is loaded from the retained world on the first gameplay frame; a step
    whose window moves is deferred like a covered step; the window keeps no
@@ -17,8 +18,10 @@ In order. Details for each are under "Stages" and in the review sections cited.
    store. Casters are cached per store block, a window change no longer
    retires the pipeline's selection, and a crossing keeps the drawn casters
    while the next frame refreshes them: a crossing's render is about 52 ms
-   against 101 ms on the window path (review 74). Then default on and the
-   window path retired. About 1 session.
+   against 101 ms on the window path (review 74). Left: retire the window
+   path's per-step membership work (with resource anchors from the store),
+   and the display frames that stop during busy 1x horizontal scrolling
+   (steps back to back, about 7 fps on both paths).
 2. **Animated effects during zoom** (added October 11 at the user's
    request; done, review 75). City smoke, flames, night lights and volcano
    plumes share the city effect layer, which zoom preview frames skipped, so

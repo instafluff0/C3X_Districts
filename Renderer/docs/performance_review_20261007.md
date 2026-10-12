@@ -3389,6 +3389,25 @@ moves with the window.
 Caster sets contained the window's in every check, the window basis matched
 throughout, and no deferred step's ownership disagreed with its draw.
 
+**Moved-step deferral, measured again** (store on, cadence, three runs
+each, scroll steps):
+
+| | 1x horizontal | 2x | 3x | All segments |
+| --- | --- | --- | --- | --- |
+| Deferred | 25, 22, 30 | 31, 35, 34 | 47, 45, 50 | 118, 117, 129 |
+| Full jobs | 29, 27, 29 | 21, 18, 33 | 39, 39, 45 | 104, 99, 122 |
+
+Deferral stays on: it wins zoomed in, and the 1x difference is within the
+run-to-run spread.
+
+**Default on.** The resident world now drives the draw by default;
+`C3X_RENDERER_RESIDENT_WORLD=0` keeps the window path. With the default (no
+option set), witness runs of the busy `near`, `combat` and `city` scenarios
+were clean (selections, casters, feed, ownership); the city scenario's
+retained-memory refusal also happens on the window path. The Lab renders
+through the 32-bit candidate DLL, which has no fresh pipeline, so its images
+cannot change.
+
 **The window basis across the wrap seam.** With no window draw records the
 window basis was taken from each capture's view; across the wrap seam Civ III
 re-bases the camera a world width while the window keeps its frame, so in 4
