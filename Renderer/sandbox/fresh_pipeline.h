@@ -2055,10 +2055,12 @@ struct SandboxFreshPipeline {
     RasterOverride raster_override;
     c3x_renderer::render_core::LinearResample static_resample;
     std::array<std::uint64_t,12> restore_key{};
-    // A preview whose sources' near-water overlays are already in static_cache
-    // (composited retained layers, or baked into a bootstrap); the water pass
-    // then draws only the animated water.
+    // A preview whose sources all have retained near-water overlay layers:
+    // the water pass draws the animated water live, then composites these
+    // layers over it, as an exact frame does.
     bool restore_overlays=false,preview_overlays=false;
+    c3x_renderer::render_core::LinearResample::Source preview_overlay_sources[2]{};
+    bool preview_overlay_secondary=false;
     unsigned region_width_px=0,region_height_px=0;
     double refine_pixels=600000;bool refine_worked=false;LARGE_INTEGER refine_last{};
     double last_static_ms=0; // static raster work (strips, previews, restore) in the previous frame
@@ -4843,13 +4845,14 @@ struct SandboxFreshPipeline {
         if(next!=restore_key){
             if(!static_resample.draw(context,static_cache,*primary,secondary))return false;
             work.draw(3);if(work.enabled)work.row().target_pixels+=std::uint64_t(static_cache.width)*static_cache.height;
-            if(overlays){
-                if(!static_resample.draw(context,static_cache,primary_overlay,secondary?&secondary_overlay:nullptr,secondary?3:1))return false;
-                work.draw(3);
-            }
             restore_key=next;restore_overlays=overlays;
         }
+        // The layers go over the live water in the water pass. Baked into
+        // the static image they sat under it: roads and bridges lying on a
+        // river vanished for every such preview frame (the user, October 11).
         preview_overlays=restore_overlays;
+        preview_overlay_sources[0]=primary_overlay;preview_overlay_sources[1]=secondary_overlay;
+        preview_overlay_secondary=secondary!=nullptr;
         ++preview_frames;static_preview=true;static_decision.preview=1;
         static_decision.front_cover=front_cover;static_decision.home_cover=home_cover;static_decision.boot_cover=boot_cover;
         return true;
@@ -5421,6 +5424,13 @@ struct SandboxFreshPipeline {
                     draw_layer(water_visible,geometry_river,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale));
                 renderer.rasterizer_state=raster;
                 if(!drawn)return fail("water_scene");
+                // Then the sources' overlay layers over that water, shifted by
+                // the same four pixel-depth units as the live water.
+                auto overlay_primary=preview_overlay_sources[0],overlay_secondary=preview_overlay_sources[1];
+                overlay_primary.depth_shift-=4.f/16384.f;overlay_secondary.depth_shift-=4.f/16384.f;
+                if(!static_resample.draw(context,glow.linear,overlay_primary,preview_overlay_secondary?&overlay_secondary:nullptr,preview_overlay_secondary?3:1))
+                    return fail("water_overlay");
+                work.draw(3);
                 char wave_control[8]{};
                 bool skip_scene_wave=c3x_renderer::render_core::cached_environment("C3X_SANDBOX_SKIP_WAVE",
                     wave_control,sizeof(wave_control)) && std::strcmp(wave_control,"1")==0;

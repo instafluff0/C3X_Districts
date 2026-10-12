@@ -3676,3 +3676,42 @@ differs in one frame from both neighbours at the same zoom and camera) found
 only scattered 200–1,400-pixel changes, which are animation. No sampled frame
 lost roads, mines or smoke. The window samples catch about one frame in
 three, so single-frame dropouts may still be missed.
+
+A second capture covered the whole scenario, including the zoom out from 3x
+to 1x. Its previews mix the old raster with the home raster or a bootstrap,
+and draw the overlays live (frames 1007-1021). Consecutive same-zoom frames
+changed only through animation: units, smoke, and water glints of up to
+27,000 pixels on the sea. Neither the switch to the bootstrap at 1x nor the
+first exact frame lost roads, mines or smoke.
+
+## 78. Roads on rivers vanished on zoom previews (October 11)
+
+**Report** (the user's recording, busy save at 2-3x near Nagoya). During zoom
+transitions the two roads crossing a river vanished, then returned once the
+zoom settled; mines, resources and shadows also seemed to change.
+
+**Cause.** A frame is the static image plus a live layer composited over it.
+An exact frame draws the animated water into the live layer, then composites
+the retained near-water overlay layer (roads, bridges, improvements on river
+and coast tiles) over that water. A preview baked the sources' overlay
+layers into the static image instead, under the live layer. Its water is
+also biased four pixel-depth units toward the camera, against the resampled
+depth. Wherever water drew, it covered the overlays, so roads lying on a
+river disappeared on every such preview. These were 25-30% of preview frames
+on the busy save.
+
+**Change.** Previews keep the overlay sources and composite them in the water
+pass, after the live water and river and before the waves (the exact frame's
+order). They are shifted by the same four pixel-depth units as the water.
+Test: `test_preview_overlay_order.py` (fails on the previous pipeline).
+
+**Checked** (busy save, `near`, 10 frames/s, the same crossing below the
+mountain mine). Every overlay-layer preview, at 2.5x, 2x, 1.75x, 1.5x and
+1.25x, keeps both road strips across the river, the two bridges and the mine.
+No compositing failures.
+
+**Still open from the recording.** These are not this bug:
+- Coal lumps beside a mine gain their ground shadows only in the settled
+  frame. Previews resample rasters drawn under another zoom's shadow field.
+- Mines change size slightly between preview frames. Each preview is
+  stretched from a raster drawn at a nearby zoom.
