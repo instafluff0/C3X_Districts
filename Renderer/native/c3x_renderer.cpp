@@ -1314,6 +1314,7 @@ public:
     // unless the development witness compares them (RESIDENT_WORLD_CHECK).
     bool resident_world_window_records=true;
     std::uint64_t resident_world_current=0,window_frame_serial=0;
+    std::array<std::chrono::steady_clock::time_point,4> assembly_marks{}; // crossing assembly sub-phases (resident-world trace)
     std::uint64_t resident_world_inserts=0,resident_world_rewrites=0,resident_world_preloads=0;
     // One current immutable membership proof, replaced before state updates.
     decltype(geometry_vertex_buffers)::Lease resource_visibility_membership;
@@ -9605,7 +9606,7 @@ public:
                 if(membership_diff.leaving)covered_membership=false;
                 geometry_translation_x=membership_diff.translation_x;
                 geometry_translation_y=membership_diff.translation_y;
-                reuse_geometry=covered_membership;QueryPerformanceCounter(&setup_marks[4]);
+                reuse_geometry=covered_membership;QueryPerformanceCounter(&setup_marks[4]);assembly_marks[0]=std::chrono::steady_clock::now();
             }
         }
         if(reuse_geometry && fresh_scene_path && !covered_membership){
@@ -12816,7 +12817,7 @@ public:
         // Construction is complete. Current occurrences choose protected world
         // content; capture ordering/anchors and replacement ownership stay exact.
         if(retained_world){
-            auto assembly_started=std::chrono::steady_clock::now();
+            auto assembly_started=std::chrono::steady_clock::now();assembly_marks[1]=assembly_started;
             for(std::size_t i=0;i<frame.tile_count;++i){
                 auto handle=geometry_cache.tile_keys[i];if(!handle.generation)continue;
                 auto owner=resident_content.resolve(handle);if(!owner)return false;
@@ -12850,6 +12851,7 @@ public:
                     c3x_renderer::render_core::CanonicalMembershipDiff::occurrence(draw.tile_x,draw.tile_y));});
             }
             frame_tile_append_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-assembly_started).count();
+            assembly_marks[2]=std::chrono::steady_clock::now();
         }
         if(!make_tile_cache_room(0))return false; // include both current and still-selected retired leases
         geometry_cache.content_replacement_flags=build_replacement;
@@ -12923,11 +12925,15 @@ public:
             static_cast<long long>(frame.target_width)-geometry_translation_x,static_cast<long long>(frame.target_height)-geometry_translation_y);
             trace.write("canonical-membership",detail,true);QueryPerformanceCounter(&setup_marks[5]);
             if(resident_world_control){auto const& world=resident_world.view();
-                sprintf_s(detail,"tiles=%zu records=%zu mb=%.1f revision=%llu inserts=%llu rewrites=%llu preloads=%llu current=%llu window_records=%u validation_ms=%.2f append_ms=%.2f",
+                auto span=[&](unsigned a,unsigned b){return assembly_marks[a].time_since_epoch().count() && assembly_marks[b]>=assembly_marks[a]?
+                    std::chrono::duration<double,std::milli>(assembly_marks[b]-assembly_marks[a]).count():-1.;};
+                assembly_marks[3]=std::chrono::steady_clock::now();
+                sprintf_s(detail,"tiles=%zu records=%zu mb=%.1f revision=%llu inserts=%llu rewrites=%llu preloads=%llu current=%llu window_records=%u validation_ms=%.2f append_ms=%.2f covered=%u build_ms=%.2f assembly_ms=%.2f tail_ms=%.2f",
                     world.tiles,world.records,double(world.bytes)/1048576.,static_cast<unsigned long long>(world.revision),
                     static_cast<unsigned long long>(resident_world_inserts),static_cast<unsigned long long>(resident_world_rewrites),
                     static_cast<unsigned long long>(resident_world_preloads),static_cast<unsigned long long>(resident_world_current),
-                    unsigned(resident_world_window_records),frame_tile_validation_ms,frame_tile_append_ms);
+                    unsigned(resident_world_window_records),frame_tile_validation_ms,frame_tile_append_ms,unsigned(covered_membership),span(0,1),span(1,2),span(2,3));
+                assembly_marks={};
                 trace.write("resident-world",detail,true);}
         }
         // Development witness (C3X_RENDERER_RESIDENT_WORLD_CHECK=1): every window

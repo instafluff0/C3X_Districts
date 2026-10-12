@@ -3408,6 +3408,15 @@ retained-memory refusal also happens on the window path. The Lab renders
 through the 32-bit candidate DLL, which has no fresh pipeline, so its images
 cannot change.
 
+**What a crossing's window assembly still costs** (store default, busy,
+trace level 2, `resident-world` trace `build_ms assembly_ms tail_ms`): the
+per-tile build loop 6.6 ms p50 (60 ms p90, when tiles compile), the assembly
+2.1 ms, and a 5.3 ms tail, mostly copying about 4,000 tile records into the
+window cache. Display frames during busy 1x horizontal scrolling (about
+7 fps on either path) are presented from Civ III's loop, about once a tick,
+while it waits in each step's synchronous adoption, so they follow the
+per-step cost rather than a separate hold.
+
 **The window basis across the wrap seam.** With no window draw records the
 window basis was taken from each capture's view; across the wrap seam Civ III
 re-bases the camera a world width while the window keeps its frame, so in 4
