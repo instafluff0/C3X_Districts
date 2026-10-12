@@ -220,7 +220,7 @@ using Lease=std::shared_ptr<Resource>;
 struct SourceShadow {
  Resource* view=nullptr;Resource* borrowed_view=nullptr;
  Resource *instance_vertex=nullptr,*resident_instance_vertex=nullptr,*instance_layout=nullptr,*resident_instance_layout=nullptr,*rigid_vertex=nullptr,*resident_rigid_vertex=nullptr;
- Resource *texture=nullptr,*vertex=nullptr,*opaque=nullptr,*cutout=nullptr,*layout=nullptr,*feature_layout=nullptr,*natural_layout=nullptr,*city_layout=nullptr,*natural_compact_layout=nullptr,*zero_stream=nullptr,*caster_settings=nullptr,*table=nullptr,*raster=nullptr,*maximum=nullptr;
+ Resource *texture=nullptr,*vertex=nullptr,*opaque=nullptr,*cutout=nullptr,*layout=nullptr,*feature_layout=nullptr,*natural_layouts[4]={},*city_layout=nullptr,*zero_stream=nullptr,*caster_settings=nullptr,*table=nullptr,*raster=nullptr,*maximum=nullptr;
  std::array<Resource*,32> targets{};Stream instance_stream;
  template<class T> void drop(T*& pointer){if(pointer)pointer->Release();pointer=nullptr;}
  void clear_cached_pages(){}
@@ -228,7 +228,7 @@ struct SourceShadow {
 };
 struct Renderer {SourceShadow source_shadow;std::size_t fresh_shadow_working_bytes=0;} renderer;
 struct SandboxSceneShadow {
- Resource *production_view=nullptr,*texture=nullptr,*view=nullptr,*vertex=nullptr,*instance_vertex=nullptr,*rigid_vertex=nullptr,*opaque=nullptr,*cutout=nullptr,*layout=nullptr,*feature_layout=nullptr,*natural_layout=nullptr,*natural_compact_layout=nullptr,*zero_stream=nullptr,*city_layout=nullptr,*instance_layout=nullptr,*constants=nullptr,*maximum=nullptr,*raster=nullptr;
+ Resource *production_view=nullptr,*texture=nullptr,*view=nullptr,*vertex=nullptr,*instance_vertex=nullptr,*rigid_vertex=nullptr,*opaque=nullptr,*cutout=nullptr,*layout=nullptr,*feature_layout=nullptr,*natural_layouts[4]={},*zero_stream=nullptr,*city_layout=nullptr,*instance_layout=nullptr,*constants=nullptr,*maximum=nullptr,*raster=nullptr;
  std::array<Resource*,25> targets{};std::vector<Resource*> patch_buffers;Lease shared_front,shadow_front;
  std::vector<Lease> terrain_batches;
  std::size_t production_field_bytes=0;

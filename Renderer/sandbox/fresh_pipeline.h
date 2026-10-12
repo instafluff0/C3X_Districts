@@ -477,12 +477,19 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
             // Elided integrated elements come from the record's constant row.
             auto element=unsigned(match-elements);
             if(c3x_renderer::render_core::integrated_elements[element].offset!=match->offset)return false;
-            decode+="    input."+name+"=asfloat(c3x_pulled_vertices.Load"+(width>1?std::to_string(width):std::string())+
-                "(c3x_pulled_field(base,"+std::to_string(element)+"u,"+std::to_string(match->offset)+"u)));\n";
+            auto field="c3x_pulled_field(base,"+std::to_string(element)+"u,"+std::to_string(match->offset)+"u)";
+            auto load="asfloat(c3x_pulled_vertices.Load"+(width>1?std::to_string(width):std::string())+"("+field+"))";
+            // A quantized record stores this element as half floats.
+            if(c3x_renderer::render_core::integrated_half_bytes[element]<c3x_renderer::render_core::integrated_elements[element].bytes)
+                load="(c3x_pulled_half_element("+std::to_string(element)+"u)?c3x_pulled_halves("+field+")"+
+                    (width==1?".x":width==2?".xy":width==3?".xyz":"")+":"+load+")";
+            decode+="    input."+name+"="+load+";\n";
         }
-        std::string element_bytes;
+        std::string element_bytes,half_bytes;
         for(auto const& e:c3x_renderer::render_core::integrated_elements)
             element_bytes+=(element_bytes.empty()?"":",")+std::to_string(e.bytes)+"u";
+        for(auto bytes:c3x_renderer::render_core::integrated_half_bytes)
+            half_bytes+=(half_bytes.empty()?"":",")+std::to_string(bytes)+"u";
         if(decode.empty())return false;
         // Shared by both pulled entries: redirect the occurrence terms after
         // the viewport cbuffer, then load one page record per vertex.
@@ -529,14 +536,25 @@ uint c3x_pulled_vertex_address(uint vertex) {
 )";
         shader.insert(close+2,redirect);
         // An integrated element's address: its packed place in the vertex,
-        // or the record's 168-byte constant row when elided.
+        // or the record's 168-byte constant row when elided. Bit 0 of the
+        // format mask (integrated_quantized) selects the half-float sizes.
         std::string const field_address=R"(
 static const uint c3x_pulled_element_bytes[19]={)"+element_bytes+R"(};
+static const uint c3x_pulled_half_bytes[19]={)"+half_bytes+R"(};
+bool c3x_pulled_half_element(uint element) {
+    return (c3x_pulled_elided&1u)!=0 && ((c3x_pulled_elided>>element)&1u)==0;
+}
+float4 c3x_pulled_halves(uint address) {
+    uint2 words=c3x_pulled_vertices.Load2(address);
+    return float4(f16tof32(words.x),f16tof32(words.x>>16),f16tof32(words.y),f16tof32(words.y>>16));
+}
 uint c3x_pulled_field(uint base,uint element,uint full) {
-    if(((c3x_pulled_elided>>element)&1u)!=0)return c3x_pulled_template+full;
-    uint skipped=0;
-    [unroll] for(uint j=1;j<element;++j)if(((c3x_pulled_elided>>j)&1u)!=0)skipped+=c3x_pulled_element_bytes[j];
-    return base+full-skipped;
+    if(element!=0 && ((c3x_pulled_elided>>element)&1u)!=0)return c3x_pulled_template+full;
+    bool halves=(c3x_pulled_elided&1u)!=0;
+    uint packed=0;
+    [unroll] for(uint j=0;j<element;++j)if(j==0 || ((c3x_pulled_elided>>j)&1u)==0)
+        packed+=halves?c3x_pulled_half_bytes[j]:c3x_pulled_element_bytes[j];
+    return base+packed;
 }
 )";
         shader+=helpers+field_address+R"(PixelInput VSIntegratedPulled(uint vertex : SV_VertexID) {
@@ -685,6 +703,7 @@ struct SandboxPerfOptions {
     double refine_pixels=0;     // C3X_RENDERER_REFINE_PIXELS: fixed per-frame refinement budget
     bool shadow_tight=false;    // C3X_RENDERER_SHADOW_TIGHT_FIT=1: refit shadows to every view
     float zoom_refine_hold=.01f; // C3X_RENDERER_ZOOM_REFINE_HOLD: no refinement while zoom is this fraction from its destination (0: off)
+    bool zoom_direct=false;     // C3X_RENDERER_ZOOM_DIRECT=1: draw each moving zoom frame at its zoom (no preview)
     SandboxPerfOptions(){
         char value[32]{};
         legacy=GetEnvironmentVariableA("C3X_RENDERER_STATIC_LEGACY",value,sizeof(value)) && value[0]=='1';
@@ -696,6 +715,7 @@ struct SandboxPerfOptions {
             double pixels=std::atof(value);refine_pixels=std::isfinite(pixels)?std::max(0.,pixels):0.;
         }
         shadow_tight=GetEnvironmentVariableA("C3X_RENDERER_SHADOW_TIGHT_FIT",value,sizeof(value)) && value[0]=='1';
+        zoom_direct=GetEnvironmentVariableA("C3X_RENDERER_ZOOM_DIRECT",value,sizeof(value)) && value[0]=='1';
         if(GetEnvironmentVariableA("C3X_RENDERER_ZOOM_REFINE_HOLD",value,sizeof(value))){
             float hold=float(std::atof(value));zoom_refine_hold=std::isfinite(hold)?std::clamp(hold,0.f,1.f):.01f;
         }
@@ -718,9 +738,9 @@ struct SandboxSceneShadow {
     ID3D11PixelShader* cutout = nullptr;
     ID3D11InputLayout* layout = nullptr;
     ID3D11InputLayout* feature_layout = nullptr;
-    ID3D11InputLayout* natural_layout = nullptr;
-    // Compact 56-byte natural vertices; their owner comes from zero_stream.
-    ID3D11InputLayout* natural_compact_layout = nullptr;
+    // Per natural format (render_core::natural_format_index); compact formats
+    // read their owner from zero_stream.
+    ID3D11InputLayout* natural_layouts[4] = {};
     ID3D11Buffer* zero_stream = nullptr;
     ID3D11InputLayout* city_layout = nullptr;
     ID3D11InputLayout* instance_layout = nullptr;
@@ -841,8 +861,8 @@ struct SandboxSceneShadow {
         shared_front.reset();shadow_front.reset();
         terrain_batches.clear();
         drop(texture); for(auto*& target:targets)drop(target); drop(view); drop(vertex); drop(instance_vertex); drop(rigid_vertex);
-        drop(opaque); drop(cutout); drop(layout); drop(feature_layout); drop(natural_layout);
-        drop(natural_compact_layout); drop(zero_stream);
+        drop(opaque); drop(cutout); drop(layout); drop(feature_layout);
+        for(auto*& natural:natural_layouts)drop(natural); drop(zero_stream);
         drop(city_layout); drop(instance_layout); drop(constants); drop(maximum); drop(raster);
     }
     bool ensure() {
@@ -897,14 +917,19 @@ struct SandboxSceneShadow {
         e[4].AlignedByteOffset=0;e[3].AlignedByteOffset=32;e[1].AlignedByteOffset=32;
         e[2].AlignedByteOffset=36;e[2].Format=DXGI_FORMAT_R32G32B32_FLOAT;
         if (SUCCEEDED(hr)) hr=renderer.device->CreateInputLayout(e,5,code->GetBufferPointer(),code->GetBufferSize(),&feature_layout);
-        e[4].AlignedByteOffset=76;e[3].AlignedByteOffset=56;e[0].AlignedByteOffset=40;
-        e[1].AlignedByteOffset=72;e[2].AlignedByteOffset=12;
-        e[2].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
-        if (SUCCEEDED(hr)) hr=renderer.device->CreateInputLayout(e,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_layout);
-        e[0].AlignedByteOffset=0;e[1].AlignedByteOffset=52;e[2].AlignedByteOffset=0;
-        e[3].AlignedByteOffset=36;e[4].AlignedByteOffset=0;e[4].InputSlot=1;
-        if (SUCCEEDED(hr)) hr=renderer.device->CreateInputLayout(e,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_compact_layout);
-        e[4].InputSlot=0;
+        // Natural formats (natural_offsets): coverage is the desert material
+        // channel, a half in the quantized formats.
+        {namespace rc=c3x_renderer::render_core;
+        unsigned const natural_strides[]={rc::natural_vertex_stride,rc::natural_compact_stride,rc::natural_quantized_stride,rc::natural_quantized_compact_stride};
+        for(unsigned f=0;f<4;++f){auto o=rc::natural_offsets(natural_strides[f]);
+            e[0].AlignedByteOffset=o.uv;e[1].AlignedByteOffset=o.base;e[2].AlignedByteOffset=o.world;
+            e[2].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
+            e[3].AlignedByteOffset=o.material+(o.quantized?4:8);e[3].Format=o.quantized?DXGI_FORMAT_R16G16_FLOAT:DXGI_FORMAT_R32_FLOAT;
+            e[4].AlignedByteOffset=o.owner;e[4].InputSlot=o.zero_owner?1:0;
+            e[4].Format=o.quantized && !o.zero_owner?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R32G32B32A32_FLOAT;
+            if (SUCCEEDED(hr)) hr=renderer.device->CreateInputLayout(e,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_layouts[f]);
+        }}
+        e[3].Format=DXGI_FORMAT_R32_FLOAT;e[4].InputSlot=0;e[4].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
         float zero[4]={};D3D11_BUFFER_DESC zero_desc={};zero_desc.ByteWidth=sizeof(zero);
         zero_desc.Usage=D3D11_USAGE_IMMUTABLE;zero_desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
         D3D11_SUBRESOURCE_DATA zero_data={};zero_data.pSysMem=zero;
@@ -1756,12 +1781,13 @@ struct SandboxSceneShadow {
             if(binding!=last_binding){last_cutout=bind_cutout(binding);last_binding=binding;}
             auto* pixel=last_cutout?cutout:opaque;
             if(pixel!=last_ps){context->PSSetShader(pixel,nullptr,0);last_ps=pixel;}
-            auto* input=caster.stride==88?city_layout:caster.stride==92?natural_layout:
-                caster.stride==56?natural_compact_layout:caster.stride==48?feature_layout:layout;
+            bool natural=c3x_renderer::render_core::natural_stride(caster.stride);
+            auto* input=caster.stride==88?city_layout:natural?natural_layouts[c3x_renderer::render_core::natural_format_index(caster.stride)]:
+                caster.stride==48?feature_layout:layout;
             if(input!=last_layout){
                 context->IASetInputLayout(input);last_layout=input;
                 // Only this page's instance groups, drawn after, use slot 1.
-                if(caster.stride==56){UINT none=0;context->IASetVertexBuffers(1,1,&zero_stream,&none,&none);}
+                if(natural && c3x_renderer::render_core::natural_offsets(caster.stride).zero_owner){UINT none=0;context->IASetVertexBuffers(1,1,&zero_stream,&none,&none);}
             }
             if(caster.vertices!=last_vertices || caster.stride!=last_stride || caster.vertex_offset!=last_vertex_offset){
                 UINT stride=caster.stride,offset=caster.vertex_offset;
@@ -3371,6 +3397,9 @@ struct SandboxFreshPipeline {
                 if(ms>1 || !valid){
                     std::printf("SANDBOX_COMPLETION layer=%u mirror=%u valid=%u ms=%.3f\n",layer,unsigned(mirrored),unsigned(valid),ms);
                     std::fflush(stdout);
+                    // In game the helper's stdout is not kept: trace it too.
+                    char detail[96];sprintf_s(detail,"layer=%u mirror=%u valid=%u ms=%.3f",layer,unsigned(mirrored),unsigned(valid),ms);
+                    renderer.trace.write("sandbox-completion",detail,true);
                 }
             }}
         } completion_probe(unsigned(layer),mirrored);
@@ -4665,6 +4694,18 @@ struct SandboxFreshPipeline {
             }
             else if(budget!=0 && !moving){static_decision.refine=1;if(timed(static_decision.refine_ms,[&]{return refine(goal,budget);})<0)return false;}
         }
+        // Per-frame zoom drawing (camera decoupling item 4): a moving zoom
+        // draws the visible raster at its own zoom every frame instead of
+        // resampling another zoom's image, and so does the frame that reaches
+        // the destination, so nothing blurs or pops when it settles. Its cost
+        // does not steer the refinement budget.
+        bool direct=options.zoom_direct && previewable &&
+            (moving || (lane==1 && static_rasters.states[front_index].projection!=zoom));
+        if(direct){
+            static_decision.sync=2;double unbounded=-1.;
+            if(timed(static_decision.refine_ms,[&]{return refine(zoom,unbounded);})<0)return false;
+            refine_worked=false;
+        }
         // Strips the displayed raster needs now. Small (scroll) gaps are drawn
         // immediately; a large gap is filled progressively behind a preview.
         if(shifted){
@@ -4688,7 +4729,7 @@ struct SandboxFreshPipeline {
             // Background guard-band fill: grow a fresh raster toward its full
             // region on otherwise quiet frames, so later scroll steps (and
             // zoom-out previews) find their pixels already drawn.
-            if(shifted && previewable && budget>0 && displayed.fresh(key) && !static_rasters.lane_refining(lane) &&
+            if(shifted && previewable && !direct && budget>0 && displayed.fresh(key) && !static_rasters.lane_refining(lane) &&
                     !displayed.covered.contains(limits)){
                 double spend=budget*.5;
                 if(!timed(static_decision.strip_ms,[&]{return extend_coverage(front_index,displayed,settings,limits,spend,0,1.f,true);}))return false;
@@ -5156,9 +5197,12 @@ struct SandboxFreshPipeline {
             bool redraw=!reflection_valid || reflection_key!=key;
             // While the zoom animates, the blurred mirror may lag up to two
             // frames; scrolling and settled zoom still redraw it immediately.
+            // Per-frame zoom drawing keeps it until the zoom settles (its
+            // redraw cost several times the static draw in the VM).
             unsigned mirror_lane=StaticRasters::lane_of(projection_zoom);
             bool hidden=mirror_lane==0 && canonical_hidden();
-            if(redraw && reflection_valid && !sandbox_perf_options().legacy &&
+            if(redraw && reflection_valid && sandbox_perf_options().zoom_direct && zoom_moving()){redraw=false;++reflection_skips;}
+            else if(redraw && reflection_valid && !sandbox_perf_options().legacy &&
                     ((lane_still[mirror_lane]==0 && reflection_skips<2) || hidden)){
                 redraw=false;++reflection_skips;
             }

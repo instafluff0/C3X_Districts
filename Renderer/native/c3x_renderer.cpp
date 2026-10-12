@@ -681,6 +681,9 @@ public:
     // Exact 56-byte natural vertices for world-projected terrain (stage 5);
     // C3X_RENDERER_COMPACT_VERTEX_CONTROL=1 keeps every natural vertex at 92.
     bool compact_vertices=true;
+    // 16-bit natural normals, materials, relief and owner (stage 5 step 2);
+    // C3X_RENDERER_QUANTIZE_CONTROL=1 keeps the exact 32-bit formats.
+    bool quantized_vertices=true;
     bool cull_river_reach=true; // C3X_RENDERER_RIVER_CULL_CONTROL=1 keeps whole river grids (review 72)
     // Fixed geometry tier (stage 5): in whole-world residency, geometry holds
     // the explored world's canonical content plus a fixed allowance for
@@ -1542,7 +1545,13 @@ public:
         auto elements=integrated_input_elements();ID3D11InputLayout* layout=nullptr;
         auto bytes=[](D3D11_INPUT_ELEMENT_DESC const& e){return e.Format==DXGI_FORMAT_R32_FLOAT?4u:e.Format==DXGI_FORMAT_R32G32_FLOAT?8u:
             e.Format==DXGI_FORMAT_R32G32B32_FLOAT?12u:16u;};
-        if(!integrated_code || !c3x_renderer::render_core::remap_integrated_layout(elements.data(),unsigned(elements.size()),elided,bytes) ||
+        // Half elements (integrated_quantized) expand in the input assembler.
+        auto half=[](D3D11_INPUT_ELEMENT_DESC& e){
+            if(e.Format==DXGI_FORMAT_R32G32_FLOAT)e.Format=DXGI_FORMAT_R16G16_FLOAT;
+            else if(e.Format==DXGI_FORMAT_R32G32B32_FLOAT || e.Format==DXGI_FORMAT_R32G32B32A32_FLOAT)e.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+            else return false;
+            return true;};
+        if(!integrated_code || !c3x_renderer::render_core::remap_integrated_layout(elements.data(),unsigned(elements.size()),elided,bytes,half) ||
            FAILED(device->CreateInputLayout(elements.data(),UINT(elements.size()),integrated_code->GetBufferPointer(),
                integrated_code->GetBufferSize(),&layout)))return nullptr;
         integrated_layouts.emplace(elided,layout);return layout;
@@ -3226,6 +3235,7 @@ public:
         composition_receiver_index=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_COMPOSITION_RECEIVER_INDEX");
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         compact_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_COMPACT_VERTEX_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        quantized_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_QUANTIZE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         // The resident world drives the draw by default (camera decoupling
         // stage 6, review 74); C3X_RENDERER_RESIDENT_WORLD=0 keeps the window.
         resident_world_control=!(GetEnvironmentVariableA("C3X_RENDERER_RESIDENT_WORLD",control,sizeof(control)) && std::strcmp(control,"0")==0);
@@ -6565,6 +6575,7 @@ public:
             // Natural chunks with a projection kind always draw through
             // project_natural_chunk; the CPU record tier keeps 23 floats.
             format.world_projected=natural_vertex && projection_kind && !record && compact_vertices;
+            format.quantized=quantized_vertices;
             // Ground layers only (layers below geometry_feature); under the
             // fidelity profile they are never shadow casters.
             format.elide_constants=!compact_feature && !natural_vertex && compact_vertices && fidelity_profile;
@@ -6578,8 +6589,9 @@ public:
         }else{++frame_prepared_meshes;frame_prepared_vertex_bytes+=prepared->vertices.size();}
         auto const& mesh=*prepared;
         if(mesh.empty())return true;
-        // A compact natural mesh has no position or owner of its own.
-        if(mesh.vertex_stride==c3x_renderer::render_core::natural_compact_stride && (!projection_kind || record))return false;
+        // Compact and quantized natural meshes draw only through world
+        // projection; the CPU record tier keeps 23 floats.
+        if(natural_vertex && mesh.vertex_stride!=c3x_renderer::render_core::natural_vertex_stride && (!projection_kind || record))return false;
         CachedVertexChunk chunk;
         chunk.projection_kind=projection_kind;chunk.source_tile_width=(projection_kind==2 || projection_kind==3)?128:shadow_tile_width;
         chunk.version=tile_geometry_version;chunk.vertex_stride=mesh.vertex_stride;chunk.elided=mesh.elided;
@@ -6897,12 +6909,12 @@ public:
         }
         input.world_revision=world_coast.revision();input.detail=patch_detail;
         input.river_ready=river_assets_ready;input.skip_flat_shore=skip_shore;input.separate_relief=separate;input.indexed=indexed;input.retain_height=heights;
-        input.world_projected=world_content && compact_vertices;
+        input.world_projected=world_content && compact_vertices;input.quantized=quantized_vertices;
         input.key={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(tile.real_terrain_type)*32+unsigned(ground),
             std::uint64_t(input.tile_width),std::uint64_t(input.tile_height),std::uint64_t(input.target_height),std::uint64_t(content_revision),
             std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
             std::uint64_t(frame.world_wrap_x)*2+unsigned(frame.world_wrap_y),std::uint64_t(patch_detail.identity()),
-            std::uint64_t(input.world_projected)*32+unsigned(skip_shore)*16+unsigned(separate)*8+unsigned(indexed)*4+unsigned(heights)*2+unsigned(river_assets_ready)};
+            std::uint64_t(input.world_projected && input.quantized)*64+std::uint64_t(input.world_projected)*32+unsigned(skip_shore)*16+unsigned(separate)*8+unsigned(indexed)*4+unsigned(heights)*2+unsigned(river_assets_ready)};
         // The vegetation floor keeps the canopy's clearing.
         input.clearing=canopy_clearing(tile,lookup);input.key[12]=input.clearing.hash();
         return input;
@@ -10029,7 +10041,7 @@ public:
             c3x_renderer::fidelity::GroundPreparationInput job;
             auto& input=job.compile;
             input.tile=tile;input.world_ground=world_ground;input.pickup_profile=pickup_profile;input.fidelity_profile=fidelity_profile;
-            input.compact_vertices=compact_vertices;input.cull_river_reach=cull_river_reach;
+            input.compact_vertices=compact_vertices;input.quantized=quantized_vertices;input.cull_river_reach=cull_river_reach;
             input.draw_marsh=marsh_assets_ready && tile.real_terrain_type==9;
             input.river_assets_ready=river_assets_ready;input.retain_ground_grids=retain_ground_grids;
             input.reuse_nested_ground_grids=reuse_nested_ground_grids;input.prewarming=prewarming;
@@ -10158,7 +10170,7 @@ public:
             input.separate_relief=separate_natural_relief;input.retain_height=retain_height_samples;
             input.route_ready=route_assets_ready;input.mine_ready=mine_assets_ready;input.farm_ready=farm_assets_ready;
             input.city_ready=city_assets_ready;input.composition_ready=cities.ready;
-            input.shared_rigid=shared_rigid;input.compact_vertices=compact_vertices && fidelity_profile;
+            input.shared_rigid=shared_rigid;input.compact_vertices=compact_vertices && fidelity_profile;input.quantized=quantized_vertices;
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
             input.routes_enabled=diagnostic_routes!=2;
 #endif
@@ -11531,6 +11543,7 @@ public:
             ground_compile_input.pickup_profile = pickup_profile;
             ground_compile_input.fidelity_profile = fidelity_profile;
             ground_compile_input.compact_vertices = compact_vertices;
+            ground_compile_input.quantized = quantized_vertices;
             ground_compile_input.cull_river_reach = cull_river_reach;
             ground_compile_input.draw_marsh = draw_marsh;
             ground_compile_input.river_assets_ready = river_assets_ready;

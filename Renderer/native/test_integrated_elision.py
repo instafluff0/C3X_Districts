@@ -1,10 +1,15 @@
-"""Stage 5 exact compaction: integrated ground meshes elide constant elements.
+"""Stage 5 compaction: integrated ground meshes elide constant elements.
 
 An integrated (168-byte) mesh drops every input element whose bytes are the
 same on all its vertices; the chunk keeps the full 168-byte constant row
 beside its vertices. Input layouts read an elided element from that row at a
 stride-0 slot 1, and the pulled shader reads it from the row's page copy. Each
 consumer must therefore fetch exactly the bytes of the full format.
+
+Quantized (stage 5 step 2, approved October 11; bit 0 of the format mask):
+stored vector elements (normal, visibility, weights, relief, river, hydrology,
+owner/flow) are half floats. Their consumers must read the nearest half of the
+full value; every other element keeps its exact bytes.
 """
 import re
 import unittest
@@ -50,11 +55,20 @@ using namespace c3x_renderer::render_core;
 using uint=unsigned;
 // The pulled shader's address helper, compiled as C++.
 static uint c3x_pulled_elided,c3x_pulled_template;
-static uint c3x_pulled_element_bytes[19];
+static uint c3x_pulled_element_bytes[19],c3x_pulled_half_bytes[19];
 ''' + helper + r'''
 struct Element {unsigned offset,bytes;};
 Element main_layout[]={''' + table(main) + r'''},border[]={''' + table(borders) + r'''},caster[]={''' + table(caster) + r'''};
-struct Desc {unsigned AlignedByteOffset,InputSlot;unsigned bytes;};
+struct Desc {unsigned AlignedByteOffset,InputSlot;unsigned bytes;bool half;};
+float half_value(std::uint16_t h){
+ int exponent=(h>>10)&31;float mantissa=float(h&1023);
+ float magnitude=exponent==0?std::ldexp(mantissa,-24):std::ldexp(1024.f+mantissa,exponent-25);
+ return h&0x8000?-magnitude:magnitude;}
+// The full element's bytes as a consumer reading `half` storage sees them.
+void expect(unsigned char const* full,unsigned char const* stored,unsigned bytes,bool half){
+ if(!half){assert(std::memcmp(full,stored,bytes)==0);return;}
+ for(unsigned c=0;c<bytes/4;++c){float value,expected;std::memcpy(&value,full+c*4,4);std::uint16_t h;std::memcpy(&h,stored+c*2,2);
+  expected=half_value(half_bits(value));assert(half_value(h)==expected && std::fabs(expected-value)<=std::fabs(value)/2048.f+6e-8f);}}
 std::vector<Vertex> mesh(bool river){
  std::vector<Vertex> out;
  for(int y=0;y<5;++y)for(int x=0;x<5;++x){
@@ -68,42 +82,63 @@ std::vector<Vertex> mesh(bool river){
   if(river){v.river_distance=float(x);v.river_padding=float(y);v.normal_x=.1f*x;v.relief_owner_u=.2f*y;}
   out.push_back(v);}
  return out;}
-PreparedMesh prepare(std::vector<Vertex> const& source,bool elide,unsigned kind=3){
- MeshFormat f;f.projection_kind=kind;f.elide_constants=elide;PreparedMesh m;
+PreparedMesh prepare(std::vector<Vertex> const& source,bool elide,unsigned kind=3,bool quantized=false){
+ MeshFormat f;f.projection_kind=kind;f.elide_constants=elide;f.quantized=quantized;PreparedMesh m;
  std::vector<unsigned> topology;for(unsigned i=0;i+2<source.size();++i){topology.push_back(i);topology.push_back(i+1);topology.push_back(i+2);}
  assert(prepare_mesh(source,&topology,f,m,[]{return false;}));return m;}
 void same(PreparedMesh const& full,PreparedMesh const& compact,Element const* layout,unsigned count){
  unsigned vertices=unsigned(full.vertices.size()/full.vertex_stride);
  assert(compact.vertices.size()==std::size_t(vertices)*compact.vertex_stride);
  for(unsigned e=0;e<count;++e){
-  Desc d{layout[e].offset,0,layout[e].bytes};
-  assert(remap_integrated_layout(&d,1,compact.elided,[](Desc const& x){return x.bytes;}));
+  Desc d{layout[e].offset,0,layout[e].bytes,false};
+  bool whole=false;for(auto const& x:integrated_elements)whole|=x.offset==d.AlignedByteOffset && x.bytes==d.bytes;
+  bool mapped=remap_integrated_layout(&d,1,compact.elided,[](Desc const& x){return x.bytes;},[](Desc& x){x.half=true;return true;});
+  // Only a part of a half element cannot be read (no consumer does).
+  if(!mapped){bool part=false;for(unsigned x=0;x<integrated_element_count;++x)part|=integrated_half(compact.elided,x) &&
+   layout[e].offset>=integrated_elements[x].offset && layout[e].offset<integrated_elements[x].offset+integrated_elements[x].bytes;
+   assert(part && !whole);continue;}
   for(unsigned i=0;i<vertices;++i){
    auto const* expected=full.vertices.data()+i*full.vertex_stride+layout[e].offset;
    auto const* actual=d.InputSlot?compact.constants.data()+d.AlignedByteOffset:
     compact.vertices.data()+i*compact.vertex_stride+d.AlignedByteOffset;
-   assert(std::memcmp(expected,actual,layout[e].bytes)==0);}
+   expect(expected,actual,layout[e].bytes,d.half);}
  }}
 void same_pulled(PreparedMesh const& full,PreparedMesh const& compact){
  // A page holds the compact vertices followed by the constant row.
  std::vector<unsigned char> page(compact.vertices.begin(),compact.vertices.end());
  page.insert(page.end(),compact.constants.begin(),compact.constants.end());
  c3x_pulled_elided=compact.elided;c3x_pulled_template=unsigned(compact.vertices.size());
- for(unsigned e=0;e<integrated_element_count;++e)c3x_pulled_element_bytes[e]=integrated_elements[e].bytes;
+ for(unsigned e=0;e<integrated_element_count;++e){c3x_pulled_element_bytes[e]=integrated_elements[e].bytes;c3x_pulled_half_bytes[e]=integrated_half_bytes[e];}
  unsigned vertices=unsigned(full.vertices.size()/full.vertex_stride);
  for(unsigned i=0;i<vertices;++i)for(unsigned e=0;e<integrated_element_count;++e){
   auto const& d=integrated_elements[e];uint at=c3x_pulled_field(i*compact.vertex_stride,e,d.offset);
-  assert(at+d.bytes<=page.size() && std::memcmp(full.vertices.data()+i*full.vertex_stride+d.offset,page.data()+at,d.bytes)==0);}}
+  // The shader decodes halves where the record is quantized and the element
+  // is stored (c3x_pulled_half_element) and has a half size.
+  bool half=(c3x_pulled_elided&1u) && !((c3x_pulled_elided>>e)&1u) && integrated_half_bytes[e]<d.bytes;
+  assert(half==integrated_half(compact.elided,e));
+  assert(at+(half?integrated_half_bytes[e]:d.bytes)<=page.size());
+  expect(full.vertices.data()+i*full.vertex_stride+d.offset,page.data()+at,d.bytes,half);}}
 int main(){
- for(bool river:{false,true})for(unsigned kind:{0u,3u}){
-  auto source=mesh(river);auto full=prepare(source,false,kind),compact=prepare(source,true,kind);
+ for(bool quantized:{false,true})for(bool river:{false,true})for(unsigned kind:{0u,3u}){
+  auto source=mesh(river);auto full=prepare(source,false,kind,quantized),compact=prepare(source,true,kind,quantized);
   assert(full.vertex_stride==integrated_vertex_bytes && !full.elided);
-  assert(compact.elided && !(compact.elided&1u) && compact.vertex_stride==integrated_stride(compact.elided));
+  assert(compact.elided && bool(compact.elided&integrated_quantized)==quantized && compact.vertex_stride==integrated_stride(compact.elided));
   assert(compact.vertex_stride<full.vertex_stride && compact.indices==full.indices && compact.bounds==full.bounds);
   same(full,compact,main_layout,19);same(full,compact,border,2);same(full,compact,caster,5);same_pulled(full,compact);
  }
- // The underlay keeps only its varying elements: 168 -> 88 bytes here.
+ // The underlay keeps only its varying elements: 168 -> 88 bytes here, and
+ // 72 with half vector elements (weights and hydrology halve).
  auto underlay=prepare(mesh(false),true);assert(underlay.vertex_stride==88);
+ assert(prepare(mesh(false),true,3,true).vertex_stride==72);
+ // A value outside the half range keeps the 32-bit elements.
+ auto wide=mesh(true);wide[4].river_distance=70000.f;
+ auto exact=prepare(wide,true,3,true);assert(exact.elided && !(exact.elided&integrated_quantized));
+ // Quantized without any elided element still keeps the row (mask bit 0).
+ auto all=mesh(true);for(std::size_t i=0;i<all.size();++i){auto& v=all[i];float f=float(i+1);
+  v.panel=v.normal_y=v.shadow_visibility=v.surface_kind=v.base_terrain=v.real_terrain=v.authored_relief_height=
+  v.active_effect=v.river_mouth_distance=v.relief_owner_state=f;}
+ auto only=prepare(all,true,3,true);assert(only.elided==integrated_quantized && only.vertex_stride==integrated_stride(integrated_quantized));
+ same(prepare(all,false),only,main_layout,19);same_pulled(prepare(all,false),only);
  // A mesh whose every element varies stays full.
  auto varied=mesh(true);for(std::size_t i=0;i<varied.size();++i){auto& v=varied[i];float f=float(i+1);
   v.panel=v.normal_y=v.shadow_visibility=v.surface_kind=v.base_terrain=v.real_terrain=v.authored_relief_height=
@@ -131,7 +166,11 @@ int main(){
  auto const& r=restored->ground->meshes[0];
  assert(r.elided==m.elided && r.constants==m.constants && r.vertices==m.vertices && r.vertex_stride==m.vertex_stride);
  assert(r.template_offset==0); // GPU placement belongs to the uploader
- auto old=bytes;std::uint32_t five=5;std::memcpy(old.data(),&five,4);assert(!WorldBackingCodec::decode(old,WorldPreparationKind::ground));
+ auto old=bytes;std::uint32_t six=6;std::memcpy(old.data(),&six,4);assert(!WorldBackingCodec::decode(old,WorldPreparationKind::ground));
+ // The quantized bit is part of the format.
+ m.elided|=render_core::integrated_quantized;m.vertex_stride=render_core::integrated_stride(m.elided);m.vertices.assign(m.vertex_stride*2,7);
+ restored=WorldBackingCodec::decode(WorldBackingCodec::encode(ground),WorldPreparationKind::ground);
+ assert(restored && restored->ground->meshes[0].elided==m.elided && restored->ground->meshes[0].vertex_stride==m.vertex_stride);
  // A stride that disagrees with the mask is rejected.
  ground.ground->meshes[0].vertex_stride=168;ground.ground->meshes[0].vertices.assign(168*2,7);
  assert(!WorldBackingCodec::decode(WorldBackingCodec::encode(ground),WorldPreparationKind::ground));

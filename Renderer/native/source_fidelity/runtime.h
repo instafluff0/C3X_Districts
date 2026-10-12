@@ -9,7 +9,9 @@ namespace c3x_renderer { namespace fidelity {
 struct Natural : NaturalWorld {
     std::vector<ID3D11ShaderResourceView*> textures;
     ID3D11VertexShader* vs[3]={};ID3D11PixelShader* ps[3]={};
-    ID3D11InputLayout* layout[3]={},*compact_layout[3]={};ID3D11Buffer* frames[3]={};
+    // Per provider: the 92-byte layout, then the 56-, 68- and 40-byte formats
+    // (render_core::natural_offsets).
+    ID3D11InputLayout* layout[3]={},*format_layout[3][3]={};ID3D11Buffer* frames[3]={};
     // Sixteen zero bytes at stride 0: the compact layouts' relief owner.
     ID3D11Buffer* zero_stream=nullptr;
     unsigned bound_provider=0;ID3D11InputLayout* bound_layout=nullptr;
@@ -34,7 +36,7 @@ struct Natural : NaturalWorld {
         for(auto&m:instance_meshes){drop(m.vertices);drop(m.indices);drop(m.material);}instance_meshes.clear();instance_mesh_bytes=0;instance_residency.clear();
         surface_bindings={};body_bindings.clear();
         drop(decal_depth);reset_world();for(auto&p:textures)drop(p);textures.clear();fields.clear();materials.clear();bodies.clear();recipes.clear();surface_recipes.clear();surface_vertices.clear();
-        for(int i=0;i<3;i++){drop(vs[i]);drop(ps[i]);drop(layout[i]);drop(compact_layout[i]);drop(frames[i]);}drop(zero_stream);bound_layout=nullptr;ready=false;}
+        for(int i=0;i<3;i++){drop(vs[i]);drop(ps[i]);drop(layout[i]);for(auto*& f:format_layout[i])drop(f);drop(frames[i]);}drop(zero_stream);bound_layout=nullptr;ready=false;}
     ~Natural(){reset();}
     template<class Read,class Upload>
     bool load(ID3D11Device*device,std::string const&root,Read read,Upload upload,
@@ -63,10 +65,19 @@ struct Natural : NaturalWorld {
                 {"TEXCOORD",4,DXGI_FORMAT_R32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"TEXCOORD",6,DXGI_FORMAT_R32G32B32A32_FLOAT,0,76,D3D11_INPUT_PER_VERTEX_DATA,0}};
             if(SUCCEEDED(hr))hr=device->CreateInputLayout(e,i<2?8:6,v->GetBufferPointer(),v->GetBufferSize(),&layout[i]);
-            // render_core::natural_compact_stride: position and uv alias world.
-            unsigned compact_offsets[]={0,0,16,0,28,44,52,0};
-            for(unsigned n=0;n<8;++n)e[n].AlignedByteOffset=compact_offsets[n];e[7].InputSlot=1;
-            if(SUCCEEDED(hr))hr=device->CreateInputLayout(e,i<2?8:6,v->GetBufferPointer(),v->GetBufferSize(),&compact_layout[i]);
+            unsigned const strides[]={render_core::natural_compact_stride,render_core::natural_quantized_stride,
+                render_core::natural_quantized_compact_stride};
+            for(unsigned f=0;f<3;++f){
+                auto o=render_core::natural_offsets(strides[f]);
+                unsigned offsets[]={o.position,o.world,o.normal,o.uv,o.material,o.relief,o.base,o.owner};
+                for(unsigned n=0;n<8;++n)e[n].AlignedByteOffset=offsets[n];
+                e[7].InputSlot=o.zero_owner?1:0;
+                e[2].Format=o.quantized?DXGI_FORMAT_R16G16B16A16_SNORM:DXGI_FORMAT_R32G32B32_FLOAT;
+                e[4].Format=o.quantized?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R32G32B32A32_FLOAT;
+                e[5].Format=o.quantized?DXGI_FORMAT_R16G16_FLOAT:DXGI_FORMAT_R32G32_FLOAT;
+                e[7].Format=o.quantized && !o.zero_owner?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R32G32B32A32_FLOAT;
+                if(SUCCEEDED(hr))hr=device->CreateInputLayout(e,i<2?8:6,v->GetBufferPointer(),v->GetBufferSize(),&format_layout[i][f]);
+            }
             drop(v);drop(p);D3D11_BUFFER_DESC desc={};desc.ByteWidth=96;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&frames[i]);
             if(FAILED(hr))return false;
@@ -173,10 +184,10 @@ struct Natural : NaturalWorld {
     // After bind(): the layout for one chunk's vertex format, before its
     // vertex buffer is bound at slot 0.
     void bind_format(ID3D11DeviceContext*c,unsigned stride){
-        bool compact=stride==render_core::natural_compact_stride;
-        auto* wanted=compact?compact_layout[bound_provider]:layout[bound_provider];
+        unsigned format=render_core::natural_format_index(stride);
+        auto* wanted=format?format_layout[bound_provider][format-1]:layout[bound_provider];
         if(wanted!=bound_layout){c->IASetInputLayout(wanted);bound_layout=wanted;}
-        if(compact){UINT none=0;c->IASetVertexBuffers(1,1,&zero_stream,&none,&none);}
+        if(render_core::natural_offsets(stride).zero_owner){UINT none=0;c->IASetVertexBuffers(1,1,&zero_stream,&none,&none);}
     }
 };
 } }

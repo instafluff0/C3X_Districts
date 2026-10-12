@@ -1,6 +1,6 @@
 #pragma once
 #include "scene_projection.h"
-#include "render_core/integrated_vertex.h"
+#include "render_core/prepared_mesh.h"
 #include <wrl/client.h>
 #include <map>
 #include <string>
@@ -162,7 +162,8 @@ public:
             context->UpdateSubresource(cb,0,nullptr,values,0,0);
             // An elided ground chunk may share a natural stride: test its mask first.
             auto* layout=chunk.elided?elided_layout(device,chunk.elided):
-                chunk.vertex_stride==92?natural_layout.Get():chunk.vertex_stride==56?compact_layout.Get():ground_layout.Get();
+                !render_core::natural_stride(chunk.vertex_stride)?ground_layout.Get():
+                render_core::natural_offsets(chunk.vertex_stride).world==0?compact_layout.Get():natural_layout.Get();
             if(!layout)return false;
             context->IASetInputLayout(layout);
             if(chunk.elided){UINT none=0,offset=chunk.template_offset;context->IASetVertexBuffers(1,1,&chunk.buffer,&none,&offset);}

@@ -72,6 +72,10 @@ struct MeshFormat {
     bool world_projected=false;
     // Integrated vertices drop elements constant across the mesh (exact).
     bool elide_constants=false;
+    // Stage 5 step 2: world-projected natural vertices store 16-bit
+    // normals, materials, relief and owner; integrated vertices that elide
+    // constants store half vector elements (integrated_quantized).
+    bool quantized=false;
 };
 // Exact compact natural vertex: world xyz+valid, normal, four material
 // weights, relief height/blend, base terrain. Valid only for a world-projected
@@ -82,6 +86,51 @@ constexpr unsigned natural_vertex_stride=92u,natural_compact_stride=56u;
 inline bool natural_vertex_compact(Vertex const& v){
     float zero[4]={},owner[]={v.relief_owner_u,v.relief_owner_v,v.relief_owner_coverage,v.relief_owner_state};
     return std::memcmp(&v.u,&v.world_x,4)==0 && std::memcmp(&v.v,&v.world_y,4)==0 && std::memcmp(owner,zero,16)==0;
+}
+// Quantized natural vertices (stage 5 step 2, approved October 11): the
+// normal is SNORM16x4, the four material channels, relief height/blend and
+// the owner are half floats, all expanded by the input assembler, so no
+// shader changes. World xyz+valid, uv, position and base terrain stay 32-bit:
+// base terrain is a class code plus coverage (42 + coverage needs a float).
+// Byte offsets per natural stride; compact formats alias position and uv
+// to world and read a zero owner from slot 1.
+constexpr unsigned natural_quantized_stride=68u,natural_quantized_compact_stride=40u;
+struct NaturalOffsets {unsigned position,world,normal,uv,material,relief,base,owner;bool zero_owner,quantized;};
+inline bool natural_stride(unsigned stride){
+    return stride==natural_vertex_stride || stride==natural_compact_stride ||
+        stride==natural_quantized_stride || stride==natural_quantized_compact_stride;
+}
+// 0: 92 bytes, 1: 56, 2: 68, 3: 40.
+inline unsigned natural_format_index(unsigned stride){
+    return stride==natural_compact_stride?1u:stride==natural_quantized_stride?2u:stride==natural_quantized_compact_stride?3u:0u;
+}
+inline NaturalOffsets natural_offsets(unsigned stride){
+    if(stride==natural_compact_stride)return {0,0,16,0,28,44,52,0,true,false};
+    if(stride==natural_quantized_stride)return {0,12,28,36,44,52,56,60,false,true};
+    if(stride==natural_quantized_compact_stride)return {0,0,16,0,24,32,36,0,true,true};
+    return {0,12,28,40,48,64,72,76,false,false};
+}
+// IEEE half, round to nearest even (the input assembler's R16_FLOAT).
+inline std::uint16_t half_bits(float value){
+    std::uint32_t x;std::memcpy(&x,&value,4);
+    std::uint32_t sign=(x>>16)&0x8000u;x&=0x7fffffffu;
+    if(x>=0x47800000u)return std::uint16_t(sign|(x>0x7f800000u?0x7e00u:0x7c00u));
+    if(x<0x38800000u){float f;std::memcpy(&f,&x,4);f+=.5f;std::uint32_t r;std::memcpy(&r,&f,4);return std::uint16_t(sign|(r-0x3f000000u));}
+    x+=0xfffu+((x>>13)&1u)-(112u<<23);
+    return std::uint16_t(sign|(x>>13));
+}
+inline std::int16_t snorm16_bits(float value){
+    return std::int16_t(std::lround(double(std::clamp(value,-1.f,1.f))*32767.));
+}
+// A vertex quantizes when every 16-bit value is finite and in range.
+inline bool natural_vertex_quantizable(Vertex const& v){
+    float unit[]={v.normal_x,v.normal_y,v.normal_z};
+    for(float n:unit)if(!(n>=-1.f && n<=1.f))return false;
+    float halves[]={v.material_grass,v.material_plains,v.material_desert,v.material_marsh,
+        v.authored_relief_height,v.authored_relief_blend,v.relief_owner_u,v.relief_owner_v,
+        v.relief_owner_coverage,v.relief_owner_state};
+    for(float h:halves)if(!(std::fabs(h)<=65504.f))return false;
+    return true;
 }
 template<class Layouts>
 unsigned shared_mesh_grid(std::size_t vertices,std::vector<unsigned> const* indices,Layouts& layouts){
@@ -114,8 +163,10 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
     auto count=topology?source.size():unique.size();
     bool compact=format.pickup && !format.city && format.natural && format.world_projected;
     for(std::size_t i=0;compact && i<count;++i)compact=natural_vertex_compact(source[topology?i:unique[i]]);
-    result.vertex_stride=format.city?88u:format.pickup?(format.natural?(compact?natural_compact_stride:natural_vertex_stride):
-        format.feature?48u:sizeof(Vertex)):120u;
+    bool quantize=format.pickup && !format.city && format.natural && format.world_projected && format.quantized;
+    for(std::size_t i=0;quantize && i<count;++i)quantize=natural_vertex_quantizable(source[topology?i:unique[i]]);
+    result.vertex_stride=format.city?88u:format.pickup?(format.natural?(quantize?(compact?natural_quantized_compact_stride:natural_quantized_stride):
+        compact?natural_compact_stride:natural_vertex_stride):format.feature?48u:sizeof(Vertex)):120u;
     result.index_stride=count<=65535u?2:4;result.index_count=unsigned(elements.size());
     result.shared_grid=format.shared_grid;
     result.vertices.resize(count*result.vertex_stride);result.indices.resize(elements.size()*result.index_stride);
@@ -151,6 +202,18 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
                 v.material_marsh,v.authored_relief_height,v.authored_relief_blend,
                 v.world_x,v.world_y,v.world_z,v.relief_owner_u,v.relief_owner_v};
             std::memcpy(output,data,sizeof(data));
+        }else if(quantize){
+            auto* out=static_cast<unsigned char*>(output);unsigned at=0;
+            auto put=[&](void const* data,unsigned bytes){std::memcpy(out+at,data,bytes);at+=bytes;};
+            if(!compact){float position[]={x,y,z};put(position,12);}
+            float world_valid[]={v.world_x,v.world_y,v.world_z,v.world_valid};put(world_valid,16);
+            std::int16_t normal[]={snorm16_bits(v.normal_x),snorm16_bits(v.normal_y),snorm16_bits(v.normal_z),0};put(normal,8);
+            if(!compact){float uv[]={v.u,v.v};put(uv,8);}
+            std::uint16_t material[]={half_bits(v.material_grass),half_bits(v.material_plains),half_bits(v.material_desert),
+                half_bits(v.material_marsh),half_bits(v.authored_relief_height),half_bits(v.authored_relief_blend)};put(material,12);
+            put(&v.base_terrain,4);
+            if(!compact){std::uint16_t owner[]={half_bits(v.relief_owner_u),half_bits(v.relief_owner_v),
+                half_bits(v.relief_owner_coverage),half_bits(v.relief_owner_state)};put(owner,8);}
         }else if(compact){
             float data[]={v.world_x,v.world_y,v.world_z,v.world_valid,v.normal_x,v.normal_y,v.normal_z,
                 v.material_grass,v.material_plains,v.material_desert,v.material_marsh,
@@ -187,6 +250,15 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
             auto const& d=integrated_elements[e];
             if(((elided>>e)&1u) && std::memcmp(rows+d.offset,rows+i*integrated_vertex_bytes+d.offset,d.bytes)!=0)elided&=~(1u<<e);
         }
+        // Stored vector elements become half floats when every value fits.
+        bool halves=format.quantized;
+        for(std::size_t i=0;i<count && halves;++i)for(unsigned e=1;e<integrated_element_count && halves;++e){
+            if(integrated_elided(elided,e) || integrated_half_bytes[e]==integrated_elements[e].bytes)continue;
+            auto const& d=integrated_elements[e];
+            for(unsigned c=0;c<d.bytes/4 && halves;++c){float value;std::memcpy(&value,rows+i*integrated_vertex_bytes+d.offset+c*4,4);
+                halves=std::fabs(value)<=65504.f;}
+        }
+        if(halves)elided|=integrated_quantized;
         if(elided){
             // Rows compact in place: every destination precedes its source.
             std::memcpy(result.constants.data(),rows,integrated_vertex_bytes);
@@ -194,8 +266,9 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
             for(std::size_t i=0;i<count;++i){
                 if((i&1023u)==0 && stop())return false;
                 unsigned packed=0;
-                for(unsigned e=0;e<integrated_element_count;++e){if((elided>>e)&1u)continue;auto const& d=integrated_elements[e];
-                    std::memmove(bytes+i*stride+packed,bytes+i*integrated_vertex_bytes+d.offset,d.bytes);packed+=d.bytes;}
+                for(unsigned e=0;e<integrated_element_count;++e){if(integrated_elided(elided,e))continue;
+                    integrated_store(elided,e,bytes+i*integrated_vertex_bytes,bytes+i*stride+packed,half_bits);
+                    packed+=integrated_stored_bytes(elided,e);}
             }
             result.vertices.resize(count*stride);result.vertices.shrink_to_fit();
             result.vertex_stride=stride;result.elided=elided;

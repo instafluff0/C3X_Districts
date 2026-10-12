@@ -3524,3 +3524,155 @@ every city's smoke columns, with no bursts; the first frame after a minimap
 jump shows smoke at once. Test: `test_preview_effects.py` (source contract,
 fails on the previous pipeline; the effect shaders must keep reading no scene
 depth).
+
+## 76. Stage 5, step 2: 16-bit natural and ground vertex elements (October 11)
+
+**Change** (approved by the user on October 11; not byte-identical).
+- **Natural terrain, decals and mountains** (world-projected meshes):
+  - The normal is stored as SNORM16x4.
+  - The four material channels, relief height/blend and the volcano owner are
+    half floats.
+  - The input assembler expands them, so no shader changed.
+  - World xyz+valid, position, uv and base terrain stay 32-bit. Base terrain
+    is a class code plus coverage (42 + coverage needs a float).
+  - Strides: compact 56 → 40 B, full 92 → 68 B (`natural_offsets` in
+    `render_core/prepared_mesh.h` describes all four formats).
+  - Every consumer derives its layout from that table: the terrain, mountain
+    and object layouts, both shadow caster layouts (coverage is the desert
+    channel, read as R16G16_FLOAT) and territory borders.
+- **Integrated ground, rivers and routes** (meshes that elide constants):
+  - Bit 0 of the format mask (`integrated_quantized`; position is never
+    elided) marks half-float vector elements: normal, visibility, material
+    weights, relief, river, hydrology and owner/flow.
+  - Position, uv, macro uv, world and the one-float elements stay 32-bit.
+    Elided elements still read the 32-bit constant row.
+  - Input layouts switch those elements to R16G16/R16G16B16A16_FLOAT. The
+    generated pulled shader decodes them with `f16tof32` and computes packed
+    addresses from the half sizes.
+- **Fallback.** A mesh with any value outside the 16-bit range (a normal
+  component beyond ±1, or a magnitude over 65,504) keeps its exact 32-bit
+  format.
+- **Other changes.** The world backing codec is version 7, and the terrain
+  and ground keys include the switch. `C3X_RENDERER_QUANTIZE_CONTROL=1` keeps
+  the exact formats.
+
+**Busy save, in game** (whole world resident, census against the control,
+same build):
+
+| | Control | Quantized |
+| --- | --- | --- |
+| Required world GPU bytes | 1,554 MB | 1,267 MB (−18%) |
+| Natural terrain / decals / mountains (logical) | 275 / 257 / 514 MB | 210 / 198 / 399 MB |
+| Underlay / river / route | 136 / 30 / 29 MB | 116 / 23 / 26 MB |
+| Geometry cache (budget-bound) | 1,822 MB, 14,320 owners | 1,617 MB, 15,916 owners |
+| Pulled pages | 411 MB | 356 MB |
+| Adapter | 3,281 MB | 3,061 MB |
+
+Every natural chunk quantized: terrain is all 40 B, and decals and mountains
+are all 68 B. Underlay strides are 52–72 B, down from 60–84 B. Neither run
+had native failures or shader errors, and pulled draws ran without fallbacks.
+Zoom and scroll cadence were within run noise.
+
+**Verification.**
+- `test_natural_compact_vertices.py`:
+  - Packs the same vertices in all four natural formats.
+  - Every main, caster and border input must equal the full format's bits,
+    or for 16-bit inputs the input assembler's conversion of the exact value.
+    The nearest half is computed from first principles, ties to even.
+  - Class codes (1, 1.25, 2, 2.5, 5-8, 42) stay exact.
+  - Out-of-range values keep the exact format.
+- `test_integrated_elision.py`:
+  - Quantized and exact meshes go through the main, border and caster
+    layouts and the pulled address helper.
+  - A quantized mesh with no elided element keeps its row (mask 1).
+  - Codec round trip.
+- Mutations fail both tests: a truncating half encoder, and a pulled helper
+  that reads position from the row when bit 0 is set.
+- `test_runtime_shader_programs` (GPU, VM) compiles the generated pulled
+  shaders against the production pack.
+
+**Lab A/B** (quantized against the control, legacy draw path, 32 pairs):
+- Coverage: grassland 3, plains 2, desert 2, floodplains 3, transitions 2,
+  hills 2, mountains 3, volcanoes 4 (detail and active at 128 and 224),
+  shorelines 4 (detail at four hours), seas and oceans 2, rivers 2,
+  infrastructure 3.
+- Result: 2 pairs are identical. Of the 30 that differ, the largest channel
+  difference is 1 level in 24, 2 in 3, 3 in 1 and 4 in 2. Pixels differing
+  by more than 2 levels: none, except 0.001% in the two volcano renders at
+  224. PSNR 73–85 dB.
+- No reference image was replaced.
+- The rivers gameplay fixture exits with code 1 on both sides; its images
+  were still compared.
+- Not run:
+  - Borders: the Lab border preview needs PIL, which the Mac interpreter
+    lacks. Border layouts read only position and world, which keep their
+    offsets.
+  - Forests: vegetation bodies are not quantized.
+
+## 77. What a per-frame zoom draw costs (October 11)
+
+Plan item 4 first measures a full draw at the current zoom on the busy save.
+`C3X_RENDERER_STATIC_LEGACY=1` draws the visible static raster synchronously
+whenever the zoom changes, as a per-frame zoom draw would.
+
+**Cadence** (`near`, two runs per side, `zoom_report.py`). Zoom transitions
+with cached previews ran at 16–63 fps, typically 25–35. With a full draw
+every frame they ran at 4.5–19 fps; 1x idle was 36 fps against 55.
+
+**GPU per zoom-changing frame** (`C3X_RENDERER_PROFILE=4`, isolated phases,
+p50; paired with each frame's `static-compose` zoom):
+
+| | Full draw (legacy) | Previews (default) |
+| --- | --- | --- |
+| Frame | 228 ms | 71 ms |
+| Static | 146 ms | 2 ms (p90 158: refinement after the zoom) |
+| Reflection | 25 ms | 2.6 ms |
+| Water surface | 12.7 ms | 5.1 ms |
+
+**By layer** (`C3X_SANDBOX_PROFILE_COMPLETION=1`, which now also writes a
+`sandbox-completion` trace; only draws over 1 ms are reported, serialized,
+mean per zoom-changing frame):
+- **Water mirror redrawn at the new zoom: 85 ms.** Vegetation bodies
+  59 ms, cliffs 12, features 10, cities 4.
+- **Main static draw: 31 ms.** Vegetation bodies 18 ms, cities 4, cliffs
+  3.6, ground (pulled) 3, features 2. Natural terrain is under 1 ms per
+  draw.
+
+**Draw calls are not the limit.** The static pass issues about 100 draws for
+a full draw (ground is pulled; rigid parts are ordered packets). The cost is
+shading, mostly vegetation, and it is paid twice when the mirror is redrawn.
+
+**Consequence for item 4.** A per-frame draw that keeps the mirror until the
+zoom settles costs about the main static draw: about 31 ms of isolated GPU
+time in this VM, against 146 ms for the full redraw.
+
+**Per-frame zoom drawing, measured** (`C3X_RENDERER_ZOOM_DIRECT=1`, busy save,
+`near`, two runs per side). Moving zoom frames, and the frame that reaches
+the destination, draw the visible static raster at their own zoom, and the
+water mirror waits for the zoom to settle (`test_zoom_direct_draw.py`).
+- Direct: transitions at 2.5–19 fps (mostly 5–11), and the first moved
+  frame came 30–820 ms after the wheel.
+- Previews: 8–50 fps (mostly 20–32), with the first moved frame 30–155 ms
+  after the wheel.
+- Direct runs presented 37–39 direct frames and 2–3 previews; preview runs
+  presented 88–113 previews.
+
+In this VM the direct draw is far slower than the stretched preview. The user
+(October 11) cares about what disappears or flickers during the stretch, not
+the stretch itself, so previews stay the default and the switch stays off.
+
+**Preview consistency, first look** (default build, 10 frames/s window
+samples during the `near` zooms). Within one zoom, previews alternate
+between two sources for near-water overlays (roads, mines, fields and
+features on coastal and river tiles):
+- the source raster's retained overlay layer, resampled with it;
+- a live draw at the current zoom against the resampled depth, when any
+  preview source has no layer: a bootstrap, or a slot just promoted by
+  refinement.
+
+At a sampled switch at one zoom and camera (frames 742 and 743, 1.25x),
+only animated units and smoke changed. A transient detector (a spot that
+differs in one frame from both neighbours at the same zoom and camera) found
+only scattered 200–1,400-pixel changes, which are animation. No sampled frame
+lost roads, mines or smoke. The window samples catch about one frame in
+three, so single-frame dropouts may still be missed.

@@ -86,11 +86,11 @@ struct TerrainCompileInput {
  using Key=std::array<std::uint64_t,13>;Key key{};CanopyClearing clearing;
  int tile_x,tile_y,real_terrain_type,ground,tile_width,tile_height,target_height;
  long long world_revision;Detail detail;
- bool river_ready,skip_flat_shore,separate_relief,indexed,retain_height,world_projected;
+ bool river_ready,skip_flat_shore,separate_relief,indexed,retain_height,world_projected,quantized;
 };
 }}
 struct State {
- bool city_profile=true,retained_world=true,share_world_meshes=true,river_assets_ready=true,compact_vertices=true;
+ bool city_profile=true,retained_world=true,share_world_meshes=true,river_assets_ready=true,compact_vertices=true,quantized_vertices=true;
  int content_view_height=900;unsigned content_revision=13;
  c3x_renderer::fidelity::Detail patch_detail;
  struct Coast {long long value=0;long long revision()const{return value;}} world_coast;
@@ -120,6 +120,8 @@ int main(){
  assert(first.world_projected);
  state.compact_vertices=false;assert(!compile().world_projected && first.key!=compile().key);
  state.compact_vertices=true;
+ state.quantized_vertices=false;assert(compile().world_projected && !compile().quantized && first.key!=compile().key);
+ state.quantized_vertices=true;
  state.share_world_meshes=false;assert(compile().tile_width==224 && first.key!=compile().key && !compile().world_projected);
 }
 ''')

@@ -93,6 +93,7 @@ struct GroundCompileInput {
     bool river_assets_ready=false;
     bool retain_ground_grids=false, reuse_nested_ground_grids=false, prewarming=false;
     bool compact_vertices=false; // integrated meshes elide constant elements (fidelity only)
+    bool quantized=false; // and store half vector elements
     bool cull_river_reach=false; // river triangles beyond every variant's bank reach are left out
     int ground=0;
     float half_w=0, half_h=0, uv_scale=1, relief_projection_scale=1;

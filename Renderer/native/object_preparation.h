@@ -13,6 +13,7 @@ struct PreparationInput {
     bool route_ready=false,routes_enabled=true,mine_ready=false,farm_ready=false,city_ready=false,composition_ready=false;
     bool shared_rigid=false;
     bool compact_vertices=false; // route meshes elide constant integrated elements
+    bool quantized=false; // and store half vector elements
     // A farm's resource parts as tile-local (u0,v0,u1,v1) boxes it keeps open.
     std::vector<std::array<float,4>> farm_resource;
 };
@@ -297,7 +298,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     for(unsigned layer=0;layer<layer_count;++layer){
         render_core::MeshFormat format;format.feature=layer!=route_layer;
         format.projection_kind=layer==route_layer && input.projection.world_objects?1:2;
-        format.elide_constants=layer==route_layer && input.compact_vertices;
+        format.elide_constants=layer==route_layer && input.compact_vertices;format.quantized=format.elide_constants && input.quantized;
         if(!render_core::prepare_mesh(surfaces.layers[layer],layer==route_layer?nullptr:&surfaces.indices[layer],format,result->layers[layer].mesh,stop))return {};
         std::vector<Vertex>().swap(surfaces.layers[layer]);
         if(bounded && result->bytes()>Preparation::byte_limit/2)return {};

@@ -4,6 +4,7 @@
 #include "shader_cache.h"
 #include "instance_stream.h"
 #include "shared_instance_submission.h"
+#include "prepared_mesh.h"
 #include <array>
 #include <atomic>
 #include <vector>
@@ -25,9 +26,10 @@ class SourceShadow {
     ID3D11InputLayout* instance_layout=nullptr,*resident_instance_layout=nullptr;
     ID3D11PixelShader *opaque=nullptr,*cutout=nullptr;
     ID3D11VertexShader* rigid_vertex=nullptr,*resident_rigid_vertex=nullptr;
-    ID3D11InputLayout *layout=nullptr,*feature_layout=nullptr,*natural_layout=nullptr,*city_layout=nullptr;
-    // Compact 56-byte natural vertices; their owner comes from zero_stream.
-    ID3D11InputLayout *natural_compact_layout=nullptr;ID3D11Buffer* zero_stream=nullptr;
+    ID3D11InputLayout *layout=nullptr,*feature_layout=nullptr,*city_layout=nullptr;
+    // Per natural format (natural_format_index); compact formats read their
+    // owner from zero_stream.
+    ID3D11InputLayout *natural_layouts[4]={};ID3D11Buffer* zero_stream=nullptr;
     ID3D11Buffer* caster_settings=nullptr;
     ID3D11RasterizerState* raster=nullptr;
     ID3D11BlendState* maximum=nullptr;
@@ -73,7 +75,7 @@ public:
         borrowed_view=nullptr;
         instance_stream.clear();drop(instance_vertex);drop(resident_instance_vertex);drop(instance_layout);drop(resident_instance_layout);drop(rigid_vertex);drop(resident_rigid_vertex);
         drop(view);drop(texture);for(auto& t:targets)drop(t);
-        drop(vertex);drop(opaque);drop(cutout);drop(layout);drop(feature_layout);drop(natural_layout);drop(city_layout);drop(natural_compact_layout);drop(zero_stream);drop(caster_settings);
+        drop(vertex);drop(opaque);drop(cutout);drop(layout);drop(feature_layout);for(auto*& l:natural_layouts)drop(l);drop(city_layout);drop(zero_stream);drop(caster_settings);
         drop(table);drop(raster);drop(maximum);clear_cached_pages();
     }
     bool ensure(ID3D11Device* device,wchar_t const* path) {
@@ -99,14 +101,19 @@ public:
             elements[3].AlignedByteOffset=32;elements[1].AlignedByteOffset=32;elements[2].AlignedByteOffset=36;
             elements[2].Format=DXGI_FORMAT_R32G32B32_FLOAT;
             if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&feature_layout);
-            elements[4].AlignedByteOffset=76;
-            elements[3].AlignedByteOffset=56;elements[0].AlignedByteOffset=40;elements[1].AlignedByteOffset=72;
-            elements[2].AlignedByteOffset=12;elements[2].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
-            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_layout);
-            elements[0].AlignedByteOffset=0;elements[1].AlignedByteOffset=52;elements[2].AlignedByteOffset=0;
-            elements[3].AlignedByteOffset=36;elements[4].AlignedByteOffset=0;elements[4].InputSlot=1;
-            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_compact_layout);
-            elements[4].InputSlot=0;
+            // Natural formats (natural_offsets): coverage is the desert
+            // material channel, a half in the quantized formats.
+            unsigned const natural_strides[]={natural_vertex_stride,natural_compact_stride,natural_quantized_stride,natural_quantized_compact_stride};
+            for(unsigned f=0;f<4;++f){auto o=natural_offsets(natural_strides[f]);
+                elements[0].AlignedByteOffset=o.uv;elements[1].AlignedByteOffset=o.base;
+                elements[2].AlignedByteOffset=o.world;elements[2].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
+                elements[3].AlignedByteOffset=o.material+(o.quantized?4:8);
+                elements[3].Format=o.quantized?DXGI_FORMAT_R16G16_FLOAT:DXGI_FORMAT_R32_FLOAT;
+                elements[4].AlignedByteOffset=o.owner;elements[4].InputSlot=o.zero_owner?1:0;
+                elements[4].Format=o.quantized && !o.zero_owner?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R32G32B32A32_FLOAT;
+                if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_layouts[f]);
+            }
+            elements[3].Format=DXGI_FORMAT_R32_FLOAT;elements[4].InputSlot=0;elements[4].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
             float zero[4]={};D3D11_BUFFER_DESC zero_desc={};zero_desc.ByteWidth=sizeof(zero);
             zero_desc.Usage=D3D11_USAGE_IMMUTABLE;zero_desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
             D3D11_SUBRESOURCE_DATA zero_data={};zero_data.pSysMem=zero;
@@ -459,10 +466,10 @@ public:
                     context->DrawIndexedInstanced(c.count,UINT(data.size()),0,0,0);++draws;continue;
                 }
                 context->VSSetShader(vertex,nullptr,0);
-                context->IASetInputLayout(c.stride==88?city_layout:c.stride==92?natural_layout:c.stride==56?natural_compact_layout:
+                context->IASetInputLayout(c.stride==88?city_layout:natural_stride(c.stride)?natural_layouts[natural_format_index(c.stride)]:
                     c.stride==48?feature_layout:layout);
                 UINT stride=c.stride,offset=c.vertex_offset;context->IASetVertexBuffers(0,1,&c.vertices,&stride,&offset);
-                if(c.stride==56){UINT none=0;context->IASetVertexBuffers(1,1,&zero_stream,&none,&none);}
+                if(natural_stride(c.stride) && natural_offsets(c.stride).zero_owner){UINT none=0;context->IASetVertexBuffers(1,1,&zero_stream,&none,&none);}
                 context->IASetIndexBuffer(c.indices,c.index_format,c.index_offset);context->DrawIndexed(c.count,0,0);++draws;
             }
             page={key.first,key.second,hash,epoch};++rebuilt;
