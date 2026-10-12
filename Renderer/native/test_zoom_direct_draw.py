@@ -30,7 +30,7 @@ class ZoomDirectDrawTests(unittest.TestCase):
         self.assertIn('refine(zoom,unbounded)', direct)
         self.assertIn('refine_worked=false;', direct, 'a direct draw must not shrink the refinement budget')
         # The direct draw follows the budgeted refinement, which waits while moving.
-        self.assertLess(compose.index('else if(budget!=0 && !moving)'), compose.index('        if(direct){'))
+        self.assertLess(compose.index('else if(budget!=0 && (!moving ||'), compose.index('        if(direct){'))
         # No background guard-band fill behind a moving zoom.
         self.assertIn('if(shifted && previewable && !direct && budget>0', compose)
 

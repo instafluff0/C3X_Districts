@@ -704,6 +704,7 @@ struct SandboxPerfOptions {
     bool shadow_tight=false;    // C3X_RENDERER_SHADOW_TIGHT_FIT=1: refit shadows to every view
     float zoom_refine_hold=.01f; // C3X_RENDERER_ZOOM_REFINE_HOLD: no refinement while zoom is this fraction from its destination (0: off)
     bool zoom_direct=false;     // C3X_RENDERER_ZOOM_DIRECT=1: draw each moving zoom frame at its zoom (no preview)
+    bool zoom_early=false;      // C3X_RENDERER_ZOOM_EARLY=1: refine the destination while the zoom moves (review 79)
     SandboxPerfOptions(){
         char value[32]{};
         legacy=GetEnvironmentVariableA("C3X_RENDERER_STATIC_LEGACY",value,sizeof(value)) && value[0]=='1';
@@ -716,6 +717,7 @@ struct SandboxPerfOptions {
         }
         shadow_tight=GetEnvironmentVariableA("C3X_RENDERER_SHADOW_TIGHT_FIT",value,sizeof(value)) && value[0]=='1';
         zoom_direct=GetEnvironmentVariableA("C3X_RENDERER_ZOOM_DIRECT",value,sizeof(value)) && value[0]=='1';
+        zoom_early=GetEnvironmentVariableA("C3X_RENDERER_ZOOM_EARLY",value,sizeof(value)) && value[0]=='1';
         if(GetEnvironmentVariableA("C3X_RENDERER_ZOOM_REFINE_HOLD",value,sizeof(value))){
             float hold=float(std::atof(value));zoom_refine_hold=std::isfinite(hold)?std::clamp(hold,0.f,1.f):.01f;
         }
@@ -1939,7 +1941,16 @@ struct SandboxFreshPipeline {
     // their shadows) retained beside each static slot; see
     // write_overlay_strip. A layer is usable only while `revision` equals its
     // slot's revision, so every slot mutation either updates it or retires it.
-    struct OverlaySlot {c3x_renderer::render_core::LinearTarget layer;std::uint64_t revision=~0ull;};
+    struct OverlaySlot {c3x_renderer::render_core::LinearTarget layer;std::uint64_t revision=~0ull,invalidations=0;};
+    // A preview may composite a slot's layer while every revision since it was
+    // written was an invalidation: the pixels are stale but unchanged, and the
+    // layer still matches them. Drawn live instead, the near-water overlays
+    // took the preview's water depth bias and partly buried rocks (a coal
+    // pile beside a mine) showed through the hill for those frames.
+    static bool overlay_matches_pixels(OverlaySlot const& o,
+            c3x_renderer::render_core::StaticRasterState<c3x_renderer::render_core::LinearTarget> const& slot){
+        return o.revision!=~0ull && o.revision+(slot.invalidations-o.invalidations)==slot.revision;
+    }
     std::array<OverlaySlot,StaticRasters::slot_count> overlay_slots;
     c3x_renderer::render_core::OverlayComposite overlay_composite;
     ID3D11BlendState* overlay_depth_only=nullptr;
@@ -2061,6 +2072,10 @@ struct SandboxFreshPipeline {
     bool restore_overlays=false,preview_overlays=false;
     c3x_renderer::render_core::LinearResample::Source preview_overlay_sources[2]{};
     bool preview_overlay_secondary=false;
+    // Every preview source maps one-to-one at whole-pixel offsets (a raster
+    // drawn at this zoom, such as a bootstrap): its depth is exact, and the
+    // live water and overlays need no bias against it.
+    bool preview_depth_exact=false;
     unsigned region_width_px=0,region_height_px=0;
     double refine_pixels=600000;bool refine_worked=false;LARGE_INTEGER refine_last{};
     double last_static_ms=0; // static raster work (strips, previews, restore) in the previous frame
@@ -4095,7 +4110,7 @@ struct SandboxFreshPipeline {
             bool matched=retain_overlays && retained.revision==before;
             bool kept=matched && write_overlay_strip(index,slot,slot_view,rect,overlays,scale);
             if(retain_overlays && !kept && retained.revision!=~0ull)++(matched?overlay_retired_failure:overlay_retired_mismatch);
-            retained.revision=kept?slot.revision:~0ull;
+            retained.revision=kept?slot.revision:~0ull;retained.invalidations=slot.invalidations;
         }
         ++slot.metrics.strip_fills;++slot.metrics.reasons[c3x_renderer::render_core::raster_strip_fills];
         if(static_slot && shadow_field.left!=INT_MIN/4){
@@ -4303,7 +4318,7 @@ struct SandboxFreshPipeline {
         // The retained overlay layer is repaired in the same rectangles.
         auto& repaired=overlay_slots[index];auto& patch_overlay=overlay_slots[patch_index];
         bool overlays=retain_overlays && repaired.revision==slot.revision && overlay_target(patch_index);
-        patch_overlay.revision=overlays?patch.revision:~0ull;
+        patch_overlay.revision=overlays?patch.revision:~0ull;patch_overlay.invalidations=patch.invalidations;
         for(auto const& r:dirty){
             D3D11_RECT rect={r.left,r.top,r.right,r.bottom};
             if(!static_restore.draw(renderer.context,patch.region,nullptr,nullptr,0,0,{},nullptr,
@@ -4331,7 +4346,7 @@ struct SandboxFreshPipeline {
             }
         }
         ++slot.revision;slot.unshadowed=slot.unshadowed.joined(patch.unshadowed);
-        repaired.revision=overlays?slot.revision:~0ull;
+        repaired.revision=overlays?slot.revision:~0ull;repaired.invalidations=slot.invalidations;
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
         static_decision.repair=0;
         // Re-register only the repaired regions (a full slot re-registration
@@ -4694,7 +4709,14 @@ struct SandboxFreshPipeline {
                 auto& abandoned=static_rasters.back(lane);
                 if(abandoned.refining){abandoned.refining=false;abandoned.stale=true;}
             }
-            else if(budget!=0 && !moving){static_decision.refine=1;if(timed(static_decision.refine_ms,[&]{return refine(goal,budget);})<0)return false;}
+            // The destination refines while the zoom still moves (the user,
+            // October 11): small objects render differently at each zoom
+            // (coal piles are heavier at 1x), so a preview stretched from
+            // another zoom's raster changed look when the exact image
+            // arrived. Promoted early, the destination raster becomes the
+            // preview source and the look changes once, during the zoom.
+            else if(budget!=0 && (!moving || (options.zoom_early && lane==1 && goal==hint))){
+                static_decision.refine=1;if(timed(static_decision.refine_ms,[&]{return refine(goal,budget);})<0)return false;}
         }
         // Per-frame zoom drawing (camera decoupling item 4): a moving zoom
         // draws the visible raster at its own zoom every frame instead of
@@ -4810,7 +4832,9 @@ struct SandboxFreshPipeline {
         if(bootstrap_ring[lane] && !(bootstrap_ring[lane]==ring && bootstrap_ring_revision[lane]==ring->revision))boot_cover=0;
         Source const* primary=nullptr;Source const* secondary=nullptr;
         StaticState const* primary_slot=nullptr;StaticState const* secondary_slot=nullptr;
-        if(front_cover==2){primary=&front_source;primary_slot=&displayed;}
+        // Returning to 1x, the canonical raster is the destination's look.
+        if(options.zoom_early && lane==1 && hint==1.f && home_cover==2){primary=&home_source;primary_slot=&home;}
+        else if(front_cover==2){primary=&front_source;primary_slot=&displayed;}
         else if(front_cover==1 && home_cover==2){primary=&front_source;primary_slot=&displayed;secondary=&home_source;secondary_slot=&home;}
         else if(home_cover==2){primary=&home_source;primary_slot=&home;}
         else{
@@ -4834,7 +4858,7 @@ struct SandboxFreshPipeline {
             out=base;if(!slot || !overlay_enabled())return false;
             for(unsigned i=0;i<overlay_slots.size();++i)if(slot==&static_rasters.states[i]){
                 auto const& retained=overlay_slots[i];
-                if(retained.revision!=slot->revision || !retained.layer.samples || !retained.layer.depth_samples)return false;
+                if(!overlay_matches_pixels(retained,*slot) || !retained.layer.samples || !retained.layer.depth_samples)return false;
                 out.color=retained.layer.samples;out.depth=retained.layer.depth_samples;return true;}
             return false;
         };
@@ -4853,6 +4877,9 @@ struct SandboxFreshPipeline {
         preview_overlays=restore_overlays;
         preview_overlay_sources[0]=primary_overlay;preview_overlay_sources[1]=secondary_overlay;
         preview_overlay_secondary=secondary!=nullptr;
+        auto one_to_one=[](Source const& s){return s.map[0]==1.f && s.map[1]==1.f &&
+            s.map[2]==std::floor(s.map[2]) && s.map[3]==std::floor(s.map[3]);};
+        preview_depth_exact=one_to_one(*primary) && (!secondary || one_to_one(*secondary));
         ++preview_frames;static_preview=true;static_decision.preview=1;
         static_decision.front_cover=front_cover;static_decision.home_cover=home_cover;static_decision.boot_cover=boot_cover;
         return true;
@@ -4877,7 +4904,10 @@ struct SandboxFreshPipeline {
         // refits once the zoom settles (review, 43). Zooming out needs the
         // wider destination field at once.
         {std::uint32_t bits=std::uint32_t(roi_key[8]);float field=0;std::memcpy(&field,&bits,sizeof(field));
-            if(body_requirements_valid && field>0 && wanted>field && zoom_moving())wanted=field;}
+            // With early refinement the destination raster is drawn during the
+            // zoom: it must sample the destination field, or settling refits
+            // the field and redraws it (a second change).
+            if(body_requirements_valid && field>0 && wanted>field && zoom_moving() && !sandbox_perf_options().zoom_early)wanted=field;}
         for(float step:ladder)if(step<=wanted+1e-4f)shadow_zoom=step;
         std::uint32_t zoom_bits=0;std::memcpy(&zoom_bits,&shadow_zoom,sizeof(zoom_bits));
         std::uint64_t visibility_sequence=0;
@@ -5419,7 +5449,7 @@ struct SandboxFreshPipeline {
                         preview_raster_device=renderer.device_generation;
                 }
                 auto* raster=renderer.rasterizer_state;
-                if(preview_water_raster)renderer.rasterizer_state=preview_water_raster;
+                if(preview_water_raster && !preview_depth_exact)renderer.rasterizer_state=preview_water_raster;
                 bool drawn=draw_layer(water_visible,geometry_water,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale)) &&
                     draw_layer(water_visible,geometry_river,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale));
                 renderer.rasterizer_state=raster;
@@ -5427,7 +5457,7 @@ struct SandboxFreshPipeline {
                 // Then the sources' overlay layers over that water, shifted by
                 // the same four pixel-depth units as the live water.
                 auto overlay_primary=preview_overlay_sources[0],overlay_secondary=preview_overlay_sources[1];
-                overlay_primary.depth_shift-=4.f/16384.f;overlay_secondary.depth_shift-=4.f/16384.f;
+                if(!preview_depth_exact){overlay_primary.depth_shift-=4.f/16384.f;overlay_secondary.depth_shift-=4.f/16384.f;}
                 if(!static_resample.draw(context,glow.linear,overlay_primary,preview_overlay_secondary?&overlay_secondary:nullptr,preview_overlay_secondary?3:1))
                     return fail("water_overlay");
                 work.draw(3);
@@ -5449,7 +5479,7 @@ struct SandboxFreshPipeline {
                         preview_raster_device=renderer.device_generation;
                 }
                 auto* raster=renderer.rasterizer_state;
-                if(static_preview && preview_water_raster)renderer.rasterizer_state=preview_water_raster;
+                if(static_preview && preview_water_raster && !preview_depth_exact)renderer.rasterizer_state=preview_water_raster;
                 bool drawn=draw_scene(water_visible,settings,full,glow.linear.target,
                         glow.linear.depth,false,float(scene_scale));
                 renderer.rasterizer_state=raster;

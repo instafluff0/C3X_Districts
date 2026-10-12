@@ -77,6 +77,9 @@ template<class Target> struct StaticRasterState {
     std::array<float,2> translation{};
     std::int64_t depth_origin=0;
     std::uint64_t signature=0,geometry_epoch=0,lighting_revision=0,revision=0;
+    // Revisions taken by invalidate(), which marks the pixels stale without
+    // changing them (a retained overlay layer still matches them).
+    std::uint64_t invalidations=0;
     unsigned shadow_builds=0;
     // Shadow caster changes up to this serial are reflected in the pixels.
     std::uint64_t shadow_serial=0;
@@ -118,7 +121,7 @@ template<class Target> struct StaticRasterStates {
     // Lighting may refine behind a preview. Changed geometry/visibility cannot
     // be combined with current dynamic water, borders and objects.
     void invalidate(unsigned slot,StaticRasterReason reason){
-        auto& state=states[slot];state.stale=true;++state.revision;count(slot,reason);
+        auto& state=states[slot];state.stale=true;++state.revision;++state.invalidations;count(slot,reason);
         if(reason==raster_scene)state.valid=false;
     }
     void invalidate_all(StaticRasterReason reason){for(unsigned i=0;i<slot_count;++i)invalidate(i,reason);}

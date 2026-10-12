@@ -3715,3 +3715,52 @@ No compositing failures.
   frame. Previews resample rasters drawn under another zoom's shadow field.
 - Mines change size slightly between preview frames. Each preview is
   stretched from a raster drawn at a nearby zoom.
+
+## 79. Coal piles flickered through zoom previews (October 11)
+
+**Report.** In the user's recording, resources beside mines (a coal pile on a
+hill) changed look during zooms; the user suspected shadow pops.
+
+**Measured** (busy save, `near`, 10 frames/s, near-black share of a
+fixed-world crop around the coal mine north-west of Nagoya). Settled frames
+read 3.6% (1x) to 6.1% (2x). On every run, 12-14 preview frames read 8-10%:
+the whole pile, including the parts buried in the hill, for one to three
+frames per zoom step.
+
+**Not the cause** (each measured):
+- Shadows. Ground shadows are equal across zooms.
+- Resolution. The 1x Lab and game renders match the 2x render downsampled.
+- Per-frame zoom drawing order.
+- The caster deferral (`C3X_RENDERER_CASTER_DEFER=0`).
+- The resident-world restructure (`C3X_RENDERER_RESIDENT_WORLD=0` showed the
+  same frames, so the behavior predates it).
+- The overlay order of section 78 (`C3X_RENDERER_OVERLAY_CACHE=0`).
+
+**Cause.** The pile counts as near-water, so it lives in the slot's retained
+overlay layer. Every dark frame (14 of 14) was a preview that drew the
+near-water overlays live: either a bootstrap, or a lane slot just marked
+stale. The live path draws them with the preview water's four pixel-depth
+bias toward the camera, which pushes buried rock through the hill. A stale
+slot lost its layer because `invalidate()` bumps the slot revision without
+touching its pixels, and previews required equal revisions.
+
+**Change.**
+- Slots count their invalidations. A preview keeps a slot's layer while every
+  revision since the layer was written was an invalidation
+  (`overlay_matches_pixels`).
+- Previews whose sources all map one-to-one at whole-pixel offsets (a
+  bootstrap at this zoom) have exact depth. They draw the water and overlays
+  without the bias.
+- Test: `test_preview_overlay_staleness.py` (the revision bookkeeping run in
+  C++; fails on the previous pipeline).
+
+**Checked.** Dark preview frames: 0 (previously 12-14 per run). Previews read
+0.9-5.0%, within the settled range, and 1x bootstrap previews match the
+settled 1x frame exactly. Zoom frame rates are unchanged.
+
+**Early refinement** (option 1, `C3X_RENDERER_ZOOM_EARLY=1`, off by
+default). The zoom lane refines toward the destination while the zoom moves,
+with the shadow field fitted to the destination at once. Before the cause
+was found it removed only some dark frames (7 against 12), and it roughly
+halved zoom transition rates in the VM: 9.4-13 fps against 14-50, and
+settling took 310-440 ms instead of 120-290 ms.
