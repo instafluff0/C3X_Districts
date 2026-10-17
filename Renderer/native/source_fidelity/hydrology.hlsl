@@ -3496,15 +3496,18 @@ float4 q3_water_material(PixelInput input) {
   // A mirrored object outweighs the water's own dark body; open sky keeps
   // the old strength.
   float reflection=fresnel*lerp(.272,.9,mirrored_alpha)*land_bank;
-  // Open-sea glare strength, so a river shares the sea's sun path. The calm
-  // surface keeps the glare a smooth sheen; ripple normals only break it up.
+  // A soft sheen on the sea's sun path. The calm surface keeps it smooth;
+  // ripple normals only break it up. The eye is screen-relative, so the
+  // glint zone stays put while the map scrolls: the open sea's wide lobe at
+  // .9 turned every river right of centre pale white with swirls (October
+  // 17). Keep the lobe about 18 degrees wide and the sheen faint.
   float3 glint_normal=normalize(float3(-lean*(.08+.10*rapids),1));
   float facing=max(dot(reflect(-environment_sun_direction,glint_normal),eye),0);
   // The sea's broad twilight sheen is open-ocean only; it would wash a
   // whole river pale at dusk.
-  float glint=smoothstep(.82,.995,facing)*.9;
-  float moon_glint=smoothstep(.82,.995,max(dot(reflect(-environment_moon_direction,glint_normal),eye),0))
-   *smoothstep(.18,.28,environment_moon_intensity)*.65;
+  float glint=smoothstep(.95,.998,facing)*.35;
+  float moon_glint=smoothstep(.95,.998,max(dot(reflect(-environment_moon_direction,glint_normal),eye),0))
+   *smoothstep(.18,.28,environment_moon_intensity)*.25;
   float3 specular=(environment_sun_color*environment_sun_intensity*glint
    +environment_moon_color*environment_moon_intensity*moon_glint)*river_visibility;
   float3 surface=lerp(river*water_light,reflected,reflection)+specular;

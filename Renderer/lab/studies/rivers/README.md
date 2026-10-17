@@ -20,8 +20,13 @@ river shader change, rerun `Renderer/tools/overlay_river_shading.py`
   Tests: `Renderer/native/test_river_depth.py`.
 - **Ocean optics.** The river material uses the in-game sea's response:
   Fresnel-weighted sky, the mirrored scene (lifted by the river's height above
-  the sea plane, faded on raised reaches) and the open-sea sun and moon glare.
-  The glare uses a calm normal so it reads as a smooth sheen.
+  the sea plane, faded on raised reaches) and a soft sun and moon sheen.
+  The sheen uses a calm normal so it stays smooth. Its view ray comes from the
+  screen centre, so the sheen stays in a zone fixed to the screen. At the
+  open sea's strength (.9, a lobe about 35 degrees wide), every river right
+  of centre at noon turned pale white with swirls (user report, 2026-10-17).
+  It is now about 18 degrees wide at .35, chosen by the user from Lab sheets.
+  Tests: `Renderer/native/test_river_glare.py`.
 - **Objects and mountains only.** Rivers reflect standing objects (forests,
   jungles, units, buildings) and mountains, never other ground: land just above
   the sea plane mirrored onto the rivers beside it. Mirror passes draw ground
