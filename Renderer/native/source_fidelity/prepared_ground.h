@@ -181,8 +181,14 @@ std::unique_ptr<PreparedGround> prepare_ground(GroundCompileInput const& ground_
         float bottom=center_depth(x0,y0+1)*(1.0f-tx)+center_depth(x0+1,y0+1)*tx;
         return top*(1.0f-ty)+bottom*ty;
     };
+    // Unexplored neighbours (ViewerTopology unexplored_bit) get a flat rim
+    // for the native fog blend. Observed: revealing one recompiles this tile.
+    auto rim_input=ground_compile_input;
+    int column=(tile.tile_x+tile.tile_y)/2,row=(tile.tile_x-tile.tile_y)/2;
+    for(int dr=-1;dr<=1;++dr)for(int dc=-1;dc<=1;++dc)
+        if((dc || dr) && ground_queries.tile(column+dc,row+dr).unexplored)rim_input.rim|=1u<<((dr+1)*3+dc+1);
     c3x_renderer::fidelity::GroundSurfaces ground_surfaces;
-    c3x_renderer::fidelity::compile_ground_surfaces(ground_compile_input, frame, ground_query_scratch.rivers, ground_river_nodes,
+    c3x_renderer::fidelity::compile_ground_surfaces(rim_input, frame, ground_query_scratch.rivers, ground_river_nodes,
         ground_grid_lease.get(), result->grid_hits,
         ground_relief_at_world, ground_pickup_height_at, ground_pickup_ground_at, ground_river_distance, ground_material_weights_for,
         ground_signed_shore_distance, ground_water_family_depth, periodic_surface_uv, ground_shore_sample_at,

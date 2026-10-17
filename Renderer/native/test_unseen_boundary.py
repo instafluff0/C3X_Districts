@@ -1,54 +1,61 @@
-"""Unexplored map edges must hide cut terrain instead of exposing a fringe."""
+"""Fog boundaries blend across tile edges like native Civ III.
+
+The user's reference (October 17): unexplored black and fog of war blend
+across the tile edge, half at the edge and complete a fifth (unexplored) or
+a quarter (fog of war) of a tile into either tile, straight along edges and
+rounded at corners. Unexplored tiles used to stay opaque with the whole fade
+on the explored side, because nothing was drawn under them; explored tiles
+now extend flat ground into that rim (test_unexplored_apron).
+"""
 import unittest
 from Renderer.native.native_cpp_test import run_cpp
 
+
 class UnseenBoundaryTests(unittest.TestCase):
-    def test_unseen_is_opaque_and_explored_edge_fades_inward(self):
+    def test_native_blend_across_the_edge(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/visibility_coverage.h"
 #include <cassert>
 #include <cmath>
+#include <initializer_list>
 using Coverage=c3x_renderer::render_core::VisibilityCoverage;
+// Cells index (v+1)*3+(u+1): 3 is the u-1 side, 1 the v-1 side, 0 their diagonal.
+// Cells not listed are unexplored.
+unsigned cells(unsigned center,std::initializer_list<int> others,unsigned other){
+ unsigned c=center<<8;for(int i:others)c|=other<<(2*i);return c;
+}
+bool near(float a,float b){return std::fabs(a-b)<1e-5f;}
 int main(){
- // Every neighbor combination, including diagonal corners: an unknown
- // center cannot reveal underlay, cliff skirts or protruding terrain triangles.
- for(unsigned pattern=0;pattern<6561;++pattern){
-  unsigned cells=0,n=pattern;
-  for(unsigned i=0;i<9;++i)if(i!=4){cells|=(n%3)<<(i*2);n/=3;}
-  for(float u:{0.f,.01f,.09f,.5f,.91f,.99f,1.f})
-   for(float v:{0.f,.01f,.09f,.5f,.91f,.99f,1.f})
-    assert(Coverage::coverage(cells,u,v,1)==0.f);
-  // Every shared edge beside an unseen neighbor is black along its entire
-  // length, even when the diagonal beyond that neighbor is explored.
-  cells|=2u<<8;
-  for(int edge=0;edge<4;++edge){
-   int neighbor[]={3,5,1,7};
-   if((cells>>(neighbor[edge]*2))&3u)continue;
-   for(float t:{0.f,.01f,.09f,.5f,.91f,.99f,1.f}){
-    float u=edge<2?float(edge):t,v=edge<2?t:float(edge-2);
-    assert(Coverage::coverage(cells,u,v,1)==0.f);
-   }
-  }
+ float const s=Coverage::shroud;assert(near(s,.2f) && near(Coverage::feather,.25f));
+ // Deep inside an unexplored region: black everywhere.
+ unsigned dark=cells(0,{0,1,2,3,5,6,7,8},0);
+ for(float u:{0.f,.1f,.5f,.9f,.999f})for(float v:{0.f,.1f,.5f,.9f,.999f})assert(Coverage::coverage(dark,u,v,1)==0);
+ // A straight boundary: the u-1 column unexplored, the rest explored.
+ unsigned explored_side=cells(1,{1,2,5,7,8},1);
+ float prior=-1;
+ for(int k=0;k<=40;++k){float u=k/100.f;
+  float c=Coverage::coverage(explored_side,u,.5f,1);
+  for(float v:{.3f,.5f,.7f})assert(near(Coverage::coverage(explored_side,u,v,1),c)); // straight
+  assert(c>=prior);prior=c;
  }
- unsigned known=0;for(unsigned i=0;i<9;++i)known|=2u<<(i*2);
- for(int edge=0;edge<4;++edge){
-  unsigned cells=known;int neighbor[]={3,5,1,7};cells&=~(3u<<(neighbor[edge]*2));
-  float prior=-1;
-  for(int step=0;step<=100;++step){
-   float d=Coverage::feather*step/100.f,u=.5f,v=.5f;
-   if(edge==0)u=d;else if(edge==1)u=1-d;else if(edge==2)v=d;else v=1-d;
-   float value=Coverage::coverage(cells,u,v,1);
-   assert(value>=prior-1e-6f&&value>=0&&value<=1);
-   if(!step)assert(value==0);if(step==100)assert(value==1);prior=value;
-  }
- }
- // Explored fog still blends between known tiles; fully explored interiors
- // retain their complete terrain footprint, independent of visible state.
- unsigned explored=0;for(unsigned i=0;i<9;++i)explored|=1u<<(i*2);
- for(float u:{0.f,.1f,.5f,.9f,1.f})for(float v:{0.f,.1f,.5f,.9f,1.f})
-  assert(Coverage::coverage(explored,u,v,1)==1.f);
- assert(Coverage::coverage(known&~(3u<<6),0,.5f,2)==.5f);
+ assert(near(Coverage::coverage(explored_side,0,.5f,1),.5f) && near(Coverage::coverage(explored_side,s,.5f,1),1));
+ // The unexplored tile across that edge mirrors it: half at the edge, black
+ // a fifth of a tile in. Its rim shows the ground explored tiles extend.
+ unsigned mirrored=cells(0,{5,8,2},1);
+ assert(near(Coverage::coverage(mirrored,.999999f,.5f,1),.5f) && Coverage::coverage(mirrored,1-s,.5f,1)<1e-6f);
+ assert(near(Coverage::coverage(mirrored,1-s/2,.5f,1),1-Coverage::coverage(explored_side,s/2,.5f,1)));
+ // Corners are rounded: explored with three unexplored neighbours around a
+ // corner is a quarter covered there, not a half like the straight edge.
+ unsigned concave=cells(1,{2,5,6,7,8},1); // diagonal and both sides unexplored
+ assert(near(Coverage::coverage(concave,0,0,1),.25f) && near(Coverage::coverage(concave,0,.5f,1),.5f));
+ unsigned convex=cells(1,{1,2,3,5,6,7,8},1); // only the diagonal unexplored
+ assert(near(Coverage::coverage(convex,0,0,1),.75f) && Coverage::coverage(convex,0,.5f,1)==1);
+ // Fog of war blends the same way over a quarter tile.
+ unsigned fogged=cells(1,{3,0,6},2),visible=cells(2,{5,2,8},1);
+ assert(near(Coverage::coverage(fogged,0,.5f,2),.5f) && near(Coverage::coverage(visible,.999999f,.5f,2),.5f));
+ assert(Coverage::coverage(fogged,.25f,.5f,2)<1e-6f && Coverage::coverage(visible,.75f,.5f,2)>1-1e-6f);
 }
 ''')
+
 
 if __name__=='__main__':unittest.main()

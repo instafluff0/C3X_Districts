@@ -3810,3 +3810,77 @@ Composition peaked at 287 MB, above the old cap. The user's session had
 **Unrelated, found while testing.** `test_native_visual_cadence` no longer
 compiles. Its stub lacks `frame_ends_before_adoption` and other symbols that
 `c3x_renderer.cpp` now has; it is a stale test, not a renderer failure.
+
+## 81. Terrain keeps its shape at the fog; the fog fades like Civ III's (October 17)
+
+**Report.** Hills and mountains changed shape as tiles were explored. Ground
+next to unexplored tiles dropped away, and rose again once those tiles were
+revealed.
+
+**Cause.** `ViewerTopology` gave unexplored tiles a flat category and
+`hidden_bit`, and `hidden_taper` sloped revealed ground to the 2.5 datum
+within a quarter tile of them (review 2026-10-04, "gray band"). Revealing a
+tile removed the taper, so its explored neighbours reshaped.
+
+**Change: real relief** (the default; the user chose real heights).
+- Unexplored tiles keep their real category, rivers and snow, and lose only
+  their effect and eruption bits.
+- They carry `unexplored_bit` (bit 28) instead of `hidden_bit`, so there is
+  no taper. `Tile::unexplored` exposes the bit.
+- `C3X_RENDERER_HIDDEN_RELIEF_CONTROL=1` restores the flat mask and taper.
+
+**Consequence and fix.** The old gray band came back: raised front edges
+(screen-down, x=column+1 and y=row) facing an unexplored tile stood above that
+tile's flat fog diamond. Nothing is drawn there, so the flat underlay showed
+inside the fade, as a dull band with a hard top edge.
+- `terrain_mesh_body.h` now continues the surface down from the edge's own
+  vertices, with their materials, to the datum a quarter tile into the
+  unexplored tile.
+- Revealing the tile recompiles its neighbour without the extension.
+
+**Lesson.** Renderer64 compiles its shaders from
+`packs/Renderer64ResidentRuntime`, not from the checkout. A first attempt,
+a black apron selected by a new `terrain.hlsl` branch, was clipped in game as
+zero coast coverage. The ground continuation needs no shader change. Any
+shader edit needs a pack overlay tool (`tools/overlay_*_shading.py`).
+
+**Fog look: native Civ III.** From the user's reference, measured against
+its tile grid:
+- Unexplored black and fog of war blend across the tile edge: half at the
+  edge, complete a fifth (unexplored, `shroud`) or a quarter (fog of war,
+  `feather`) of a tile into either tile.
+- Edges are straight along tiles and rounded at corners: the bilinear blend
+  the fog of war already used.
+- So native shows a sliver of an unexplored tile's own ground at its rim.
+
+Previously unexplored tiles stayed opaque and the whole fade lay on the
+explored side, because nothing is drawn under them. Explored tiles now add
+flat ground at the datum a quarter tile into every unexplored edge and corner
+neighbour, with no relief, trees or features:
+- natural terrain (`terrain_mesh_body.h`), with that rim's own materials;
+- underlay, bed, water and river (`compile_ground_surfaces`; `prepare_ground`
+  sets `GroundCompileInput::rim` from observed neighbours, so a reveal
+  recompiles the tile).
+
+CPU and GPU coverage match (oracle, max error 1).
+
+**Rejected.**
+- Hard per-tile states. The user asked for them while the band was taken for
+  fog, then asked for native fades.
+- A map-anchored wobble, and an explored-side distance fade. Native edges
+  are straight and centred on the tile edge.
+
+**Tests.**
+- `test_viewer_topology`: real relief.
+- `test_unexplored_apron`: rims in both compilers and the front-edge
+  continuation; fails without them.
+- `test_unseen_boundary`: the native blend.
+
+**Checked.** Reveal-scroll on the new-game save, same camera before and
+after: the band in the notch is gone. Unit shadows are unchanged: the
+darkest shadow pixels are 0.71 and 0.69 of the ground in both runs. The grid
+seen in one run had been switched on during that run.
+
+**Unrelated, found while testing.** Two tests no longer compile, with or
+without this change: `test_visibility`'s fresh-map test (missing resident-world
+symbols since 934de059) and `test_fresh_preparation_cancellation`.

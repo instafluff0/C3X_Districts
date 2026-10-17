@@ -3236,6 +3236,9 @@ public:
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         compact_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_COMPACT_VERTEX_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         quantized_vertices=!(GetEnvironmentVariableA("C3X_RENDERER_QUANTIZE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        // Unexplored neighbours shape revealed ground with their real relief
+        // (ViewerTopology); =1 restores the flat mask and the datum taper.
+        viewer_topology.real_relief=!(GetEnvironmentVariableA("C3X_RENDERER_HIDDEN_RELIEF_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         // The resident world drives the draw by default (camera decoupling
         // stage 6, review 74); C3X_RENDERER_RESIDENT_WORLD=0 keeps the window.
         resident_world_control=!(GetEnvironmentVariableA("C3X_RENDERER_RESIDENT_WORLD",control,sizeof(control)) && std::strcmp(control,"0")==0);

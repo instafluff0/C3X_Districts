@@ -101,6 +101,7 @@ int main(){
 #include "Renderer/native/render_core/foreground_selection.h"
 #include "Renderer/native/render_core/visibility_coverage.h"
 #include <cassert>
+#include <cmath>
 #include <cstring>
 using namespace c3x_renderer::render_core;
 int main(){
@@ -125,9 +126,10 @@ int main(){
  auto unknown=std::find_if(after.tiles.begin(),after.tiles.end(),[](auto tile){return tile.x==0&&tile.y==0;});
  assert(unknown!=after.tiles.end());
  assert(VisibilityCoverage::coverage(unknown->cells,.5f,.5f,1)==0); // Opaque unknown center.
- // a67f1431: unseen tiles stay opaque and the feather moves to the explored side.
+ // Native blend (October 17): half at an edge shared with a known tile.
  assert(((unknown->cells>>2)&3u)==2); // The wrapped visible neighbor is still recorded.
- assert(VisibilityCoverage::coverage(unknown->cells,.5f,.001f,1)==0);
+ assert(std::fabs(VisibilityCoverage::coverage(unknown->cells,.5f,.0001f,1)-.5f)<.01f);
+ assert(VisibilityCoverage::coverage(unknown->cells,.5f,.5f,1)==0);
  auto seen=std::find_if(after.tiles.begin(),after.tiles.end(),[](auto tile){return tile.x==64&&tile.y==-32;});
  assert(seen!=after.tiles.end()&&((seen->cells>>14)&3u)==0); // Wrapped unknown neighbor.
  float feather=VisibilityCoverage::coverage(seen->cells,.5f,.999f,1);

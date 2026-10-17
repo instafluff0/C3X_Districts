@@ -1,4 +1,13 @@
-"""Unexplored land must not shape revealed neighbours (ViewerTopology)."""
+"""Unexplored land and revealed neighbours (ViewerTopology).
+
+Real relief (default; the user, October 17): revealed ground takes its final
+shape at once. Hidden land keeps its real category and rivers and loses only
+its effect and eruption bits; it carries unexplored_bit, not hidden_bit, so
+there is no datum taper, only a black apron below raised edges facing it.
+Previously edges dropped toward hidden hills and mountains and reshaped when
+those were explored.
+The flat mask (C3X_RENDERER_HIDDEN_RELIEF_CONTROL=1) is kept as a control.
+"""
 import unittest
 
 from Renderer.native.native_cpp_test import run_cpp
@@ -29,7 +38,7 @@ int main(){
     raw[at(4,4)]=tile(12,12);       // sea
     raw[at(5,5)]=tile(0,4);         // flood plain
     std::vector<std::tuple<int,int,unsigned>> inputs;
-    ViewerTopology viewer;bool changed=false;
+    ViewerTopology viewer;viewer.real_relief=false;bool changed=false;  // the flat mask (control)
     auto update=[&](std::uint64_t sequence,std::int64_t revision=3){
         return viewer.update(raw.data(),count,width,height,revision,sequence,[&](auto mark){
             for(auto const& input:inputs)mark(std::get<0>(input),std::get<1>(input),std::get<2>(input));},&changed);};
@@ -77,6 +86,54 @@ int main(){
     std::printf("PASS viewer topology: hidden_relief=1 hidden_flag=1 datum_taper=1 water_kept=1 rivers_kept=1 distinct_revisions=1 lease_failure=1\n");
 }
 ''')
+
+
+    def test_real_relief_shapes_revealed_ground_once(self):
+        run_cpp(r"""
+#include "Renderer/native/render_core/viewer_topology.h"
+#include "Renderer/native/render_core/world_coast.h"
+#include <cassert>
+#include <cstdio>
+#include <tuple>
+#include <vector>
+using namespace c3x_renderer::render_core;
+constexpr unsigned known=C3X_RENDERER_TILE_VISIBILITY_KNOWN,explored=C3X_RENDERER_TILE_EXPLORED;
+std::uint32_t tile(unsigned biome,unsigned category,unsigned river=0,bool effect=false,bool snow=false,bool erupting=false){
+    return biome|(category<<8)|(river<<16)|(effect?1u<<24:0u)|(snow?1u<<26:0u)|(erupting?1u<<27:0u);}
+int main(){
+    int const width=8,height=8;std::size_t const count=width*height/2;
+    std::vector<std::uint32_t> raw(count,tile(2,2));
+    auto at=[&](int x,int y){return (std::size_t(y)*width+x)/2;};
+    raw[at(2,2)]=tile(1,5,7);                  // hills on plains with a river
+    raw[at(3,3)]=tile(2,6,0,false,true);       // snow-capped mountains
+    raw[at(5,5)]=tile(2,8,0,true,false,true);  // an erupting volcano
+    std::vector<std::tuple<int,int,unsigned>> inputs={{1,1,known|explored},{2,2,known},{3,3,known},{5,5,known}};
+    ViewerTopology viewer;bool changed=false;assert(viewer.real_relief);
+    auto update=[&](std::uint64_t sequence){
+        return viewer.update(raw.data(),count,width,height,3,sequence,[&](auto mark){
+            for(auto const& input:inputs)mark(std::get<0>(input),std::get<1>(input),std::get<2>(input));},&changed);};
+    auto values=update(1);
+    // Hidden hills and mountains keep their category, river and snow: the
+    // revealed tiles around them are shaped by the real relief.
+    auto unexplored=ViewerTopology::unexplored_bit;
+    assert(values[at(2,2)]==(raw[at(2,2)]|unexplored)&&values[at(3,3)]==(raw[at(3,3)]|unexplored));
+    // A hidden volcano keeps its cone but cannot erupt, smoke or light.
+    assert(values[at(5,5)]==(tile(2,8)|unexplored));
+    // No hidden_bit anywhere: no datum taper at the fog.
+    for(std::size_t i=0;i<count;++i)assert(!ViewerTopology::hidden(values[i]));
+    WorldCoast coast;coast.update({width,height,false,false},values,count,viewer.revision);
+    auto hills=coast.world().tile((2+2)/2,(2-2)/2);
+    assert(hills.present&&hills.real==5&&!hills.hidden&&hills.unexplored);
+    assert(!coast.world().tile((1+1)/2,(1-1)/2).unexplored);
+    // Revealing the hills clears only their unexplored bit.
+    std::vector<std::uint32_t> copy(values,values+count);
+    inputs[1]={2,2,known|explored};values=update(2);assert(changed);
+    for(std::size_t i=0;i<count;++i)assert(values[i]==(i==at(2,2)?raw[i]:copy[i]));
+    // Revealing the volcano restores its effects (a real change).
+    inputs[3]={5,5,known|explored};values=update(3);assert(values[at(5,5)]==raw[at(5,5)]&&changed);
+    std::printf("PASS real relief: categories_kept=1 effects_hidden=1 no_taper=1 reveal_clears_unexplored=1\\n");
+}
+""")
 
 
 if __name__ == '__main__':

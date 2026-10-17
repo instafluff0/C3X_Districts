@@ -40,7 +40,13 @@ struct VisibilityCoverage {
         return std::make_pair(canonical(x,world_width,wrap_x),canonical(y,world_height,wrap_y));
     }
     unsigned state(std::int64_t x,std::int64_t y)const{auto found=states.find(key(x,y));return found==states.end()?0:found->second;}
-    static constexpr float feather=.18f,gray=.18f,fog_alpha=.5f;
+    // Native Civ III blends every state boundary across the tile edge: half
+    // at the edge, complete `shroud` (unexplored) or `feather` (fog of war)
+    // into either tile, straight along edges and rounded at corners (the
+    // user's reference, October 17). Explored tiles extend flat ground into
+    // the rim of unexplored neighbours (terrain_mesh_body.h,
+    // ground_compiler.h), which the unexplored side of the blend shows.
+    static constexpr float feather=.25f,shroud=.20f,gray=.18f,fog_alpha=.5f;
     bool capture(c3x_renderer_frame_v1 const& frame,std::uint64_t scope=0,std::uint64_t visibility=0,
                  std::uint64_t content=0,std::uint64_t device=0){
         fact_checks=map_records=neighbor_lookups=0;
@@ -117,21 +123,14 @@ struct VisibilityCoverage {
         return true;
         }catch(...){reject();throw;}
     }
-    static float edge(float coordinate){
-        float d=std::min(coordinate,1-coordinate),t=std::clamp(d/feather,0.f,1.f);
+    static float edge(float coordinate,float width=feather){
+        float d=std::min(coordinate,1-coordinate),t=std::clamp(d/width,0.f,1.f);
         return .5f*(1-t*t*(3-2*t));
     }
     static float coverage(unsigned cells,float u,float v,unsigned threshold){
         int x=u<.5f?-1:1,y=v<.5f?-1:1;
         auto value=[&](int dx,int dy){return float(((cells>>(2*((dy+1)*3+dx+1)))&3u)>=threshold);};
-        float wx=edge(u),wy=edge(v);
-        // Unseen cells are opaque. Feather on the explored side, where terrain
-        // exists, and never expose a clipped mesh/underlay in an unseen neighbor.
-        if(threshold==1){
-            if(!value(0,0))return 0;
-            wx*=2;wy*=2;
-            return std::min({1-wx*(1-value(x,0)),1-wy*(1-value(0,y)),1-wx*wy*(1-value(x,y))});
-        }
+        float width=threshold==1?shroud:feather,wx=edge(u,width),wy=edge(v,width);
         return (value(0,0)*(1-wx)+value(x,0)*wx)*(1-wy)+(value(0,y)*(1-wx)+value(x,y)*wx)*wy;
     }
     // Explicit CPU-output compatibility. Never darken retained source pixels.
