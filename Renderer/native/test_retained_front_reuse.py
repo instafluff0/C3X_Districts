@@ -101,7 +101,7 @@ struct Owner {
  std::vector<std::uint64_t> drawn_dependencies,pending_drawn_dependencies;
  Texture assembled_front;Storage::Lease front_owned,front_physical;unsigned assembled_width=0,assembled_height=0;Format assembled_format=Format::bgra32;
  std::uint64_t assembled_revision=0;std::vector<FrontPatch> assembled_patches;
- static constexpr std::uint64_t resident_budget=256u*1024u*1024u;
+ std::uint64_t resident_budget()const{return 256u*1024u*1024u;}
  Storage owned_storage,storage;Replay replay;Context gpu;Context* context=&gpu;
  std::uint64_t resident_bytes()const{return used;}
  static bool empty(Rect r){return r.left>=r.right||r.top>=r.bottom;}
@@ -153,7 +153,7 @@ int main(){
  right->output[1].Reset();assert(!o.assemble_front(image,damage));right->output[1]=right->output[0];assert(o.assemble_front(image,damage));
  o.front.patches[0].node->output[0]=o.assembled_front;assert(!o.assemble_front(image,damage)&&!o.assembled_front);
  o.front.patches[0].node->output[0]=Texture(std::make_shared<Tex>(2,4));
- o.used=Owner::resident_budget-63;assert(!o.assemble_front(image,damage)&&!o.assembled_front);o.used=0;
+ o.used=o.resident_budget()-63;assert(!o.assemble_front(image,damage)&&!o.assembled_front);o.used=0;
  o.replay.refuse=true;assert(!o.assemble_front(image,damage)&&!o.assembled_front);o.replay.refuse=false;assert(o.assemble_front(image,damage));
  // Existing optional storage is released on source-handle admission failure.
  o.replay.refuse=true;assert(!o.assemble_front(image,damage)&&!o.assembled_front&&o.assembled_patches.empty());

@@ -38,6 +38,11 @@ public:
     bool contains(ID3D11Texture2D* texture)const{auto found=state->entries.find(texture);
         return found!=state->entries.end()&&!found->second.expired();}
     std::uint64_t bytes()const{return state->current;}
+    // Diagnostics: live entries by size (at least 8 MiB, at least 1 MiB, smaller).
+    void histogram(std::uint64_t (&count)[3],std::uint64_t (&total)[3])const{
+        for(auto const& entry:state->entries)if(auto lease=entry.second.lock()){
+            unsigned bucket=lease->bytes>=(8ull<<20)?0u:lease->bytes>=(1ull<<20)?1u:2u;++count[bucket];total[bucket]+=lease->bytes;}
+    }
     std::uint64_t peak()const{return state->peak;}
     std::uint64_t allocations()const{return state->allocations;}
 };

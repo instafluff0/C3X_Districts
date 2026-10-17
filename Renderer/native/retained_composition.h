@@ -221,7 +221,18 @@ private:
     }
     // Match the bounded live native family, including saved packed/full-color
     // versions and old/new immutable map overlap at fullscreen.
-    constexpr static std::uint64_t resident_budget=256u*1024u*1024u;
+    // The budget scales with the window: opening a full-screen native window
+    // (city view, diplomacy) needs about 25 window-sized textures resident at
+    // once (native uploads, pinned layers, fused sources, retired pixels, HUD
+    // pair, replay scratch). At 2240x1192 each is 10.7 MB, and a fixed 256 MiB
+    // refused the new window's capture: its updates never reached the screen
+    // while clicks still worked (the user, October 17; review 80).
+    constexpr static std::uint64_t base_resident_budget=256u*1024u*1024u,window_layers=40;
+    mutable std::uint64_t window_bytes=0;
+    std::uint64_t resident_budget()const{
+        window_bytes=std::max(window_bytes,std::uint64_t(front.width)*front.height*4);
+        return std::max(base_resident_budget,window_layers*window_bytes);
+    }
     Rect intersect(Rect a,Rect b)const{return {std::max(a.left,b.left),std::max(a.top,b.top),std::min(a.right,b.right),std::min(a.bottom,b.bottom)};}
     bool empty(Rect r)const{return r.left>=r.right||r.top>=r.bottom;}
     Rect extent(Picture const& p)const{return {0,0,int(p.width),int(p.height)};}
@@ -239,11 +250,11 @@ private:
     std::uint64_t resident_bytes()const{return owned_storage.bytes()+direct_bytes+replay.spatial_bytes();}
     void release_front(){assembled_patches.clear();assembled_front.Reset();front_owned={};front_physical={};assembled_width=assembled_height=0;assembled_revision=0;}
     void reserve(std::uint64_t bytes,char const* site,BatchPreparation* cache=nullptr){
-        if(bytes>resident_budget)throw std::runtime_error("retained composition texture budget");
-        if(bytes<=resident_budget-resident_bytes())return;
+        if(bytes>resident_budget())throw std::runtime_error("retained composition texture budget");
+        if(bytes<=resident_budget()-resident_bytes())return;
         // Optional front reuse cannot displace an authoritative native output.
         release_front();
-        if(bytes<=resident_budget-resident_bytes())return;
+        if(bytes<=resident_budget()-resident_bytes())return;
         if(cache){
             // A shared HUD atlas is optional; immutable output pairs are not.
             // Keep its recipe and source pictures so bind_batch can rebuild it
@@ -253,7 +264,7 @@ private:
             for(auto& view:cache->batch_views)view.texture.Reset();
             for(auto& source:cache->batch_sources){source.texture.Reset();source.owned={};source.physical={};}
         }
-        if(bytes<=resident_budget-resident_bytes())return;
+        if(bytes<=resident_budget()-resident_bytes())return;
         // Inactive native forms and save/restore canvases can keep complete
         // recipes after their last presentation. Their derived textures are
         // caches; immutable uploads, retired pixels and sampled scenes are not.
@@ -271,11 +282,22 @@ private:
             for(unsigned i=0;i<2;++i){n->output_view[i].Reset();n->output[i].Reset();
                 n->owned_storage[i]={};n->storage[i]={};n->bytes[i]=0;n->borrowed_output[i]=false;}
             n->seen=0;
-            if(bytes<=resident_budget-resident_bytes())return;
+            if(bytes<=resident_budget()-resident_bytes())return;
         }
-        char line[384];std::snprintf(line,sizeof(line),
-            "[C3X renderer] stage=retained-admission-rejected site=%s requested=%llu resident=%llu cap=%llu physical=%llu peak=%llu recipe_eligible=%llu recipe_probed=%llu recipe_reused=%llu\n",
-            site,bytes,resident_bytes(),resident_budget,storage.bytes(),storage.peak(),recipe_counts.eligible,recipe_counts.probed,recipe_counts.reused);OutputDebugStringA(line);
+        // What holds the budget: owned textures by size, direct inputs, replay,
+        // and which reachable owners keep the large (window-sized) ones.
+        std::uint64_t count[3]={},total[3]={};owned_storage.histogram(count,total);
+        unsigned large_fused=0,large_retired=0,large_pinned=0,large_upload=0,large_kept=0;
+        for(auto const& r:fused_sources)if(r.texture&&std::uint64_t(r.width)*r.height*4>=(8ull<<20))++large_fused;
+        for(auto* n:visited)for(unsigned i=0;i<2;++i)if(n->bytes[i]>=(8ull<<20)){
+            if(n->retired)++large_retired;else if(n->pins)++large_pinned;else if(!n->operation)++large_upload;else ++large_kept;}
+        char line[640];std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=retained-admission-rejected site=%s requested=%llu resident=%llu cap=%llu physical=%llu peak=%llu recipe_eligible=%llu recipe_probed=%llu recipe_reused=%llu "
+            "owned_large=%llu/%llu owned_mid=%llu/%llu owned_small=%llu/%llu direct=%llu spatial=%llu nodes=%zu images=%zu "
+            "large_fused=%u large_retired=%u large_pinned=%u large_upload=%u large_kept=%u reachable=%zu\n",
+            site,bytes,resident_bytes(),resident_budget(),storage.bytes(),storage.peak(),recipe_counts.eligible,recipe_counts.probed,recipe_counts.reused,
+            count[0],total[0],count[1],total[1],count[2],total[2],direct_bytes,replay.spatial_bytes(),nodes,images.size(),
+            large_fused,large_retired,large_pinned,large_upload,large_kept,visited.size());OutputDebugStringA(line);
         throw std::runtime_error("retained composition texture budget");
     }
     void output(Node& n,unsigned index,Texture texture){
@@ -533,7 +555,7 @@ private:
             for(auto const& patch:source.picture.patches)source.pending.push_back(patch.node->revision);
             revisions_changed|=source.pending!=source.revisions;
         }
-        auto available=resident_bytes()<resident_budget?resident_budget-resident_bytes():0;
+        auto available=resident_bytes()<resident_budget()?resident_budget()-resident_bytes():0;
         if(b.binding_refused&&!revisions_changed&&available==b.binding_allowance){b.batch_bound=false;return false;}
         if(revisions_changed){
             // Generation changes retire copied atlas inputs before recycling
@@ -548,14 +570,14 @@ private:
         std::uint64_t needed=0;
         for(auto const& source:b.batch_sources)if(!source.texture&&!directly_bindable(source.picture))
             needed+=std::uint64_t(source.picture.width)*source.picture.height*4;
-        available=resident_bytes()<resident_budget?resident_budget-resident_bytes():0;
+        available=resident_bytes()<resident_budget()?resident_budget()-resident_bytes():0;
         if(needed>available){
             // Binding is optional. Roll it back as a unit and use the existing
             // transient interpreter rather than rejecting the native front.
             b.spatial_plan={};b.spatial_ready=b.spatial_attempted=b.batch_bound=false;
             for(auto& view:b.batch_views)view.texture.Reset();
             for(auto& source:b.batch_sources){source.texture.Reset();source.owned={};source.physical={};source.revisions.swap(source.pending);}
-            b.binding_refused=true;b.binding_allowance=resident_bytes()<resident_budget?resident_budget-resident_bytes():0;return false;
+            b.binding_refused=true;b.binding_allowance=resident_bytes()<resident_budget()?resident_budget()-resident_bytes():0;return false;
         }
         b.binding_refused=false;
         for(unsigned index=0;index<b.batch_sources.size();++index){auto& source=b.batch_sources[index];
@@ -569,7 +591,7 @@ private:
             replay.destroy(image);b.batch_views[index].texture=source.texture;
             source.revisions.swap(source.pending);++plan_counts.source_binds;changed=true;
         }
-        auto resident=resident_bytes();auto allowance=resident<resident_budget?resident_budget-resident:0;
+        auto resident=resident_bytes();auto allowance=resident<resident_budget()?resident_budget()-resident:0;
         // Failed admission is an exact plan state too. Retry when its command
         // placement, immutable operands or real available budget changes.
         if(!b.spatial_ready&&allowance!=b.spatial_allowance)changed=true;
@@ -1274,7 +1296,7 @@ private:
         if(covered!=pixels){release_front();return false;} // sparse canvases keep cleared scratch
         if(!assembled_front||assembled_width!=front.width||assembled_height!=front.height||assembled_format!=front.format){
             release_front();auto used=resident_bytes();
-            if(used>resident_budget||pixels*4>resident_budget-used)return false;
+            if(used>resident_budget()||pixels*4>resident_budget()-used)return false;
             auto id=replay.create(front.width,front.height,Format::bgra32,false);if(!id)return false;
             auto target=replay.release_import_target(id);if(!target.texture)return false;
             assembled_front=std::move(target.texture);front_owned=owned_storage.retain(assembled_front.Get());front_physical=storage.retain(assembled_front.Get());
@@ -1324,6 +1346,7 @@ public:
     // This switch changes execution only, never captured native semantics.
     void set_compiled_enabled(bool value){compiled_enabled=value;if(!value)release_front();invalidate_plan();}
     std::uint64_t bytes()const{return resident_bytes();}
+    std::uint64_t budget()const{return resident_budget();}
     std::uint64_t allocation_bytes()const{return storage.bytes()+direct_bytes;}
     std::uint64_t allocation_peak()const{return storage.peak();}
     void share_storage(CompositionStorage const& tracker){storage=tracker;replay.share_storage(tracker);}
@@ -1634,7 +1657,7 @@ public:
         if(!r.texture||r.width!=p.width||r.height!=p.height||r.format!=p.format){
             // Native words and full color both live in R32_UINT, as owned outputs do.
             r={};auto used=resident_bytes(),bytes=std::uint64_t(p.width)*p.height*4;
-            if(used>resident_budget||bytes>resident_budget-used){note_executed("retained-budget",full);return assemble(p,ticks,frequency,depth,{},true);}
+            if(used>resident_budget()||bytes>resident_budget()-used){note_executed("retained-budget",full);return assemble(p,ticks,frequency,depth,{},true);}
             D3D11_TEXTURE2D_DESC desc={};desc.Width=p.width;desc.Height=p.height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
             desc.Format=DXGI_FORMAT_R32_UINT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
             if(FAILED(device->CreateTexture2D(&desc,nullptr,&r.texture))){r={};return assemble(p,ticks,frequency,depth,{},true);}

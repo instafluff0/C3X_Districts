@@ -35,7 +35,7 @@ int main(){try{
  retained.commit(screen,full);
  for(unsigned tick=1;tick<=3;++tick){
   assert(retained_read(device.Get(),context.Get(),retained.sample(tick,1000).Get())==expected);
-  assert(retained.bytes()<=256u*1024u*1024u);
+  assert(retained.bytes()<=retained.budget());
  }
  std::printf("PASS 32 fullscreen intermediates, three exact bounded frames\n");
  }catch(std::exception const& e){std::printf("FAIL %s\n",e.what());return 1;}
@@ -64,7 +64,7 @@ int main(){try{
  // City uploads arrive between visual samples. Last frame's evaluated
  // operation results are reclaimable, while these immutable uploads are not.
  for(Id id=200;id<220;++id){retained.create(id,w,h,Format::rgb555);retained.source(id,live.texture(source));}
- assert(retained.ready()&&retained.bytes()<=256u*1024u*1024u);
+ assert(retained.ready()&&retained.bytes()<=retained.budget());
  for(Id id=200;id<220;++id)retained.destroy(id);
  assert(retained_read(device.Get(),context.Get(),retained.sample(2,1000).Get())==expected);
  std::printf("PASS uploads between frames reclaim results and restore exact pixels\n");
@@ -91,7 +91,7 @@ int main(){try{
  auto check=[&](unsigned index){
   retained.commit(forms[index],full);auto image=retained_read(device.Get(),context.Get(),retained.sample(++tick,1000).Get());
   for(unsigned n=0;n<image.size();++n)assert(image[n]==(n%17==0?0x3e0:colors[index]));
-  assert(retained.bytes()<=256u*1024u*1024u);
+  assert(retained.bytes()<=retained.budget());
  };
  for(unsigned n=0;n<16;++n){
   auto target=Id(100+n);retained.create(target,w,h,Format::rgb555);forms.push_back(target);colors.push_back(0x400+n);

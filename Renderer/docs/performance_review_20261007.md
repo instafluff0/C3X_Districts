@@ -3764,3 +3764,49 @@ with the shadow field fitted to the destination at once. Before the cause
 was found it removed only some dark frames (7 against 12), and it roughly
 halved zoom transition rates in the VM: 9.4-13 fps against 14-50, and
 settling took 310-440 ms instead of 120-290 ms.
+
+## 80. Native windows stopped updating: the composition budget (October 17)
+
+**Report** (the user's `CAPTURE_GAMEPLAY.bat` session, a new game at
+2240x1192).
+- City view: the close button did not highlight on hover, though it still
+  closed when clicked.
+- Diplomacy with Germany: the first attempt to negotiate ignored clicks; the
+  second reached the negotiation screen, where no choice took effect.
+
+**Cause.** The input reached Civ III; the screen stopped showing its UI.
+Each time a full-screen native window opened (bursts at 15, 35, 65, 80, 110
+and 135 s), the retained composition refused the window's capture:
+`retained-admission-rejected site=capture-output requested=10680320`
+(`owned-pair` 21360640 once), at resident 255-267 MB against the fixed
+256 MiB cap. It then logged `visual-failure-memory` and 200-420
+`failed-retained-node` lines. Map hover and click handling stopped during
+those windows, so the map did not take the clicks.
+
+**What holds the budget** (new breakdown in the refusal trace; scripted
+`city` scenario on the new-game save reproduced it with exit 1):
+- 19 window-sized textures, 203 MB: 6 native uploads, 7 pinned by the
+  composition being built, 2 fused sources, 2 retired native pixels, and 2
+  outside the reachable graph (the HUD pair).
+- Replay scratch 45 MB, smaller textures 11 MB.
+
+All of these are in use. At 2240x1192 a window-sized texture is 10.7 MB, so
+256 MiB fits about 24, and a new full-screen window needs a few more. At 4K
+(33 MB each) no fixed cap of this size works.
+
+**Change.** The budget is 40 window-sized textures, never below 256 MiB,
+and never shrinks when the front is reset. That is 427 MB at 2240x1192 and
+332 MB at 1920x1080; smaller windows keep 256 MiB
+(`retained_composition.h`, `resident_budget()`; `budget()` exposes it).
+- Test: `test_retained_budget_scaling.py`, which reproduces the observed
+  267 MB + 21.4 MB request and fails on the previous code.
+- `test_retained_view_lifetime` now bounds by the actual budget.
+
+**Checked.** The same `city` scenario passes: zero refusals, zero failed
+nodes, and the city view displays and updates at both city zooms.
+Composition peaked at 287 MB, above the old cap. The user's session had
+6.9 GB of video budget with 1.9 GB used.
+
+**Unrelated, found while testing.** `test_native_visual_cadence` no longer
+compiles. Its stub lacks `frame_ends_before_adoption` and other symbols that
+`c3x_renderer.cpp` now has; it is a stale test, not a renderer failure.
