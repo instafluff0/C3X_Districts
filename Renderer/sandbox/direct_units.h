@@ -730,6 +730,13 @@ float4 PSShadow(Output i):SV_Target {
         renderer.context->VSSetShaderResources(0,1,&palette);return true;
     }
     using ContributionPlan=c3x_renderer::render_core::UnitContributionPlan;
+    // Screen pixels a body at (x,y) stands above its native point. The selection
+    // ring and the held route (composited after the scene, against the last
+    // scene's basis) share it so both sit on the same ground.
+    float ground_lift(c3x_renderer_frame_v1 const& frame,float x,float y){
+        return unit_low_ground(frame,x,y)*frame.tile_width/224.f*.82f;
+    }
+    c3x_renderer_frame_v1 ground_frame{};c3x_renderer_tile_v1 ground_tile{};
     // Aircraft climb to their pack flight height while flying (moving or
     // attacking) and settle back when parked, eased so they never jump.
     struct Climb{float from=0,to=0;long long started=0,ticks=-1;};
@@ -1084,8 +1091,7 @@ float4 PSShadow(Output i):SV_Target {
                 // Same native center and sampled travel as the body below.
                 int x=draw.body_x+int(std::int64_t(draw.sprite_width)*projection/2000);
                 int y=draw.body_y+int(std::int64_t(draw.sprite_height)*projection/2000);
-                float low=unit_low_ground(frame,float(x),float(y));
-                cursors.ring(float(x+4),float(y+4)-low*frame.tile_width/224.f*.82f,draw.reduced?64.f:128.f,true);
+                cursors.ring(float(x+4),float(y+4)-ground_lift(frame,float(x),float(y)),draw.reduced?64.f:128.f,true);
             }
             if(!cursors.primitives.empty())renderer.tactical_gpu.draw_into(renderer.device,context,cursors,
                 {0,0,int(scene.width/scene_scale),int(scene.height/scene_scale)},

@@ -30,7 +30,8 @@ int test_tactical_overlay(){
         auto copied=input;input.primitives.clear();
         auto frame=[&](double seconds){return tactical_pixels(device.Get(),context.Get(),gpu.draw(device.Get(),context.Get(),copied,{0,0,480,320},seconds));};
         auto a=frame(0),b=frame(1),endFrame=frame(2.5),repeat=frame(5);assert(a==repeat&&a!=b);
-        if(zoom==128){unsigned marker=178*480+357;assert((endFrame[marker]&255)>(a[marker]&255)+150);}
+        if(zoom==128){unsigned marker=179*480+356; // right marker, on the axis of the ring at (320,180)
+            assert((endFrame[marker]&255)>(a[marker]&255)+150);}
         auto packed=tactical_pixels(device.Get(),context.Get(),gpu.packed(device.Get(),context.Get(),copied,{0,0,480,320},0));assert(a==packed);
         unsigned partial=0,opaque=0;for(auto pixel:a){auto alpha=pixel>>24;partial+=alpha>0&&alpha<250;opaque+=alpha>=250;}
         assert(partial>300&&opaque>5);assert(a[0]==0&&a[479]==0);++checks;
@@ -44,8 +45,20 @@ int test_tactical_overlay(){
     auto curled=tactical_pixels(device.Get(),context.Get(),gpu.draw(device.Get(),context.Get(),cursor,{0,0,200,80},0));
     auto alpha=[&](int x,int y){return curled[y*200+x]>>24;};
     assert(alpha(59,38)>80&&alpha(59,42)>80&&alpha(56,40)<60);
-    assert(alpha(98,18)>80&&alpha(102,18)>80&&alpha(100,18)<60);
+    assert(alpha(98,19)>80&&alpha(102,19)>80&&alpha(100,19)<60);
     tactical_bmp("../lab/out/tactical-overlays/cursor-only.bmp",curled,200,80);
+    // Civ III's map text effect: pure white over one black copy at (+2,+2).
+    // Every solid shadow pixel's glyph sample is the white pixel up-left of
+    // it; an outline would also darken pixels with no glyph there.
+    c3x_renderer::tactical::Input count;count.label(100,40,"1",20.f);
+    auto text=tactical_pixels(device.Get(),context.Get(),gpu.draw(device.Get(),context.Get(),count,{0,0,200,80},0));
+    unsigned shadowed=0,white=0;
+    for(int y=2;y<80;++y)for(int x=2;x<200;++x){auto p=text[y*200+x];
+        if((p>>24)>=250&&(p&255)>=250&&((p>>8)&255)>=250&&((p>>16)&255)>=250)++white;
+        if((p>>24)>150&&(p&255)<40){auto up=text[(y-2)*200+x-2];assert((up>>24)>128&&(up&255)>128);++shadowed;}
+    }
+    assert(white>20&&shadowed>20);++checks;
+    tactical_bmp("../lab/out/tactical-overlays/turn-count.bmp",text,200,80);
     // A solid one-pixel axis-aligned native stroke covers exactly the half-open
     // run from its start toward its end, so the owner may fill it (review 49).
     struct Stroke {int x0,y0,x1,y1;unsigned argb;};
@@ -58,7 +71,7 @@ int test_tactical_overlay(){
             if(in)assert((p>>24)==255&&(p&0xffffffu)==(s.argb&0xffffffu));else assert((p>>24)==0);}
         ++checks;
     }
-    std::printf("PASS tactical GPU: %u zooms, curled cursor, eased quarter-turn and dark-white fade, shadowless route, antialias coverage and clear exterior\n",checks);return 0;
+    std::printf("PASS tactical GPU: %u zooms, curled cursor, drop-shadowed count, eased quarter-turn and dark-white fade, shadowless route, antialias coverage and clear exterior\n",checks);return 0;
 }
 
 #ifdef C3X_TACTICAL_STANDALONE

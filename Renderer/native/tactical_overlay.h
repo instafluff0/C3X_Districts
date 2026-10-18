@@ -65,9 +65,10 @@ struct Input {
     }
     void ring(float x,float y,float native_tile_width,bool moving){
         if(!std::isfinite(native_tile_width)||native_tile_width<64||native_tile_width>192)throw std::runtime_error("tactical projection");
-        // Visible strokes sit a few pixels inside the 93x46 FLC canvas.
-        float scale=cursor_scale(native_tile_width),rx=44.f*scale,ry=21.5f*scale;
-        if(moving)y-=2.f*scale;
+        // Cursor.flc's white stroke centreline, fit away from its gaps: 43.5x20.6
+        // about the point. Native centres the selected unit's and the route
+        // target's cursor alike (x-46,y-23 of the 93x46 frame).
+        float scale=cursor_scale(native_tile_width),rx=43.5f*scale,ry=20.6f*scale;
         append({{x-rx-5,y-ry-5,x+rx+5,y+ry+5},{x,y,rx,ry},{.97f,.98f,1.f,.94f},{1,1.8f,moving?1.f:0.f,0}});
         animated|=moving;
     }
@@ -89,15 +90,37 @@ struct Input {
             {3,float(width),float(dash),0}});
     }
     void label(float x,float y,std::string const& text,float height){
-        // Native supplies the complete turn string, including action suffixes.
+        // Native supplies the complete turn string, including action suffixes,
+        // and centres it white on the tile; the shader adds its black (+2,+2)
+        // drop shadow. Cells advance like the bold 16 px digits (.556 em of
+        // the atlas' 54/64 cell, at the cell's .95 width).
         if(!std::isfinite(height)||height<8||height>128)throw std::runtime_error("tactical label size");
         if(text.size()>32)throw std::runtime_error("tactical label budget");
-        float width=height*.95f,left=x-width*float(text.size())*.5f;
+        float width=height*.95f,pitch=width*.556f*54.f/64.f,left=x-pitch*float(text.size())*.5f;
         for(unsigned i=0;i<text.size();++i){unsigned glyph=static_cast<unsigned char>(text[i]);
             if(glyph<32||glyph>126)throw std::runtime_error("unsupported tactical label glyph");
-            float a=left+float(i)*width;
-            append({{a-2,y-height*.5f-2,a+width+2,y+height*.5f+2},{a,y-height*.5f,width,height},
-                {1.f,.96f,.92f,1.f},{2,float(glyph-32),0,0}});
+            float a=left+(float(i)+.5f)*pitch-width*.5f;
+            append({{a-2,y-height*.5f-2,a+width+4,y+height*.5f+4},{a,y-height*.5f,width,height},
+                {1.f,1.f,1.f,1.f},{2,float(glyph-32),0,0}});
+        }
+    }
+    // Raise copied tile-centre geometry onto the scene's ground, as resident
+    // units and their selection ring stand: lines per endpoint, a ring at its
+    // centre, and the turn count with the ring it labels.
+    template<class Ground>void lift(Ground ground){
+        float ring_lift=0;bool ringed=false;
+        for(auto& p:primitives){
+            if(p.style[0]<.5f){
+                float pad=std::min(p.shape[0],p.shape[2])-p.bounds[0];
+                p.shape[1]-=ground(p.shape[0],p.shape[1]);p.shape[3]-=ground(p.shape[2],p.shape[3]);
+                p.bounds[1]=std::min(p.shape[1],p.shape[3])-pad;p.bounds[3]=std::max(p.shape[1],p.shape[3])+pad;
+                continue;
+            }
+            float dy=0;
+            if(p.style[0]<1.5f){dy=ring_lift=ground(p.shape[0],p.shape[1]);ringed=true;}
+            else if(p.style[0]<2.5f)dy=ringed?ring_lift:ground(p.shape[0]+p.shape[2]*.5f,p.shape[1]+p.shape[3]*.5f);
+            else continue;
+            p.shape[1]-=dy;p.bounds[1]-=dy;p.bounds[3]-=dy;
         }
     }
     std::array<int,4> extent(std::array<int,4> clip)const{

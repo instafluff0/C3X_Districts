@@ -40,7 +40,7 @@ float curlDistance(float2 q,float2 a,float2 control,float2 end){
 }
 float ringDistance(float2 q,Primitive p){float2 n=(q-p.shape.xy)/p.shape.zw;return abs(length(n)-1)/max(length(n/(p.shape.zw*max(length(n),.001))),.0001);}
 float ring(float2 q,Primitive p){
- float scale=p.shape.z/44,halfWidth=p.style.y*.5*scale;
+ float scale=p.shape.z/43.5,halfWidth=p.style.y*.5*scale;
  float gap=min(abs(q.x-p.shape.x),abs(q.y-p.shape.y));
  float rim=coverage(ringDistance(q,p),halfWidth)*smoothstep(1.5*scale,3.2*scale,gap);
  float curls=1000;
@@ -69,14 +69,15 @@ float glyph(float2 q,Primitive p){float2 uv=(q-p.shape.xy)/p.shape.zw;
  if(any(uv<0)||any(uv>1))return 0;uint g=(uint)p.style.y;
  return font.SampleLevel(linearClamp,(float2(g%16,g/16)+uv)/float2(16,6),0).r;}
 float4 pixel(V i):SV_Target{
- Primitive p=items[i.id];float a=0,marker=0,markerLight=0,shadow=0;
+ Primitive p=items[i.id];float a=0,marker=0,markerLight=0,shadow=0;float3 shade=float3(.025,.035,.045);
  if(p.style.x<.5){float dist=segment(i.location,p.shape.xy,p.shape.zw);a=coverage(dist,p.style.y*.5);
  }else if(p.style.x<1.5){float phase=p.style.z>0?clock.x:0;
   markerLight=saturate(phase/1.5707963);
   a=ring(i.location,p);marker=arrow(i.location,p,phase);
   shadow=max(ring(i.location-float2(0,1.4),p),arrow(i.location-float2(0,1.4),p,phase))*.5;
  }else if(p.style.x>3.5){a=saturate((1.15-length((i.location-p.shape.xy)/p.shape.zw))/.35);
- }else if(p.style.x<2.5){a=glyph(i.location,p);shadow=max(max(glyph(i.location+float2(-1,0),p),glyph(i.location+float2(1,0),p)),max(glyph(i.location+float2(0,-1),p),glyph(i.location+float2(0,1.5),p)))*.9;
+ // Civ III's map text effect: the same glyph in black at (+2,+2) beneath it.
+ }else if(p.style.x<2.5){a=glyph(i.location,p);shadow=glyph(i.location-float2(2,2),p);shade=float3(0,0,0);
  }else {float2 v=p.shape.zw-p.shape.xy;float lengthV=max(length(v),.001);float along=dot(i.location-p.shape.xy,v)/lengthV;
   a=coverage(abs((i.location.x-p.shape.x)*v.y-(i.location.y-p.shape.y)*v.x)/lengthV,p.style.y*.5);
   if(along<0||along>=lengthV)a=0;
@@ -87,7 +88,7 @@ float4 pixel(V i):SV_Target{
  float markAlpha=marker*.88;
  float3 markerColor=lerp(float3(.12,.12,.12),float3(.98,.98,.98),markerLight);
  fill=over(float4(markerColor*markAlpha,markAlpha),fill);
- return over(fill,float4(.025,.035,.045,1)*shadow);
+ return over(fill,float4(shade,1)*shadow);
 })";
         Ptr<ID3DBlob> v,p,error;
         auto compile=[&](char const* entry,char const* profile,Ptr<ID3DBlob>& out){

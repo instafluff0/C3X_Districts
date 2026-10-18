@@ -7,9 +7,14 @@ white ellipse with rotating inward markers, red route, destination ellipse and
 turn label. Source media remain external/local; runtime art is generic.
 The installed Civ III `Cursor.flc` confirms a 93×46 frame, 30 frames and an
 83 ms frame interval. Decompiled native cursor draws use the full frame at
-normal zoom and half at native zoom-out. The Lab ellipse sits within that frame
-and stays independent of custom camera zoom. Each of its four cardinal gaps
-has a small inward curl, matching the visible stroke ends of the native frame.
+normal zoom and half at native zoom-out, drawn at (x−46, y−23): the white stroke
+is centred on the draw point, with a 43.5×20.6 centreline fit away from its gaps.
+The selected unit's and the route target's cursors share that rule, so the Lab
+ellipse uses it for both and stays independent of custom camera zoom. Each of
+its four cardinal gaps has a small inward curl, matching the visible stroke ends
+of the native frame. Renderer64 lifts the selected ring by its body's low-relief
+ground; the held route lifts its target ring, turn label and line endpoints by
+the same function against the last scene's basis.
 The five-second easing cycle is a user-requested half-speed approximation of
 the source sequence, rather than a decoded runtime FLC. The markers turn 90°
 between endpoints. Decoded installed FLC frames brighten the inward markers
@@ -38,8 +43,10 @@ The GOG go-to update wrapper opens a bounded capture scope and executes the
 original function. Only that scope's target image intercepts native line/text
 operations. No route is recomputed, guessed from terrain, or retained through a
 new mouse listener. The separate destination-cursor hook supplies its native
-center. The complete native turn string is copied, including an action suffix;
-font/color shadow draws collapse into one modern label. At scope close one
+center. The complete native turn string is copied, including an action suffix.
+Native's unit-canvas text effect (white, black copy at +2,+2) draws as one label:
+white glyphs over one black (+2,+2) drop shadow, no outline, cells advancing like
+bold 16 px digits. At scope close one
 immutable primitive batch joins the existing worker and retained history.
 
 The native grid function returns immediately in custom mode; the map insertion

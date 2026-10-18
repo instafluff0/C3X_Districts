@@ -43,6 +43,8 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
 bool c3x_renderer64_static_refinement_pending(float zoom);
 // Writes the GPU memory census trace (C3X_RENDERER_MEMORY_CENSUS=1).
 void c3x_renderer64_memory_census(unsigned long long dxgi_usage);
+// Screen pixels a resident body at native (x,y) stands above it, by the last scene.
+float c3x_renderer64_ground_lift(float x,float y);
 #endif
 #include "terrain_scene_runtime.h"
 #include "object_compiler.h"
@@ -17331,6 +17333,11 @@ private:
                 result=C3X_RENDERER_RESULT_SUPERSEDED;
                 auto* session=renderer_state.gpu_composition.get();
                 if(session&&session->current_ticket()==tactical_target.ticket){
+#ifdef C3X_RENDERER64_FRESH
+                    // The held route's target cursor stands on the same ground as
+                    // the resident selected unit's, as both do natively.
+                    if(tactical_input.world_overlay)tactical_input.lift(c3x_renderer64_ground_lift);
+#endif
                     auto area=tactical_input.extent({tactical_target.clip[0],tactical_target.clip[1],tactical_target.clip[2],tactical_target.clip[3]});
                     result=C3X_RENDERER_RESULT_OK;
                     if(area[0]<area[2]&&area[1]<area[3]&&tactical_input.world_overlay){

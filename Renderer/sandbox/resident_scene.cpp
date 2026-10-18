@@ -317,6 +317,10 @@ bool c3x_renderer64_static_refinement_pending(float zoom){
     c3x_renderer64_frame_device();
     return sandbox_fresh.static_refinement_pending(zoom);
 }
+float c3x_renderer64_ground_lift(float x,float y){
+    c3x_renderer64_frame_device();auto& units=sandbox_direct_units;
+    return units.ground_frame.tile_count?units.ground_lift(units.ground_frame,x,y):0.f;
+}
 // GPU memory by owner (performance goals, G1: Civ VI memory direction).
 // Textures and targets are sized from their descriptions, each resource once;
 // owners that keep their own byte ledgers report those. The remainder of the
@@ -387,6 +391,8 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         auto const& first=frame.tiles[0];
         camera_x=first.anchor_x-first.tile_x*frame.tile_width/2;
         camera_y=first.anchor_y-first.tile_y*frame.tile_height/2;
+        auto& units=sandbox_direct_units;units.ground_frame=frame;units.ground_tile=first;
+        units.ground_frame.tiles=&units.ground_tile;units.ground_frame.tile_count=1;
     }
     if(!sandbox_fresh.draw(frame,camera_x,camera_y,0,0,0,0,false,zoom))return false;
     if(frame_trace)renderer.trace.write("fresh-callback","scene-ready",true);
