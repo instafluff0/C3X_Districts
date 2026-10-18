@@ -49,7 +49,8 @@
     "Renderer.native.test_bridge_natural_depth",
     "Renderer.native.test_bridge_waterline",
     "Renderer.native.test_river_rock_bridges",
-    "Renderer.native.test_river_glare"
+    "Renderer.native.test_river_glare",
+    "Renderer.native.test_river_surface_reach"
   ],
   "references": {
     "d3d11": [

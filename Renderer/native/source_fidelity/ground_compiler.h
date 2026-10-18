@@ -44,6 +44,15 @@ inline int underlay_grid(bool river_near, double center_shore, int tile_width) {
     return river_near ? std::max(flat, tile_width >= 96 ? 32 : 16) : flat;
 }
 
+// River distances are exact only within the corridor's bucket reach (57.24 px
+// per tile of reach). Past it a sample reads its own cell: 1000 on a river
+// tile's far side, ~55-70 px one grid step in. That jump inside one row of the
+// river layer defeated its reach cull and widened its antialiasing into a thin
+// dark line of bank along the tile edge, so river surfaces stop at the reach.
+inline float river_surface_reach(float distance) {
+    return std::min(distance, 57.24f * float(::river::Corridor::bucket_reach));
+}
+
 // Moved here from c3x_renderer.cpp: used only by ground generation, so this
 // is now the single definition. c3x_renderer.cpp aliases both names.
 struct GroundPoint {
@@ -250,7 +259,7 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
         bool shadow_surface = layer > 9.5f && layer < 10.5f;
         float river_surface_distance = river_surface ||
             (river_near && (underlay_surface || land_surface || shadow_surface))
-            ? river_distance(tile, u, v) : 1000.0f;
+            ? river_surface_reach(river_distance(tile, u, v)) : 1000.0f;
         bool terrain_conforming_surface = land_surface ||
             (layer > 8.5f && layer < 10.5f);
         if (terrain_conforming_surface && !point.terrain_ready) {
