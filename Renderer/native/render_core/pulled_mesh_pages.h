@@ -112,20 +112,32 @@ private:
         page->bytes=align4(vertex_bytes)+align4(index_bytes)+count*sizeof(Record);
         copied_bytes+=vertex_bytes+index_bytes;++builds;return page;
     }
-    void trim(){
-        if(resident<=budget)return;
-        // Retire whole pages that this frame does not use, oldest first.
+    // Retire whole pages last drawn before frame `unused_before`, oldest first,
+    // until residency is at most `target`: choose the pages, then erase their
+    // entries in one pass (a pass per page cost milliseconds after a jump).
+    void retire_oldest(std::uint64_t unused_before,std::size_t target){
         std::vector<std::pair<std::uint64_t,Page*>> candidates;
-        for(auto const& e:entries)if(e.second.page->used!=frame)candidates.push_back({e.second.page->used,e.second.page.get()});
+        for(auto const& e:entries)if(e.second.page->used<unused_before)candidates.push_back({e.second.page->used,e.second.page.get()});
         std::sort(candidates.begin(),candidates.end());
-        for(auto const& c:candidates){
-            if(resident<=budget*3/4)break;
-            for(auto i=entries.begin();i!=entries.end();){
-                if(i->second.page.get()==c.second){release(i->second);i=entries.erase(i);++retired;}else ++i;}
-        }
+        candidates.erase(std::unique(candidates.begin(),candidates.end()),candidates.end());
+        std::set<Page*> chosen;std::size_t remaining=resident;
+        for(auto const& c:candidates){if(remaining<=target)break;chosen.insert(c.second);remaining-=std::min(remaining,c.second->bytes);}
+        if(chosen.empty())return;
+        for(auto i=entries.begin();i!=entries.end();){
+            if(chosen.count(i->second.page.get())){release(i->second);i=entries.erase(i);++retired;}else ++i;}
     }
+    void trim(){if(resident>budget)retire_oldest(frame,budget*3/4);}
 public:
-    void begin_frame(){++frame;}
+    // Pages of earlier views (a jump origin, another zoom, scrolled-off
+    // edges) stayed until the 512 MiB budget: the busy save held about
+    // 300 MB of them (performance review 87). Retire pages no frame has drawn
+    // for idle_frames once residency passes idle_floor; a revisit rebuilds
+    // them with the same bounded copy.
+    std::size_t idle_floor=128u*1024u*1024u;std::uint64_t idle_frames=300;
+    void begin_frame(){
+        ++frame;
+        if(!(frame&63) && resident>idle_floor && frame>idle_frames)retire_oldest(frame-idle_frames,idle_floor);
+    }
     void clear(){entries.clear();resident=0;}
     std::size_t bytes()const{return resident;}
     std::size_t entry_count()const{return entries.size();}

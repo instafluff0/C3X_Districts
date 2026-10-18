@@ -533,6 +533,14 @@ capture from before its fix and to pass after it (performance review 4t, 4v,
   the map black or stale; on the 1498 AD save, a first job a few KB over the
   geometry budget kept the map black for the session.
 
+- `python3 Renderer/tools/memory_peak_report.py MEMORY.csv --log renderer.log`
+  reads `sample_memory.ps1` output taken in the VM beside a run, plus that
+  run's log. It fails if the helper's peak private memory exceeds 4.5 GB, its
+  GPU memory 2.5 GB (the busy save's `near` targets, `--max-*` to change), or
+  if more than 100 world tiles were restored or compiled again after loading.
+  In the VM every D3D allocation counts in private memory. The RAM world
+  copy's eviction churn and a 5.7 GB peak failed it (review 87).
+
 Their logic is covered on the Mac by `test_borrowed_snapshot_reuse.py`,
 `test_hit_scene_fast_paths.py` and `test_required_geometry_admission.py`,
 together with exact hit-test answers and mutation-checked counters for the

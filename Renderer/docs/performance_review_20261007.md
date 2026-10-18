@@ -4279,3 +4279,187 @@ next same-camera pair.
 - Both builds reused the mirror on 14 of 20 moved frames and redrew it 19
   and 20 times; 1057 and 1065 traced scene frames. The change does no
   additional work.
+
+## 87. The busy save's memory peak: attribution and three cuts (October 18)
+
+**Why.** Music blips are whole-VM pauses of about 280 ms or more, triggered
+by macOS memory pressure (`docs/audio_skips.md`). On the busy save's `near`
+run the helper peaked at 5.7 GB private and 3.4 GB GPU memory, against the
+G1 direction of about 4 GB and 2 GB.
+
+**How the VM counts memory.** A D3D11 probe in the guest
+(`native/build/mem-peak/d3d_*_probe.cpp`, not tracked) showed:
+- Every D3D11 allocation costs exactly its size in the process's private
+  bytes, with no hidden CPU copy. The helper's private memory is therefore its
+  whole footprint, GPU included.
+- `D3D11_USAGE_DEFAULT` buffers, such as pulled pages, count in private
+  memory but not in the adapter's `CurrentUsage`.
+- The driver keeps up to about 256 MB of freed allocations for reuse.
+
+**Timeline** (t from Civ III start):
+- t 52-71: the whole world goes to the GPU (+1.27 GB).
+- t 76: first view, at 5.0 GB.
+- t 108 and 112: minimap jumps.
+- t 116-129: zoom to 2× and 3×, the peak.
+
+macOS went to critical pressure at t 72, during the load and first view. The
+Mac already held 14-16 GB in its compressor before launch, with Parallels
+resident at 8-11 GB.
+
+**Attribution at the peak.** From region walks of the helper's committed
+memory by allocation size, the census and a new CPU census line:
+
+| Item | MB | Note |
+| --- | --- | --- |
+| World geometry | 1,269 | resident from loading |
+| Textures | about 600-800 | the census counts 261; natural and city pack textures are outside it |
+| Retained DDS file bytes (CPU) | 591 | kept beside the uploaded textures for device recovery (`geometry-census-cpu dds_kb`) |
+| World RAM copy (CPU) | 618 | compressed copy of the world (1.71 GB raw) |
+| Static layer | 240 at 1×, 554 zoomed | 52.4 MB per slot and per overlay, 2 previews, cache 31 |
+| Retained composition | 280-356 | 35-61 window-sized textures live in all |
+| Pulled pages | 107, growing to 305 | `DEFAULT` buffers kept until a 512 MiB budget |
+| Shadow / scene targets / units | 100 / 92 / 94 | |
+| Owner metadata (CPU) | about 80 | records, chunks and proofs of 16,900 owners |
+
+**Eviction churn.** The world-geometry budget follows free memory. On the
+14 GB VM, guest free memory sat at 3.1-3.8 GB, against a reserve of
+max(2 GB, RAM/6) + about 0.8 GB = 3.1 GB. Each camera frame then evicted
+about 9 world tiles and restored others from the RAM copy: 3,692 restores in
+one run (`base1`). The census run evicted 4,235 owners (126 MB of GPU
+geometry, plus their driver blocks and heap), and `base1`'s private memory
+fell by about 0.8 GB late in the run. That eviction, not a smaller working
+set, is why its settled figure (4.6 GB) was lower than its peak.
+
+**Changes** (all picture-identical):
+- `c3x_renderer.cpp`: the loading sweep releases the RAM copy of every world
+  key it made GPU-resident: 15,200-15,464 records, 609-612 MB. Refused keys
+  (1,436-1,700, 6-9 MB) keep theirs. Nothing is released if the refused keys
+  exceed the 384 MiB view allowance. Free memory then no longer evicts the
+  resident world; the fixed tier (canonical + 384 MiB) alone bounds it
+  (`FrameWorkingSet::tier_geometry`). `C3X_RENDERER_WORLD_BACKING_CONTROL=1`
+  keeps the RAM copy.
+- `pulled_mesh_pages.h`: pages no frame has drawn for 300 frames retire once
+  residency passes 128 MiB. Retirement chooses its pages first and then erases
+  their entries in one pass. A first build scanned every entry once per
+  retired page, and after a zoom-out the 2× and 3× pages aged out together:
+  one run stalled at 20 fps for three seconds of 1× idle.
+- `fresh_pipeline.h`: while zoomed, the 1× lane's back slot and overlay
+  (105 MB) are freed. Only the 1× front feeds the previews; the next 1×
+  refinement or recentre allocates the slot again.
+- The memory census adds `geometry-census-cpu` (owner CPU bytes and retained
+  DDS bytes). `tools/memory_peak_report.py` checks a run's peak and
+  world-tile churn. `sample_memory.ps1` adds a `utc_ms` column.
+
+**Tests.**
+- `test_loading_world_preparation`: release after the sweep, refused keys
+  kept, control switch, and an over-allowance sweep keeps every copy.
+- `test_required_geometry_admission`: the released tier ignores free memory.
+- `test_pulled_mesh_pages`: idle pages retire, drawn pages stay, and 37 idle
+  pages retire in one pass down to the floor (VM GPU).
+- `test_static_zoom_lane_release`: only the idle 1× back slot is freed.
+- `test_geometry_census`: the CPU line counts shared objects once.
+
+Each failed against the old code or a mutated copy. `memory_peak_report.py`
+fails on both pre-change captures (5.7 GB; 703 and 3,692 restores).
+
+**Measured** (busy save, `near`, one run each, MB; GPU is the
+`Total Committed` counter):
+
+| Run | Peak private | Peak GPU | First view | 2× (t 120) | Late private / GPU | Tiles restored or compiled after loading |
+| --- | --- | --- | --- | --- | --- | --- |
+| Before (`base1`) | 5,707 | 3,456 | 5,065 | 5,528 | 4,629 / 2,522 | 3,692 |
+| After (`fix2`) | 5,139 | 3,367 | 4,569 | 5,115 | 4,761 / 3,035 | 0 |
+| Before, census (`census1`) | 5,708 | 3,483 | | | | 703 |
+| After, census (`fix2c`) | 5,072 | 3,356 | | | | 0 |
+
+- The peak fell by 570-640 MB and the first view by about 500 MB.
+- The late figure is higher than before (+130 MB private, +500 MB GPU)
+  because the world is no longer evicted and restored.
+- Pulled pages stay at 127-211 MB instead of growing to 305. The zoomed
+  static layer is 450 MB instead of 554.
+- macOS still reached critical pressure, at t 91 instead of 72.
+- No camera, GPU or admission failures in any run.
+
+**Speed A/B** (user rule: memory cuts must not slow anything). HEAD's trio
+(A) against this build (B) was staged in turn. Runs used `-MeasureCadence`,
+alternating A B B A; medians of `near_report.py`, `zoom_report.py` and
+`check_navigation_cadence.py`.
+
+| Busy `near` (6 A, 4 B runs) | A | B |
+| --- | --- | --- |
+| 1× idle, 3× idle, 1× idle at the end | 47, 59, 46 fps | 49, 59, 47 fps |
+| 1× scroll x: step / adoption p50 | 237 / 212 ms | 211 / 190 ms |
+| 1× scroll y: step / adoption p50 | 157 / 135 ms | 157 / 134 ms |
+| 2× scroll: step / adoption p50, steps | 232 / 184 ms, 19 | 156 / 131 ms, 29 |
+| 3× scroll: step / adoption p50, steps | 156 / 126 ms, 30 | 120 / 93 ms, 36 |
+| Zoom in to 2×, to 3×, out to 1× | 34, 58, 28 fps | 33, 55, 31 fps |
+| Jump 1, jump 2 | 314, 802 ms | 446, 620 ms |
+
+- One B run (B2) was slow in every segment, including the 1× scrolls before
+  any zoom (4.3 fps at 1× y, against 30-37 in every other run). A runs had
+  the same kind of disturbance (A4 1× idle 20.7 fps; A3 at 3 fps for a
+  second). The medians include it.
+- Jump 1 has only two B detections, one of them B2; none of the changes acts
+  before the first zoom.
+
+Profiled pair (trace level 2, `step_report.py`):
+- A: 58 camera jobs, 11 over 300 ms, 12 with over 100 ms of mesh
+  preparation (evicted world tiles restored); job p50 69 ms, adoption p50
+  198 ms.
+- B: 96 jobs, none over 300 ms, one mesh preparation; job p50 41 ms,
+  adoption p50 135 ms.
+- `check_camera_jobs`: no failures on either side; A needed the
+  required-geometry overflow 8 times, B none. `check_native_call_waits`
+  passes on all 12 busy runs.
+
+Busy `zoom-out` (2 and 2):
+- Settle mean 698 → 662 ms; longest presentation gap 155 → 117 ms; fps
+  equal.
+- `check_navigation_cadence` fails on both A runs (no progress for 1.13 and
+  1.04 s) and passes on both B runs (0.98, 0.87 s).
+- macOS was at critical pressure for 53-54 two-second samples per A run and
+  38-39 per B run.
+
+Light save `near` (2 and 2): equal in every segment (idle 60 fps; scroll
+steps 78 ms). Jumps 33 → 82 and 95 → 43 ms; none of the changes acts on a
+38-tile world.
+
+**What the Mac sees** (`footprint -p` of `prl_vm_app` every 5 s, busy
+`near`; idea from the music-skip session):
+- The guest's 14 GB is fully dirty from boot and does not change.
+- `IOAccelerator (graphics)` plus unmapped graphics is the Mac-side Metal
+  mirror of the VM's D3D resources. It tracks the helper's GPU memory almost
+  1:1: 0.54 GB with no game, 3.5-3.9 GB at the first view, peak 4.19 GB.
+- The total footprint grows from 15.4 to 19.5 GB.
+
+| Mac graphics | Peak | Late (t 180-245) |
+| --- | --- | --- |
+| HEAD trio | 4,192 MB | 3,340 MB |
+| This build | 4,088 MB | 3,705 MB |
+
+- GPU memory therefore costs the Mac twice (guest RAM and Metal), while
+  guest-private savings help it only through the compressibility of freed,
+  zeroed guest pages.
+- This build lowers the Mac's peak slightly. Late in a run it holds about
+  0.37 GB more, because it keeps the whole world GPU-resident where HEAD
+  evicted geometry under guest pressure (with the 1 s restore jobs above).
+- GPU-side cuts (textures, geometry, static-layer formats, composition) are
+  what reduce the Mac's footprint, and they count double.
+
+**What remains** against 4.5 GB private and 2.5 GB GPU:
+- *Private, about 0.6 GB over.* The 591 MB of retained DDS bytes is the
+  largest exact item. Freeing them needs `reset()`, which re-uploads every
+  texture from those bytes after device loss or a camera-job exception, to
+  read the files again. That is a separate change with a recovery test.
+- *GPU, about 0.9 GB over.* This is mostly representation:
+  - world geometry (1.27 GB; mountains 400 MB and decals 199 MB at
+    68-byte vertices);
+  - textures, of which 25 terrain textures are RGBA16F 1024² with mips
+    (267 MB);
+  - the static layer's RGBA16F + R32 slots;
+  - window-sized composition textures.
+
+  Each needs a Lab comparison and the user's visual approval.
+- *Host.* The Mac enters the run already compressing 14-16 GB. With a 14 GB
+  VM on a 24 GB Mac, even the 4.5 GB target may not keep macOS below
+  critical pressure; host load matters as much as the helper.

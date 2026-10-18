@@ -205,7 +205,10 @@ gate free.
 - `unit_timing_report.py`: unit moves and reveals.
 - `game_samples_report.py`: Civ III thread samples.
 - `sample_memory.ps1` (run in the VM beside a capture): process and GPU
-  memory of Civ III and Renderer64 every 2 s.
+  memory of Civ III and Renderer64 every 2 s. In the VM the helper's private
+  memory includes all of its GPU allocations (review 87).
+- `memory_peak_report.py`: the helper's peak and settled memory from that
+  CSV, and world-tile churn from the run's log.
 
 **Run settings.**
 - `-MeasureCadence` for fps.

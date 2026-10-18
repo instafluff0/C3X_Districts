@@ -4608,6 +4608,19 @@ struct SandboxFreshPipeline {
             else if(now-zoom_lane_used>std::chrono::seconds(10)){zoom_lane_used=now;
                 if(static_rasters.states[2].region.color || static_rasters.states[3].region.color || bootstrap[0].region.color || bootstrap[1].region.color)
                     release_zoom_lane();}
+            // Zoomed, the 1x lane is read only through its front (the
+            // previews' home source); its back slot is redrawn by the next 1x
+            // refinement or recenter. Free it and its overlay layer while
+            // zoomed: about 105 MB at 2240x1192 (G1 memory, review 87).
+            unsigned home_back=static_rasters.back_index(0);
+            if(lane==1 && (static_rasters.states[home_back].region.color || overlay_slots[home_back].layer.color)){
+                double freed=double(static_rasters.states[home_back].region.bytes()+overlay_slots[home_back].layer.bytes())/(1024.*1024.);
+                static_rasters.discard(home_back,c3x_renderer::render_core::raster_explicit_reset);
+                static_rasters.states[home_back].region.reset();raster_inputs[home_back].clear();
+                overlay_slots[home_back].layer.reset();overlay_slots[home_back].revision=~0ull;
+                char detail[48];std::snprintf(detail,sizeof(detail),"freed_mb=%.1f",freed);
+                renderer.trace.write("static-home-back-released",detail,true);
+            }
         }
         float hint=zoom_destination();
         bool previewable=!options.legacy && scene_samples==1 && static_resample.ensure(renderer.device);

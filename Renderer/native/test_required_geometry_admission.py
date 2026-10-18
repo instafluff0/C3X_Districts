@@ -165,10 +165,38 @@ int main(){
 
     def test_tier_caps_the_budget_at_canonical_content_plus_view_allowance(self):
         source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
-        self.assertTrue('if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency)\n'
-                        '            tile_geometry_runtime_budget=std::min(tile_geometry_runtime_budget,canonical_geometry_bytes()+\n'
-                        '                retired_content->bytes.load()+terrain_patch_index_bytes+view_geometry_allowance);' in source)
+        self.assertTrue('if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency){' in source)
+        self.assertTrue('tile_geometry_runtime_budget=c3x_renderer::render_core::FrameWorkingSet::tier_geometry(tile_geometry_runtime_budget,\n'
+                        '                canonical_geometry_bytes()+retired_content->bytes.load()+terrain_patch_index_bytes,view_geometry_allowance,world_backing_released);'
+                        in source)
         self.assertTrue('static constexpr std::size_t view_geometry_allowance=384u*1024u*1024u;' in source)
+
+    def test_released_world_copy_keeps_the_resident_world(self):
+        """Busy save (review 87): the free-memory budget followed owned bytes
+        down as guest memory neared its reserve, so each frame evicted about 9
+        world tiles and restored others from the RAM copy (3,692 restores in a
+        `near` run). Once that copy is released, free memory no longer shrinks
+        the world's budget; the fixed tier alone bounds it."""
+        run_cpp(r'''
+#include "Renderer/native/render_core/frame_working_set.h"
+#include <cassert>
+#include <cstdio>
+using c3x_renderer::render_core::FrameWorkingSet;
+int main(){
+ constexpr std::size_t mib=1024u*1024u,canonical=1600u*mib,allowance=384u*mib;
+ // Plenty of free memory: canonical plus the allowance, either way.
+ assert(FrameWorkingSet::tier_geometry(8192u*mib,canonical,allowance,false)==canonical+allowance);
+ assert(FrameWorkingSet::tier_geometry(8192u*mib,canonical,allowance,true)==canonical+allowance);
+ // With the RAM copy, free memory below the tier evicts, world tiles too.
+ assert(FrameWorkingSet::tier_geometry(canonical+100u*mib,canonical,allowance,false)==canonical+100u*mib);
+ assert(FrameWorkingSet::tier_geometry(canonical-200u*mib,canonical,allowance,false)==canonical-200u*mib);
+ // Without it the resident world is kept whole, with room for the refused
+ // keys and view-specific content within the tier.
+ assert(FrameWorkingSet::tier_geometry(canonical+100u*mib,canonical,allowance,true)==canonical+allowance);
+ assert(FrameWorkingSet::tier_geometry(canonical-200u*mib,canonical,allowance,true)==canonical+allowance);
+ std::puts("PASS tier geometry: a released world copy keeps the resident world");
+}
+''')
 
 
 if __name__ == '__main__':

@@ -19,6 +19,13 @@ class LoadingWorldPreparationTests(unittest.TestCase):
 #include "Renderer/native/render_core/world_preparation_region.h"
 #include "Renderer/native/render_core/world_coast.h"
 #include "Renderer/native/render_core/viewer_topology.h"
+#include <cstdlib>
+#include <cstring>
+#include <set>
+namespace c3x_renderer { namespace render_core {
+unsigned cached_environment(char const* name,char* buffer,unsigned size){
+ char const* value=std::getenv(name);if(!value)return 0;auto length=unsigned(std::strlen(value));
+ if(length<size)std::memcpy(buffer,value,length+1);return length<size?length:length+1;}}}
 #include <algorithm>
 #include <cassert>
 #include <atomic>
@@ -44,13 +51,15 @@ struct RendererState {
  bool loading_preparation=false,loading_world_only=false;unsigned patch_pixels=0;
  bool loading_gpu_residency=false,world_gpu_residency_ready=false;
  bool world_gpu_capacity_refused=false,world_gpu_allocation_failed=false,world_gpu_allocation_pressure=false;
- struct Record {unsigned state=0;};std::map<std::uint64_t,Record> world_gpu_records;
+ struct Record {unsigned state=0;std::size_t required=0;};std::map<std::uint64_t,Record> world_gpu_records;
+ static constexpr std::size_t view_geometry_allowance=384u<<20;
  std::vector<Record*> world_gpu_current;
  std::map<std::uint64_t,c3x_renderer_tile_v1> gpu_owners;
  unsigned gpu_calls=0,gpu_uploads=0,gpu_reports=0,gpu_capacity=0,gpu_fail=0;
  bool gpu_complete=false;
  void world_gpu_report(bool complete){++gpu_reports;gpu_complete=complete;gpu_capacity=0;
   for(auto const& row:world_gpu_records)gpu_capacity+=row.second.state==2;}
+ bool geometry_tier=true,world_backing_released=false;
  WorldCoast world_coast;ViewerTopology viewer_topology;
  struct Natural {unsigned calls=0;std::int64_t revision=-1;
   void update_rivers(WorldTopology const& world,std::int64_t r){
@@ -59,7 +68,8 @@ struct RendererState {
   void bind(Natural const&,WorldTopology const& world,std::int64_t r){
    assert(!world.empty());++calls;revision=r;}}cliff_query_scratch;
  c3x_renderer::fidelity::PatchDetail patch_detail;
- struct {struct Stats {std::size_t bytes=0;};Stats statistics(){return {};}}world_backing;
+ struct {struct Stats {std::size_t bytes=0;unsigned records=0;};std::set<std::uint64_t> released;
+  Stats statistics(){return {};}void invalidate(std::uint64_t key){released.insert(key);}}world_backing;
  struct {void write(char const*,char const*,bool){}double milliseconds(long long v){return double(v);}}trace;
  std::size_t tile_geometry_cache_bytes=0;unsigned calls=0;int fail_call=0;
 ''' + sources + r'''
@@ -76,7 +86,9 @@ struct RendererState {
    auto const& tile=f.tiles[selected[0]];auto key=topology_cache.key(tile.tile_x,tile.tile_y);
    auto& record=world_gpu_records[key];world_gpu_current={&record};
    world_gpu_capacity_refused=world_gpu_allocation_failed=false;
-   if(gpu_fail==1 && tile.tile_x%4<2){world_gpu_capacity_refused=true;return false;}
+   if((gpu_fail==1 || gpu_fail==4) && tile.tile_x%4<2){
+    if(gpu_fail==4)record.required=8u<<20; // 64 refused cores of 8 MB exceed the view allowance
+    world_gpu_capacity_refused=true;return false;}
    if(gpu_fail==2){world_gpu_allocation_failed=true;return false;}
    if(gpu_fail==3)return false;
    auto facts=CapturedScene::content(tile);auto retained=gpu_owners.find(key);
@@ -146,20 +158,40 @@ int main(){
  assert(h.world_schedule.completed==4 && !h.world_schedule.unavailable && h.renderer_state.calls==5);
  assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true) && h.renderer_state.calls==5);
  assert(h.renderer_state.gpu_uploads==128 && h.renderer_state.gpu_complete);
+ // Every key the sweep made GPU-resident gives up its compressed RAM copy.
+ assert(h.renderer_state.world_backing_released && h.renderer_state.world_backing.released.size()==128);
  auto uploads=h.renderer_state.gpu_uploads;
  assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
  assert(h.renderer_state.gpu_uploads==uploads && !h.renderer_state.loading_gpu_residency);
  // Optional capacity refusal keeps RAM completion and previously resident
  // owners. The actual second pass visits later smaller cores after refusal.
  h.renderer_state.gpu_owners.clear();h.renderer_state.gpu_fail=1;
+ h.renderer_state.world_backing_released=false;h.renderer_state.world_backing.released.clear();
  assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
  assert(h.renderer_state.gpu_complete && h.renderer_state.gpu_capacity==64);
+ // Refused keys keep the RAM copy they restore from; admitted ones release it.
+ assert(h.renderer_state.world_backing_released && h.renderer_state.world_backing.released.size()==64);
+ for(auto key:h.renderer_state.world_backing.released)assert(h.renderer_state.gpu_owners.count(key));
  assert(h.renderer_state.gpu_owners.size()==64);
  uploads=h.renderer_state.gpu_uploads;
  assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
  assert(h.renderer_state.gpu_uploads==uploads); // repeated pressure never churns survivors
  h.renderer_state.gpu_fail=0;assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
  assert(h.renderer_state.gpu_uploads==uploads+64 && h.renderer_state.gpu_owners.size()==128);
+ assert(h.renderer_state.world_backing.released.size()==128);
+ // A sweep that refused more than the tier's view allowance keeps every copy.
+ h.renderer_state.gpu_owners.clear();h.renderer_state.world_gpu_records.clear();h.renderer_state.gpu_fail=4;
+ h.renderer_state.world_backing_released=false;h.renderer_state.world_backing.released.clear();
+ assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true) && h.renderer_state.gpu_capacity==64);
+ assert(!h.renderer_state.world_backing_released && h.renderer_state.world_backing.released.empty());
+ h.renderer_state.gpu_fail=0;assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
+ assert(h.renderer_state.world_backing_released && h.renderer_state.world_backing.released.size()==128);
+ // The control switch keeps every RAM copy.
+ setenv("C3X_RENDERER_WORLD_BACKING_CONTROL","1",1);
+ h.renderer_state.world_backing_released=false;h.renderer_state.world_backing.released.clear();
+ assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
+ assert(!h.renderer_state.world_backing_released && h.renderer_state.world_backing.released.empty());
+ unsetenv("C3X_RENDERER_WORLD_BACKING_CONTROL");
  // Allocation/source failures remain explicit, with no GPU-complete receipt.
  for(unsigned failure:{2u,3u}){h.renderer_state.gpu_fail=failure;
   assert(!h.prepare_required_world(h.scene_changes.state(),nullptr,true));

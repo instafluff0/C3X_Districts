@@ -542,8 +542,8 @@ struct RendererState {
     std::size_t publication_working_bytes=0,publication_capacity_bytes=0;bool memory_pressured=false;void preserve_process_headroom(){}
     struct Scene : c3x_renderer::render_core::CapturedScene {std::uint64_t signature=0;} topology_cache;
     struct WorldStorage {
-        struct Statistics {std::size_t bytes=0;};
-        unsigned clears=0;void clear(){++clears;}
+        struct Statistics {std::size_t bytes=0;unsigned records=0;};
+        unsigned clears=0;void clear(){++clears;}void invalidate(std::uint64_t){unexpected_gpu();}
         Statistics statistics()const{return {};}
     } world_preparation_queue,world_backing;
     c3x_renderer::fidelity::PatchDetail patch_detail;unsigned patch_pixels=0;
@@ -557,9 +557,11 @@ struct RendererState {
     bool loading_preparation=false,loading_world_only=false,unit_sources_ready=false;unsigned unit_source_device=0;
     bool loading_gpu_residency=false,world_gpu_residency_ready=false,world_gpu_allocation_pressure=false;
     bool world_gpu_capacity_refused=false,world_gpu_allocation_failed=false;
-    struct GpuRecord {unsigned state=0;};std::vector<GpuRecord> world_gpu_records;
+    struct GpuRecord {unsigned state=0;std::size_t required=0;};std::map<std::uint64_t,GpuRecord> world_gpu_records;
+    static constexpr std::size_t view_geometry_allowance=384u<<20;
     std::vector<GpuRecord*> world_gpu_current;
     void world_gpu_report(bool){unexpected_gpu();}
+    bool geometry_tier=true,world_backing_released=false;
     bool initialize_device(){assert(native_transfer_test);return true;}
     bool prepare_world_sources(c3x_renderer_frame_v1 const&){return true;} // Source topology initialization is exercised by the loading-world fixture.
     Device owned_device;Context owned_context;Device* device=&owned_device;Context* context=&owned_context;

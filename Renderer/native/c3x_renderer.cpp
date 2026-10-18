@@ -985,6 +985,11 @@ public:
     bool retained_world=true;
     bool loading_preparation=false,loading_world_only=false;
     bool loading_gpu_residency=false,world_gpu_residency_ready=false;
+    // The loading sweep released the compressed RAM copies of the world keys
+    // it made GPU-resident (about 0.6 GB on the busy save); the resident world
+    // is then kept, not evicted for free memory (G1 memory, review 87).
+    // C3X_RENDERER_WORLD_BACKING_CONTROL=1 keeps the RAM copy.
+    bool world_backing_released=false;
     bool world_gpu_capacity_refused=false,world_gpu_allocation_failed=false,world_gpu_allocation_pressure=false;
     struct WorldGpuRecord {std::size_t required=0,charged=0;unsigned state=0;bool measured=false;};
     // One required-loading receipt, released after its summary. These exact
@@ -1010,6 +1015,21 @@ public:
     std::size_t canonical_geometry_bytes()const{
         std::size_t bytes=0;for(auto const& entry:tile_geometry_cache)if(entry.second.world_ground)bytes+=entry.second.byte_count;
         return bytes;
+    }
+    // DDS file bytes kept beside their uploaded textures for device recovery.
+    std::size_t texture_file_bytes()const{
+        std::size_t dds=0;auto file=[&](std::vector<std::uint8_t> const& bytes){dds+=bytes.capacity();};
+        auto files=[&](auto const& list){for(auto const& bytes:list)file(bytes);};
+        for(auto const& t:terrain_textures){for(auto const* bytes:{&t.dds,&t.material_height_dds,&t.specular_dds,&t.elevated_dds,
+            &t.elevated_height_dds,&t.elevated_specular_dds})file(*bytes);files(t.relief_layer_dds);files(t.water_surface_dds);}
+        for(auto const* bytes:{&dune_surface.dds,&dune_surface.material_height_dds,&dune_surface.specular_dds,&dune_decal_base_dds,&dune_decal_height_dds,
+            &marsh_decal_base_dds,&marsh_decal_height_dds,&marsh_decal_specular_dds,&volcano_base_dds,&volcano_height_dds,&volcano_active_base_dds,
+            &volcano_active_specular_dds,&water_clutter_base_dds,&water_clutter_height_dds,&grass_clutter_base_dds,&grass_clutter_height_dds,
+            &plains_clutter_base_dds,&plains_clutter_height_dds})file(*bytes);
+        files(feature_texture_dds);files(terrain_extra_dds);files(river_surface_dds);files(cliff_dds);files(river_rock_texture_dds);
+        files(route_texture_dds);files(bridge_texture_dds);files(resource_texture_dds);files(city_base_dds);files(city_emissive_dds);
+        files(wall_texture_dds);files(mine_base_dds);files(mine_emissive_dds);files(site_dds);files(farm_base_dds);files(farm_emissive_dds);
+        return dds;
     }
     void geometry_census(){
         struct Row {std::uint64_t unique=0,logical=0,vertices=0,indices=0,instances=0;unsigned chunks=0,rigid=0,aliases=0;std::array<unsigned,4> strides{};};
@@ -1046,6 +1066,41 @@ public:
                 static_cast<unsigned long long>(row.instances),row.rigid,row.aliases,row.strides[0],row.strides[1],row.strides[2],row.strides[3]);
             detail+=cell;}
         trace.write(first?"geometry-census":"geometry-census-more",detail.c_str(),true);
+        // CPU bytes the resident owners hold, each shared object once (KiB):
+        // owner records, chunk records, proof vectors by kind, instance lists,
+        // city lighting and resource anchors (review 87).
+        std::unordered_set<void const*> objects;std::uint64_t meshes=0,chunks=0,instances=0,lighting=0,anchors=0;
+        std::array<std::uint64_t,6> proofs{};
+        for(auto const& entry:tile_geometry_cache){auto const& owner=entry.second;
+            anchors+=owner.resource_anchors.capacity()*sizeof(ResourceAnchor);
+            if(!owner.mesh || !objects.insert(owner.mesh.get()).second)continue;
+            meshes+=sizeof(CachedMeshGeneration);
+            for(auto const& layer:owner.mesh->layers){chunks+=layer.capacity()*sizeof(CachedVertexChunk);
+                for(auto const& chunk:layer){
+                    if(chunk.instances && objects.insert(chunk.instances.get()).second)
+                        instances+=chunk.instances->capacity()*sizeof((*chunk.instances)[0]);
+                    if(chunk.city_lighting && objects.insert(chunk.city_lighting.get()).second)
+                        lighting+=sizeof(*chunk.city_lighting)+chunk.city_lighting->lights.capacity()*sizeof(chunk.city_lighting->lights[0])+
+                            chunk.city_lighting->blockers.capacity()*sizeof(chunk.city_lighting->blockers[0]);
+                }}
+            auto const* proof=owner.mesh->proof.get();
+            if(!proof || !objects.insert(proof).second)continue;
+            proofs[0]+=proof->appearance_dependencies.capacity()*sizeof(proof->appearance_dependencies[0]);
+            proofs[1]+=proof->dependencies.capacity()*sizeof(proof->dependencies[0]);
+            proofs[2]+=proof->coast_dependencies.capacity()*sizeof(proof->coast_dependencies[0]);
+            proofs[3]+=proof->world_dependencies.capacity()*sizeof(proof->world_dependencies[0]);
+            proofs[4]+=proof->river_dependencies.capacity()*sizeof(proof->river_dependencies[0]);
+            proofs[5]+=proof->anchor_dependencies.capacity()*sizeof(proof->anchor_dependencies[0])+sizeof(*proof);
+        }
+        char cpu[560];std::snprintf(cpu,sizeof(cpu),
+            "dds_kb=%llu owners_kb=%llu meshes_kb=%llu chunks_kb=%llu appearance_kb=%llu dependencies_kb=%llu coast_kb=%llu world_kb=%llu river_kb=%llu anchor_proof_kb=%llu instances_kb=%llu lighting_kb=%llu anchors_kb=%llu",
+            static_cast<unsigned long long>(texture_file_bytes()>>10),
+            static_cast<unsigned long long>(tile_geometry_cache.size()*(sizeof(CachedTileGeometry)+32)>>10),static_cast<unsigned long long>(meshes>>10),
+            static_cast<unsigned long long>(chunks>>10),static_cast<unsigned long long>(proofs[0]>>10),static_cast<unsigned long long>(proofs[1]>>10),
+            static_cast<unsigned long long>(proofs[2]>>10),static_cast<unsigned long long>(proofs[3]>>10),static_cast<unsigned long long>(proofs[4]>>10),
+            static_cast<unsigned long long>(proofs[5]>>10),static_cast<unsigned long long>(instances>>10),static_cast<unsigned long long>(lighting>>10),
+            static_cast<unsigned long long>(anchors>>10));
+        trace.write("geometry-census-cpu",cpu,true);
     }
     std::size_t world_owner_gpu_bytes(CachedTileGeometry const& owner)const{
         std::unordered_set<ID3D11Buffer*> unique;
@@ -6464,7 +6519,7 @@ public:
     }
 
     void clear_tile_geometry_cache() {
-        world_gpu_residency_ready=false;world_gpu_records.clear();world_gpu_current.clear();resident_world_clear();
+        world_gpu_residency_ready=world_backing_released=false;world_gpu_records.clear();world_gpu_current.clear();resident_world_clear();
         sandbox_shadow_meshes.clear();
         residency_candidates.clear();
         natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
@@ -9390,9 +9445,15 @@ public:
             // optimistic measurement to allocate more optional world content.
             tile_geometry_runtime_budget=tile_geometry_cache_bytes+retired_content->bytes.load()+terrain_patch_index_bytes;
         }
-        if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency)
-            tile_geometry_runtime_budget=std::min(tile_geometry_runtime_budget,canonical_geometry_bytes()+
-                retired_content->bytes.load()+terrain_patch_index_bytes+view_geometry_allowance);
+        if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency){
+            // Without its RAM copy, evicting world tiles for free memory would
+            // compile them again; with it, they churned about 9 tiles per
+            // frame through restores on the busy save (review 87).
+            tile_geometry_runtime_budget=c3x_renderer::render_core::FrameWorkingSet::tier_geometry(tile_geometry_runtime_budget,
+                canonical_geometry_bytes()+retired_content->bytes.load()+terrain_patch_index_bytes,view_geometry_allowance,world_backing_released);
+            if(tile_geometry_required_budget)
+                tile_geometry_required_budget=std::max(tile_geometry_required_budget,tile_geometry_runtime_budget);
+        }
         if(cpu_terrain_workers!=requested_workers){terrain_preparation.clear();cpu_terrain_workers=requested_workers;}
         bool const cpu_terrain_enabled=cpu_terrain_workers && fidelity_profile && retained_world;
         unsigned active_terrain_workers=cpu_terrain_workers;
@@ -16106,6 +16167,25 @@ private:
                     }
                     if(service)service();
                 }
+            }
+            // A world key the sweep made GPU-resident has a valid owner, so
+            // preparation schedules no job for it; its RAM copy would serve
+            // only restores after evictions, which the geometry tier no
+            // longer makes once it is released. Keys the sweep refused keep
+            // theirs (196-1,618 of 16,900 keys, 0.5-13 MB, on the busy save);
+            // they must fit the tier's view allowance, or nothing is released.
+            std::size_t refused=0;
+            for(auto const& record:renderer_state.world_gpu_records)if(record.second.state!=1)refused+=record.second.required;
+            char control[4]={};
+            if(complete && renderer_state.geometry_tier && refused<=renderer_state.view_geometry_allowance &&
+               !(c3x_renderer::render_core::cached_environment("C3X_RENDERER_WORLD_BACKING_CONTROL",control,sizeof(control)) && control[0]=='1')){
+                auto before=renderer_state.world_backing.statistics();
+                for(auto const& record:renderer_state.world_gpu_records)
+                    if(record.second.state==1)renderer_state.world_backing.invalidate(record.first);
+                auto after=renderer_state.world_backing.statistics();renderer_state.world_backing_released=true;
+                sprintf_s(detail,"released_records=%u released_bytes=%llu kept_records=%u kept_bytes=%llu",before.records-after.records,
+                    static_cast<unsigned long long>(before.bytes-after.bytes),after.records,static_cast<unsigned long long>(after.bytes));
+                renderer_state.trace.write("world-backing-released",detail,true);
             }
             renderer_state.world_gpu_report(complete);
         }

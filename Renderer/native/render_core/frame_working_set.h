@@ -85,6 +85,15 @@ struct FrameWorkingSet {
         auto usable=available>floor?available-floor:0;
         return std::min(ceiling,owned+std::min(usable/2,gpu_headroom-gpu_headroom/5));
     }
+    // Fixed geometry tier in whole-world residency: the explored world's
+    // canonical bytes plus a fixed view-specific allowance, never more than
+    // the free-memory budget. Once the world's RAM copy is released, the
+    // resident world is the only prepared copy: evicting it for free memory
+    // would compile tiles again, and admitting a refused key would evict
+    // another. The tier alone then bounds geometry.
+    static std::size_t tier_geometry(std::size_t budget,std::size_t canonical,std::size_t allowance,bool sole_copy){
+        return sole_copy?canonical+allowance:std::min(budget,canonical+allowance);
+    }
     static Content content(std::size_t available,std::size_t resident,std::size_t ceiling,unsigned workers){
         // Keep one ready slot beside every configured active lane. Reducing
         // this allowance under pressure serializes demanded compilation as soon
