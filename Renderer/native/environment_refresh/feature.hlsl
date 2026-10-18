@@ -1,7 +1,11 @@
 // Shared scalar policy; also included inside the CPU lighting namespace.
-// Dynamic ground footprints approximate lost direct illumination on a cached
-// background. Self/world receivers preserve their material's ambient term.
-static const float c3x_dynamic_shadow_opacity = 0.48f;
+// Dynamic ground footprints (units, animated resources) blend over a cached
+// background. They remove the share of open flat-ground light that a world
+// shadow removes, so terrain, forest, city, unit and resource shadows match.
+// Inputs are the luminance of frame_illumination with and without shadow.
+inline float c3x_dynamic_shadow_opacity(float open_ground, float shaded_ground) {
+    return open_ground > .0001f ? 1 - shaded_ground / open_ground : 0;
+}
 
 // Translate the authoritative Civ III viewport vertex contract into the
 // approved terrain shader contract. Production keeps a frozen copy of the
@@ -1518,8 +1522,7 @@ float4 q6_raw_main(PixelInput input)
         clip(coverage - 0.08);
         // One restrained sample anchors the body without a generic blob or a
         // full static-scene rerender on every animation tick.
-        float alpha = environment_shadow_strength * c3x_dynamic_shadow_opacity *
-            smoothstep(0.08, 0.35, coverage);
+        float alpha = c3x_dynamic_shadow_opacity(dot(frame_illumination(float3(0, 0, 1), 1, 1), float3(0.2126, 0.7152, 0.0722)), dot(frame_illumination(float3(0, 0, 1), 0, 1), float3(0.2126, 0.7152, 0.0722)));
         clip(alpha - 0.004);
         return float4(0.008, 0.011, 0.016, alpha);
     }

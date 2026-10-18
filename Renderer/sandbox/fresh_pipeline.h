@@ -1989,6 +1989,7 @@ struct SandboxFreshPipeline {
     ID3D11Buffer* aquatic_bounds_buffer=nullptr;
     ID3D11BlendState* terrain_material_blend=nullptr;
     ID3D11DepthStencilState* aquatic_depth=nullptr;
+    ID3D11DepthStencilState* resource_shadow_once=nullptr;
     c3x_renderer::render_core::LinearRestore static_restore;
     c3x_renderer::render_core::DrawParameterStream parameters;
     using PreparedParameters=c3x_renderer::render_core::PreparedDrawParameters<ViewportShaderSettings,geometry_layer_count>;
@@ -2330,6 +2331,7 @@ struct SandboxFreshPipeline {
         if(aquatic_bounds_buffer)aquatic_bounds_buffer->Release();
         if(terrain_material_blend)terrain_material_blend->Release();
         if(aquatic_depth)aquatic_depth->Release();
+        if(resource_shadow_once)resource_shadow_once->Release();
 #ifndef C3X_RENDERER64_FRESH
         if (production_reflection) {
             renderer.scene_reflection_view=production_reflection;
@@ -2712,7 +2714,18 @@ struct SandboxFreshPipeline {
             context->PSSetShaderResources(116,8,renderer.resource_texture_views.data());
             ID3D11SamplerState* shadow_samplers[]={renderer.natural_wrap,renderer.natural_clamp};
             context->PSSetSamplers(0,2,shadow_samplers);
-            context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
+            if(!resource_shadow_once){
+                // As unit ground shadows: the first footprint fragment at a
+                // pixel marks it, so legs over a body darken the ground once.
+                D3D11_DEPTH_STENCIL_DESC d={};renderer.natural.decal_depth->GetDesc(&d);
+                d.StencilEnable=TRUE;d.StencilReadMask=d.StencilWriteMask=0xff;
+                d.FrontFace.StencilFunc=D3D11_COMPARISON_EQUAL;
+                d.FrontFace.StencilFailOp=d.FrontFace.StencilDepthFailOp=D3D11_STENCIL_OP_KEEP;
+                d.FrontFace.StencilPassOp=D3D11_STENCIL_OP_INCR_SAT;d.BackFace=d.FrontFace;
+                if(FAILED(renderer.device->CreateDepthStencilState(&d,&resource_shadow_once)))return false;
+            }
+            context->ClearDepthStencilView(depth,D3D11_CLEAR_STENCIL,1,0);work.clear(depth);
+            context->OMSetDepthStencilState(resource_shadow_once,0);
             if(!issue_records(inputs,geometry_shadow,settings,rect,false)){
                 std::printf("SANDBOX_RESOURCE_DRAW_ERROR pass=shadow records=%zu\n",
                     poses[geometry_shadow].size());std::fflush(stdout);return false;

@@ -50,7 +50,9 @@
     "Renderer.tools.asset_compiler.test_school_orientation",
     "Renderer.tools.asset_compiler.test_herd_spacing",
     "Renderer.native.test_resource_decal_slope",
-    "Renderer.native.test_resource_route_clearance"
+    "Renderer.native.test_resource_route_clearance",
+    "Renderer.native.test_resource_shadow_union",
+    "Renderer.native.test_dynamic_shadow_opacity"
   ],
   "references": {
     "d3d11": [

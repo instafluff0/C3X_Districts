@@ -403,7 +403,7 @@ public:
         }
         beauty[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/(noon.sun_intensity+noon.moon_intensity);
         beauty[7]=1;beauty[11]=.62f;beauty[12]=.490290f;beauty[13]=-.735435f;beauty[14]=.469979f;
-        beauty[16]=float(shadow.extent);beauty[17]=look[0];beauty[18]=look[1];beauty[19]=look[2];
+        beauty[15]=environment.shadow_strength;beauty[16]=float(shadow.extent);beauty[17]=look[0];beauty[18]=look[1];beauty[19]=look[2];
         context->UpdateSubresource(beauty_frame,0,nullptr,beauty,0,0);
         context->PSSetConstantBuffers(1,1,&beauty_frame);context->PSSetSamplers(1,1,&samplers[3]);
         pose_ms+=elapsed();
@@ -809,7 +809,7 @@ private:
         UnitPoseInput input;input.phase=pose.phase;input.direction=key.direction;input.width=key.width;input.height=key.height;
         input.anchor_x=pose.anchor_x-request.body_x;input.anchor_y=pose.anchor_y-request.body_y;input.zoom=pose.projection_scale;
         auto environment=evaluate_environment(float(request.hour),request.season);
-        input.shadow_strength=environment.shadow_strength;auto light=lighting::key_light(environment);
+        input.shadow_opacity=lighting::dynamic_shadow_opacity(environment);auto light=lighting::key_light(environment);
         input.light_x=light.direction[0];input.light_y=light.direction[1];
         input.source.scale=unit.scale;input.source.yaw_offset=unit.yaw_offset;input.source.offset_z=unit.offset_z;
         input.source.allow_exit_clip=action.allow_exit_clip;input.source.shadow_extent=unit.minimum_canvas?1536:128;

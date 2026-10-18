@@ -478,7 +478,7 @@ float4 PSShadow(Output i):SV_Target {
             (noon.sun_intensity+noon.moon_intensity);
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
-        beauty_values[14]=.469979f;beauty_values[16]=1;
+        beauty_values[14]=.469979f;beauty_values[15]=environment.shadow_strength;beauty_values[16]=1;
         context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);work->upload_buffer(beauty);
         double seconds=double(frame.presentation_time_ticks)/
             double(std::max<c3x_renderer_i64>(1,frame.presentation_frequency));
@@ -834,7 +834,8 @@ float4 PSShadow(Output i):SV_Target {
             (noon.sun_intensity+noon.moon_intensity);
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
-        beauty_values[14]=.469979f;beauty_values[16]=float(shadow_fit.extent);
+        // Self-shadowed limbs lose the share of direct light world shadows do.
+        beauty_values[14]=.469979f;beauty_values[15]=environment.shadow_strength;beauty_values[16]=float(shadow_fit.extent);
         if(!look_read){char option[64]={};look_read=true;
             look_override=GetEnvironmentVariableA("C3X_RENDERER_UNIT_LOOK",option,sizeof(option))&&
                sscanf_s(option,"%f,%f,%f",&look[0],&look[1],&look[2])==3;
@@ -1195,8 +1196,8 @@ float4 PSShadow(Output i):SV_Target {
                 c3x_renderer::SceneProjection(frame.target_width,frame.target_height,zoom)
                     .unit_placement(placement_values.data(),guard,scene_scale);
                 if(layer==0){
-                    // The shared dynamic-shadow policy animated resources use.
-                    placement_values[14]=environment.shadow_strength*c3x_renderer::lighting::c3x_dynamic_shadow_opacity;
+                    // Darken the ground as much as a world shadow does.
+                    placement_values[14]=c3x_renderer::lighting::dynamic_shadow_opacity(environment);
                     placement_values[16]=1;
                     placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;

@@ -50,11 +50,12 @@ float4 PSReflection(PixelInput input):SV_Target {
     feature=feature.replace('+ c3x_viewport_translation.y;', '+ c3x_viewport_depth_translation;')
     feature=feature.replace('// Use a power-of-two pixel depth range. An integer camera movement now adds\n// an exactly representable depth offset; coplanar neighbors cannot exchange\n// their depth-test order because of viewport-dependent division roundoff.','// Use one power-of-two pixel depth range, independent of raster-region XY.\n// Integer basis offsets are representable, but D24 rasterization can still\n// change near-coplanar rounding at a world-origin transition. Material order\n// and depth-write rules remain explicit; stored depth carries its basis.')
     feature=read(LAB/'shaders/lighting/shadow_policy.hlsl')+'\n'+feature
-    old='float alpha = frame_cast_shadow_strength() * 0.22 *'
+    old='float alpha = frame_cast_shadow_strength() * 0.22 *\n            smoothstep(0.08, 0.35, coverage);'
     assert feature.count(old)==1
-    # Native unit footprints use the captured strength directly. The legacy
-    # feature floor would otherwise make resource shadows stronger at night.
-    feature=feature.replace(old,'float alpha = environment_shadow_strength * c3x_dynamic_shadow_opacity *')
+    # Resource footprints darken open ground uniformly, as much as a world
+    # shadow; the stencil keeps one fragment per pixel. The legacy feature
+    # floor would otherwise make them stronger at night.
+    feature=feature.replace(old,'float alpha = c3x_dynamic_shadow_opacity(dot(frame_illumination(float3(0, 0, 1), 1, 1), float3(0.2126, 0.7152, 0.0722)), dot(frame_illumination(float3(0, 0, 1), 0, 1), float3(0.2126, 0.7152, 0.0722)));')
     feature=feature.replace('tile_object_weight * 0.07);','tile_object_weight * 0.07 * (1.0-step(0.175, material_fraction)));')
     # The retained feature provider predates the common paged receiver. Bind
     # the current filter here as well as in the natural shader generator.

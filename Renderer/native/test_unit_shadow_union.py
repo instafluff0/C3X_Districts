@@ -157,8 +157,8 @@ class UnitShadowUnionTests(unittest.TestCase):
     def test_layer_zero_selects_single_darkening_state(self):
         text = DIRECT.read_text()
         self.assertIn("context->OMSetDepthStencilState(shadow_once,0);", text)
-        # One shadow at the shared dynamic-shadow strength animated resources use.
-        self.assertIn("placement_values[14]=environment.shadow_strength*c3x_renderer::lighting::c3x_dynamic_shadow_opacity;", text)
+        # One shadow, as dark as a world shadow on the same open ground.
+        self.assertIn("placement_values[14]=c3x_renderer::lighting::dynamic_shadow_opacity(environment);", text)
         # Floating hulls below z=0 shade their footprint (see the GPU test).
         self.assertIn("float above=max(z,0);x+=above*pass_control.y;y+=above*pass_control.z;z=0;", text)
 

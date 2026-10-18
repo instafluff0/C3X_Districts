@@ -18,7 +18,7 @@ struct UnitPoseInput {
     double phase=0;
     bool gpu_shadow=false;
     int direction=1,width=1,height=1,anchor_x=0,anchor_y=0;
-    float zoom=1,light_x=0,light_y=0,shadow_strength=1;
+    float zoom=1,light_x=0,light_y=0,shadow_opacity=1;
 };
 struct UnitPoseContent {
     UnitShadow shadow;
@@ -110,7 +110,7 @@ struct UnitPoseCompiler {
         // with the rendered body's alpha without reading the body back.
         if(w<1||h<1||w>1024||h>1024)return {};
         result->ground_projection={float(input.anchor_x),float(input.anchor_y),zoom,
-            255*lighting::c3x_dynamic_shadow_opacity*input.shadow_strength,
+            255*input.shadow_opacity,
             shadow.left,shadow.top,shadow.width,shadow.height,float(shadow.extent)};
         if(!input.gpu_shadow)result->ground_shadow.resize(std::size_t(w)*h);
         for(int y=0;!input.gpu_shadow && y<h;++y){
@@ -119,7 +119,7 @@ struct UnitPoseCompiler {
                 float sx=(float(x)+.5f-float(input.anchor_x))/(64*zoom);
                 float sy=(float(y)+.5f-float(input.anchor_y))/(32*zoom);
                 float fade=std::clamp(float(std::min({x,y,w-1-x,h-1-y}))/3,0.f,1.f);
-                result->ground_shadow[std::size_t(y)*w+x]=static_cast<unsigned char>(255*lighting::c3x_dynamic_shadow_opacity*input.shadow_strength*fade*shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
+                result->ground_shadow[std::size_t(y)*w+x]=static_cast<unsigned char>(255*input.shadow_opacity*fade*shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
             }
         }
         result->uploads.resize(source.meshes.size());
@@ -170,7 +170,7 @@ struct UnitPoseCompiler {
         for(auto const& part:result->uploads)for(auto const& v:part)include((v[0]+1)*w*.5f,(1-v[1])*h*.5f);
         // The 3x3 height filter reaches one cell beyond its stored domain.
         // Extra cells and two pixels conservatively cover floor/MSAA rounding.
-        if(input.shadow_strength>0){float dx=shadow.width*2/shadow.extent,dy=shadow.height*2/shadow.extent;
+        if(input.shadow_opacity>0){float dx=shadow.width*2/shadow.extent,dy=shadow.height*2/shadow.extent;
             for(float x:{shadow.left-dx,shadow.left+shadow.width+dx})for(float y:{shadow.top-dy,shadow.top+shadow.height+dy})
                 include(input.anchor_x+(x-y)*64*zoom,input.anchor_y+(x+y)*32*zoom);}
         result->coverage={std::clamp(int(std::floor(left))-2,0,w),std::clamp(int(std::floor(top))-2,0,h),

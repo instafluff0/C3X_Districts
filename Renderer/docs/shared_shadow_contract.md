@@ -44,10 +44,20 @@ the unit cache, plus dirty-region proofs. The subsequent hut/camp integration ad
 API 17 and static world geometry, using the existing map boundary. Natural
 wonders, constructed wonders and Districts remain deferred.
 
-Both dynamic ground paths use `shadow_policy.hlsl` for opacity, with the
-captured environment's shadow strength directly; animated resources do not
-apply the legacy feature shader's separate night-time minimum. Actual self/world visibility attenuates
-direct illumination and leaves the material's ambient contribution intact.
+Actual self/world visibility attenuates direct illumination and leaves the
+material's ambient contribution intact. Both dynamic ground paths blend one
+uniform opacity from `shadow_policy.hlsl`: the share of open flat-ground light
+that a world shadow removes under the same `frame_illumination`, so unit,
+animated-resource, terrain, forest and city shadows match at every hour.
+Animated resources evaluate it in the shader; units use the CPU copy in
+`scene_lighting.h` (`test_dynamic_shadow_opacity` keeps them equal). A unit's
+pose-local self-shadow likewise removes only the environment's shadow-strength
+share of direct light (BeautyFrame `View.w`), so a limb in its body's shadow is
+no darker than ground in a world shadow. Each
+dynamic pass clears the stencil and keeps the first fragment per pixel, so
+overlapping parts, legs and bodies darken the ground once
+(`test_unit_shadow_union`, `test_resource_shadow_union`). Unit and resource
+footprints are separate unions and still darken a world shadow they fall in.
 The shared paged receiver owns cross-page sampling, receiver-plane depth bias,
 3-by-3 filtering and tight contact. Local unit filtering remains limited to its
 128-square pose raster and native sprite rectangle; it is not a world receiver.

@@ -74,10 +74,15 @@ def generate(source_root=None, output_root=None, output_name='terrain_scene.hlsl
         float coverage = resource_base_texture_0.Sample(
             material_sampler, input.uv).a;
         clip(coverage - 0.08);
-        // One restrained sample anchors the body without a generic blob or a
-        // full static-scene rerender on every animation tick.
-        float alpha = environment_shadow_strength * c3x_dynamic_shadow_opacity *
-            smoothstep(0.08, 0.35, coverage);
+        // One sample anchors the body without a generic blob or a full
+        // static-scene rerender on every animation tick. It darkens open
+        // ground exactly as much as a world shadow from the same light, and
+        // uniformly: the stencil keeps the first fragment, so a leg over the
+        // body cannot darken the ground twice or leave a lighter seam.
+        float3 ground_luma = float3(0.2126, 0.7152, 0.0722);
+        float alpha = c3x_dynamic_shadow_opacity(
+            dot(frame_illumination(float3(0, 0, 1), 1, 1), ground_luma),
+            dot(frame_illumination(float3(0, 0, 1), 0, 1), ground_luma));
         clip(alpha - 0.004);
         return float4(0.008, 0.011, 0.016, alpha);
     }''' + text[finish:]

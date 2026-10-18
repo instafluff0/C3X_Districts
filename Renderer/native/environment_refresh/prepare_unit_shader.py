@@ -72,13 +72,16 @@ float4 PS(Output i):SV_Target {
   int2 q=cell+int2(ox,oy);
   if(all(q>=0) && all(q<int(Quality.x)))occluded+=(shadow_map.Load(int3(q,0))>i.shadow.x+.006)?1.0/9:0;
  }
+ // View.w carries the environment's shadow strength (0: unset, full) so a
+ // self-shadowed limb loses the share of direct light a world shadow does.
+ float visibility=1-(View.w>0?View.w:1)*occluded;
  float3 radiance;
- if(moon_color.w>.5)radiance=unit_microfacet_response(i,albedo,n,1-occluded);
+ if(moon_color.w>.5)radiance=unit_microfacet_response(i,albedo,n,visibility);
  else {
   float ao=channels.x>.5?lerp(.48,1,ambient_occlusion.Sample(sample_base,i.uv).r):1;
   float gloss=channels.y>.5?gloss_texture.Sample(sample_base,i.uv).r:.08;
   float3 emission=channels.z>.5?emissive_texture.Sample(sample_emission,i.uv).rgb:0;
-  radiance=beauty_unit_response(albedo,n,ao,gloss,emission,1-occluded);
+  radiance=beauty_unit_response(albedo,n,ao,gloss,emission,visibility);
  }
  if(Quality.y>0||Quality.z>0) {
   float l=dot(radiance,float3(.2126,.7152,.0722));

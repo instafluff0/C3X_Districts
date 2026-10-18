@@ -35,6 +35,21 @@ inline KeyLight key_light(EnvironmentState const& e) {
     return out;
 }
 
+// CPU copy of the gameplay frame_illumination (Q6_GAMEPLAY_NIGHT) on open
+// flat ground, lit by the key light. Unit ground shadows blend this opacity.
+inline float dynamic_shadow_opacity(EnvironmentState const& e) {
+    float z=key_light(e).direction[2],night=e.night_activation;
+    float luma[3]={.2126f,.7152f,.0722f},open=0,shaded=0;
+    for(unsigned i=0;i<3;++i) {
+        float ambient=e.ambient_color[i]*.46f*(1+.8f*night);
+        float direct=e.sun_color[i]*e.sun_intensity*(.16f+.84f*z)+
+            e.moon_color[i]*e.moon_intensity*(.20f+.80f*z)*.82f*2.2f;
+        open+=luma[i]*(ambient+direct);
+        shaded+=luma[i]*(ambient+direct*(1-e.shadow_strength));
+    }
+    return c3x_dynamic_shadow_opacity(open,shaded);
+}
+
 inline std::array<float,12> shadow_frame(EnvironmentState const& e) {
     auto l=key_light(e).direction;
     float h=std::hypot(l[0],l[1]),x=l[0]/h,y=l[1]/h;

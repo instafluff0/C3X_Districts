@@ -1126,7 +1126,7 @@ public:
     ID3D11BlendState * reflection_terrain_blend = nullptr;
     ID3D11BlendState * reflection_coverage_blend = nullptr;
     static constexpr float mountain_mirror_coverage[4] = {.5f, .5f, .5f, .5f};
-    ID3D11DepthStencilState * depth_state = nullptr;
+    ID3D11DepthStencilState * depth_state = nullptr, *resource_shadow_once = nullptr;
     ID3D11RasterizerState * rasterizer_state = nullptr;
     ID3D11SamplerState * natural_wrap = nullptr, *natural_clamp = nullptr;
     ID3D11SamplerState * terrain_sampler = nullptr;
@@ -1727,6 +1727,7 @@ public:
         release(terrain_sampler);
         release(rasterizer_state);
         release(depth_state);
+        release(resource_shadow_once);
         release(blend_state);
         release(reflection_terrain_blend);
         release(reflection_coverage_blend);
@@ -8082,10 +8083,23 @@ public:
         context->PSSetSamplers(0,2,shadow_samplers);
         context->VSSetShader(vertex_shader,nullptr,0);
         context->PSSetShader(resource_shadow_shader,nullptr,0);
+        if(!resource_shadow_once){
+            // The first footprint fragment at a pixel marks it, so legs over
+            // a body darken the ground once (as unit ground shadows do).
+            D3D11_DEPTH_STENCIL_DESC d={};depth_state->GetDesc(&d);
+            d.StencilEnable=TRUE;d.StencilReadMask=d.StencilWriteMask=0xff;
+            d.FrontFace.StencilFunc=D3D11_COMPARISON_EQUAL;
+            d.FrontFace.StencilFailOp=d.FrontFace.StencilDepthFailOp=D3D11_STENCIL_OP_KEEP;
+            d.FrontFace.StencilPassOp=D3D11_STENCIL_OP_INCR_SAT;d.BackFace=d.FrontFace;
+            if(FAILED(device->CreateDepthStencilState(&d,&resource_shadow_once)))return false;
+        }
+        context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_STENCIL,1,0);
+        context->OMSetDepthStencilState(resource_shadow_once,0);
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
         if(!diagnostic_animation)
 #endif
         if(!draw_cached_geometry(geometry_shadow,buffers,rectangles,settings,nullptr))return false;
+        context->OMSetDepthStencilState(depth_state,0);
         // Shoreline foam uses the same retained scene depth and lighting as
         // the static water. Only selected ribbons draw; terrain stays resident.
         if(wave_ready && !buffers[geometry_wave].empty()){

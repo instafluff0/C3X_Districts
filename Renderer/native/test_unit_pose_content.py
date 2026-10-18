@@ -43,7 +43,7 @@ int main(){
  for(int y=0;y<input.height;++y)for(int x=0;x<input.width;++x){
   float sx=(float(x)+.5f-float(input.anchor_x))/(64*input.zoom),sy=(float(y)+.5f-float(input.anchor_y))/(32*input.zoom);
   float fade=std::clamp(float(std::min({x,y,input.width-1-x,input.height-1-y}))/3,0.f,1.f);
-  unsigned expected=unsigned(255*lighting::c3x_dynamic_shadow_opacity*input.shadow_strength*fade*control->shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
+  unsigned expected=unsigned(255*input.shadow_opacity*fade*control->shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
   assert(result->ground_shadow[std::size_t(y)*input.width+x]==expected);
   if(expected)assert(x>=selected->coverage[0]&&y>=selected->coverage[1]&&x<selected->coverage[2]&&y<selected->coverage[3]);
  }
