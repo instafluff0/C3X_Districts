@@ -2172,6 +2172,14 @@ struct SandboxFreshPipeline {
         for(unsigned i=0;i<a.view.size();++i)if(i!=2 && i!=3 && a.view[i]!=b.view[i])return false;
         return true;
     }
+    // A pixel lands at vertex + (camera + 4) on screen and at vertex +
+    // (mirror camera + 8) in the mirror, both scaled about the view centre,
+    // so a reused mirror is read at screen + 4 + this shift. The opposite
+    // sign read it two steps off: for 150 ms after each scroll step the
+    // shallows mirrored the coast out to a displaced copy of the coastline.
+    static float reused_mirror_shift(int camera,int mirror_camera,float zoom){
+        return float(double(mirror_camera-camera)*zoom);
+    }
     bool reflected_terrain_material_valid=false;
     bool mirror_mountain_coverage=false;
     bool reflection_valid=false;
@@ -5254,8 +5262,8 @@ struct SandboxFreshPipeline {
             }
             if(!redraw){
                 ++reflection_reuses;if(work.enabled)++work.row().reuses;
-                reflection_shift[0]=float(double(camera_x-reflection_camera_x)*projection_zoom);
-                reflection_shift[1]=float(double(camera_y-reflection_camera_y)*projection_zoom);
+                reflection_shift[0]=reused_mirror_shift(camera_x,reflection_camera_x,projection_zoom);
+                reflection_shift[1]=reused_mirror_shift(camera_y,reflection_camera_y,projection_zoom);
             }
             else {
             if(work.enabled)++work.row().rebuilds;

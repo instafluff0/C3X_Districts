@@ -4172,8 +4172,8 @@ window margin (`missing_binding=145`, `user-3350BC` scroll).
   step to the side, then corrects. It appears with and without the water
   fix and with no ring at all. Those frames are deferred steps that reuse
   the previous view's static layer shifted (`static-compose camera=-2400,-300
-  slot=-2208,-300 shifted=1`) while water is redrawn each frame, which
-  suggests the water's shallow tint reads the previous view's depth.
+  slot=-2208,-300 shifted=1`) while water is redrawn each frame. The cause
+  was the reused water mirror, not the static layer (review 86).
 
 **Tests.** Each fails on the previous code.
 - `test_loading_ring`:
@@ -4226,3 +4226,56 @@ the first `world-window` trace. A discarded warm-up run preceded each series.
 - The remaining first-frame cost is the price of drawing the whole map.
   Drawing the outer ring only from the second view would move that GPU work
   later, and a reveal in the first seconds would wait for the second view.
+
+## 86. Coastal ghost after a scroll step: the reused mirror's offset (October 17)
+
+**Report.** For one or two frames after a scroll step, the shallows along a
+coast take a greener tint that ends at a sharp, ragged copy of the coastline
+out in open water, then correct (user; `user-3350BC` scroll, review 85).
+
+**Cause.**
+- Within 150 ms of a camera move, a mirror changed only by the camera is
+  reused with a sampling offset instead of redrawn (review, October 3). The
+  water pass reads it at screen + `NativeReflectionTarget.zw`, which was
+  4 + (camera − mirror camera) × zoom.
+- A pixel lands at vertex + (camera + 4) on screen and at vertex + (mirror
+  camera + 8) in the mirror, both scaled about the view centre, so the offset
+  is 4 + (mirror camera − camera) × zoom. The sign was reversed: the mirror
+  was read two steps to the side.
+- The sea mirrors terrain only where it is shallow, with full coverage
+  wherever mirrored land has colour. The shallows therefore showed mirrored
+  land out to the displaced coastline, with a hard, stair-stepped edge (the
+  mirror's reduced raster). Rivers read the mirror the same way.
+- Confirmed in the 10 Hz frames and trace: the ghost frame was shown between
+  frames that reused the mirror (`reflection_draws` unchanged at the camera
+  change) and the exact redraw at 227 ms; the next frame was correct. The
+  static layer and water depth were registered correctly.
+
+**Change.** `fresh_pipeline.h`: `reused_mirror_shift` gives the reused
+mirror's offset with the correct sign. Reuse, its 160×96 bound and the
+150 ms redraw are unchanged.
+
+**Test.** `test_mirror_reuse_shift` projects world points through
+`SceneProjection` for the screen pass (camera + 4, guard 4) and the mirror
+pass (camera + 8, guard 8) at seven zooms, eight steps and nine cameras, and
+requires the water pass to read the same point from a reused mirror. It also
+pins the translations, guards and sampling expressions it models. Old: at
+0.5×, a 64 px step read 64 display px to the side.
+
+**Measured.** `user-3350BC`, `scroll`, `-SampleHz 10 -ProfileRenderer`; the
+staged build against the same working tree plus this change, staged
+temporarily. Mirrored-land band: pixels (half scale) whose green-minus-blue
+changed by more than 6 between a step's first frame and the next, against the
+next same-camera pair.
+
+| | steps with a band | band, median / max | control, median / max |
+|---|---|---|---|
+| before | 8 of 20 | 193 / 8852 | 19 / 337 |
+| after | 0 of 20 | 30 / 363 | 103 / 375 |
+
+- "A band" is more than three times the control plus 200. The after
+  control leaves out one pair that spanned the next step.
+
+- Both builds reused the mirror on 14 of 20 moved frames and redrew it 19
+  and 20 times; 1057 and 1065 traced scene frames. The change does no
+  additional work.
