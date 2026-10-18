@@ -85,6 +85,14 @@ Report original(WorldCoast const& world_coast,ExactPointCache<ShoreSample>& shor
                     auto sample = world_coast.sample_with_lookup({u,v},
                         [&](auto id,auto revision) { coast_dependencies.emplace(id,revision); }, world_lookup, &shore_patch);
                     if(u==shore_center_u && v==shore_center_v){shore_center=sample;shore_center_ready=true;}
+                    // Rockiness and beach width belong to the point within a
+                    // tile of the shore (continuous where the nearest foot jumps).
+                    if(std::abs(sample.distance)<1.5){
+                        c3x_renderer::render_core::ShoreField field(world_coast.world().dimensions(),world_lookup);
+                        c3x_renderer::render_core::Point p{u-.5,v-.5};
+                        sample.rocky=field.rockiness(p);
+                        sample.beach_width=(.065+.18*field.world_noise(p,.66,628))*(1-sample.rocky);
+                    }
                     return sample;
                 });
             };

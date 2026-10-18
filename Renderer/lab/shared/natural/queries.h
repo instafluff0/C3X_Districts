@@ -56,9 +56,23 @@ public:
         if(i!=std::size_t(-1))observe_world(i,topology.at(i));
         auto value=topology.tile(c,r);far_tiles.emplace(key,value);return value;
     }
+    // Rockiness and beach width at the point itself. A coast sample reads them
+    // at its nearest coast point, which jumps where two coast segments are
+    // equally near; hill and coastal-rim relief scaled by them stepped there (a
+    // sheer wall across a hill behind a rocky coast, dashes on its skirt). The
+    // farthest consumer, the ground's world_valid ramp, saturates by 1.25 tiles;
+    // farther samples are unchanged, as the center certificate assumes.
+    render_core::ShoreSample at_point(float u,float v,render_core::ShoreSample sample) {
+        if(std::abs(sample.distance)>=1.5)return sample;
+        render_core::ShoreField field(coast.world().dimensions(),[&](int c,int r){return tile(c,r);});
+        render_core::Point p{u-.5,v-.5};
+        sample.rocky=field.rockiness(p);
+        sample.beach_width=(.065+.18*field.world_noise(p,.66,628))*(1-sample.rocky);
+        return sample;
+    }
     void prime_center(render_core::ShoreSample const& value) {
         center=value;center_ready=true;
-        samples.get(center_u,center_v,[&](){return value;});
+        samples.get(center_u,center_v,[&](){return at_point(center_u,center_v,value);});
     }
     render_core::ShoreSample shore(float u,float v) {
         // Preserve the production center certificate and exact query cache.
@@ -72,7 +86,7 @@ public:
             auto sample=coast.sample_with_lookup({u,v},observe_coast,
                 [&](int c,int r){return tile(c,r);},&patch);
             if(u==center_u && v==center_v){center=sample;center_ready=true;}
-            return sample;
+            return at_point(u,v,sample);
         });
     }
     std::array<float,5> weights(float u,float v) {

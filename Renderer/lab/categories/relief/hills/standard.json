@@ -46,7 +46,8 @@
     "Renderer.tools.asset_compiler.test_hill_height_import",
     "Renderer.native.test_hill_decals",
     "Renderer.native.test_ground_tessellation",
-    "Renderer.native.test_hill_river_banks"
+    "Renderer.native.test_hill_river_banks",
+    "Renderer.native.test_shore_attribute_continuity"
   ],
   "references": {
     "d3d11": [
