@@ -493,6 +493,35 @@ calls. Extracted wheel/key/picking/HUD contracts, GPU composition through 3x and
 `TEST_INJECTED_CODE_COMPILE.bat` pass. These checks do not claim live-game visual
 acceptance for the newly extended range.
 
+## Territory borders from load
+
+`required_user_action: []`. The user authorized adding this row on
+2026-10-17, given the verified GOG address.
+
+| Capability | Symbol | GOG | Steam | PCGames.de |
+| --- | --- | --- | --- | --- |
+| `define` | `p_units_image_data` (`Units_Image_Data *`) | `0x0073DA40` | unverified (`0x0`) | unverified (`0x0`) |
+
+```csv
+define, 0x73DA40, 0x0, 0x0, "p_units_image_data", "Units_Image_Data *"
+```
+
+- **Why:** border capture (`read_custom_renderer_tile`) needs each civ's
+  palette (entry 64). It only had `is->custom_renderer_unit_images`, which the
+  `Units_Image_Data` trampolines set. `advance_animations` runs under
+  `Animator::update`, which Renderer64 skips while its resident front is
+  ready. So every capture from loading until the first unit animation had no
+  border edges or colour, and borders appeared only after a unit moved.
+- **Address:** Civ III's global `units_image_data`. In the GOG executable
+  (unmodified and installed), its static constructor at `0x405D10` is
+  `mov ecx,0x73DA40; call; push 0x405D30; call` (at-exit destructor).
+  `FUN_00403040` (civ colour) reads `[Color_Table_ID*4+0x73DA44]` after
+  `leaders[civ].Color_Table_ID` at `0xA53F90` (`leaders` `0xA52E98` + 0x10F8),
+  so `Color_Tables` is at +4, as in `Civ3Conquests.h`. `mov ecx,0x73DA40`
+  occurs 59 times.
+- **Fallback:** builds with `0x0` keep the previous behaviour (the trampoline
+  pointer). No function is patched; config-off is unchanged.
+
 ## Cities and territory borders Lab promotion
 
 `required_user_action: []`. This pass changes no patch-table entry.

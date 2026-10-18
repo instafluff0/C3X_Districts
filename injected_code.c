@@ -29092,10 +29092,14 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 			Map_Renderer * view = &p_bic_data->Map.Renderer;
 			bool hidden_borders = view != NULL && (view->Flags & 0x200) &&
 				((char (__fastcall *) (Map_Renderer *, int))view->vtable->m05_Check_dword_9AFD34)(view, __);
-			if (owner > 0 && owner < 32 && ! hidden_borders && is->custom_renderer_unit_images != NULL) {
+			// Civ III's own palette owner, as its civ colours read it. The unit-image
+			// trampolines only see it at the first unit animation, so borders
+			// were missing from load until a unit moved.
+			Units_Image_Data * unit_images = (p_units_image_data != NULL) ? p_units_image_data : is->custom_renderer_unit_images;
+			if (owner > 0 && owner < 32 && ! hidden_borders && unit_images != NULL) {
 				int palette_id = leaders[owner].Color_Table_ID;
 				PCX_Color_Table * palette = palette_id >= 0 && palette_id < 32 ?
-					is->custom_renderer_unit_images->Color_Tables[palette_id] : NULL;
+					unit_images->Color_Tables[palette_id] : NULL;
 				if (palette != NULL && palette->JGL_Color_Table != NULL) {
 					unsigned char rgb[3] = {0};
 					JGL_Color_Table * table = palette->JGL_Color_Table;

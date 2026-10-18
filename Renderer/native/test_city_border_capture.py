@@ -23,6 +23,8 @@ struct JGL_Color_Table{PaletteVT* vtable;};
 struct PCX_Color_Table{struct JGL_Color_Table* JGL_Color_Table;};
 struct Units_Image_Data{PCX_Color_Table* Color_Tables[32]={};};
 struct State{Units_Image_Data* custom_renderer_unit_images=nullptr;}state,*is=&state;
+// civ_prog_objects.csv: Civ III's global (GOG); null on builds without the address.
+Units_Image_Data* p_units_image_data=nullptr;
 struct Leader{int Color_Table_ID=0;}leaders[32];
 struct Map{Map_Renderer Renderer;int Flags=0,Width=8,Height=8;};
 struct Bic{struct Map Map;}bic,*p_bic_data=&bic;
@@ -54,6 +56,9 @@ int main(){
  hidden=false;r={};capture(&r,0,0);assert(r.territory_edge_mask==15);
  r={};r.territory_owner_id=0;capture(&r,0,0);assert(!r.territory_edge_mask);
  is->custom_renderer_unit_images=nullptr;r={};capture(&r,0,0);assert(!r.territory_edge_mask);
+ // From load, before any unit animation: Civ III's own palette owner.
+ p_units_image_data=&images;r={};capture(&r,0,0);
+ assert(r.territory_edge_mask==15&&r.territory_color_rgb==0x1791e7);
 }
 ''')
 
