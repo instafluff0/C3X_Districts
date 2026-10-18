@@ -238,21 +238,22 @@ int main(){
   tiles[i].anchor_y=100;tiles[i].tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBLE;}
  c3x_renderer_frame_v1 frame{};frame.tiles=tiles;frame.tile_count=2;frame.tile_width=128;frame.tile_height=64;
  frame.world_width_tiles=frame.world_height_tiles=12;
- auto capture=[&](int id,int group,int tile,long long ticks){
+ auto capture=[&](int id,int group,int tile,long long ticks,int action=1,int direction=0,unsigned flags=1){
   c3x_renderer_unit_state_v1 state{};state.struct_size=sizeof(state);state.unit_id=id;
-  state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.tile_x=tile;state.tile_y=4;state.action=1;
+  state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.tile_x=tile;state.tile_y=4;state.action=action;
   state.visible=1;state.max_hp=3;state.presentation_frequency=1000000;state.presentation_time_ticks=ticks;
   assert(world.state(state));
   c3x_renderer_unit_animation_v1 event{};event.struct_size=sizeof(event);event.display_unit_id=group;
-  auto& v=event.visual;v.struct_size=sizeof(v);v.unit_id=id;v.action=1;v.max_hp=3;v.flags=1;
+  event.frames=15;event.frame_seconds=.0625f;   // directed actions carry their clip cadence
+  auto& v=event.visual;v.struct_size=sizeof(v);v.unit_id=id;v.action=action;v.max_hp=3;v.flags=flags;
   v.projection_scale_milli=1000;v.target_x=(tile+1)*64;v.target_y=160;
   v.presentation_frequency=1000000;v.presentation_time_ticks=ticks;
   assert(world.observe_animation(event));
-  c3x_renderer_unit_v1 body{};body.struct_size=sizeof(body);body.unit_id=id;body.action=1;
+  c3x_renderer_unit_v1 body{};body.struct_size=sizeof(body);body.unit_id=id;body.action=action;body.direction=direction;
   body.frame_count=15;body.sprite_width=body.sprite_height=191;body.projection_scale_milli=1000;
   body.presentation_frequency=1000000;body.presentation_time_ticks=ticks;std::strcpy(body.unit_key,"warrior");
   UnitInstances::Selection selected;
-  assert(world.capture(body,1,catalog,[](int a){return a==2?"move":"idle";},selected));
+  assert(world.capture(body,flags,catalog,[](int a){return a==2?"move":"idle";},selected));
  };
  auto poses=[&](long long ticks){return world.scene_poses(frame,ticks,1000000,catalog);};
  capture(0,0,4,0);assert(poses(0).size()==1);
@@ -271,6 +272,17 @@ int main(){
  assert(moving!=p.end()&&moving->draw.action==2);
  p=poses(600006);assert(p.size()==2); // independent source + destination selections
  capture(0,0,6,900007);p=poses(900007);assert(p.size()==1&&p[0].draw.unit_id==0);
+ // Native FUN_005cc430: a loaded army's commander stands 40 px right of its
+ // member (20 px higher while it attacks east); the team disc stays under the member.
+ auto body=[](std::vector<UnitInstances::ScenePose> const& all,int id){
+  auto found=std::find_if(all.begin(),all.end(),[&](auto const& pose){return pose.draw.unit_id==id;});
+  assert(found!=all.end());return *found;};
+ unsigned disc=1|C3X_RENDERER_UNIT_TEAM_DISC;
+ capture(30,30,4,1000000,1,0,disc);capture(31,30,4,1000001,1,0,disc);p=poses(1000001);
+ assert(body(p,30).draw.body_x==body(p,31).draw.body_x+40&&body(p,30).draw.body_y==body(p,31).draw.body_y);
+ assert(!body(p,30).owner_ring&&body(p,31).owner_ring);
+ capture(30,30,4,1000002,3,2,disc);p=poses(1000002);
+ assert(body(p,30).draw.body_x==body(p,31).draw.body_x+40&&body(p,30).draw.body_y==body(p,31).draw.body_y-20);
  world.clear();assert(poses(700000).empty());
 }
 ''')

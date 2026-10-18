@@ -2,6 +2,8 @@
 #include "unit_playback.h"
 #include "unit_locomotion.h"
 #include <map>
+#include <set>
+#include <tuple>
 #include <cstdint>
 #include <cmath>
 #include <vector>
@@ -703,6 +705,19 @@ public:
         result.erase(std::remove_if(result.begin(),result.end(),[&](auto const& pose){
             return !pose.travelling&&owners.at({pose.tile_x,pose.tile_y}).second!=pose.display_id;
         }),result.end());
+        // A loaded army draws its commander (the army's own body) 40 pixels
+        // right of its representative member, 20 higher while attacking east,
+        // with the team disc under the member only (native FUN_005cc430).
+        std::set<std::tuple<int,int,int>> led;
+        for(auto const& pose:result)
+            if(pose.draw.unit_id!=pose.display_id)led.insert({pose.display_id,pose.tile_x,pose.tile_y});
+        int projection=frame.tile_width*1000/128;
+        for(auto& pose:result)
+            if(pose.draw.unit_id==pose.display_id&&led.count({pose.display_id,pose.tile_x,pose.tile_y})){
+                pose.draw.body_x+=40*projection/1000;
+                if(pose.draw.action==3&&pose.draw.direction==2)pose.draw.body_y-=20*projection/1000;
+                pose.owner_ring=false;
+            }
         return result;
     }
 
