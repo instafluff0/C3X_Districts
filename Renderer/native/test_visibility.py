@@ -223,7 +223,7 @@ struct Coverage {int id=123;bool ok=true;unsigned captures=0;
  bool capture(int visible,unsigned scope,unsigned sequence,unsigned content,unsigned device){
   assert(drawn&&visible==77&&scope==5&&sequence==6&&content==8&&device==9);++captures;return ok;}};
 struct Renderer {bool visibility_pass=true;int device=0,context=0;unsigned content_revision=8,device_generation=9;
- struct {unsigned revealed=0;long long revealed_frequency=0,revealed_capture=0;
+ struct {unsigned revealed=0,held_waiting=0,held_undrawn=0;long long revealed_frequency=0,revealed_capture=0;
   template<class F>int sample(F const&,unsigned scope){assert(scope==5);return 77;}} arrival_visibility;
  struct {unsigned scope_sequence()const{return 5;}unsigned visibility_sequence()const{return 6;}} topology_cache;
  struct {int level=0;void write(char const*,char const*,bool){}} trace;
@@ -262,7 +262,7 @@ int main(){
  std::vector<unsigned> source(128*64,0xaabb8844),out;
  assert(c.capture(f));assert(!c.may_contribute(0,0,128,64));c.apply(source.data(),out);assert(out[32*128+64]==0xaa000000);
  t.tile_flags|=C3X_RENDERER_TILE_EXPLORED;assert(c.capture(f));c.apply(source.data(),out);
- assert(out[32*128+64]==0xaa745b39); // 50% gray over each original channel
+ assert(out[32*128+64]==0xaa705229); // fog of war keeps 0.6 of each channel (FogOfWar.pcx)
  t.tile_flags|=C3X_RENDERER_TILE_VISIBLE;assert(c.capture(f));c.apply(source.data(),out);
  assert(out[32*128+64]==source[32*128+64]);assert(out[1*128+64]!=source[1*128+64]);
  auto again=out;c.apply(source.data(),out);assert(again==out && source[0]==0xaabb8844);

@@ -601,6 +601,11 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
                 1000.*double(now.QuadPart-renderer.arrival_visibility.revealed_capture)/double(renderer.arrival_visibility.revealed_frequency));
             renderer.trace.write("reveal-shown",detail,true);
         }
+        if((renderer.arrival_visibility.held_waiting||renderer.arrival_visibility.held_undrawn)&&renderer.trace.level>=2){
+            char detail[96];std::snprintf(detail,sizeof(detail),"waiting=%u undrawn=%u",
+                renderer.arrival_visibility.held_waiting,renderer.arrival_visibility.held_undrawn);
+            renderer.trace.write("reveal-held",detail,true);
+        }
         presented=renderer.arrival_coverage.capture(visible,renderer.topology_cache.scope_sequence(),
             renderer.topology_cache.visibility_sequence(),renderer.content_revision,renderer.device_generation);
         Microsoft::WRL::ComPtr<ID3D11Resource> resource;

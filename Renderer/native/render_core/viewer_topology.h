@@ -8,16 +8,14 @@
 namespace c3x_renderer { namespace render_core {
 // World topology as the viewing civ knows it.
 //
-// Real relief (the default; the user, October 17): revealed ground takes its
-// final shape at once, as under Civilization VI's fog. Unexplored land keeps
-// its real category, biome and rivers; only its effect and eruption bits are
-// cleared, so it cannot light, smoke or erupt beside revealed ground. It
-// carries unexplored_bit instead of hidden_bit, so revealed ground runs at its
-// real height up to the fog (no datum taper) and keeps its shape when the
-// neighbour is revealed. Previously revealed edges dropped toward hidden
-// hills and mountains and reshaped once those were explored. A raised edge
-// facing an unexplored tile drops a black apron into it (terrain_mesh_body.h),
-// which revealing that tile removes.
+// Real relief (the default; the user, October 17): like Civ III, the map is
+// drawn as it really is and fog of war and unexplored black are laid over it
+// (VisibilityCoverage), so exploration never changes terrain. The unexplored
+// tiles near explored land are drawn as ordinary terrain (CapturedScene
+// hidden ring), which the overlay alone hides; a reveal invalidates no
+// compiled ground. Only live state is withheld: an unexplored tile loses its
+// effect (a smoldering volcano) and eruption bits, as Civ III shows nothing
+// there and the ring draws no objects (volcano plumes). Snow stays.
 //
 // Flat mask (real_relief=false, C3X_RENDERER_HIDDEN_RELIEF_CONTROL=1): unexplored land keeps its biome
 // and river code but loses its visible category (hills, mountains, forest,
@@ -32,7 +30,7 @@ namespace c3x_renderer { namespace render_core {
 // The revision equals the captured one while nothing is hidden; otherwise it
 // gains a serial above bit 40, so every masked state has its own revision.
 struct ViewerTopology {
-    static constexpr std::uint32_t hidden_bit=1u<<25,unexplored_bit=1u<<28;
+    static constexpr std::uint32_t hidden_bit=1u<<25;
     static bool hidden(std::uint32_t value){return value!=0xffffffffu && (value&hidden_bit)!=0;}
     std::vector<std::uint32_t> values;
     std::int64_t source=-1,revision=-1;
@@ -40,9 +38,7 @@ struct ViewerTopology {
     std::size_t hidden_tiles=0;
     bool masked=false;
     bool real_relief=true;
-    std::uint32_t conceal(std::uint32_t value)const{
-        return real_relief?(value&~((1u<<24)|(1u<<27)))|unexplored_bit:hide(value);
-    }
+    static constexpr std::uint32_t live_bits=(1u<<24)|(1u<<27);
     static std::uint32_t hide(std::uint32_t value){
         auto biome=value&255u;
         return (biome>=11 && biome<=13?value&~(1u<<24):(value&0x00ff00ffu)|(biome<<8))|hidden_bit;
@@ -63,7 +59,7 @@ struct ViewerTopology {
                 if(x<0 || y<0 || x>=width || y>=height || ((x+y)&1))return;
                 auto index=(std::size_t(y)*std::size_t(width)+std::size_t(x))/2;
                 if(index>=count)return;
-                auto value=conceal(next[index]);
+                auto value=real_relief?next[index]&~live_bits:hide(next[index]);
                 if(value!=next[index]){next[index]=value;++hidden;}
             });
         }catch(std::exception const&){

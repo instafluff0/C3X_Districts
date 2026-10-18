@@ -15,6 +15,24 @@ namespace c3x_renderer { namespace render_core {
 // from identity and GPU residency; retained appearance never authorizes a draw.
 class CapturedScene {
 public:
+    // Like Civ III, the map is drawn as it really is and fog of war and
+    // unexplored black are laid over it (the user, October 17). Unexplored
+    // tiles within ring_reach tiles of explored land form the hidden ring:
+    // their world inputs carry EXPLORED and this marker, so they compile and
+    // draw as ordinary terrain without objects (their inputs omit them), and a
+    // reveal only lifts the overlay. Native visibility (records, coverage) is
+    // unchanged. Two tiles: a unit on a mountain sees two tiles, and a quick
+    // second step can arrive before the first step's view is drawn.
+    static constexpr unsigned hidden_ring=1u<<24;
+    static constexpr int ring_reach=2;
+    // Raw-coordinate offsets within ring_reach tiles (excluding the tile);
+    // stops and returns true when visit does.
+    template<class Visit>static bool each_ring_offset(Visit visit){
+        constexpr int reach=2*ring_reach;
+        for(int dy=-reach;dy<=reach;++dy)for(int dx=-reach;dx<=reach;++dx)
+            if(!((dx+dy)&1) && (dx||dy) && dx+dy>=-reach && dx+dy<=reach && dy-dx>=-reach && dy-dx<=reach && visit(dx,dy))return true;
+        return false;
+    }
     struct Record {
         c3x_renderer_tile_v1 appearance={};
         std::uint64_t revision=0;
@@ -138,9 +156,12 @@ private:
         return !std::memcmp(&appearance,&permitted,sizeof(appearance))?input->content_revision:0;
     }
     std::uint64_t retained_raster_appearance(std::uint64_t id) const {
+        auto input=permitted_world_input(id);
+        // A hidden-ring tile draws its object-free world input (window_tile),
+        // whatever Civ III captured of the unexplored tile.
+        if(input && (input->occurrence.tile_flags&hidden_ring))return input->content_revision;
         auto record=retained(id);
         if(record && record->authoritative)return record->revision;
-        auto input=permitted_world_input(id);
         return input && (input->occurrence.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==
             (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED)?input->content_revision:0;
     }
@@ -148,6 +169,28 @@ private:
         if(world_input_epoch==UINT64_MAX)throw std::length_error("world input sequence exhausted");
         world_changes.clear();world_inputs.reset();++world_input_epoch;
         if(raster_dependencies)raster_dependencies->invalidate();
+    }
+    static bool unexplored(c3x_renderer_tile_v1 const& tile){
+        return (tile.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==C3X_RENDERER_TILE_VISIBILITY_KNOWN;
+    }
+    bool explored_record(std::uint64_t id) const {
+        auto found=records.find(id);
+        return found!=records.end() && (found->second.visibility_flags&C3X_RENDERER_TILE_EXPLORED);
+    }
+    bool borders_explored(std::uint64_t id) const {
+        int x=int(std::uint32_t(id>>32)),y=int(std::uint32_t(id));
+        return each_ring_offset([&](int dx,int dy){return explored_record(key(x+dx,y+dy));});
+    }
+    // A tile's exploration changed: unexplored tiles around it may join the
+    // hidden ring. Their inputs keep their content and revision.
+    bool refresh_hidden_ring(std::uint64_t id){
+        int x=int(std::uint32_t(id>>32)),y=int(std::uint32_t(id));
+        return !each_ring_offset([&](int dx,int dy){
+            auto neighbour=key(x+dx,y+dy);auto record=records.find(neighbour);auto input=permitted_world_input(neighbour);
+            if(record==records.end() || !input || (record->second.visibility_flags&C3X_RENDERER_TILE_EXPLORED))return false;
+            auto tile=input->occurrence;
+            return !update_world_input(neighbour,tile,record->second);
+        });
     }
     bool update_world_input(std::uint64_t id,c3x_renderer_tile_v1 const& tile,Record const& record){
         Observation next{};
@@ -188,6 +231,13 @@ private:
         next.occurrence.anchor_x=next.occurrence.anchor_y=0;
         next.occurrence.tile_flags=record.visibility_flags|C3X_RENDERER_TILE_TOPOLOGY_HALO|
             (full?C3X_RENDERER_TILE_PREFETCH:0u)|partial;
+        if((record.visibility_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==
+                C3X_RENDERER_TILE_VISIBILITY_KNOWN && borders_explored(id)){
+            next.occurrence.tile_flags|=C3X_RENDERER_TILE_EXPLORED|hidden_ring;
+            // Borders over unexplored land are never shown, and only Civ
+            // III's on-screen capture supplies their edges.
+            next.occurrence.territory_edge_mask=next.occurrence.territory_color_rgb=0;
+        }
         next.occurrence.visibility_mask=record.visibility_mask;next.occurrence.tile_visibility=record.tile_visibility;
         next.occurrence.fog_status=record.fog_status;next.semantic=record.semantic;
         next.real=tile.real_terrain_type;
@@ -285,7 +335,9 @@ public:
             // Keep that identity and its attachment only on byte equality.
             auto prepared_revision=full && !record.authoritative?matching_permitted_revision(id,next):0;
             record.appearance=next;record.revision=prepared_revision?prepared_revision:++serial;
-            if(!prepared_revision){record.compiled={};for(auto& variant:record.compiled_views)variant={};
+            // An unexplored tile's captured appearance is never drawn: its
+            // compiled ground follows its world input (the hidden ring).
+            if(!prepared_revision && !unexplored(tile)){record.compiled={};for(auto& variant:record.compiled_views)variant={};
                 ++appearance_epoch;touch_raster(RasterDependencyRevisions::Domain::appearance,id);}
             changed=true;
         }
@@ -293,6 +345,7 @@ public:
         auto flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
         // visibility_mask is a per-draw native argument, not tile state (see
         // ScenePublication::capture); it never advances the revision.
+        bool exploration=((record.visibility_flags^flags)&C3X_RENDERER_TILE_EXPLORED)!=0;
         if(!record.visibility_revision || record.visibility_flags!=flags ||
             record.tile_visibility!=tile.tile_visibility || record.fog_status!=tile.fog_status){
             if(serial==UINT64_MAX)return false;
@@ -303,7 +356,7 @@ public:
         }
         if(full && !record.authoritative){record.authoritative=true;++authoritative_records;
             touch_raster(RasterDependencyRevisions::Domain::appearance,id);}
-        return update_world_input(id,effective,record) && bytes()<=budget;
+        return update_world_input(id,effective,record) && (!exploration || refresh_hidden_ring(id)) && bytes()<=budget;
     }
     std::uint64_t key(int x,int y) const {
         auto canonical=[](int value,int extent,bool wraps){
@@ -441,7 +494,10 @@ public:
             }
         }
         auto partial=known_partial_flags(tile);
-        if(full || (!published && partial)){
+        // A hidden-ring window tile is the tile's world input (window_tile),
+        // not an observation of its appearance: recording it would alternate
+        // with Civ III's capture of the unexplored tile every frame.
+        if((full || (!published && partial)) && !(tile.tile_flags&hidden_ring)){
             auto& record=found->second;auto next=content(tile);
             if(!full){
                 next=record.appearance;
@@ -453,7 +509,7 @@ public:
                 if(serial==~std::uint64_t(0))return false;
                 auto prepared_revision=full?matching_permitted_revision(id,next):0;
                 record.appearance=next;record.revision=prepared_revision?prepared_revision:++serial;
-                if(!prepared_revision){record.compiled={};for(auto& variant:record.compiled_views)variant={};
+                if(!prepared_revision && !unexplored(tile)){record.compiled={};for(auto& variant:record.compiled_views)variant={};
                     touch_raster(RasterDependencyRevisions::Domain::appearance,id);}
             }
         }
@@ -533,6 +589,7 @@ public:
     std::uint64_t appearance_revision(std::uint64_t id) const {
         auto observed=current(id);
         if(!observed || !(observed->occurrence.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return 0;
+        if(auto input=permitted_world_input(id);input && (input->occurrence.tile_flags&hidden_ring))return input->content_revision;
         auto record=retained(id);auto appearance=content(observed->occurrence);
         if(record && record->authoritative && !std::memcmp(&appearance,&record->appearance,sizeof(appearance)))return record->revision;
         if(auto revision=matching_permitted_revision(id,appearance))return revision;
@@ -563,10 +620,15 @@ public:
             auto permitted=content(input->occurrence);
             matches=!std::memcmp(&appearance,&permitted,sizeof(appearance));
         }else{
+            // A hidden-ring tile has no native appearance: it keeps the
+            // object-free world input it was compiled from, so a later job
+            // reuses it instead of rebuilding it.
+            auto ring=permitted_world_input(id);if(ring && !(ring->occurrence.tile_flags&hidden_ring))ring=nullptr;
             if(!(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)) ||
-                !current(id) || !found->second.revision)return;
-            matches=!std::memcmp(&appearance,&found->second.appearance,sizeof(appearance));
-            if(!matches && appearance_revision(id)){
+                !current(id) || (!found->second.revision && !ring))return;
+            if(ring){auto permitted=content(ring->occurrence);matches=!std::memcmp(&appearance,&permitted,sizeof(appearance));}
+            else matches=!std::memcmp(&appearance,&found->second.appearance,sizeof(appearance));
+            if(!ring && !matches && appearance_revision(id)){
                 auto input=permitted_world_input(id);
                 if(input){auto permitted=content(input->occurrence);
                     matches=!std::memcmp(&appearance,&permitted,sizeof(appearance));}

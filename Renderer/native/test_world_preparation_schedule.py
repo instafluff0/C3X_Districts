@@ -119,9 +119,15 @@ int main(){
   }
  }
  assert(cores.size()==2048 && !region.build(scene,f,64,true));
- // Unseen halo still needs known visibility and topology, never imported art.
+ // An unexplored tile near explored land stays selected as the hidden ring
+ // (CapturedScene): known visibility and topology, never imported art.
  c3x_renderer_tile_v1 unseen{};unseen.tile_x=unseen.tile_y=0;
  unseen.tile_flags=C3X_RENDERER_TILE_VISIBILITY_KNOWN;assert(scene.publish(unseen,changed));
+ assert(region.build(scene,f,0,true) && region.selected.size()==32);
+ for(auto i:region.selected)if(!region.tiles[i].tile_x&&!region.tiles[i].tile_y)
+  assert((region.tiles[i].tile_flags&CapturedScene::hidden_ring) && !(region.tiles[i].tile_flags&C3X_RENDERER_TILE_PREFETCH));
+ // Unseen halo still needs known visibility.
+ unseen.tile_flags=0;assert(scene.publish(unseen,changed));
  assert(region.build(scene,f,0,true) && region.selected.size()==31);
  f.world_topology=nullptr;assert(!region.build(scene,f,0,true));
  // Tiny wrapped worlds keep the duplicate-occurrence guard and demand fallback.

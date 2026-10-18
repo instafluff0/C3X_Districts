@@ -18,10 +18,7 @@ constexpr double volcano_footprint = .62 / volcano_scale;
 // snow: Civ III's snow-capped mountain flag (topology bit 26).
 // active: a native tile effect (bit 24; on volcanoes, smoke or eruption);
 // erupting: that effect is a volcano eruption (bit 27).
-// unexplored: unexplored under real relief (bit 28); no taper, an apron.
-struct Tile { int base = 2, real = 2; bool present = false, hidden = false, snow = false, active = false, erupting = false,
-              unexplored = false; };
-// Flat mask only (C3X_RENDERER_HIDDEN_RELIEF_CONTROL=1, ViewerTopology).
+struct Tile { int base = 2, real = 2; bool present = false, hidden = false, snow = false, active = false, erupting = false; };
 // Revealed ground meets an unexplored tile at the 2.5 datum. No terrain is
 // drawn there and its fog is a flat diamond, so ground raised up to that edge
 // would expose the flat underlay below it (or a cut silhouette). Returns 1

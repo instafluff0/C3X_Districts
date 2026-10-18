@@ -42,7 +42,7 @@ int main(){
  // Copied visibility stays fogged while the cosmetic material sample advances.
  VisibilityCoverage coverage;assert(coverage.capture(later));assert(coverage.state(0,0)==1);
  std::vector<unsigned> pixels(128*64,0xaabb8844),out;coverage.apply(pixels.data(),out);
- assert(out[32*128+64]==0xaa745b39);
+ assert(out[32*128+64]==0xaa705229); // fog of war keeps 0.6 of each channel (FogOfWar.pcx)
  // Sight loss/reveal and hidden on-screen content do not consult a prior clock.
  for(unsigned flags:std::vector<unsigned>{C3X_RENDERER_TILE_VISIBILITY_BITS,
       C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED,

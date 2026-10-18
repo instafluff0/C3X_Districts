@@ -3884,3 +3884,146 @@ seen in one run had been switched on during that run.
 **Unrelated, found while testing.** Two tests no longer compile, with or
 without this change: `test_visibility`'s fresh-map test (missing resident-world
 symbols since 934de059) and `test_fresh_preparation_cancellation`.
+
+## 82. The fog is only an overlay, with Civ III's fade (October 17)
+
+**Report.** The user's screenshots after review 81 showed four problems:
+- Edges next to unexplored tiles fell away, then looked flat once explored.
+- Hills and mountains at those edges had grainy, striped shadows, which
+  disappeared when the neighbours were revealed.
+- Lines cut through city building shadows.
+- Fades showed a semi-opaque band where Civ III fades gradually.
+
+The user's rule: like Civ III, the map is drawn as it really is and fog of war
+and unexplored black are laid over it. The overlays have no effect on the
+look of the tiles under them.
+
+A first fix drew hidden neighbours from their explored neighbours. The user
+then found reveals slow and play slower: a unit arriving next to unexplored
+tiles must reveal them at once, after every step of a multi-move unit.
+
+**Causes.**
+- Review 81's apron and flat rim:
+  - Raised edges facing unexplored tiles dropped a curtain to the 2.5 datum.
+  - Every explored tile added flat datum ground a quarter tile into its
+    unexplored neighbours.
+  - Seen through the half-black fade, both read as ground falling away.
+- The apron copied its edge vertices' normals onto a steep surface. Shadow
+  receivers offset and bias along the normal, so it self-shadowed in stripes
+  and speckles (acne). Revealing the tile removed it.
+- The fade met at each tile edge as two half smoothsteps with zero slope: a
+  flat, half-covered shelf. Fog of war was a 50% grey veil.
+- Renderer64's shadow atlas (`SandboxSceneShadow`) compiled
+  `environment_refresh/source_caster.hlsl`, which has no city branch:
+  - Masked city materials (100 plus channels) fell into its natural-opacity
+    branch and were clipped by whatever tree mask t33 last held. With no mask
+    bound, they cast nothing.
+  - The production `SourceShadow` already selects the city-profile caster.
+
+**Civ III's fade.** `Art/Terrain/FogOfWar.pcx` holds 9×9 sprites of 128×64,
+one per state of the four tiles around a tile vertex. They are drawn on the
+dual grid, whose corners are tile centres:
+- The column gives the top and left tiles, the row the right and bottom.
+- Grey is a light multiplier: unexplored 0, fog of war 0.6, clear 1.
+- The user's annotated screenshot matches the unexplored-to-fog sprite within
+  a few percent.
+
+**Reveal latency causes** (unit-motion game test, trace level 2):
+- Exploration changed terrain inputs, so a reveal recompiled ground around
+  it, and the fog stayed until a new view was published. A further move
+  cancelled that job, so multi-move units revealed after the last step.
+- `UnitArrivalVisibility` held any sight the drawn view lacked, including
+  fog of war lifting over explored ground: 13 frames kept one fogged tile
+  dark until the job finished, 0.8 s after arrival.
+- The fog pass only admits Civ III's new sight when a job starts. A slow
+  arrival frame (a 300k-pixel static repair) delays that publication by
+  about 0.1 s. Not changed here.
+
+**Changes.**
+- `VisibilityCoverage::light` and `gpu_visibility.h`:
+  - Bilinear seen and explored flags between tile centres, each through one
+    smoothstep over 0.55 tile.
+  - Seen light reaches 0.225 tile into darker tiles. Explored meets
+    unexplored 0.05 tile inside the unexplored tile.
+  - Fog keeps 0.6 of the light, with no grey veil.
+  - Within 0.043 of the sprites.
+- The hidden ring (`CapturedScene`): unexplored tiles within two tiles of
+  explored land.
+  - Their world inputs carry `EXPLORED` and `hidden_ring`. They compile and
+    draw as ordinary terrain, without objects or borders (`window_tile`
+    takes them from the input).
+  - Two tiles, because a unit on a mountain sees two, and a quick second
+    step can arrive before the first step's view is drawn.
+  - `ViewerTopology` no longer masks terrain by exploration, so a reveal
+    changes no terrain input. The apron, rim and drawer-neighbour code of
+    the first fix are reverted.
+  - Only live state is withheld: unexplored tiles lose the effect and
+    eruption bits (24, 27; snow, 26, stays), so a ring volcano does not glow
+    or bloom past the overlay. The mask reads native exploration, not the
+    ring's `EXPLORED`. (Raised by the volcano session.)
+- `UnitArrivalVisibility`: explored and ring tiles lift on the drawn view as
+  soon as native sight arrives. Unit arrival waits and immediate loss are
+  unchanged.
+- Ring identity stays stable, or every job and every shadow proof rebuilt it:
+  - It is the input's content revision (`appearance_revision`,
+    `retained_raster_appearance`), whatever Civ III captured of the
+    unexplored tile and whether or not the frame observes it.
+  - Captures of unexplored tiles do not clear compiled ground, and window
+    ring tiles do not rewrite the record.
+  - Ring tiles seen only in the halo keep their compiled ground (`attach`).
+- `fresh_pipeline.h`: the city-profile caster.
+- `biq_preview.cpp`: unexplored tiles are the fog pass's, and
+  `C3X_RENDERER_PREVIEW_VISIBILITY=<n>` sets the explored radius for Lab fog
+  studies.
+- `resident_scene.cpp`: `reveal-held` (trace level 2) counts cells kept dark
+  for a unit's arrival or for a view drawing them.
+
+**Tests.** Each was confirmed to fail on the previous code.
+- `test_unexplored_ground`:
+  - A reveal keeps content and extends the ring (24 tiles around one).
+  - Fog of war and ring reveals lift on the drawn view; a tile three away
+    waits.
+  - Ring ground prepared at load survives Civ III's capture, window frames
+    and unobserved frames, with one identity.
+  - Halo-only ring tiles keep their compiled ground. The window draws the
+    ring.
+- `test_viewer_topology`: exploration never changes terrain, except that an
+  unexplored volcano's activity is withheld until it is revealed.
+- `test_visibility`: its stub arrival gate gains the `reveal-held` counters.
+- `test_city_shadow_caster` (D3D): the selected caster clips masked city
+  quads by their own mask and ignores tree masks. Old: 0 of 4096 covered.
+- `test_unseen_boundary`: the fade matches `FogOfWar.pcx` curves within 0.05
+  and keeps its slope at the tile edge (old: 0.3; new: 0.9–2.6).
+- `test_visibility`: fog value. The GPU oracle matches the CPU (max channel
+  error 1).
+- Ring counts updated in `test_world_readiness`, `test_world_preparation_schedule`
+  and `test_world_input_lease`.
+
+**Measured.** Renderer64 trio built from HEAD plus this change plus the
+tactical session's five files, `user-3350BC`, `-ProfileRenderer`.
+
+| Fog lifts after visual arrival | Before | After |
+|---|---|---|
+| unit-turn, first move | 736 ms | 91–96 ms |
+| unit-turn, second unit | 115 ms | 52–57 ms |
+| unit-motion | 301 ms | 78 ms |
+
+- Scroll, two runs each: median 59.4–59.5 fps and p10 56.5–58.0 for both;
+  helper CPU 24–25%; 6 shadow builds; same proof rejections. Helper memory
+  is 35–50 MiB higher.
+- The first view after loading takes 1.2 s instead of 0.9 s: its job builds
+  the 145 ring tiles on screen, which loading does not prepare.
+
+**Open.**
+- Six tests that copy code out of `c3x_renderer.cpp`, `fresh_pipeline.h` or
+  `resident_scene.cpp` fail on HEAD too (stale extracts):
+  `test_canonical_membership`, `test_fresh_shared_submission`,
+  `test_fresh_preparation_cancellation`, `test_native_visual_cadence`,
+  `test_visibility` (`fresh_map_without_resources`) and
+  `test_zoomed_step_canonical`.
+- City building shadows still show a one-pixel checkerboard in game. It is
+  finer than a shadow texel, so it is not caster holes. The cause is not yet
+  found: no alpha-to-coverage or screen dither is in the city path.
+- A city's border edges and colour, captured for the first time near a
+  moving unit, rebuild its 21 tiles' terrain (about 0.4 s of job time) even
+  though borders are drawn from the occurrence. This predates this review.

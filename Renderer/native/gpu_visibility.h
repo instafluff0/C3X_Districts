@@ -44,17 +44,18 @@ V vs(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
  p=(p-floor(size.xy*.5))*response.w+floor(size.xy*.5);
  v.position=float4(p.x*2/size.x-1,1-p.y*2/size.y,0,1);return v;
 }
-float value(uint cells,int x,int y,uint threshold){return ((cells>>(2*((y+1)*3+x+1)))&3)>=threshold?1.f:0.f;}
-float coverage(uint cells,float2 uv,uint threshold){
- int2 direction=int2(uv.x<.5f?-1:1,uv.y<.5f?-1:1);
- // Unexplored blends over `shroud` (actors.z), fog of war over `feather`.
- float2 t=saturate(min(uv,1-uv)/(threshold==1?actors.z:response.x)),w=.5f*(1-t*t*(3-2*t));
- return lerp(lerp(value(cells,0,0,threshold),value(cells,direction.x,0,threshold),w.x),
-             lerp(value(cells,0,direction.y,threshold),value(cells,direction.x,direction.y,threshold),w.x),w.y);
+float flag(uint cells,int x,int y,uint threshold){return ((cells>>(2*((y+1)*3+x+1)))&3)>=threshold?1.f:0.f;}
+// Native Civ III fog on the dual grid (VisibilityCoverage::light): bilinear
+// seen and explored flags between tile centres, each through one smooth step.
+float blend(uint cells,int2 d,float2 w,uint threshold){
+ return lerp(lerp(flag(cells,0,0,threshold),flag(cells,d.x,0,threshold),w.x),
+             lerp(flag(cells,0,d.y,threshold),flag(cells,d.x,d.y,threshold),w.x),w.y);
 }
 float4 ps(V v):SV_Target{
- float explored=coverage(v.cells,v.uv,1),visible=min(explored,coverage(v.cells,v.uv,2));
- float fog=(explored-visible)*response.z;
+ int2 d=int2(v.uv.x<.5f?-1:1,v.uv.y<.5f?-1:1);float2 w=abs(v.uv-.5f);
+ float seen=smoothstep(0,response.y,blend(v.cells,d,w,2));
+ float explored=max(seen,smoothstep(response.z,response.z+response.y,blend(v.cells,d,w,1)));
+ float light=lerp(seen,explored,response.x);
  // Only depth-tested body fragments carry stencil 1. Ground, shadows,
  // cutout holes and terrain in front of a body retain ordinary map coverage.
  int2 at=int2(v.position.xy)+int(actors.x);
@@ -64,7 +65,7 @@ float4 ps(V v):SV_Target{
   for(uint sample=0;sample<(uint)actors.y;++sample)
    actor_coverage+=(actor_samples.Load(at,sample).y!=0)/actors.y;
  }
- return float4((response.y*fog).xxx,1-explored+fog)*(1-actor_coverage);
+ return float4(0,0,0,1-light)*(1-actor_coverage);
 }
 )";
             Ptr<ID3DBlob> vs,ps,error;
@@ -115,8 +116,8 @@ float4 ps(V v):SV_Target{
         }
         D3D11_BOX range={0,0,0,bytes,1,1};context->UpdateSubresource(buffer.Get(),0,&range,coverage.tiles.data(),0,0);
         float constants[]={float(width),float(height),float(coverage.tile_width),float(coverage.tile_height),
-            render_core::VisibilityCoverage::feather,render_core::VisibilityCoverage::gray,render_core::VisibilityCoverage::fog_alpha,zoom,
-            float(actor_guard),float(actor_samples),render_core::VisibilityCoverage::shroud,0};
+            render_core::VisibilityCoverage::fog_light,render_core::VisibilityCoverage::step_width,render_core::VisibilityCoverage::explored_start,zoom,
+            float(actor_guard),float(actor_samples),0,0};
         context->UpdateSubresource(settings.Get(),0,nullptr,constants,0,0);
         context->OMSetRenderTargets(0,nullptr,nullptr);
         auto output=view.Get();context->OMSetRenderTargets(1,&output,nullptr);context->OMSetBlendState(blend.Get(),nullptr,~0u);

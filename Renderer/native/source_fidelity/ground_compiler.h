@@ -100,9 +100,6 @@ struct GroundCompileInput {
     float key_light[3]={};
     float left=0, top=0; // mesh origin is local; Civ III supplies the draw anchor
     int flat_grid=0, tile_ground_grid=0, shadow_grid=0;
-    // Unexplored neighbours, bit (row+1)*3+column+1 (prepare_ground): their
-    // rim gets flat ground for the native fog blend.
-    unsigned rim=0;
 };
 
 struct GroundSurfaces {
@@ -331,31 +328,6 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
         }
         return vertex;
     };
-    // A quarter tile of flat ground into each unexplored neighbour, built
-    // from the same world-positioned points as the tile's own grid.
-    auto append_rim = [&](std::vector<MapVertex> & target, float layer, std::vector<UINT> * indices) {
-        for (unsigned n = 0; n < 9; ++n) {
-            if (n == 4 || !((input.rim >> n) & 1u)) continue;
-            int dc = int(n % 3) - 1, dr = int(n / 3) - 1;
-            float u0 = dc > 0 ? 1.f : dc < 0 ? -.25f : 0.f, v0 = dr < 0 ? 1.f : dr > 0 ? -.25f : 0.f;
-            float du = dc ? .25f : 1.f, dv = dr ? .25f : 1.f;
-            unsigned nu = dc ? 1u : 8u, nv = dr ? 1u : 8u;
-            std::vector<MapVertex> rim;
-            for (unsigned j = 0; j <= nv; ++j)
-                for (unsigned i = 0; i <= nu; ++i)
-                    rim.push_back(make_ground_vertex(u0 + du * float(i) / float(nu), v0 + dv * float(j) / float(nv), layer));
-            auto first = UINT(target.size());
-            if (indices) target.insert(target.end(), rim.begin(), rim.end());
-            for (unsigned j = 0; j < nv; ++j)
-                for (unsigned i = 0; i < nu; ++i) {
-                    unsigned a = j * (nu + 1) + i, b = a + 1, c = b + nu + 1, d = a + nu + 1;
-                    for (unsigned k : {a, b, c, a, c, d}) {
-                        if (indices) indices->push_back(first + k);
-                        else target.push_back(rim[k]);
-                    }
-                }
-        }
-    };
     auto append_ground_layer = [&](std::vector<MapVertex> & target, float layer,
                                    int subdivisions, std::vector<UINT> * indices=nullptr) {
         // Adjacent cells share grid corners. Build and upload each
@@ -463,7 +435,6 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
                         river_near ? std::max(input.flat_grid,
                             frame.tile_width >= 96 ? 32 : 16) : input.flat_grid,
                         &destination.underlay_indices);
-    append_rim(destination.underlay_vertices, 0.5f, &destination.underlay_indices);
     if (input.ground < 11 && (!input.fidelity_profile || input.draw_marsh))
         append_ground_layer(destination.land_vertices, 1.0f,
                             river_near ? std::max(input.tile_ground_grid,
@@ -472,15 +443,10 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
     if (!input.pickup_profile) {
         append_ground_layer(destination.bed_vertices, 4.0f, input.flat_grid, &destination.bed_indices);
         append_ground_layer(destination.water_vertices, 5.0f, input.flat_grid, &destination.water_indices);
-        append_rim(destination.bed_vertices, 4.0f, &destination.bed_indices);
-        append_rim(destination.water_vertices, 5.0f, &destination.water_indices);
     }
     if (input.river_assets_ready && ((tile.river_code & 170u) != 0 || river_near))
-    {
         append_ground_layer(destination.river_vertices, 9.0f,
                             frame.tile_width >= 96 ? 32 : 16, &destination.river_indices);
-        append_rim(destination.river_vertices, 9.0f, &destination.river_indices);
-    }
     if (!input.pickup_profile && input.ground < 11) {
         // Cast-shadow visibility ray-marches the authored relief field.
         // Retain the approved 16x16 near grid for canonical fixtures,

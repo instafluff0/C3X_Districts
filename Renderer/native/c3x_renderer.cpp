@@ -9003,7 +9003,7 @@ public:
             return false;
         }
         LARGE_INTEGER begin = {}, end = {}; QueryPerformanceCounter(&begin);
-        // Hidden relief must not shape revealed neighbours (ViewerTopology).
+        // Unexplored tiles withhold live state, such as volcano activity (ViewerTopology).
         // Query caches below follow world_coast.revision(), not the capture.
         std::uint32_t const* topology=frame.world_topology;
         c3x_renderer_i64 revision=frame.world_topology_revision;
@@ -9012,7 +9012,10 @@ public:
             topology=viewer_topology.update(frame.world_topology,frame.world_topology_count,frame.world_width_tiles,
                 frame.world_height_tiles,frame.world_topology_revision,topology_cache.world_input_sequence(),
                 [&](auto mark){topology_cache.world_snapshot()->visit([&](auto const& input){
-                    mark(input.occurrence.tile_x,input.occurrence.tile_y,input.occurrence.tile_flags);});},&masked_change);
+                    // Native exploration: the hidden ring is drawn as explored only.
+                    auto flags=input.occurrence.tile_flags;
+                    if(flags&topology_cache.hidden_ring)flags&=~unsigned(C3X_RENDERER_TILE_EXPLORED);
+                    mark(input.occurrence.tile_x,input.occurrence.tile_y,flags);});},&masked_change);
             revision=viewer_topology.revision;
         }catch(std::length_error const&){topology=frame.world_topology;revision=frame.world_topology_revision;}
         auto updated = world_coast.update({frame.world_width_tiles, frame.world_height_tiles,
@@ -9050,6 +9053,11 @@ public:
     bool window_tile(int x,int y,c3x_renderer_tile_v1& tile)const{
         auto id=topology_cache.key(x,y);
         auto record=topology_cache.retained(id);
+        // The hidden ring (CapturedScene): unexplored ground near explored
+        // land, drawn from its object-free world input, as explored terrain.
+        if(auto input=topology_cache.world_input(id);input && (input->occurrence.tile_flags&topology_cache.hidden_ring)){
+            tile=input->occurrence;return true;
+        }
         if(record && record->revision && (record->authoritative || (record->partial_flags&C3X_RENDERER_TILE_PREFETCH)))
             tile=record->appearance;
         else if(auto input=topology_cache.world_input(id);input && (input->occurrence.tile_flags&C3X_RENDERER_TILE_PREFETCH))tile=input->occurrence;

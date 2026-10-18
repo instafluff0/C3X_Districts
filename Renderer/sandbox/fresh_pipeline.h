@@ -906,7 +906,12 @@ struct SandboxSceneShadow {
         };
         ID3DBlob* code=nullptr;
         HRESULT hr=E_FAIL;
-        auto caster=root+"environment_refresh/source_caster.hlsl";
+        // City buildings (material 100+) clip by their own mask at t34
+        // (bind_cutout), which only the city-profile caster reads. The
+        // environment caster took them for natural opacity and clipped them
+        // by whichever tree mask t33 last held: lines through building
+        // shadows (October 17). The production SourceShadow selects the same.
+        auto caster=root+(renderer.city_profile?"city_fidelity/source_caster.hlsl":"environment_refresh/source_caster.hlsl");
         if (!shader(caster,"VS","vs_5_0",&code)) return false;
         hr=renderer.device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&vertex);
         D3D11_INPUT_ELEMENT_DESC e[]={

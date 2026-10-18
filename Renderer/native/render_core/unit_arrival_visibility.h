@@ -1,7 +1,9 @@
 #pragma once
 #include "../c3x_renderer_api.h"
+#include "captured_scene.h"
 #include <algorithm>
 #include <map>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -17,6 +19,9 @@ public:
     // Diagnostic: cells the last sample newly displayed as visible/explored,
     // and the native capture (QPC time) whose visibility they show.
     unsigned revealed=0;long long revealed_capture=-1,revealed_frequency=0;
+    // Diagnostic: cells natively explored/visible that the last sample kept
+    // dark, waiting for a unit's arrival or for a view drawing them.
+    unsigned held_waiting=0,held_undrawn=0;
 private:
     struct Cell {unsigned native=0,shown=0,displayed=0;std::vector<Arrival> waits;unsigned long long seen=0;bool sampled=false;};
     std::map<std::pair<int,int>,Cell> cells;
@@ -61,9 +66,23 @@ public:
     c3x_renderer_frame_v1 sample(c3x_renderer_frame_v1 const& frame,unsigned long long current_scope){
         // Standalone consumers have no ordered unit/camera admission owner.
         if(!admitted || scope!=current_scope)capture(frame,current_scope);
-        auto result=frame;revealed=0;
+        auto result=frame;revealed=0;held_waiting=held_undrawn=0;
         if(!frame.tiles||frame.tile_count>8192)return result;
         tiles.assign(frame.tiles,frame.tiles+frame.tile_count);
+        // The view draws explored ground, and unexplored tiles near it as
+        // terrain (the hidden ring, CapturedScene), so lifting fog of war or
+        // a reveal there needs no new view: the overlay lifts as soon as
+        // native sight arrives. Only cells newly shown need the check.
+        std::set<std::pair<int,int>> explored;
+        auto wrap=[](int value,int extent,bool wraps){return wraps && extent>0?((value%extent)+extent)%extent:value;};
+        auto drawn=[&](c3x_renderer_tile_v1 const& tile){
+            if(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED)return bits;
+            if(explored.empty())for(auto const& other:tiles)if(other.tile_flags&C3X_RENDERER_TILE_EXPLORED)explored.emplace(other.tile_x,other.tile_y);
+            return CapturedScene::each_ring_offset([&](int dx,int dy){
+                return explored.count({wrap(tile.tile_x+dx,frame.world_width_tiles,frame.world_wrap_x!=0),
+                                       wrap(tile.tile_y+dy,frame.world_height_tiles,frame.world_wrap_y!=0)})!=0;
+            })?bits:tile.tile_flags&bits;
+        };
         for(auto& tile:tiles){
             auto found=cells.find({tile.tile_x,tile.tile_y});
             if(found==cells.end())continue;
@@ -73,7 +92,9 @@ public:
             }),cell.waits.end());
             if(cell.waits.empty())cell.shown=cell.native;
             // An older view cannot expose new geometry, or undo a newer loss.
-            tile.tile_flags=(tile.tile_flags&~bits)|(cell.shown&tile.tile_flags&bits);
+            auto allowed=tile.tile_flags&bits;if(cell.shown&~allowed)allowed=drawn(tile);
+            held_waiting+=(cell.native&~cell.shown)!=0;held_undrawn+=(cell.shown&~allowed)!=0;
+            tile.tile_flags=(tile.tile_flags&~bits)|(cell.shown&allowed);
             auto displayed=tile.tile_flags&bits;
             if(cell.sampled&&(displayed&~cell.displayed))++revealed;
             cell.displayed=displayed;cell.sampled=true;

@@ -40,13 +40,18 @@ struct VisibilityCoverage {
         return std::make_pair(canonical(x,world_width,wrap_x),canonical(y,world_height,wrap_y));
     }
     unsigned state(std::int64_t x,std::int64_t y)const{auto found=states.find(key(x,y));return found==states.end()?0:found->second;}
-    // Native Civ III blends every state boundary across the tile edge: half
-    // at the edge, complete `shroud` (unexplored) or `feather` (fog of war)
-    // into either tile, straight along edges and rounded at corners (the
-    // user's reference, October 17). Explored tiles extend flat ground into
-    // the rim of unexplored neighbours (terrain_mesh_body.h,
-    // ground_compiler.h), which the unexplored side of the blend shows.
-    static constexpr float feather=.25f,shroud=.20f,gray=.18f,fog_alpha=.5f;
+    // Native Civ III fog (Art/Terrain/FogOfWar.pcx, measured October 17):
+    // 81 sprites, one per state of the four tiles around a tile vertex, on
+    // the dual grid whose corners are tile centres. Clear ground keeps its
+    // light, fog of war 0.6 of it, unexplored none. Bilinear interpolation of
+    // the seen and explored flags between those centres, each through one
+    // smooth step over 0.55 tile, matches them within a few percent without
+    // their dithering: seen light reaches 0.225 tile into a darker tile, and
+    // explored meets unexplored 0.05 tile inside the unexplored one. One step
+    // has no shelf at the edge; the previous two half steps met at a flat,
+    // half-covered band (the user, October 17). Explored tiles draw the real
+    // ground of unexplored neighbours (terrain_mesh_body.h), which shows here.
+    static constexpr float fog_light=.6f,step_width=.55f,explored_start=.175f;
     bool capture(c3x_renderer_frame_v1 const& frame,std::uint64_t scope=0,std::uint64_t visibility=0,
                  std::uint64_t content=0,std::uint64_t device=0){
         fact_checks=map_records=neighbor_lookups=0;
@@ -123,15 +128,17 @@ struct VisibilityCoverage {
         return true;
         }catch(...){reject();throw;}
     }
-    static float edge(float coordinate,float width=feather){
-        float d=std::min(coordinate,1-coordinate),t=std::clamp(d/width,0.f,1.f);
-        return .5f*(1-t*t*(3-2*t));
-    }
-    static float coverage(unsigned cells,float u,float v,unsigned threshold){
+    static float smooth(float x){x=std::clamp(x,0.f,1.f);return x*x*(3-2*x);}
+    // Light at diamond coordinates (u,v): 1 clear, fog_light fogged, 0 black.
+    static float light(unsigned cells,float u,float v){
         int x=u<.5f?-1:1,y=v<.5f?-1:1;
-        auto value=[&](int dx,int dy){return float(((cells>>(2*((dy+1)*3+dx+1)))&3u)>=threshold);};
-        float width=threshold==1?shroud:feather,wx=edge(u,width),wy=edge(v,width);
-        return (value(0,0)*(1-wx)+value(x,0)*wx)*(1-wy)+(value(0,y)*(1-wx)+value(x,y)*wx)*wy;
+        float a=std::fabs(u-.5f),b=std::fabs(v-.5f);
+        auto blend=[&](unsigned threshold){
+            auto flag=[&](int dx,int dy){return float(((cells>>(2*((dy+1)*3+dx+1)))&3u)>=threshold);};
+            return (flag(0,0)*(1-a)+flag(x,0)*a)*(1-b)+(flag(0,y)*(1-a)+flag(x,y)*a)*b;
+        };
+        float seen=smooth(blend(2)/step_width),explored=std::max(seen,smooth((blend(1)-explored_start)/step_width));
+        return seen+fog_light*(explored-seen);
     }
     // Explicit CPU-output compatibility. Never darken retained source pixels.
     void apply(std::uint32_t const* source,std::vector<std::uint32_t>& output)const{
@@ -143,10 +150,9 @@ struct VisibilityCoverage {
                 float dx=(x+.5f-tile.x)/tile_width*2-1,dy=(y+.5f-tile.y)/tile_height*2;
                 float u=(dx+dy)*.5f,v=(dy-dx)*.5f;
                 if(u<0 || v<0 || u>=1 || v>=1)continue;
-                float explored=coverage(tile.cells,u,v,1),visible=std::min(explored,coverage(tile.cells,u,v,2));
-                float fog=(explored-visible)*fog_alpha,scale=explored-fog;
+                float scale=light(tile.cells,u,v);
                 auto index=std::size_t(y)*width+x;unsigned original=source[index],pixel=original&0xff000000u;
-                for(unsigned shift:{0u,8u,16u})pixel|=unsigned(std::clamp(std::nearbyint(((original>>shift)&255u)*scale+gray*255*fog),0.f,255.f))<<shift;
+                for(unsigned shift:{0u,8u,16u})pixel|=unsigned(std::clamp(std::nearbyint(((original>>shift)&255u)*scale),0.f,255.f))<<shift;
                 output[index]=pixel;
             }
         }

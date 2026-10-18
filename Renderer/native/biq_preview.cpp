@@ -30,7 +30,11 @@ bool preview_ownership(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_v
     if (output.fallback_tile_count || output.replacement_tile_count != frame.tile_count ||
         (frame.tile_count && !output.replacement_tile_flags)) return false;
     for (unsigned i=0;i<frame.tile_count;++i) {
-        bool visible=(frame.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER)!=0;
+        // An unexplored tile (C3X_RENDERER_PREVIEW_VISIBILITY) is the fog
+        // pass's: the renderer draws no terrain of its own for it.
+        auto captured=frame.tiles[i].tile_flags;
+        bool visible=(captured & C3X_RENDERER_TILE_RENDER)!=0 &&
+            (captured & (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))!=C3X_RENDERER_TILE_VISIBILITY_KNOWN;
         unsigned flags=output.replacement_tile_flags[i];
         if ((!visible && flags) || (visible && !(flags & C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED))) {
             std::printf("FAIL production ownership index=%u tile=%d,%d captured=%u replacement=%u\n",
@@ -382,8 +386,10 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_VISIBILITY",visibility_fixture,sizeof(visibility_fixture))){
             tile.tile_flags&=~(C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE);
             int distance=(std::min)(std::abs(source.x-visibility_center_x),map_width-std::abs(source.x-visibility_center_x))+std::abs(source.y-visibility_center_y);
-            if(distance<9)tile.tile_flags|=C3X_RENDERER_TILE_EXPLORED;
-            if(distance<5)tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;
+            // A value above 1 is the explored radius (fog studies); visible is half.
+            int explored=std::atoi(visibility_fixture)>1?std::atoi(visibility_fixture):9;
+            if(distance<explored)tile.tile_flags|=C3X_RENDERER_TILE_EXPLORED;
+            if(distance<(explored==9?5:explored/2))tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;
         }
         tile.resource_id = tile.resource_class = tile.tile_building_id = tile.barbarian_tribe_id = -1;
         tile.city_id = tile.city_owner_id = tile.city_size = tile.city_culture_group = tile.city_era = -1;
@@ -793,7 +799,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     double initial_render_ms=double(initial_done.QuadPart-initial_begin.QuadPart)*1000/initial_frequency.QuadPart;
     std::size_t expected_rendered = 0;
     for (c3x_renderer_tile_v1 const & tile : tiles)
-        if ((tile.tile_flags & C3X_RENDERER_TILE_RENDER) != 0)
+        if ((tile.tile_flags & C3X_RENDERER_TILE_RENDER) != 0 &&
+            (tile.tile_flags & (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))!=C3X_RENDERER_TILE_VISIBILITY_KNOWN)
             ++expected_rendered;
     bool ok = result == C3X_RENDERER_RESULT_OK &&
               (pickup ? output.rendered_tile_count >= expected_rendered : output.rendered_tile_count == expected_rendered) &&

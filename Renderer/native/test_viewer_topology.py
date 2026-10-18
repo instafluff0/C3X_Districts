@@ -88,50 +88,43 @@ int main(){
 ''')
 
 
-    def test_real_relief_shapes_revealed_ground_once(self):
+    def test_real_relief_never_changes_terrain_with_exploration(self):
+        # The user (October 17): like Civ III, the map is drawn as it really
+        # is and the fog overlay is laid over it. A reveal must not change any
+        # terrain input, or it recompiles the ground around it before the
+        # revealed tiles can show (slow reveals). Only an unexplored volcano's
+        # live state (smoldering, erupting) is withheld: its glow could bloom
+        # past the overlay, and Civ III shows nothing there.
         run_cpp(r"""
 #include "Renderer/native/render_core/viewer_topology.h"
-#include "Renderer/native/render_core/world_coast.h"
 #include <cassert>
 #include <cstdio>
 #include <tuple>
 #include <vector>
 using namespace c3x_renderer::render_core;
 constexpr unsigned known=C3X_RENDERER_TILE_VISIBILITY_KNOWN,explored=C3X_RENDERER_TILE_EXPLORED;
-std::uint32_t tile(unsigned biome,unsigned category,unsigned river=0,bool effect=false,bool snow=false,bool erupting=false){
-    return biome|(category<<8)|(river<<16)|(effect?1u<<24:0u)|(snow?1u<<26:0u)|(erupting?1u<<27:0u);}
 int main(){
     int const width=8,height=8;std::size_t const count=width*height/2;
-    std::vector<std::uint32_t> raw(count,tile(2,2));
+    std::vector<std::uint32_t> raw(count,2u|(2u<<8));
     auto at=[&](int x,int y){return (std::size_t(y)*width+x)/2;};
-    raw[at(2,2)]=tile(1,5,7);                  // hills on plains with a river
-    raw[at(3,3)]=tile(2,6,0,false,true);       // snow-capped mountains
-    raw[at(5,5)]=tile(2,8,0,true,false,true);  // an erupting volcano
-    std::vector<std::tuple<int,int,unsigned>> inputs={{1,1,known|explored},{2,2,known},{3,3,known},{5,5,known}};
+    raw[at(2,2)]=1u|(5u<<8)|(7u<<16);              // hills with a river
+    raw[at(5,5)]=2u|(8u<<8)|(1u<<24)|(1u<<26)|(1u<<27); // an erupting snowy volcano
+    std::vector<std::tuple<int,int,unsigned>> inputs={{1,1,known|explored},{2,2,known},{5,5,known}};
     ViewerTopology viewer;bool changed=false;assert(viewer.real_relief);
     auto update=[&](std::uint64_t sequence){
         return viewer.update(raw.data(),count,width,height,3,sequence,[&](auto mark){
             for(auto const& input:inputs)mark(std::get<0>(input),std::get<1>(input),std::get<2>(input));},&changed);};
     auto values=update(1);
-    // Hidden hills and mountains keep their category, river and snow: the
-    // revealed tiles around them are shaped by the real relief.
-    auto unexplored=ViewerTopology::unexplored_bit;
-    assert(values[at(2,2)]==(raw[at(2,2)]|unexplored)&&values[at(3,3)]==(raw[at(3,3)]|unexplored));
-    // A hidden volcano keeps its cone but cannot erupt, smoke or light.
-    assert(values[at(5,5)]==(tile(2,8)|unexplored));
-    // No hidden_bit anywhere: no datum taper at the fog.
-    for(std::size_t i=0;i<count;++i)assert(!ViewerTopology::hidden(values[i]));
-    WorldCoast coast;coast.update({width,height,false,false},values,count,viewer.revision);
-    auto hills=coast.world().tile((2+2)/2,(2-2)/2);
-    assert(hills.present&&hills.real==5&&!hills.hidden&&hills.unexplored);
-    assert(!coast.world().tile((1+1)/2,(1-1)/2).unexplored);
-    // Revealing the hills clears only their unexplored bit.
-    std::vector<std::uint32_t> copy(values,values+count);
-    inputs[1]={2,2,known|explored};values=update(2);assert(changed);
-    for(std::size_t i=0;i<count;++i)assert(values[i]==(i==at(2,2)?raw[i]:copy[i]));
-    // Revealing the volcano restores its effects (a real change).
-    inputs[3]={5,5,known|explored};values=update(3);assert(values[at(5,5)]==raw[at(5,5)]&&changed);
-    std::printf("PASS real relief: categories_kept=1 effects_hidden=1 no_taper=1 reveal_clears_unexplored=1\\n");
+    // Terrain as it is; the hidden volcano keeps its snow, not its activity.
+    for(std::size_t i=0;i<count;++i)assert(values[i]==(i==at(5,5)?raw[i]&~((1u<<24)|(1u<<27)):raw[i]));
+    auto revision=viewer.revision;assert(viewer.hidden_tiles==1);
+    // A reveal: the same values and revision, so no compiled ground goes stale.
+    inputs[1]={2,2,known|explored};values=update(2);
+    assert(viewer.revision==revision && !changed && values[at(2,2)]==raw[at(2,2)]);
+    // Revealing the volcano shows its activity.
+    inputs[2]={5,5,known|explored};values=update(3);
+    assert(changed && values==raw.data() && viewer.revision==3);
+    std::printf("PASS real relief: terrain_unchanged=1 reveal_unchanged=1 hidden_activity=0\n");
 }
 """)
 

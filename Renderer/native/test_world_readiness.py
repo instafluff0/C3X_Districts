@@ -293,18 +293,24 @@ int main(){
    !(p.tiles[1].tile_flags&C3X_RENDERER_TILE_PREFETCH));
  }
  assert(scene.size()==800&&scene.authoritative_size()==1);
- assert(region.build(scene,f,0)&&region.selected.size()==1);
+ // The explored tile and its unexplored ring, the eight tiles within two
+ // tiles of it, (2,0), (4,0), (1,1), (3,1), (0,2), (2,2), (1,3) and (0,4)
+ // (the map does not wrap): drawn as terrain, without hidden objects.
+ assert(region.build(scene,f,0)&&region.selected.size()==9);
  auto unseen=scene.retained(scene.key(2,0));assert(unseen&&!unseen->authoritative);
  for(auto const& t:region.tiles)if(t.tile_x==2&&t.tile_y==0){
   assert(t.terrain_type==2&&t.real_terrain_type==3);
-  assert(t.city_id==-1&&t.resource_id==-1&&!(t.tile_flags&C3X_RENDERER_TILE_PREFETCH));}
+  assert(t.city_id==-1&&t.resource_id==-1&&!(t.tile_flags&C3X_RENDERER_TILE_PREFETCH));
+  assert(t.tile_flags&CapturedScene::hidden_ring);}
  c3x_renderer_tile_v1 revealed{};revealed.tile_x=2;revealed.tile_y=0;
  revealed.terrain_type=2;revealed.real_terrain_type=3;revealed.city_id=9;revealed.resource_id=5;
  revealed.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_PREFETCH|
   C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE;
  auto delta=f;delta.tiles=&revealed;delta.tile_count=1;
  assert(journal.capture(delta,{1,1,1,1})&&journal.apply(scene,changed));
- assert(scene.authoritative_size()==2&&region.build(scene,f,0)&&region.selected.size()==2);
+ // Revealed with its objects; its own new ring, (6,0), (5,1), (4,2), (3,3)
+ // and (2,4), joins.
+ assert(scene.authoritative_size()==2&&region.build(scene,f,0)&&region.selected.size()==14);
  assert(scene.retained(scene.key(2,0))->appearance.city_id==9);
 }
 ''')

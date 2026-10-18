@@ -154,12 +154,12 @@ struct Rivers {using CellProof=std::vector<int>;bool valid(CellProof const&)cons
 int main(){
  CapturedScene scene;auto f=frame();c3x_renderer_camera_identity_v1 identity{};
  scene.publication_scope(f,identity,1);auto tile=full(2,2);publish(scene,tile);
- auto before=scene.world_snapshot();auto missing=before->key(4,4);assert(!before->current(missing));
+ auto before=scene.world_snapshot();auto missing=before->key(8,2);assert(!before->current(missing));
  Result result{std::make_unique<Part>(),std::make_unique<Part>(),std::make_unique<Part>()};
  result.ground->topology[missing]=0;result.objects->topology[missing]=0;
  Coast coast;Rivers rivers;assert(prepared_world_valid(result,coast,*before,rivers));
  // A known unseen halo supplies topology, never omitted city/resource art.
- auto halo=full(4,4,6);halo.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_VISIBILITY_KNOWN;
+ auto halo=full(8,2,6);halo.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_VISIBILITY_KNOWN;
  halo.city_id=777;halo.resource_id=888;publish(scene,halo);auto after=scene.world_snapshot();
  auto value=after->current(missing);assert(value && value->relief==6 && value->surface==6);
  assert(value->occurrence.city_id==-1 && value->occurrence.resource_id==-1);

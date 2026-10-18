@@ -96,9 +96,11 @@ struct WorldWindow {
         for(std::int64_t oy=box[1]/hh;oy<box[3]/hh;++oy)for(std::int64_t ox=box[0]/hw;ox<box[2]/hw;++ox){
             if((ox+oy)&1)continue;
             auto found=native.find(occurrence(ox,oy));
-            if(found!=native.end() && appearance(frame.tiles[found->second].tile_flags)){
-                if(explored(frame.tiles[found->second].tile_flags)){
-                    used[found->second]=true;native_index.push_back(found->second);tiles.push_back(frame.tiles[found->second]);}
+            // An unexplored native tile may still be drawn from the retained
+            // world as the hidden ring (CapturedScene), under the fog overlay.
+            if(found!=native.end() && appearance(frame.tiles[found->second].tile_flags) &&
+               explored(frame.tiles[found->second].tile_flags)){
+                used[found->second]=true;native_index.push_back(found->second);tiles.push_back(frame.tiles[found->second]);
                 continue;
             }
             std::int64_t cx=0,cy=0;

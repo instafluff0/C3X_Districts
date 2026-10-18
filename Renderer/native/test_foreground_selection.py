@@ -69,15 +69,27 @@ int main(){
  auto original=records;auto original_topology=topology;
  ForegroundSelection selection{2240,1260,128,64,4,2,true,false};
  std::set<std::uint64_t> foreground,required;
- for(auto const& tile:records)if(selection.selects(tile))foreground.insert(scene.key(tile.tile_x,tile.tile_y));
- assert(foreground.size()==11);
+ // The camera draws through the world window, which takes the hidden ring
+ // (unexplored tiles near explored ones) from its world inputs as
+ // explored terrain (window_tile).
+ for(auto tile:records){
+  auto input=snapshot->current(snapshot->key(tile.tile_x,tile.tile_y));
+  if(input && (input->occurrence.tile_flags&CapturedScene::hidden_ring))tile.tile_flags|=C3X_RENDERER_TILE_EXPLORED;
+  if(selection.selects(tile))foreground.insert(scene.key(tile.tile_x,tile.tile_y));}
+ assert(foreground.size()>11);
+ std::set<std::uint64_t> captured;
+ for(auto const& tile:records)if(tile.tile_flags&C3X_RENDERER_TILE_RENDER)captured.insert(scene.key(tile.tile_x,tile.tile_y));
  assert(WorldPreparationRegion::count(frame,true)==64);
  for(unsigned n=0;n<64;++n){
   WorldPreparationRegion region;assert(region.build(scene,frame,n,true));
   for(auto index:region.selected){auto const& tile=region.tiles[index];
    required.insert(scene.key(tile.tile_x,tile.tile_y));}
  }
- assert(required==foreground);
+ // Regions also prepare the ring beyond the camera's capture (its window
+ // takes those from retained inputs); within the capture they agree.
+ std::set<std::uint64_t> shared;
+ for(auto key:required)if(captured.count(key))shared.insert(key);
+ assert(shared==foreground);
  // Wrapped native occurrences retain their independent screen placement.
  auto wrapped=records[0];wrapped.tile_x+=60;wrapped.tile_y-=60;
  wrapped.anchor_x+=3840;wrapped.anchor_y-=1920;
@@ -89,7 +101,10 @@ int main(){
  assert(topology==original_topology&&scene.world_snapshot()==snapshot);
  assert(scene.appearance_sequence()==appearance&&scene.visibility_sequence()==visibility&&scene.scope_sequence()==scope);
  auto neighbor=snapshot->current(snapshot->key(59,-1));assert(neighbor);
- assert(neighbor->occurrence.terrain_type==2&&!(neighbor->occurrence.tile_flags&C3X_RENDERER_TILE_EXPLORED));
+ // An unexplored wrapped neighbour of explored land is in the hidden ring:
+ // drawn as terrain, while its native visibility stays unexplored.
+ assert(neighbor->occurrence.terrain_type==2&&(neighbor->occurrence.tile_flags&CapturedScene::hidden_ring));
+ assert(!(scene.retained(snapshot->key(59,-1))->visibility_flags&C3X_RENDERER_TILE_EXPLORED));
  auto promoted=records[797];promoted.tile_flags|=C3X_RENDERER_TILE_EXPLORED;
  assert(!selection.preserves(records[797],promoted));
  assert(snapshot->current(snapshot->key(promoted.tile_x,promoted.tile_y))->occurrence.tile_flags==unknown_flags);
@@ -125,14 +140,14 @@ int main(){
  assert(after.state(0,0)==0&&after.state(1,-1)==2);
  auto unknown=std::find_if(after.tiles.begin(),after.tiles.end(),[](auto tile){return tile.x==0&&tile.y==0;});
  assert(unknown!=after.tiles.end());
- assert(VisibilityCoverage::coverage(unknown->cells,.5f,.5f,1)==0); // Opaque unknown center.
- // Native blend (October 17): half at an edge shared with a known tile.
+ assert(VisibilityCoverage::light(unknown->cells,.5f,.5f)==0); // Opaque unknown center.
+ // Native fade (FogOfWar.pcx): seen light reaches into the unknown tile.
  assert(((unknown->cells>>2)&3u)==2); // The wrapped visible neighbor is still recorded.
- assert(std::fabs(VisibilityCoverage::coverage(unknown->cells,.5f,.0001f,1)-.5f)<.01f);
- assert(VisibilityCoverage::coverage(unknown->cells,.5f,.5f,1)==0);
+ assert(VisibilityCoverage::light(unknown->cells,.5f,.0001f)>.9f);
+ assert(VisibilityCoverage::light(unknown->cells,.5f,.5f)==0);
  auto seen=std::find_if(after.tiles.begin(),after.tiles.end(),[](auto tile){return tile.x==64&&tile.y==-32;});
  assert(seen!=after.tiles.end()&&((seen->cells>>14)&3u)==0); // Wrapped unknown neighbor.
- float feather=VisibilityCoverage::coverage(seen->cells,.5f,.999f,1);
+ float feather=VisibilityCoverage::light(seen->cells,.5f,.999f);
  assert(feather>0&&feather<1); // Neighbor feather still exists across the wrap.
  // Body selection preserves the native fog RENDER anchors rather than clearing them.
  assert(tiles[0].tile_flags==(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBILITY_KNOWN));
