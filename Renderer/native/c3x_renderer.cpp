@@ -6781,7 +6781,11 @@ public:
 
     // window=false enters the tile into the resident world only (preparation
     // and prefetch preload it before any camera window reaches it).
-    void append_tile_geometry(CachedTileGeometry & tile, c3x_renderer_tile_v1 const & record, bool animated_view, bool window=true) {
+    void append_tile_geometry(CachedTileGeometry & tile, c3x_renderer_tile_v1 const & occurrence, bool animated_view, bool window=true) {
+        // Window tiles already carry their borders' inside corners; preloaded
+        // and loaded tiles gain them here, so stored content keys agree.
+        auto record=occurrence;
+        record.territory_edge_mask|=topology_cache.inside_corners(record.tile_x,record.tile_y,record);
         bool store=resident_world_feed || (!window && resident_world_control);
         // While the store drives the draw, the window keeps no draw records
         // (resident_world_window_records), and a stored tile built from the
@@ -9056,7 +9060,7 @@ public:
         // The hidden ring (CapturedScene): unexplored ground near explored
         // land, drawn from its object-free world input, as explored terrain.
         if(auto input=topology_cache.world_input(id);input && (input->occurrence.tile_flags&topology_cache.hidden_ring)){
-            tile=input->occurrence;return true;
+            tile=input->occurrence;tile.territory_edge_mask|=topology_cache.inside_corners(x,y,tile);return true;
         }
         if(record && record->revision && (record->authoritative || (record->partial_flags&C3X_RENDERER_TILE_PREFETCH)))
             tile=record->appearance;
@@ -9064,6 +9068,8 @@ public:
         else{++window_skips[!record && !topology_cache.world_input(id)?0:record && !topology_cache.world_input(id)?1:2];return false;}
         if(record){tile.tile_flags=(tile.tile_flags&~C3X_RENDERER_TILE_VISIBILITY_BITS)|record->visibility_flags;
             tile.visibility_mask=record->visibility_mask;tile.tile_visibility=record->tile_visibility;tile.fog_status=record->fog_status;}
+        // Borders' inside corners follow the neighbours (CapturedScene::inside_corners).
+        tile.territory_edge_mask|=topology_cache.inside_corners(x,y,tile);
         return true;
     }
     bool render(c3x_renderer_frame_v1 const & native_frame, c3x_renderer_output_v1 & output,

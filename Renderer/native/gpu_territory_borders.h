@@ -56,6 +56,9 @@ float rounded_distance(float2 q,uint edges){
  [unroll]for(uint x=0;x<2;x++)[unroll]for(uint y=0;y<2;y++){
   uint ux=x?8:1,vy=y?2:4;float2 c=float2(x?1-q.x:q.x,y?1-q.y:q.y);
   if((edges&ux)&&(edges&vy)&&all(c<r))d=min(d,r-length(c-r));
+  // An inside corner (CapturedScene::inside_corners): the neighbours' bands
+  // end at this vertex, so the distance to it continues them around it.
+  if(edges&(16u<<(x+2*y)))d=min(d,length(c));
  }
  return d;
 }

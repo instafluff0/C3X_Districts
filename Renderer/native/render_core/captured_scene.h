@@ -444,6 +444,31 @@ public:
         a.territory_edge_mask=b.territory_edge_mask;a.territory_color_rgb=b.territory_color_rgb;
         return !std::memcmp(&a,&b,sizeof(a));
     }
+    // Civ III captures four border edges per tile (bits 1,2,4,8; corner k
+    // joins edge bits ux=k&1?8:1 and vy=k&2?2:4, as in gpu_territory_borders.h).
+    // Where a border turns inward, both tiles across a vertex's edges share
+    // this tile's owner and the tile across the vertex does not: no captured
+    // edge reaches that vertex, so 16<<k marks it for the band to turn there.
+    // Derived from the neighbours' captured edges, so a neighbour's change
+    // changes this tile's drawn occurrence (window_tile) and its records.
+    std::uint32_t inside_corners(int x,int y,c3x_renderer_tile_v1 const& tile)const{
+        if(!tile.territory_color_rgb)return 0;
+        auto edges=[&](int nx,int ny)->std::uint32_t{
+            auto id=key(nx,ny);auto record=retained(id);
+            if(record && record->revision && (record->authoritative || (record->partial_flags&C3X_RENDERER_TILE_PREFETCH)))
+                return record->appearance.territory_edge_mask&15u;
+            auto input=permitted_world_input(id);return input?input->occurrence.territory_edge_mask&15u:0u;
+        };
+        std::uint32_t corners=0;
+        for(unsigned k=0;k<4;++k){
+            unsigned ux=k&1?8:1,vy=k&2?2:4;
+            if(tile.territory_edge_mask&(ux|vy))continue;
+            // The neighbours across ux and vy; each has an edge toward the tile across the vertex.
+            int a=ux==8?1:-1,c=vy==2?1:-1;
+            if((edges(x+a,y+a)&vy) || (edges(x+c,y-c)&ux))corners|=16u<<k;
+        }
+        return corners;
+    }
     static c3x_renderer_tile_v1 object_inputs(c3x_renderer_tile_v1 tile) {
         tile=content(tile);
         // Territory is applied from the current occurrence during draw assembly

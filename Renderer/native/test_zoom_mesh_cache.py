@@ -788,7 +788,8 @@ struct State {
  std::size_t prefetched_geometry_bytes=20;std::uint64_t tile_geometry_epoch=5;
  std::unordered_map<int,CachedTileGeometry> tile_geometry_cache;
  c3x_renderer::render_core::ResidentContent<CachedTileGeometry> resident_content{4};
- struct Scene {void attach(c3x_renderer_tile_v1 const&,Handle){}} topology_cache;
+ struct Scene {void attach(c3x_renderer_tile_v1 const&,Handle){}
+  std::uint32_t inside_corners(int,int,c3x_renderer_tile_v1 const&)const{return 0;}} topology_cache;
  std::vector<Anchor> resource_anchors;std::vector<int> geometry_footprints;
  // Production selection: records plus their generation leases.
  c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count> geometry_vertex_buffers;

@@ -110,8 +110,22 @@ int main(){try{
   assert(std::abs(moved[4]/moved[3]-shown[4]/shown[3]-16)<.01);
   records[0].territory_rgb=0xff2010;auto captured=render(1,1);assert(captured[0]>captured[1]*10);
   records[0].territory_edges=0;auto removed=render(1,1);assert(removed[3]==0);
+  // Inside corners (CapturedScene::inside_corners, bit 16<<k): no edge of
+  // this tile reaches the vertex, yet the band turns around it there. The
+  // vertex is q=(0,0) left, (1,0) bottom, (0,1) top, (1,1) right on screen.
+  records[0].territory_rgb=0x20c080;records[0].translation_x=0;
+  records[0].territory_edges=15;auto full=render(1,1);
+  double center_x=full[4]/full[3],center_y=full[5]/full[3];
+  records[0].territory_edges=4;auto straight=render(1,1);
+  for(unsigned k=0;k<4;++k){
+   records[0].territory_edges=16u<<k;auto corner=render(1,1);
+   assert(corner[3]>4 && corner[3]<straight[3]*.5);
+   double x=corner[4]/corner[3]-center_x,y=corner[5]/corner[3]-center_y;
+   assert(k==0?x<-24:k==3?x>24:k==1?y>12:y<-12);
+   assert(k==0||k==3?std::abs(y)<4:std::abs(x)<4);
+  }
  }
- std::puts("PASS GPU borders: native colors, ownership removal/capture, zoom, translated occurrence, translucent occlusion, 1/2/4 samples");
+ std::puts("PASS GPU borders: native colors, ownership removal/capture, zoom, translated occurrence, translucent occlusion, inside corners, 1/2/4 samples");
  }catch(std::exception const&e){std::printf("FAIL borders: %s\n",e.what());return 1;}
 }
 ''', timeout=120)
