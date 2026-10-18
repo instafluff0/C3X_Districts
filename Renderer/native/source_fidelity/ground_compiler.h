@@ -36,6 +36,14 @@ inline float ground_smoothstep01(float value) {
     return value * value * (3.0f - 2.0f * value);
 }
 
+// The flat underlay's grid: river tiles 32, coastal tiles 16, others 8 (16/8
+// below 96 px). A tile splits each underlay side to its neighbour's grid when
+// that is denser, so the tile and its neighbours must use this one rule.
+inline int underlay_grid(bool river_near, double center_shore, int tile_width) {
+    int flat = std::abs(center_shore) < 1.5 && tile_width >= 96 ? 16 : 8;
+    return river_near ? std::max(flat, tile_width >= 96 ? 32 : 16) : flat;
+}
+
 // Moved here from c3x_renderer.cpp: used only by ground generation, so this
 // is now the single definition. c3x_renderer.cpp aliases both names.
 struct GroundPoint {
@@ -112,14 +120,14 @@ struct GroundSurfaces {
 
 template<class RiverNodes,class ReliefAt,class PickupHeightAt,class PickupGroundAt,
     class RiverDistanceAt,class MaterialWeightsAt,class ShoreDistanceAt,class WaterDepthAt,
-    class SurfaceUVAt,class ShoreSampleAt,class NdcX,class NdcY,class Cancelled>
+    class SurfaceUVAt,class ShoreSampleAt,class UnderlayGridAt,class NdcX,class NdcY,class Cancelled>
 void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_frame_v1 const & frame,
         NaturalWorld & natural, RiverNodes const & local_river_nodes,
         std::vector<CachedGroundGrid> const * cached_grid_source, unsigned & ground_grid_hit_counter,
         ReliefAt relief_at_world, PickupHeightAt pickup_height_at, PickupGroundAt pickup_ground_at,
         RiverDistanceAt river_distance, MaterialWeightsAt material_weights_for,
         ShoreDistanceAt signed_shore_distance, WaterDepthAt water_family_depth,
-        SurfaceUVAt periodic_surface_uv, ShoreSampleAt shore_sample_at,
+        SurfaceUVAt periodic_surface_uv, ShoreSampleAt shore_sample_at, UnderlayGridAt underlay_grid_at,
         NdcX ndc_x, NdcY ndc_y, Cancelled cancelled, GroundSurfaces & destination) {
     c3x_renderer_tile_v1 const & tile = input.tile;
     // River topology is consumed only by the river surface pass. Computing
@@ -328,8 +336,23 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
         }
         return vertex;
     };
+    // Neighbouring underlays differ in density (underlay_grid). Unequal grids
+    // left T-junctions on shared sides, seen as thin dark seams on beaches
+    // and in shallow water, so each side takes the denser tile's grid.
+    int underlay = river_near ? std::max(input.flat_grid, frame.tile_width >= 96 ? 32 : 16) : input.flat_grid;
+    std::array<int, 4> underlay_sides{};
+    if (input.pickup_profile && input.fidelity_profile) {
+        int column = (tile.tile_x + tile.tile_y) / 2, row = (tile.tile_x - tile.tile_y) / 2;
+        underlay = underlay_grid(river_near, shore_sample_at(column + .5f, row + .5f).distance, frame.tile_width);
+        // Sides v=0, u=1, v=1, u=0 face these lattice neighbours.
+        int const across[4][2] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+        for (unsigned side = 0; side < 4; ++side)
+            underlay_sides[side] = std::max(underlay, underlay_grid_at(column + across[side][0], row + across[side][1]));
+    }
+    // sides (indexed grids): a side's grid when a neighbour's is denser.
     auto append_ground_layer = [&](std::vector<MapVertex> & target, float layer,
-                                   int subdivisions, std::vector<UINT> * indices=nullptr) {
+                                   int subdivisions, std::vector<UINT> * indices=nullptr,
+                                   std::array<int, 4> const * sides=nullptr) {
         // Adjacent cells share grid corners. Build and upload each
         // corner once, then preserve the original triangle-list order.
         // This avoids repeated terrain/shadow evaluation for a point.
@@ -400,11 +423,45 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
                 float aa=std::max(.35f,2.f*(std::fabs(gx)+std::fabs(gy)));
                 return !(least>=std::max(21.7f,12.7f+aa));
             };
+            // A split side gets every point of its denser grid; its boundary
+            // cells fan from a centre sample, as in emit_ground_grid.
+            std::array<std::vector<UINT>,4> side_points;
+            if(sides)for(unsigned side=0;side<4;++side){
+                int lattice=(*sides)[side];
+                if(lattice<=subdivisions || lattice%subdivisions)continue;
+                int ratio=lattice/subdivisions;auto& points=side_points[side];points.resize(std::size_t(lattice)+1);
+                for(int i=0;i<=lattice;++i){
+                    if(i%ratio==0){int j=i/ratio;
+                        points[i]=UINT(side==0?j:side==1?j*row_width+subdivisions:
+                            side==2?subdivisions*row_width+subdivisions-j:(subdivisions-j)*row_width);
+                        continue;}
+                    // Exact k/lattice coordinates, as the neighbour samples them.
+                    float t=float(i)/lattice,back=float(lattice-i)/lattice;
+                    points[i]=UINT(grid_vertices.size());
+                    grid_vertices.push_back(make_ground_vertex(side==0?t:side==1?1.f:side==2?back:0.f,
+                        side==0?0.f:side==1?t:side==2?1.f:back,layer));
+                }
+            }
+            auto emit=[&](UINT i0,UINT i1,UINT i2){
+                if(!cull || drawn(i0,i1,i2))indices->insert(indices->end(),{i0,i1,i2});
+            };
             for(int y=0;y<subdivisions;++y)for(int x=0;x<subdivisions;++x){
                 UINT a=UINT(y*row_width+x),b=a+1,c=b+UINT(row_width),d=a+UINT(row_width);
-                UINT triangles[]={a,b,c,a,c,d};
-                for(int t=0;t<6;t+=3)if(!cull || drawn(triangles[t],triangles[t+1],triangles[t+2]))
-                    indices->insert(indices->end(),triangles+t,triangles+t+3);
+                bool split[]={y==0 && !side_points[0].empty(),x+1==subdivisions && !side_points[1].empty(),
+                              y+1==subdivisions && !side_points[2].empty(),x==0 && !side_points[3].empty()};
+                if(split[0] || split[1] || split[2] || split[3]){
+                    UINT center=UINT(grid_vertices.size());
+                    grid_vertices.push_back(make_ground_vertex((x+.5f)/subdivisions,(y+.5f)/subdivisions,layer));
+                    UINT corners[]={a,b,c,d,a};
+                    int starts[]={x,y,subdivisions-1-x,subdivisions-1-y};
+                    for(unsigned side=0;side<4;++side){
+                        if(!split[side]){emit(center,corners[side],corners[side+1]);continue;}
+                        auto const& points=side_points[side];int ratio=int(points.size()-1)/subdivisions;
+                        for(int i=starts[side]*ratio;i<(starts[side]+1)*ratio;++i)emit(center,points[i],points[i+1]);
+                    }
+                    continue;
+                }
+                emit(a,b,c);emit(a,c,d);
             }
             if(cull && indices->size()<std::size_t(subdivisions)*subdivisions*6){
                 std::vector<UINT> remap(grid_vertices.size(),~0u);std::vector<MapVertex> used;
@@ -431,10 +488,8 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
             }
         }
     };
-    append_ground_layer(destination.underlay_vertices, 0.5f,
-                        river_near ? std::max(input.flat_grid,
-                            frame.tile_width >= 96 ? 32 : 16) : input.flat_grid,
-                        &destination.underlay_indices);
+    append_ground_layer(destination.underlay_vertices, 0.5f, underlay,
+                        &destination.underlay_indices, &underlay_sides);
     if (input.ground < 11 && (!input.fidelity_profile || input.draw_marsh))
         append_ground_layer(destination.land_vertices, 1.0f,
                             river_near ? std::max(input.tile_ground_grid,

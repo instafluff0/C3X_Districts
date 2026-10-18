@@ -54,7 +54,8 @@
     "Renderer.native.test_render_core",
     "Renderer.tools.asset_compiler.test_clutter_blp_extractor",
     "Renderer.tools.asset_compiler.test_shore_blp_extractor",
-    "Renderer.lab.test_natural"
+    "Renderer.lab.test_natural",
+    "Renderer.native.test_underlay_side_stitching"
   ],
   "references": {
     "d3d11": [

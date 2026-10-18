@@ -181,12 +181,24 @@ std::unique_ptr<PreparedGround> prepare_ground(GroundCompileInput const& ground_
         float bottom=center_depth(x0,y0+1)*(1.0f-tx)+center_depth(x0+1,y0+1)*tx;
         return top*(1.0f-ty)+bottom*ty;
     };
+    // A neighbour's flat-underlay grid by the compiler's own rule, so their
+    // shared side takes the denser grid. Its reads are this tile's
+    // dependencies: a neighbour's river or shore change re-places the side.
+    auto ground_underlay_grid_at=[&](int c,int r){
+        auto const & world=world_coast.world();
+        auto i=world.index(c,r);auto value=world.at(i);
+        if(i!=std::size_t(-1))ground_observe_world(i,value);
+        if(value==0xffffffffu)return 0;
+        bool river=fidelity_profile && river_assets_ready &&
+            (((value>>16)&170u)!=0 || ground_query_scratch.rivers.river_affects(c,r));
+        return c3x_renderer::fidelity::underlay_grid(river,ground_shore_sample_at(float(c)+.5f,float(r)+.5f).distance,frame.tile_width);
+    };
     c3x_renderer::fidelity::GroundSurfaces ground_surfaces;
     c3x_renderer::fidelity::compile_ground_surfaces(ground_compile_input, frame, ground_query_scratch.rivers, ground_river_nodes,
         ground_grid_lease.get(), result->grid_hits,
         ground_relief_at_world, ground_pickup_height_at, ground_pickup_ground_at, ground_river_distance, ground_material_weights_for,
         ground_signed_shore_distance, ground_water_family_depth, periodic_surface_uv, ground_shore_sample_at,
-        ndc_x, ndc_y, ground_cancelled, ground_surfaces);
+        ground_underlay_grid_at, ndc_x, ndc_y, ground_cancelled, ground_surfaces);
     if(!c3x_renderer::fidelity::pack_ground(ground_surfaces,pickup_profile,world_ground,
         ground_compile_input.fidelity_profile && ground_compile_input.compact_vertices,ground_compile_input.quantized,ground_cancelled,*result))return {};
 
