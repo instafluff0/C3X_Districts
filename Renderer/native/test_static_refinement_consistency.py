@@ -54,7 +54,7 @@ struct Harness {
     struct {unsigned repair=0,repair_rects=0,repair_percent=0,repair_changed=0;} static_decision;
     bool ensure_linear_target(Target&,unsigned,unsigned,unsigned,bool){return true;}
     // Retained near-water overlay layers follow their slot's revision.
-    struct OverlaySlot {Target layer;std::uint64_t revision=~0ull;};
+    struct OverlaySlot {Target layer;std::uint64_t revision=~0ull,invalidations=0;};
     std::array<OverlaySlot,4> overlay_slots;bool overlay_mode=false;
     bool overlay_target(unsigned){return true;}
     bool write_slot(unsigned index,StaticState& slot,ViewportShaderSettings const&,StaticRect r,float,bool){

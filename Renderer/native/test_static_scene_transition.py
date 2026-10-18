@@ -85,7 +85,7 @@ using StaticState=c3x_renderer::render_core::StaticRasterState<Target>;
 using StaticRect=StaticState::Rect;
 struct ViewportShaderSettings{float translation[2]{},depth_translation=0,projection=1;};
 struct Revisions{struct Checkpoint{int owner=0,sequence=0;};Checkpoint checkpoint()const{return {};}};
-struct Options{bool legacy=false;float bootstrap_scale=1.f,zoom_refine_hold=.01f;};
+struct Options{bool legacy=false,zoom_direct=false,zoom_early=false;float bootstrap_scale=1.f,zoom_refine_hold=.01f;};
 struct Pipeline {
  Context context;
  struct{Context* context;int device=1,content_view_width=4,content_view_height=4;std::int64_t scene_depth_origin=0;
@@ -97,8 +97,12 @@ struct Pipeline {
  std::chrono::steady_clock::time_point zoom_lane_used{};void release_zoom_lane(){}
  std::array<RasterInputs,4> raster_inputs;std::array<RasterInputs,2> bootstrap_inputs;
  std::array<std::array<std::uint64_t,6>,2> bootstrap_stamp{};
- bool restore_overlays=false,preview_overlays=false;
- struct OverlaySlot{Target layer;std::uint64_t revision=~0ull;};std::array<OverlaySlot,4> overlay_slots;
+ bool restore_overlays=false,preview_overlays=false,preview_overlay_secondary=false,preview_depth_exact=false;
+ c3x_renderer::render_core::LinearResample::Source preview_overlay_sources[2]{};
+ struct OverlaySlot{Target layer;std::uint64_t revision=~0ull,invalidations=0;};std::array<OverlaySlot,4> overlay_slots;
+ // As production: a layer matches its slot while every later revision was an invalidation.
+ static bool overlay_matches_pixels(OverlaySlot const& o,StaticState const& slot){
+  return o.revision!=~0ull && o.revision+(slot.invalidations-o.invalidations)==slot.revision;}
  bool overlay_enabled()const{return false;}
  std::array<std::uint64_t,6> bootstrap_identity()const{return {std::uint64_t(version),0,0,0,0,0};}
  Options options;Options const& sandbox_perf_options()const{return options;}

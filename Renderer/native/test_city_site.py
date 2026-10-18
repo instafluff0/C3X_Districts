@@ -196,8 +196,10 @@ int main(){
         from pathlib import Path
         source = (Path(__file__).parent.parent / "sandbox/fresh_pipeline.h").read_text()
         self.assertTrue(effects_routed_first(source))
-        # Static preview frames skip the effect layer.
-        self.assertIn("if(!static_preview && !effect_visible[geometry_city].empty()", source)
+        # Static preview frames draw the effect layer without the resampled
+        # depth (review 75, test_preview_effects). They skipped it before
+        # October 11, when smoke and plumes vanished for whole zooms.
+        self.assertIn("glow.linear.target,static_preview?nullptr:glow.linear.depth", source)
         # The reflection contributors skip attached effects.
         self.assertIn("record.content().animation_texture || record.content().city_effect ||", source)
         # The earlier routing sent a water-dependent smoke quad to the water

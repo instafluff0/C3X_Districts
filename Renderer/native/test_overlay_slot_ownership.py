@@ -35,7 +35,7 @@ struct GeometryDrawView {using Records=std::array<std::vector<Record>,layers>;};
 struct Harness {
     c3x_renderer::render_core::StaticRasterStates<Target> static_rasters;
     StaticState bootstrap_image;
-    struct OverlaySlot {Target layer;std::uint64_t revision=~0ull;};
+    struct OverlaySlot {Target layer;std::uint64_t revision=~0ull,invalidations=0;};
     std::array<OverlaySlot,4> overlay_slots;
     std::uint64_t overlay_retired_mismatch=0,overlay_retired_failure=0;
     struct {bool water_scene_active=true;
