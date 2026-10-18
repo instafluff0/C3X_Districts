@@ -56,7 +56,7 @@ struct Harness {
  unsigned queries=0;
  struct StaticRect {int left=0,top=0,right=0,bottom=0;} shadow_field;
  float tile_half_width=64,tile_half_height=32;struct {std::array<float,2> receiver_area{};} shadow;
- struct Options {bool shadow_tight=false;};Options sandbox_perf_options()const{return {};}
+ struct Options {bool shadow_tight=false,zoom_early=false;}options;Options sandbox_perf_options()const{return options;}
  float destination=1.f;bool moving=false;
  float zoom_destination()const{return destination;}bool zoom_moving()const{return moving;}
  bool canonical_hidden()const{return false;}
@@ -123,6 +123,13 @@ int main(){
   auto narrow=z.shadow.receiver_area;
   z.destination=1.25f;z.moving=true;assert(z.update_roi(settings,1000,800));
   assert(z.roi_revision==revision+2 && z.shadow.receiver_area[0]>narrow[0]);}
+ // With early refinement the destination raster is drawn while the zoom
+ // moves, so the field fits the destination at once instead of waiting.
+ {Harness z;z.options.zoom_early=true;z.all_visible[1]={main};z.guard[1]={main};
+  z.projection_zoom=z.destination=1.5f;assert(z.update_roi(settings,1000,800));
+  auto wide=z.shadow.receiver_area;auto revision=z.roi_revision;
+  z.destination=2.f;z.projection_zoom=1.6f;z.moving=true;assert(z.update_roi(settings,1000,800));
+  assert(z.roi_revision==revision+1 && z.shadow.receiver_area[0]<wide[0]);}
 }
 ''')
 

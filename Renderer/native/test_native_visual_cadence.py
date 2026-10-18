@@ -242,12 +242,16 @@ int main(){
 #include <array>
 #include <cassert>
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <memory>
 #include <utility>
 #include "Renderer/native/c3x_renderer_api.h"
 using HRESULT=int;constexpr HRESULT S_OK=0;bool FAILED(HRESULT code){return code<0;}
+// The zoom the camera is heading to (zoom_transition.h); the display-frame
+// samples below only count once it equals the presented zoom.
+namespace c3x_renderer{inline std::atomic<float>& zoom_destination_hint(){static std::atomic<float> value{1.f};return value;}}
 struct LARGE_INTEGER{long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* value){++value->QuadPart;}
 template<std::size_t N,class... Args>int sprintf_s(char (&buffer)[N],char const* format,Args... args){
@@ -299,6 +303,12 @@ struct Owner{
  std::atomic<std::uint64_t> trial_visual_permit_denials{0},trial_visual_call_busy{0},trial_visual_state_busy{0};
  std::array<std::atomic<unsigned>,32> visual_busy_by{};
  long long visual_ticks=17,visual_frequency=1000;
+ // Display-frame samples (settled zoom, ambient frames only) and the deferred
+ // step's animation gate: a frame starts only if it ends before adoption.
+ std::array<double,8> visual_frame_samples{};unsigned visual_frame_count=0;long long visual_sampled_at=0;
+ unsigned visual_sample_zoom=0;std::uint64_t visual_front_seen=0;
+ bool deferred_animating=false,ends_in_time=true;
+ bool frame_ends_before_adoption()const{return ends_in_time;}
  int offer(){
   bool phase_probe=true,route_witness=true;
   LARGE_INTEGER started{},prepared{},sampled{},finished{};
@@ -350,6 +360,33 @@ int main(){
  status.trial_surface_swap->result=S_OK;assert(status.offer()==C3X_RENDERER_RESULT_OK);
  assert(status.trial_surface_swap->presents==2&&status.renderer_state.gpu_composition->published==1);
  assert(!status.trial_front_pending&&status.trial_presented_front_revision==9&&status.trial_surface_permit.consumed==1);
+ // A deferred step still animating the shown view whose frame would end after
+ // Civ III adopts the step does not start: it is a denial of this offer, not a
+ // consumed grant, and the grant stays available for the next opportunity.
+ Owner late;late.trial_surface_permit.admitted=true;late.deferred_animating=true;late.ends_in_time=false;
+ assert(late.offer()==C3X_RENDERER_RESULT_BUSY&&!late.renderer_state.gpu_composition->samples);
+ assert(late.trial_surface_permit.admitted&&!late.trial_surface_permit.consumed&&!late.trial_surface_swap->presents);
+ assert(late.trial_visual_permit_denials==0&&!late.fences&&!late.visual_fence_denials);
+ late.ends_in_time=true;assert(late.offer()==C3X_RENDERER_RESULT_OK&&late.trial_surface_permit.consumed==1);
+ // The gate holds back only the ordinary command; required startup presents.
+ Owner required;required.command=Owner::Command::trial_required_visual_shared;
+ required.trial_surface_permit.admitted=true;required.deferred_animating=true;required.ends_in_time=false;
+ assert(required.offer()==C3X_RENDERER_RESULT_OK&&required.trial_surface_permit.consumed==1);
+ // Display-frame samples: a moving zoom is never sampled, a settled zoom's
+ // ambient frames are, and only after the frame's front was already seen.
+ Owner ambient;
+ ambient.trial_surface_permit.admitted=true;assert(ambient.offer()==C3X_RENDERER_RESULT_OK); // zoom 1.25 is not the destination (1.0)
+ assert(!ambient.visual_frame_count&&!ambient.visual_sample_zoom&&ambient.visual_front_seen==9);
+ c3x_renderer::zoom_destination_hint().store(81920.f/65536.f,std::memory_order_relaxed);
+ ambient.trial_surface_permit.admitted=true;assert(ambient.offer()==C3X_RENDERER_RESULT_OK);
+ assert(ambient.visual_frame_count==1&&ambient.visual_sample_zoom==81920&&ambient.visual_sampled_at>0);
+ ambient.trial_surface_permit.admitted=true;assert(ambient.offer()==C3X_RENDERER_RESULT_OK&&ambient.visual_frame_count==2);
+ ambient.visual_front_seen=8; // a newly committed front: presented, but not an ambient sample
+ ambient.trial_surface_permit.admitted=true;assert(ambient.offer()==C3X_RENDERER_RESULT_OK&&ambient.visual_frame_count==2&&ambient.visual_front_seen==9);
+ ambient.visual_sample_zoom=65536; // a new settled zoom starts the samples again
+ ambient.trial_surface_permit.admitted=true;assert(ambient.offer()==C3X_RENDERER_RESULT_OK);
+ assert(ambient.visual_frame_count==1&&ambient.visual_sample_zoom==81920);
+ c3x_renderer::zoom_destination_hint().store(1.f,std::memory_order_relaxed);
 }
 ''')
 

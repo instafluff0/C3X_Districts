@@ -42,6 +42,11 @@ struct RendererState {
   assert(std::string(event)=="resource-preparation" && std::string(detail).size()<512);++rows;}
   double milliseconds(long long ticks){return double(ticks);}}trace;
  long long resource_composite_ticks=1;
+ // The resident world refreshes its own water occurrences when active; the
+ // classic membership path under test runs with it off, and the hook is
+ // checked to be reached (once per sample) when it is on.
+ bool resident_world_control=false;unsigned resident_world_refreshes=0;
+ void resident_world_refresh_visibility(){++resident_world_refreshes;}
  std::vector<int> resource_anchors,sandbox_resource_poses,sandbox_aquatic_resource_poses,sandbox_pose_chunks;
  enum {geometry_water,geometry_river};
  struct Chunk {struct {int left=0,top=0,right=0,bottom=0;} bounds;
@@ -110,6 +115,9 @@ int main(){
  proof=renderer.resource_visibility_membership;renderer.reset_resources();
  assert(!renderer.resource_visibility_membership && proof.use_count()==1 && !renderer.visibility_coverage.captured);
  assert(renderer.sample(frame,true) && renderer.resource_preparation.builds==1 && !renderer.resource_preparation.occurrence_reuses);
+ assert(!renderer.resident_world_refreshes);
+ renderer.resident_world_control=true;assert(renderer.sample(frame,true) && renderer.resident_world_refreshes==1);
+ renderer.resident_world_control=false;
  tile.tile_flags=C3X_RENDERER_TILE_RENDER;
  assert(!renderer.sample(frame,true)); // never publish an unclassified map
  assert(!renderer.visibility_coverage.captured && renderer.visibility_coverage.states.empty() && !renderer.resource_visibility_membership);

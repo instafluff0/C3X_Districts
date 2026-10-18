@@ -145,6 +145,7 @@ struct Harness {
     int assets_result=C3X_RENDERER_RESULT_OK,meshes_result=C3X_RENDERER_RESULT_OK;
     bool fresh_scene_path=true,visibility_pass=true,fresh_path_failed=false;
     bool gpu_map_valid=false,cpu_output_stale=false;
+    bool scene_render=false; // held by the draw's SceneRender guard, cleared on every exit
     bool cached_request_continuous_redraw=false,cache_valid=false;
     unsigned cached_signature=0,previous_signature=0,cached_rendered_tile_count=0,
         cached_fallback_tile_count=0,cached_textured_tile_count=0,cached_visible_animation_count=0;
@@ -185,7 +186,7 @@ struct Harness {
     ~Harness(){release(gpu_map_texture);}
     void event(CancelAt stage){if(cancel_at==stage)camera_cancelled.store(true);}
     bool prepare_wave_chunks(Frame const&){++waves;event(CancelAt::wave);return wave_ok;}
-    bool c3x_renderer64_render_fresh(Frame const&,ID3D11RenderTargetView*,float=1.f){++draws;event(CancelAt::draw);return draw_ok;}
+    bool c3x_renderer64_render_fresh(Frame const&,ID3D11RenderTargetView*,float=1.f){assert(scene_render);++draws;event(CancelAt::draw);return draw_ok;}
     bool fill_output(Frame const&,Output& output,unsigned,long long){++fills;output.filled=true;return true;}
     bool capture_gpu(Published& ready,Output const&,Frame const&,unsigned){
         ++captures;event(CancelAt::capture);
@@ -235,6 +236,7 @@ void cancelled_case(CancelAt stage,bool wave_ok=true,bool draw_ok=true,bool text
     int releases=ID3D11RenderTargetView::releases;
     bool complete=h.worker();
     assert(!complete&&"cancelled preparation must return incomplete");
+    assert(!h.scene_render&&"the scene-render guard is released on a cancelled draw");
     assert(h.camera_cancelled.load());
     assert(h.fills==0&&!h.gpu_map_valid&&!h.cpu_output_stale);
     assert(!h.fresh_path_failed&&"cancel is not a sticky renderer failure");
@@ -274,6 +276,7 @@ int main(){
         Harness h;assert(h.worker());
         assert(h.waves==1&&h.draws==1&&h.fills==1&&h.captures==1);
         assert(h.gpu_map_valid&&h.cpu_output_stale&&!h.fresh_path_failed);
+        assert(!h.scene_render);
         assert(h.camera_ready.identity==61&&h.camera_result==C3X_RENDERER_RESULT_OK);
         assert(!h.camera_ready_prepared&&ID3D11RenderTargetView::alive==0);
         assert(h.selections==1&&h.assets==1&&h.meshes==1&&h.consumes==1);
@@ -286,7 +289,7 @@ int main(){
     {
         Harness h;h.draw_ok=false;assert(!h.worker());
         assert(h.fresh_path_failed&&h.waves==1&&h.draws==1&&h.fills==0);
-        assert(ID3D11RenderTargetView::alive==0);
+        assert(ID3D11RenderTargetView::alive==0&&!h.scene_render);
     }
     {
         Harness h;h.texture_ok=false;assert(!h.worker());

@@ -125,6 +125,7 @@ int main(){exact_diff();ownership_diff();depth_basis();std::cout<<"CANONICAL_MEM
 #include "Renderer/native/render_core/canonical_membership_diff.h"
 #include <vector>
 #include <array>
+#include <chrono>
 #include <memory>
 #include <cassert>
 #include <cstring>
@@ -156,6 +157,7 @@ struct Harness {
  Selection selection{640,320,128,64,2,0,true,false};Signature signature{};Cache geometry_cache;Scene topology_cache;
  struct Content {std::vector<Owner*> owners;Owner* resolve(Handle h){return h.generation && h.generation<owners.size()?owners[h.generation]:nullptr;}}resident_content;
  std::array<std::uint64_t,2> compile_quality={11,12};
+ std::array<std::chrono::steady_clock::time_point,4> assembly_marks{}; // crossing assembly sub-phases (resident-world trace)
  bool tile_content_valid(Owner const& owner,c3x_renderer_tile_v1 const&){return !owner.invalid && owner.mesh->proof->valid;}
  bool raster_content_valid(Proof const& proof){return proof.valid;}
  struct Result {bool covered,incremental;unsigned entering,leaving;};
@@ -178,6 +180,7 @@ int main(){
  for(auto const& t:current)h.topology_cache.records[h.topology_cache.key(t.tile_x,t.tile_y)]={};
  c3x_renderer_frame_v1 frame{};frame.tiles=current.data();frame.tile_count=current.size();frame.target_width=640;frame.target_height=320;
  auto result=h.admit(frame);assert(result.covered && result.incremental && !result.entering && !result.leaving);
+ assert(h.assembly_marks[0].time_since_epoch().count()!=0); // membership evaluation starts the assembly timeline
  // A changed native order retires alpha pixels while preserving all owners.
  std::swap(current[0],current[1]);result=h.admit(frame);
  assert(!result.covered && result.incremental && !result.entering && !result.leaving);

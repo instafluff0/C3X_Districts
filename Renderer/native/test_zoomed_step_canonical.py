@@ -106,7 +106,11 @@ int main(){
         # the canonical target; the 1x render only when not zoomed.
         self.assertIn("c3x_renderer64_render_fresh(native_frame,zoomed_step_target,zoomed_step) &&\n"
                       "                    canonical_minify.draw(device,context,zoomed_step_view,target,", step)
-        self.assertIn("}else drawn=c3x_renderer64_render_fresh(native_frame,target);", step)
+        # Both draws run inside the SceneRender guard (scene_render is held for
+        # the call and cleared on every exit); the 1x draw is still the else.
+        guard = r"struct SceneRender \{bool& flag;~SceneRender\(\)\{flag=false;\}\} scene\{scene_render\};scene_render=true;"
+        self.assertRegex(step, r"\}else\{" + guard + r"\s*drawn=c3x_renderer64_render_fresh\(native_frame,target\);\}")
+        self.assertRegex(step, guard + r"\s*drawn=zoomed_step_target && c3x_renderer64_render_fresh\(native_frame,zoomed_step_target,zoomed_step\)")
         self.assertEqual(len(re.findall(r"c3x_renderer64_render_fresh\(", step)), 2)
         # Units are selected for the zoom actually drawn.
         self.assertIn("select_frame_units(native_frame,candidates,fresh_unit_poses,zoomed_step)", source)
