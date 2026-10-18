@@ -157,8 +157,9 @@ private:
     std::uint64_t retained_raster_appearance(std::uint64_t id) const {
         auto input=permitted_world_input(id);
         // A hidden-ring tile draws its object-free world input (window_tile),
-        // whatever Civ III captured of the unexplored tile.
-        if(input && (input->occurrence.tile_flags&hidden_ring))return input->content_revision;
+        // whatever Civ III captured of the unexplored tile. Other unexplored
+        // tiles are not drawn; ring compilers read only their world input.
+        if(input && ((input->occurrence.tile_flags&hidden_ring) || unexplored(input->occurrence)))return input->content_revision;
         auto record=retained(id);
         if(record && record->authoritative)return record->revision;
         return input && (input->occurrence.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==
@@ -643,7 +644,8 @@ public:
     std::uint64_t appearance_revision(std::uint64_t id) const {
         auto observed=current(id);
         if(!observed || !(observed->occurrence.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return 0;
-        if(auto input=permitted_world_input(id);input && (input->occurrence.tile_flags&hidden_ring))return input->content_revision;
+        if(auto input=permitted_world_input(id);input && ((input->occurrence.tile_flags&hidden_ring) || unexplored(input->occurrence)))
+            return input->content_revision; // As retained_raster_appearance.
         auto record=retained(id);auto appearance=content(observed->occurrence);
         if(record && record->authoritative && same_compiled(appearance,record->appearance))return record->revision;
         if(auto revision=matching_permitted_revision(id,appearance))return revision;

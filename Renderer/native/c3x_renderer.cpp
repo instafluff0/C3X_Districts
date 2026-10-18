@@ -6311,10 +6311,14 @@ public:
             double(record.bounds.right)+record.translation_x+radius,double(record.bounds.bottom)+record.translation_y+radius,
             chunk.world_bounds.low[2],chunk.world_bounds.high[2]};
     }
-    // A tile's retained visibility, as the water refresh reads it.
+    // A tile's retained visibility, as the water refresh reads it. The hidden
+    // ring is drawn as explored terrain (window_tile), so its water moves as
+    // the window draws it, not fog-frozen during camera steps.
     bool resident_water_visible(int tile_x,int tile_y)const{
         if(!visibility_pass)return true;
-        auto record=topology_cache.retained(topology_cache.key(tile_x,tile_y));
+        auto id=topology_cache.key(tile_x,tile_y);
+        if(auto input=topology_cache.world_input(id);input && (input->occurrence.tile_flags&topology_cache.hidden_ring))return true;
+        auto record=topology_cache.retained(id);
         return record && (record->visibility_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) &&
             (record->visibility_flags&(C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE));
     }
@@ -6373,24 +6377,29 @@ public:
     void resident_world_load(std::array<std::uint64_t,2> const& quality,bool world_ground,bool world_objects){
         if(resident_world_loaded || !resident_world_feed || !world_gpu_residency_ready)return;
         resident_world_loaded=true;
-        auto begin=std::chrono::steady_clock::now();unsigned loaded=0,refused=0;
+        auto begin=std::chrono::steady_clock::now();unsigned loaded=0,refused=0,ring=0;
         topology_cache.each_retained([&](std::uint64_t id,auto const& retained){
             constexpr unsigned eligibility=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;
+            // The hidden ring is drawn from its world input as explored
+            // terrain (window_tile); loading prepared it, so it is stored too.
+            auto input=topology_cache.world_input(id);
+            if(input && !(input->occurrence.tile_flags&topology_cache.hidden_ring))input=nullptr;
+            auto flags=input?input->occurrence.tile_flags:retained.visibility_flags;
             auto owner=resident_content.resolve(retained.compiled);
             auto revision=topology_cache.world_appearance_revision(id);
-            if(!owner || !owner->mesh || !owner->mesh->proof || owner->shared_natural || (retained.visibility_flags&eligibility)!=eligibility ||
+            if(!owner || !owner->mesh || !owner->mesh->proof || owner->shared_natural || (flags&eligibility)!=eligibility ||
                !revision || owner->compile_context[17]!=revision || owner->world_ground!=world_ground || owner->world_objects!=world_objects ||
                owner->compile_context[14]!=quality[0] || owner->compile_context[15]!=quality[1] ||
                owner->mesh->proof->scope!=topology_cache.scope_sequence() || owner->mesh->proof->assets!=content_revision ||
                owner->compile_context[11]!=device_generation || !owner->anchor_dependencies.empty()){++refused;return;}
             if(owner->natural_content.generation){auto source=resident_content.resolve(owner->natural_content);
                 if(!source || !source->mesh || !source->mesh->proof || !raster_content_valid(*source->mesh->proof)){++refused;return;}}
-            auto tile=retained.appearance;tile.tile_x=int(std::uint32_t(id>>32));tile.tile_y=int(std::uint32_t(id));
-            tile.tile_flags=retained.visibility_flags|C3X_RENDERER_TILE_PREFETCH;
+            auto tile=input?input->occurrence:retained.appearance;tile.tile_x=int(std::uint32_t(id>>32));tile.tile_y=int(std::uint32_t(id));
+            tile.tile_flags=flags|C3X_RENDERER_TILE_PREFETCH;
             if(!tile_content_valid(*owner,tile)){++refused;return;}
-            append_tile_geometry(*owner,tile,false,false);++loaded;
+            append_tile_geometry(*owner,tile,false,false);++loaded;ring+=input!=nullptr;
         });
-        char detail[160];std::snprintf(detail,sizeof(detail),"loaded=%u refused=%u tiles=%zu records=%zu ms=%.2f",loaded,refused,
+        char detail[160];std::snprintf(detail,sizeof(detail),"loaded=%u ring=%u refused=%u tiles=%zu records=%zu ms=%.2f",loaded,ring,refused,
             resident_world.view().tiles,resident_world.view().records,std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count());
         trace.write("resident-world-load",detail,true);
     }

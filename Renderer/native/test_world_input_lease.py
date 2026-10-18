@@ -164,7 +164,10 @@ int main(){
  auto value=after->current(missing);assert(value && value->relief==6 && value->surface==6);
  assert(value->occurrence.city_id==-1 && value->occurrence.resource_id==-1);
  assert(!(value->occurrence.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)));
- assert(!scene.world_appearance_revision(missing));
+ // Its identity is that object-free input (test_loading_ring): ring canopy
+ // tiles depend on it, and Civ III's capture of the tile must not change it.
+ auto unexplored_identity=scene.world_appearance_revision(missing);
+ assert(unexplored_identity && unexplored_identity==value->content_revision);
  assert(prepared_world_valid(result,coast,*before,rivers)); // Old compiler lease remains coherent.
  assert(!prepared_world_valid(result,coast,*after,rivers)); // Adoption must check newest authority.
  result.ground->topology[missing]=result.objects->topology[missing]=value->semantic;
@@ -174,6 +177,7 @@ int main(){
  assert(scene.world_input_sequence()>sequence);
  auto revealed=scene.world_snapshot();assert(revealed!=after);
  assert(revealed->current(missing)->occurrence.city_id==777 && scene.world_appearance_revision(missing));
+ assert(scene.world_appearance_revision(missing)!=unexplored_identity); // The reveal invalidates its dependents.
  assert(after->current(missing)->occurrence.city_id==-1);
  halo.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;
  halo.city_id=-1;publish(scene,halo);auto hidden=scene.world_snapshot();

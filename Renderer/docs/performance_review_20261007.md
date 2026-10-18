@@ -4124,3 +4124,105 @@ plus review 83, without and with this change.
     a tribal village appear one sample later.
   - With it, the gold appears with its tile. The village tile (a hut is
     known only once seen) stays dark one sample, then appears whole.
+
+## 85. The first view after loading keeps the prepared hidden ring (October 17)
+
+**Report.** After review 82 the first view after loading took about 1.2 s
+instead of 0.9 s. Its job rebuilt the hidden-ring tiles on screen and in the
+window margin (`missing_binding=145`, `user-3350BC` scroll).
+
+**Cause.**
+- Loading does prepare the ring. Its GPU sweep admitted 688 keys: two for
+  each of the 199 explored and 145 ring tiles in view.
+- `WorldInputCapture::accept` rebuilt each unexplored loading-page tile from
+  the packed topology alone. It dropped the map seed (`variant_seed`) and
+  the pine flag, which the injected producer supplies for unexplored tiles.
+- Civ III's first on-screen capture carries both. Every ring tile on screen
+  changed content, so it got a new identity and `update_world_input`
+  cleared its compiled ground. The first job rebuilt all of them.
+  - A diagnostic build confirmed it: at that publication 145 of 145 bound
+    ring tiles lost their binding, and each differed only in `variant_seed`.
+  - Loading had also compiled ring pine forests as broadleaf.
+- Ring tiles with canopy depend on tiles up to two away, which include
+  unexplored tiles outside the ring. Their identity was 0 until Civ III
+  captured them on screen, then that capture's revision. In game, 2 ring
+  tiles were still rebuilt once the seed was kept.
+- `resident_world_load` admitted only natively explored records, from their
+  native appearance, so ring tiles were never stored at load.
+
+**Changes.**
+- `world_input_capture.h`: unexplored loading tiles keep the producer's
+  seed and terrain feature flags. They are the terrain recipe, not hidden
+  art.
+- `CapturedScene`: an unexplored tile outside the ring takes its world
+  input's content revision as its identity (`retained_raster_appearance`,
+  `appearance_revision`), as ring tiles do. It is never drawn, and ring
+  compilers read only its input.
+- `resident_world_load` stores ring tiles from their world input, as
+  `window_tile` draws them. Its trace reports `ring=`.
+- `resident_water_visible`: stored ring water moves like the window's.
+  Camera steps draw from the resident world, whose water took its
+  visibility from native exploration, so ring water was fog-frozen there
+  (no time, drift or water-scene contribution) but animated in the window.
+  Storing the ring at load exposed this on every early scroll step. 10 Hz
+  frames showed no visible difference: the ring lies almost entirely under
+  the black.
+- Not this: the user's coastal ghost after a scroll step. For one or two
+  frames the shallow-water tint ends at a copy of the coastline about one
+  step to the side, then corrects. It appears with and without the water
+  fix and with no ring at all. Those frames are deferred steps that reuse
+  the previous view's static layer shifted (`static-compose camera=-2400,-300
+  slot=-2208,-300 shifted=1`) while water is redrawn each frame, which
+  suggests the water's shallow tint reads the previous view's depth.
+
+**Tests.** Each fails on the previous code.
+- `test_loading_ring`:
+  - A ring tile prepared from a loading page survives Civ III's capture
+    with its compiled ground and identity. Old: seed 0, compiled ground
+    cleared, identity 24 -> 2401.
+  - An unexplored neighbour's identity is its world input's revision before
+    and after Civ III's capture. Old: 0 -> 601.
+  - Stored ring water is visible where the window draws it moving (the real
+    `resident_water_visible`). Old: ring tile stored frozen.
+- `test_world_input_lease`: an unexplored halo tile outside the ring now
+  reports its input's revision instead of 0, and its reveal still changes it.
+
+**Measured.** `user-3350BC`, `scroll`, `-ProfileRenderer -MeasureCadence`.
+One isolated build with a measurement-only switch (not in the checkout):
+the old stripping and identity, and no hidden ring at all. Times are from
+the first `world-window` trace. A discarded warm-up run preceded each series.
+
+| | camera-complete ticket=1 | first image on screen | ring tiles built |
+|---|---|---|---|
+| staged trio (old) | 1261 ms | 1971 ms | 156 |
+| old behaviour, same build | 1248, 1175 ms | 1952, 1795 ms | 156 |
+| this change | 1209, 1159, 1167, 1158 ms | 1834, 1645, 1905, 1659 ms | 0 |
+| no hidden ring, same build | 795, 837 ms | 1523, 1530 ms | 0 |
+
+- "First image on screen" is the first `direct-visual drawn=1`.
+- The first job now builds nothing (`built=0 reused=344`), and
+  `resident-world-load` stores the ring (`loaded=344 ring=145`).
+- The rebuild itself cost only about 40 ms of job time. The first image
+  arrives about 145 ms earlier on average than with the old behaviour.
+- About 235 ms remains against no ring. It is GPU work for drawing the ring
+  in the first frame: 235 water draws instead of 64, 2034 shadow projections
+  instead of 1731, and 437 static raster cells instead of 275.
+  - This VM's GPU runs in order. With the ring, the first frame's water
+    uploads wait for that work inside the job (`water` 267-283 ms).
+  - Without it, the same wait lands in the next frame (`frame-preparation-
+    ready render_ms` 281-307). So camera-complete overstates the gap: the
+    second frame is at 1108-1125 ms without the ring and 1172-1180 ms with
+    it.
+- Frame rate is unchanged. Drawn frames per second in the first 3 s:
+  33.7-40.3 with this change, 33.0-38.3 with the old behaviour and 34.7-36.3
+  with no ring. Median 58.5-58.9 fps for all.
+
+**Open.**
+- Later eras: Civ III's capture sets `route_style` to the viewer's era on
+  every tile, while loading pages give unexplored tiles 0. From the Middle
+  Ages on, the first capture again changes ring content. Ancient saves, such
+  as this one, are unaffected. `route_style` also selects mine and farm art,
+  so it cannot simply be ignored on tiles without routes.
+- The remaining first-frame cost is the price of drawing the whole map.
+  Drawing the outer ring only from the second view would move that GPU work
+  later, and a reveal in the first seconds would wait for the second view.

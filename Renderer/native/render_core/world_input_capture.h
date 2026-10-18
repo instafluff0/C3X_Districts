@@ -91,6 +91,13 @@ public:
                 safe.terrain_type=int(topology&255u);
                 safe.real_terrain_type=int((topology>>8)&255u);
                 safe.river_code=(topology>>16)&255u;
+                // The map seed and terrain features (pine forests) are the
+                // terrain recipe, not hidden art. Civ III's on-screen capture
+                // carries them, so a hidden-ring tile prepared now keeps its
+                // identity and compiled ground into the first view.
+                safe.variant_seed=tile.variant_seed;
+                safe.feature_flags=tile.feature_flags&(C3X_RENDERER_FEATURE_FOREST|C3X_RENDERER_FEATURE_PINE|
+                    C3X_RENDERER_FEATURE_JUNGLE|C3X_RENDERER_FEATURE_MARSH|C3X_RENDERER_FEATURE_VOLCANO);
                 safe.visibility_mask=tile.visibility_mask;
                 safe.tile_visibility=tile.tile_visibility;
                 safe.fog_status=tile.fog_status;
