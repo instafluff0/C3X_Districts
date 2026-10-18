@@ -152,8 +152,7 @@ private:
         auto input=permitted_world_input(id);
         if(!input || (input->occurrence.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))!=
             (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))return 0;
-        auto permitted=content(input->occurrence);
-        return !std::memcmp(&appearance,&permitted,sizeof(appearance))?input->content_revision:0;
+        return same_compiled(appearance,content(input->occurrence))?input->content_revision:0;
     }
     std::uint64_t retained_raster_appearance(std::uint64_t id) const {
         auto input=permitted_world_input(id);
@@ -198,8 +197,14 @@ private:
                 (!published && (record.partial_flags&C3X_RENDERER_TILE_PREFETCH))) &&
             (!(record.visibility_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) ||
                 (record.visibility_flags&C3X_RENDERER_TILE_EXPLORED));
-        next.occurrence=full?record.appearance:content(tile);
-        if(!full){
+        // Civ III draws every tile and lays its fog over it. A hidden-ring tile
+        // it captured on screen keeps that capture (ring_content): what a
+        // reveal will show, so the reveal changes nothing drawn.
+        bool ring=(record.visibility_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==
+            C3X_RENDERER_TILE_VISIBILITY_KNOWN && borders_explored(id);
+        bool seen_ring=ring && record.revision && record.authoritative;
+        next.occurrence=full?record.appearance:seen_ring?ring_content(record.appearance):content(tile);
+        if(!full && !seen_ring){
             c3x_renderer_tile_v1 absent{};
             absent.city_id=absent.city_owner_id=absent.city_size=absent.city_culture_group=absent.city_era=-1;
             copy_city_facts(next.occurrence,absent);
@@ -231,12 +236,10 @@ private:
         next.occurrence.anchor_x=next.occurrence.anchor_y=0;
         next.occurrence.tile_flags=record.visibility_flags|C3X_RENDERER_TILE_TOPOLOGY_HALO|
             (full?C3X_RENDERER_TILE_PREFETCH:0u)|partial;
-        if((record.visibility_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==
-                C3X_RENDERER_TILE_VISIBILITY_KNOWN && borders_explored(id)){
+        if(ring){
             next.occurrence.tile_flags|=C3X_RENDERER_TILE_EXPLORED|hidden_ring;
-            // Borders over unexplored land are never shown, and only Civ
-            // III's on-screen capture supplies their edges.
-            next.occurrence.territory_edge_mask=next.occurrence.territory_color_rgb=0;
+            // Only Civ III's on-screen capture supplies border edges.
+            if(!seen_ring)next.occurrence.territory_edge_mask=next.occurrence.territory_color_rgb=0;
         }
         next.occurrence.visibility_mask=record.visibility_mask;next.occurrence.tile_visibility=record.tile_visibility;
         next.occurrence.fog_status=record.fog_status;next.semantic=record.semantic;
@@ -255,8 +258,7 @@ private:
                 if(!std::memcmp(&value->second.occurrence,&next.occurrence,sizeof(next.occurrence)) &&
                    value->second.semantic==next.semantic && value->second.ground==next.ground &&
                    value->second.real==next.real && value->second.relief==next.relief && value->second.surface==next.surface)return true;
-                auto before=content(value->second.occurrence),after=content(next.occurrence);
-                if(!std::memcmp(&before,&after,sizeof(before)))same_recipe_revision=value->second.content_revision;
+                if(same_compiled(content(value->second.occurrence),content(next.occurrence)))same_recipe_revision=value->second.content_revision;
             }}
         if(world_input_epoch==UINT64_MAX)return false;
         if(changed==world_changes.end()){
@@ -265,7 +267,11 @@ private:
             changed=world_changes.emplace(block_id,std::make_shared<WorldBlock>(world_memory,prior)).first;
         }
         if(serial==UINT64_MAX)return false;
-        next.content_revision=full?record.revision:same_recipe_revision?same_recipe_revision:++serial;
+        // A seen ring tile with nothing withheld is the record's appearance,
+        // with its identity: a reveal keeps its compiled ground and that of
+        // the canopy around it.
+        bool whole=seen_ring && same_compiled(content(next.occurrence),record.appearance);
+        next.content_revision=full||whole?record.revision:same_recipe_revision?same_recipe_revision:++serial;
         if(!full && !same_recipe_revision){auto retained=records.find(id);if(retained!=records.end()){
             retained->second.compiled={};for(auto& variant:retained->second.compiled_views)variant={};
         }
@@ -332,12 +338,17 @@ public:
             if(serial==UINT64_MAX)return false;
             // A first foreground capture may grant full authority without
             // changing the exact permitted recipe already prepared offscreen.
-            // Keep that identity and its attachment only on byte equality.
+            // Keep that identity and its attachment only when it compiles the same.
             auto prepared_revision=full && !record.authoritative?matching_permitted_revision(id,next):0;
-            record.appearance=next;record.revision=prepared_revision?prepared_revision:++serial;
+            // Borders alone keep the compiled terrain and its identity; their
+            // drawers read the new appearance.
+            bool borders=!prepared_revision && record.revision && same_compiled(next,record.appearance);
+            record.appearance=next;
+            if(!borders)record.revision=prepared_revision?prepared_revision:++serial;
             // An unexplored tile's captured appearance is never drawn: its
             // compiled ground follows its world input (the hidden ring).
-            if(!prepared_revision && !unexplored(tile)){record.compiled={};for(auto& variant:record.compiled_views)variant={};
+            if(!prepared_revision && !unexplored(tile)){
+                if(!borders){record.compiled={};for(auto& variant:record.compiled_views)variant={};}
                 ++appearance_epoch;touch_raster(RasterDependencyRevisions::Domain::appearance,id);}
             changed=true;
         }
@@ -389,6 +400,13 @@ public:
         std::memcpy(to.city_civilization,from.city_civilization,sizeof(to.city_civilization));
         std::memcpy(to.city_era_name,from.city_era_name,sizeof(to.city_era_name));
     }
+    // What the hidden ring draws of Civ III's capture of an unexplored tile:
+    // city bodies (known only once explored) and live tile effects withheld.
+    static c3x_renderer_tile_v1 ring_content(c3x_renderer_tile_v1 tile){
+        c3x_renderer_tile_v1 absent{};
+        absent.city_id=absent.city_owner_id=absent.city_size=absent.city_culture_group=absent.city_era=-1;
+        copy_city_facts(tile,absent);tile.has_effect=0;return tile;
+    }
     static void copy_native_overlays(c3x_renderer_tile_v1& to,c3x_renderer_tile_v1 const& from){
         constexpr unsigned mask=C3X_RENDERER_IMPROVEMENT_IRRIGATION|C3X_RENDERER_IMPROVEMENT_MINE|
             C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|
@@ -418,10 +436,18 @@ public:
         std::memset(tile.unit_type_name,0,sizeof(tile.unit_type_name));
         return tile;
     }
+    // Borders are drawn from the current occurrence (draw records, window
+    // tiles) and never compiled: appearances that differ only in them share
+    // one compiled identity (revision, compiled views). A border change still
+    // replaces the appearance and touches its raster consumers.
+    static bool same_compiled(c3x_renderer_tile_v1 a,c3x_renderer_tile_v1 const& b){
+        a.territory_edge_mask=b.territory_edge_mask;a.territory_color_rgb=b.territory_color_rgb;
+        return !std::memcmp(&a,&b,sizeof(a));
+    }
     static c3x_renderer_tile_v1 object_inputs(c3x_renderer_tile_v1 tile) {
         tile=content(tile);
-        // Territory is applied from the current occurrence during draw assembly.
-        // It still belongs to full appearance/raster identity, never object mesh.
+        // Territory is applied from the current occurrence during draw assembly
+        // (same_compiled), never object mesh.
         tile.territory_edge_mask=tile.territory_color_rgb=0;
         // Resources have a separate draw/animation owner. The CPU object compiler
         // consumes routes, improvements and cities, and only an irrigated tile's
@@ -508,8 +534,11 @@ public:
             if(!record.authoritative && (!record.revision || std::memcmp(&next,&record.appearance,sizeof(next)))){
                 if(serial==~std::uint64_t(0))return false;
                 auto prepared_revision=full?matching_permitted_revision(id,next):0;
-                record.appearance=next;record.revision=prepared_revision?prepared_revision:++serial;
-                if(!prepared_revision && !unexplored(tile)){record.compiled={};for(auto& variant:record.compiled_views)variant={};
+                bool borders=!prepared_revision && record.revision && same_compiled(next,record.appearance); // As in publish().
+                record.appearance=next;
+                if(!borders)record.revision=prepared_revision?prepared_revision:++serial;
+                if(!prepared_revision && !unexplored(tile)){
+                    if(!borders){record.compiled={};for(auto& variant:record.compiled_views)variant={};}
                     touch_raster(RasterDependencyRevisions::Domain::appearance,id);}
             }
         }
@@ -591,9 +620,9 @@ public:
         if(!observed || !(observed->occurrence.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return 0;
         if(auto input=permitted_world_input(id);input && (input->occurrence.tile_flags&hidden_ring))return input->content_revision;
         auto record=retained(id);auto appearance=content(observed->occurrence);
-        if(record && record->authoritative && !std::memcmp(&appearance,&record->appearance,sizeof(appearance)))return record->revision;
+        if(record && record->authoritative && same_compiled(appearance,record->appearance))return record->revision;
         if(auto revision=matching_permitted_revision(id,appearance))return revision;
-        return record && !std::memcmp(&appearance,&record->appearance,sizeof(appearance))?record->revision:0;
+        return record && same_compiled(appearance,record->appearance)?record->revision:0;
     }
     // A compiled world tile may depend on art outside the current camera's
     // observation set. The published full-world record remains its authority;
@@ -617,8 +646,7 @@ public:
             auto input=permitted_world_input(id);
             if(!input || (input->occurrence.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))!=
                 (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))return;
-            auto permitted=content(input->occurrence);
-            matches=!std::memcmp(&appearance,&permitted,sizeof(appearance));
+            matches=same_compiled(appearance,content(input->occurrence));
         }else{
             // A hidden-ring tile has no native appearance: it keeps the
             // object-free world input it was compiled from, so a later job
@@ -626,12 +654,11 @@ public:
             auto ring=permitted_world_input(id);if(ring && !(ring->occurrence.tile_flags&hidden_ring))ring=nullptr;
             if(!(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)) ||
                 !current(id) || (!found->second.revision && !ring))return;
-            if(ring){auto permitted=content(ring->occurrence);matches=!std::memcmp(&appearance,&permitted,sizeof(appearance));}
-            else matches=!std::memcmp(&appearance,&found->second.appearance,sizeof(appearance));
+            if(ring)matches=same_compiled(appearance,content(ring->occurrence));
+            else matches=same_compiled(appearance,found->second.appearance);
             if(!ring && !matches && appearance_revision(id)){
                 auto input=permitted_world_input(id);
-                if(input){auto permitted=content(input->occurrence);
-                    matches=!std::memcmp(&appearance,&permitted,sizeof(appearance));}
+                if(input)matches=same_compiled(appearance,content(input->occurrence));
             }
         }
         if(matches){

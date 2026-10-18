@@ -23,13 +23,22 @@ public:
     // dark, waiting for a unit's arrival or for a view drawing them.
     unsigned held_waiting=0,held_undrawn=0;
 private:
-    struct Cell {unsigned native=0,shown=0,displayed=0;std::vector<Arrival> waits;unsigned long long seen=0;bool sampled=false;};
+    // reveal_content: what the tile showed when Civ III revealed it
+    // (content_hash), compared with what the drawn view drew there.
+    struct Cell {unsigned native=0,shown=0,displayed=0;std::vector<Arrival> waits;unsigned long long seen=0,reveal_content=0;bool sampled=false;};
     std::map<std::pair<int,int>,Cell> cells;
     std::vector<c3x_renderer_tile_v1> tiles;
     unsigned long long scope=0,sample_id=0;
     long long capture_ticks=-1,capture_frequency=0;
     bool admitted=false;
     static constexpr unsigned bits=C3X_RENDERER_TILE_VISIBLE|C3X_RENDERER_TILE_EXPLORED;
+    // A tile's drawn content (CapturedScene::same_compiled), hashed.
+    static unsigned long long content_hash(c3x_renderer_tile_v1 tile){
+        tile=CapturedScene::content(tile);tile.territory_edge_mask=tile.territory_color_rgb=0;
+        unsigned long long hash=1469598103934665603ull;auto bytes=reinterpret_cast<unsigned char const*>(&tile);
+        for(std::size_t i=0;i<sizeof(tile);++i)hash=(hash^bytes[i])*1099511628211ull;
+        return hash|1;
+    }
 public:
     void reset(){cells.clear();tiles.clear();pending.clear();scope=0;capture_ticks=-1;capture_frequency=0;admitted=false;}
     // Admit native visibility once, before terrain work. Presentation may later
@@ -50,6 +59,7 @@ public:
             auto found=cells.find(key);
             if(found==cells.end())found=cells.emplace(key,Cell{native,native,{}}).first;
             auto& cell=found->second;cell.seen=sample_id;
+            if((native&C3X_RENDERER_TILE_EXPLORED) && !(cell.native&C3X_RENDERER_TILE_EXPLORED))cell.reveal_content=content_hash(tile);
             if((native&cell.native)!=cell.native){cell.shown&=native;cell.waits.clear();}
             if(native!=cell.native){
                 if((native&~cell.shown)&&!represented.empty())cell.waits=represented;
@@ -75,8 +85,13 @@ public:
         // native sight arrives. Only cells newly shown need the check.
         std::set<std::pair<int,int>> explored;
         auto wrap=[](int value,int extent,bool wraps){return wraps && extent>0?((value%extent)+extent)%extent:value;};
-        auto drawn=[&](c3x_renderer_tile_v1 const& tile){
+        auto drawn=[&](c3x_renderer_tile_v1 const& tile,Cell const& cell){
             if(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED)return bits;
+            // The view drew Civ III's capture of this unexplored tile as the
+            // hidden ring (CapturedScene::ring_content). A reveal showing more
+            // (a city, or improvements learned with it) waits for a view
+            // drawing it, so the tile appears with its contents.
+            if(cell.reveal_content && content_hash(CapturedScene::ring_content(tile))!=cell.reveal_content)return tile.tile_flags&bits;
             if(explored.empty())for(auto const& other:tiles)if(other.tile_flags&C3X_RENDERER_TILE_EXPLORED)explored.emplace(other.tile_x,other.tile_y);
             return CapturedScene::each_ring_offset([&](int dx,int dy){
                 return explored.count({wrap(tile.tile_x+dx,frame.world_width_tiles,frame.world_wrap_x!=0),
@@ -92,7 +107,7 @@ public:
             }),cell.waits.end());
             if(cell.waits.empty())cell.shown=cell.native;
             // An older view cannot expose new geometry, or undo a newer loss.
-            auto allowed=tile.tile_flags&bits;if(cell.shown&~allowed)allowed=drawn(tile);
+            auto allowed=tile.tile_flags&bits;if(cell.shown&~allowed)allowed=drawn(tile,cell);
             held_waiting+=(cell.native&~cell.shown)!=0;held_undrawn+=(cell.shown&~allowed)!=0;
             tile.tile_flags=(tile.tile_flags&~bits)|(cell.shown&allowed);
             auto displayed=tile.tile_flags&bits;

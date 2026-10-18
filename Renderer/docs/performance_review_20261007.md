@@ -4027,3 +4027,100 @@ tactical session's five files, `user-3350BC`, `-ProfileRenderer`.
 - A city's border edges and colour, captured for the first time near a
   moving unit, rebuild its 21 tiles' terrain (about 0.4 s of job time) even
   though borders are drawn from the occurrence. This predates this review.
+  Fixed in review 83.
+
+## 83. Borders no longer rebuild the terrain under them (October 17)
+
+**Cause.** Border edges and colour (`territory_edge_mask`,
+`territory_color_rgb`) were part of a tile's compiled identity. A border-only
+change replaced the record's appearance, cleared its compiled terrain and
+advanced its revision, which is in the compile context and in neighbouring
+canopy proofs. Borders are never compiled: draw records and window tiles take
+them from the occurrence.
+
+**Why the first move.** `read_custom_renderer_tile` (injected) fills borders
+only when `is->custom_renderer_unit_images` is set. Only the
+`Units_Image_Data` trampolines set it, and `Animator::update` is skipped while
+the resident front is ready. So from loading until the first unit animation,
+every capture has no borders. In game, Washington shows no border before
+the move and does after (window samples). Civ III reads the palette from its
+`units_image_data` global. Showing borders at load needs that global, or
+another palette source, in the injected capture: not changed here.
+
+**Change.** `CapturedScene::same_compiled` compares content except borders.
+- `publish()`/`update()`: a border-only change replaces the appearance and
+  keeps the revision and compiled views. The tile is still published as
+  changed, `appearance_epoch` advances and its raster appearance is touched.
+- `matching_permitted_revision`, `appearance_revision`, `attach` and
+  `update_world_input` compare with it, so a capture ahead of its publication
+  and a reveal inside foreign borders keep their compiled identity.
+- Borders still redraw. Membership and `terrain_content_key` include them, so
+  the tile is placed again from its binding, and its records, resident-world
+  copy and static-raster contributor keys carry the new edges.
+
+**Tests.** `test_territory_identity` (three cases) fails on HEAD `4c291752`
+and passes. `test_captured_scene` now expects borders to keep the identity.
+The 29 modules that use `CapturedScene` or territory pass (220 tests).
+
+**Measured.** unit-motion on `user-3350BC`, `-ProfileRenderer`, one run per
+side. Isolated trios: HEAD and HEAD plus this change. Only the first (north)
+move was admitted on both sides, so the scenario's two-move check failed on both.
+
+| First move's job | HEAD | Change |
+|---|---|---|
+| `tile-residency-reasons` | missing_binding=21 dependency_mismatch=10 | 0 and 0 |
+| built / reused | 31 / 313 | 0 / 344 |
+| invalid appearance dependencies | 24 | 0 |
+| setup phases (assembly, draw) | 619 ms (414, 192) | 257 ms (176, 70) |
+
+The loading view is unchanged (145 ring tiles built on both). After the
+move, the window samples show the same border on both sides.
+
+## 84. Revealed tiles show their contents with them (October 17)
+
+**Report.** After review 82, resources and forests appeared a moment after
+the tile they were on was revealed.
+
+**Cause.**
+- The hidden ring drew unexplored tiles from object-free inputs. A reveal
+  then changed the tile's content and identity.
+- The next view rebuilt it and the canopy around it. Forest clearings depend
+  on the routes, resources and sites of a tile and its neighbours.
+- Before the fix, the next job built 23 tiles, with 47 appearance
+  dependencies invalid, and the resources appeared about one sample later.
+
+**Changes.**
+- Civ III draws every tile and lays its fog over it. A ring tile it captured
+  on screen now draws that capture (`CapturedScene::ring_content`):
+  resources, routes and improvements as the player knows them, forests and
+  borders.
+  - City bodies (known only once explored) and live tile effects are
+    withheld.
+  - Its identity is the record's revision when nothing was withheld, so a
+    reveal keeps its compiled ground and that of its neighbours.
+- `UnitArrivalVisibility` remembers what a tile shows when it is revealed.
+  If that differs from what the drawn view drew there (a city, or
+  improvements learned with the reveal), the fog waits for a view drawing
+  it, so the tile appears whole.
+- This builds on review 83's `same_compiled`.
+
+**Tests.** Each was confirmed to fail on the previous code.
+- `test_unexplored_ground`:
+  - The ring draws captured contents, a reveal keeps content, identity and
+    compiled ground, and a city is withheld until explored.
+  - A reveal with new contents waits for its view.
+
+**Measured.** `reveal-scroll` on `newgame-4000BC`, isolated trios from HEAD
+plus review 83, without and with this change.
+
+| Scout's move | Without | With |
+|---|---|---|
+| fog lifts after visual arrival | 160 ms | 50 ms |
+| tiles the next job built | 23 (9 dependency) | 7 (new ring tiles only) |
+| invalid appearance dependencies | 47 | 0 |
+
+- Window samples of the worker's second step:
+  - Without the change, the terrain appears first, and a gold resource and
+    a tribal village appear one sample later.
+  - With it, the gold appears with its tile. The village tile (a hut is
+    known only once seen) stays dark one sample, then appears whole.

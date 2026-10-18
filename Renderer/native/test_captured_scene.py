@@ -98,7 +98,7 @@ int main(){
 }
 ''')
 
-    def test_city_and_border_changes_invalidate_retained_appearance(self):
+    def test_city_changes_invalidate_retained_appearance_and_borders_replace_it(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/captured_scene.h"
 #include <cassert>
@@ -114,8 +114,14 @@ int main(){
  t.city_id=71;publish();t.city_size=1;publish();t.city_culture_group=2;publish();
  t.city_era=3;publish();t.city_flags=C3X_RENDERER_CITY_CAPITAL;publish();
  t.city_flags|=C3X_RENDERER_CITY_WALLED;publish();t.city_owner_id=4;publish();
- t.territory_edge_mask=13;publish();t.territory_color_rgb=0xff2030;publish();
- t.territory_edge_mask=0;publish();t.city_id=-1;publish();
+ // Borders are drawn from the appearance but never compiled
+ // (test_territory_identity): they replace it with the same identity.
+ auto borders=[&]{changed=false;assert(scene.publish(t,changed)&&changed);
+   assert(scene.world_appearance_revision(key)==revision);
+   assert(scene.retained(key)->appearance.territory_edge_mask==t.territory_edge_mask &&
+          scene.retained(key)->appearance.territory_color_rgb==t.territory_color_rgb);};
+ t.territory_edge_mask=13;borders();t.territory_color_rgb=0xff2030;borders();
+ t.territory_edge_mask=0;borders();t.city_id=-1;publish();
  assert(scene.retained(key)->appearance.resource_id==7); // Razing restores the captured resource.
  t.city_population=20;t.anchor_x=60;changed=false;assert(scene.publish(t,changed)&&!changed);
 }
