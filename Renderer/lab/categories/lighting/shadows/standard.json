@@ -51,6 +51,7 @@
     "Renderer.lab.test_shadow_fixture",
     "Renderer.native.test_skin_shadow",
     "Renderer.native.test_shadow_page_contents",
+    "Renderer.native.test_shadow_filter_continuity",
     "Renderer.native.test_shadow_sampling_grid",
     "Renderer.native.test_shared_instance_submission"
   ],

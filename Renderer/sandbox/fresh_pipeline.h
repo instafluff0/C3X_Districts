@@ -133,31 +133,46 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
  if(abs(determinant)>1e-12)gradient=float2(zx*uy.y-zy*ux.y,zy*ux.x-zx*uy.x)/determinant;
  int2 center=int2(floor(uv));float sum=0;
 #ifdef SANDBOX_FILTERED_SHADOW
- // Four bilinear comparisons cover a 3x3 tent. Keep the exact per-texel
- // receiver-plane correction on steep surfaces and across page boundaries.
+ // Four comparison gathers cover a 4x4 window, weighted as the sliding box
+ // below. Fixed corner taps jumped a texel at a time, which showed the
+ // shadow map's grid at close zoom, and some adapters (the Parallels GPU)
+ // point-sample filtered comparisons. Keep the exact per-texel receiver-plane
+ // correction on steep surfaces and across page boundaries.
  int2 page=int2(floor(float2(center)/1024.));int2 local=center-page*1024;
  float bias=water?.00060:texel*.35;
- if(all(local>=1) && all(local<1023) && max(abs(gradient.x),abs(gradient.y))<bias*.25) {
+ if(all(local>=2) && all(local<1021) && max(abs(gradient.x),abs(gradient.y))<bias*.25) {
   float4 range=pickup_pages[0];int2 selected=page-int2(range.xy);
   if(any(selected<0)||any(selected>=int2(range.zw)))return 1;
   int layer=int(pickup_pages[3+selected.y*int(range.z)+selected.x].x);
   if(layer<0)return 1;
+  float2 position=uv-float2(page*1024),base=floor(position-.5),f=position-.5-base;
+  float wx[4]={1-f.x,1,1,f.x},wy[4]={1-f.y,1,1,f.y},total=0;
   [unroll]for(int j=0;j<2;++j)[unroll]for(int i=0;i<2;++i){
-   float2 delta=float2(i,j)-.5;
-   float2 location=float2(local)+.5+delta;
-   float receiver=z+dot(gradient,float2(center)+.5+delta-uv);
-   sum+=field.SampleCmpLevelZero(SandboxShadowComparison,float3(location/1024.,layer),receiver+bias);
+   // The corner between texels base-1+2i and base+2i (likewise in y).
+   float2 corner=base+float2(2*i,2*j);
+   float4 lit=field.GatherCmpRed(SandboxShadowComparison,float3(corner/1024.,layer),
+    z+dot(gradient,corner-position)+bias);
+   float4 dark=1-lit; // weigh the shadowed texels: fully lit stays exactly 1
+   sum+=wy[2*j]*(wx[2*i]*dark.w+wx[2*i+1]*dark.z)+wy[2*j+1]*(wx[2*i]*dark.x+wx[2*i+1]*dark.y);
+   total+=wy[2*j]*(wx[2*i]+wx[2*i+1])+wy[2*j+1]*(wx[2*i]+wx[2*i+1]);
   }
-  return sum*.25;
+  return saturate(1-sum/total);
  }
 #endif
- [unroll]for(int y=-1;y<=1;y++)[unroll]for(int x=-1;x<=1;x++) {
-  int2 sample=center+int2(x,y);
+ // Exact per-texel comparisons (steep receivers such as hill flanks, page
+ // edges). The 3-texel box slides with the sample: a 4x4 window weighted
+ // 1-f,1,1,f per axis, equal to the texel-centred 3x3 box at texel centres.
+ float2 base=floor(uv-.5),f=uv-.5-base;
+ float wx[4]={1-f.x,1,1,f.x},wy[4]={1-f.y,1,1,f.y},total=0;
+ [unroll]for(int y=0;y<4;y++)[unroll]for(int x=0;x<4;x++) {
+  int2 sample=int2(base)+int2(x-1,y-1);
   float blocker=sandbox_shadow_load(field,sample);
   float receiver=z+dot(gradient,float2(sample)+.5-uv);
-  sum+=step(blocker,receiver+(water?.00060:texel*.35));
+  // Weigh the shadowed texels, so a fully lit window is exactly 1.
+  sum+=wx[x]*wy[y]*(1-step(blocker,receiver+(water?.00060:texel*.35)));
+  total+=wx[x]*wy[y];
  }
- return sum/9;
+ return saturate(1-sum/total);
 }
 )");
         UINT support=0;char reference[8]={};
