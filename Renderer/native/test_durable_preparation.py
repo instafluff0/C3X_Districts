@@ -19,6 +19,7 @@ struct State {
  std::size_t base=0,publication_capacity_bytes=160u*Budget::mib,publication_working_bytes=0;
  std::size_t tile_geometry_cache_bytes=512u*Budget::mib,terrain_patch_index_bytes=0,tile_geometry_runtime_budget=0;
  bool measured_gpu=true,world_gpu_allocation_pressure=false,loading_gpu_residency=true,prewarming=false;
+ bool geometry_tier=false; // the free-memory control path; the adapter tier follows below
  std::size_t tile_geometry_required_budget=0;
  struct Packet {std::size_t bytes=0;std::size_t gpu_bytes()const{return bytes;}}ordered_rigid_packets,shared_instances;
  struct Retired {std::atomic<std::size_t> bytes{0};};std::shared_ptr<Retired> retired_content=std::make_shared<Retired>();
@@ -42,6 +43,14 @@ int main(){State s;auto empty=s.calculate();
  s.world_gpu_allocation_pressure=true;assert(s.calculate()==s.tile_geometry_cache_bytes);
  s.world_gpu_allocation_pressure=false;s.content_memory.ullAvailPhys=0;s.loading_gpu_residency=false;
  assert(s.calculate()<s.tile_geometry_cache_bytes);
+ // The geometry tier sizes the world by the adapter: the same reserves charge
+ // it once, and no free memory no longer shrinks it below what is owned.
+ s.geometry_tier=true;s.loading_gpu_residency=true;s.content_memory.ullAvailPhys=12ull*1024*Budget::mib;
+ s.ordered_rigid_packets.bytes=0;s.publication_working_bytes=0;auto tier=s.calculate();
+ s.ordered_rigid_packets.bytes=32u*Budget::mib;assert(s.calculate()>tier); // owned packets leave the future reserve
+ s.content_memory.ullAvailPhys=0;s.loading_gpu_residency=false;
+ assert(s.calculate()>s.tile_geometry_cache_bytes && s.tile_geometry_required_budget>=s.tile_geometry_runtime_budget);
+ s.world_gpu_allocation_pressure=true;assert(s.calculate()==s.tile_geometry_cache_bytes);
 }
 ''')
 

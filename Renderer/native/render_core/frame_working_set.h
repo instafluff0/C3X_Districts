@@ -85,14 +85,26 @@ struct FrameWorkingSet {
         auto usable=available>floor?available-floor:0;
         return std::min(ceiling,owned+std::min(usable/2,gpu_headroom-gpu_headroom/5));
     }
-    // Fixed geometry tier in whole-world residency: the explored world's
-    // canonical bytes plus a fixed view-specific allowance, never more than
-    // the free-memory budget. Once the world's RAM copy is released, the
-    // resident world is the only prepared copy: evicting it for free memory
-    // would compile tiles again, and admitting a refused key would evict
-    // another. The tier alone then bounds geometry.
-    static std::size_t tier_geometry(std::size_t budget,std::size_t canonical,std::size_t allowance,bool sole_copy){
-        return sole_copy?canonical+allowance:std::min(budget,canonical+allowance);
+    // Whole-world residency sizes geometry by the adapter's budget, the OS's
+    // tier for this process (VRAM, or shared memory on integrated GPUs and in
+    // the VM), less the attachments not yet allocated; never by free physical
+    // memory. The free-memory rules above needed about 4.7 GB free before any
+    // world: a 12 GB VM loaded the busy save with none, and a debug reveal then
+    // failed every camera job (review 88). Physical pressure releases optional
+    // caches (process headroom), never the explored world. The geometry tier
+    // (canonical content plus the view allowance) still caps the result.
+    static std::size_t world_tier(std::size_t owned,std::size_t gpu_headroom,std::size_t future,std::size_t ceiling){
+        auto gpu=gpu_headroom>future?gpu_headroom-future:0;
+        return std::min(ceiling,owned+(gpu-gpu/5));
+    }
+    // The same tier keeps the explored world's compressed recipes, which a
+    // required world pass must store before it uses them: they may grow within
+    // the commit limit (2 GiB kept), not within free physical memory less the
+    // reserve above. After a debug reveal on a 12 GB VM that left no capacity,
+    // every recipe was refused and every camera job failed (review 88).
+    static std::size_t world_recipes(std::size_t prepared,std::size_t stored,std::size_t commit_available){
+        auto floor=2048u*mib;
+        return std::max(prepared,stored+(commit_available>floor?(commit_available-floor)/4:0));
     }
     static Content content(std::size_t available,std::size_t resident,std::size_t ceiling,unsigned workers){
         // Keep one ready slot beside every configured active lane. Reducing

@@ -4335,9 +4335,9 @@ set, is why its settled figure (4.6 GB) was lower than its peak.
   key it made GPU-resident: 15,200-15,464 records, 609-612 MB. Refused keys
   (1,436-1,700, 6-9 MB) keep theirs. Nothing is released if the refused keys
   exceed the 384 MiB view allowance. Free memory then no longer evicts the
-  resident world; the fixed tier (canonical + 384 MiB) alone bounds it
-  (`FrameWorkingSet::tier_geometry`). `C3X_RENDERER_WORLD_BACKING_CONTROL=1`
-  keeps the RAM copy.
+  resident world; the fixed tier (canonical + 384 MiB) alone bounds it.
+  Section 88 replaced this rule: the tier is now sized by the adapter.
+  `C3X_RENDERER_WORLD_BACKING_CONTROL=1` keeps the RAM copy.
 - `pulled_mesh_pages.h`: pages no frame has drawn for 300 frames retire once
   residency passes 128 MiB. Retirement chooses its pages first and then erases
   their entries in one pass. A first build scanned every entry once per
@@ -4463,3 +4463,134 @@ steps 78 ms). Jumps 33 → 82 and 95 → 43 ms; none of the changes acts on a
 - *Host.* The Mac enters the run already compressing 14-16 GB. With a 14 GB
   VM on a 24 GB Mac, even the 4.5 GB target may not keep macOS below
   critical pressure; host load matters as much as the helper.
+
+## 88. A 12 GB VM: the world tier follows the adapter (October 19)
+
+**Symptom.** After the VM was lowered from 14 to 12 GB, C3X debug mode on the
+busy save froze the game for a while. The map then stayed black except for
+city labels and other native overlays. The build before section 87 failed
+the same way, so the cause is the VM size, not those cuts.
+
+**Cause.** Whole-world residency sized its world geometry by free physical
+memory. `FrameWorkingSet::world_geometry` keeps a reserve of
+max(2 GB, RAM/6) + 0.5 GB + compile lanes (about 2.8 GB). It also holds back
+the attachments not yet allocated (about 1.9 GB), so it admits nothing below
+about 4.7 GB free.
+- *Loading.* The 12 GB guest had 4.0 GB free at the loading sweep, so the
+  sweep's geometry budget was 0. All 16,900 world keys (1.21 GB) were
+  deferred. The world was never GPU-resident: views compiled their tiles,
+  and the RAM copy was never released.
+- *Reveal.* A debug reveal changes the viewer scope
+  (`resident-world-rescope`). The resident world and its RAM copy are
+  cleared, and the required world pass recompiles every region into the RAM
+  store before any camera job may use it. That store's capacity also came
+  from free memory less the reserve, and after the reveal it was 0. Every
+  recipe was refused, so the pass never completed (`backing_saved` stayed
+  false). Every camera job then returned before drawing: four
+  `gpu-failure phase=camera` and three `first-map-ready result=0` per run.
+  An adapter-sized geometry budget alone (first candidate) failed the same
+  way.
+
+**Changes** (`FrameWorkingSet`, `c3x_renderer.cpp`):
+- `world_tier`: in the geometry tier, the world's geometry budget is what is
+  owned plus 80% of the adapter's measured headroom, less the attachments
+  still to come. The canonical content plus the 384 MiB view allowance still
+  caps it. The adapter's budget is the OS's tier for this process: dedicated
+  VRAM, or shared memory on integrated GPUs and in the VM. Allocation
+  pressure still holds growth at what is owned. Without the geometry tier,
+  the free-memory rules are unchanged.
+- `world_recipes`: in the same tier, the world's compressed recipes may grow
+  by a quarter of the commit limit's headroom above 2 GiB, and never fall
+  below the previous rule. The loading sweep still releases the copies of
+  resident keys (section 87).
+- `world_backing_released` and `tier_geometry` are removed: the adapter tier
+  replaces section 87's released/unreleased split.
+
+**Tests.** `test_required_geometry_admission` uses the measured 12 GB numbers:
+- loading sweep: the old rule admits less than the world, `world_tier`
+  admits all of it;
+- reveal: `required_geometry` leaves no room for the revealed world, the
+  tier does;
+- an exhausted adapter admits only what is owned, and the ceiling caps it;
+- the reveal's 618 MB of recipes: the old capacity is below them,
+  `world_recipes` admits them, and with no commit headroom nothing changes.
+
+`test_durable_preparation` checks that packets raise the tier, that no free
+memory does not shrink it below what is owned, and that allocation pressure
+holds it. A header copy whose `world_recipes` returns the old capacity fails
+the recipe assertion; the source assertions fail on the old code.
+
+**Debug reveal, 12 GB VM** (busy save, `debug` scenario, readiness-relative
+keys):
+
+| Build | Loading sweep | After reveal | After hide |
+| --- | --- | --- | --- |
+| Section 87 commit, and the build before it | budget 0, nothing resident | 4 camera GPU failures, map black | still failing |
+| Adapter tier only | 1.27 GB resident | 4 camera GPU failures, map black | still failing |
+| This change | 1.27 GB resident, 618 MB RAM copy released | world pass 22.2 s, map drawn | world pass 21.8 s, map drawn |
+
+Sampled window frames show the terrain throughout the revealed scroll and
+after the hide. The run's peak was 5,560 MB private and 3,535 MB GPU, during
+the reveal's recompile.
+
+**The freeze that remains.** From the rescope to the end of the required
+world pass, about 37 s, the helper presents nothing: no static presentations
+and no native UI presents. Civ III keeps running underneath (native map
+transactions continue), and the same stall follows the hide. The rescope and
+the whole-world recompile predate sections 87 and 88. Keeping the last image
+and the native UI presented during that pass, or reusing geometry that does
+not depend on visibility, is separate work.
+
+**Speed A/B on the 12 GB VM** (user rule). A = section 87's commit, B = this
+change. Runs used `-MeasureCadence`, alternating, 2 runs per side per save;
+the tables give the mean of each side's runs from `near_report.py` and
+`zoom_report.py`.
+
+Busy `near`: both A runs failed with first-map timeouts at the 2× zoom (one
+camera job took 5.9 s); both B runs passed.
+
+| Busy `near` | A | B |
+| --- | --- | --- |
+| 1× idle, 3× idle, 1× idle at the end | 52, 58, 55 fps | 51, 58, 53 fps |
+| 1× scroll x: step / adoption p50, map px/s | 233 / 189 ms, 374 | 233 / 191 ms, 1,903 |
+| 1× scroll y: step / adoption p50 | 156 / 134 ms | 232 / 178 ms (B1 307 / 220, B2 157 / 136) |
+| 2× scroll: step / adoption p50, map px/s | 499 / 565 ms, 333 | 156 / 131 ms, 4,760 |
+| 3× scroll: step / adoption p50, map px/s | 155 / 120 ms, 958 | 118 / 94 ms, 6,896 |
+| Zoom in to 2×, to 3×, out to 1× | 28, 54, 35 fps | 37, 55, 36 fps |
+| Jump 2 | 1,188 ms | 485 ms |
+
+Busy `zoom-out`: zoom start 110 → 98 ms, settle 613 → 600 ms, longest
+presentation gap 94 → 88 ms, fps during the zoom 22 → 22. In the second after
+each step settles, B presents fewer frames (26 → 23 fps). In the first
+seconds at 0.5×, B idles at about 39 fps where A idles at about 46; later at
+0.5×, B matches or exceeds A. A profiled pair explains it:
+- At the same camera and 0.5×, B draws 14,242 records and A 12,343. At 0.62×
+  they are 10,746 and 10,556; at 1× and 3× they are equal.
+- Frame preparation at 0.5× takes p50 9.9 / p90 21.5 ms in B against
+  9.0 / 12.5 ms in A.
+- At 12 GB, A lacks part of the world at 0.5×. B draws the whole resident
+  scene, as both sides did on the 14 GB VM, where section 87 measured equal
+  zoom-out fps.
+- Camera jobs pass on both sides (A 32, two required-geometry overflows;
+  B 31, none).
+
+Light save `near`: equal in every segment (idle 60 fps; scroll steps 78 ms,
+adoption 60 ms).
+
+`check_native_call_waits` passes on all four busy `near` runs.
+
+**Memory, 12 GB VM** (peak private / GPU, MB):
+
+| Run | A | B |
+| --- | --- | --- |
+| Busy `near` | 4,827-4,909 / 2,647-2,739 | 5,173-5,191 / 3,289-3,346 |
+| Busy `zoom-out` | 4,633-4,869 / 2,612-2,821 | 5,459-5,498 / 3,536-3,571 |
+| Light `near` | 2,523-2,555 / 1,638-1,671 | 2,520-2,556 / 1,638-1,645 |
+
+- B's busy figures match section 87's 14 GB results (5,139 / 3,367). A was
+  lower only because it held none of the world.
+- The guest's minimum free memory was 2.3-2.7 GB with A and 1.5-1.8 GB
+  with B.
+- macOS stayed at normal pressure through both profiled zoom-out runs.
+- The targets of section 87 (4.5 GB private, 2.5 GB GPU) are still unmet.
+  What remains is unchanged from that section.

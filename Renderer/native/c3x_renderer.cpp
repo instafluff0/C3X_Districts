@@ -985,11 +985,6 @@ public:
     bool retained_world=true;
     bool loading_preparation=false,loading_world_only=false;
     bool loading_gpu_residency=false,world_gpu_residency_ready=false;
-    // The loading sweep released the compressed RAM copies of the world keys
-    // it made GPU-resident (about 0.6 GB on the busy save); the resident world
-    // is then kept, not evicted for free memory (G1 memory, review 87).
-    // C3X_RENDERER_WORLD_BACKING_CONTROL=1 keeps the RAM copy.
-    bool world_backing_released=false;
     bool world_gpu_capacity_refused=false,world_gpu_allocation_failed=false,world_gpu_allocation_pressure=false;
     struct WorldGpuRecord {std::size_t required=0,charged=0;unsigned state=0;bool measured=false;};
     // One required-loading receipt, released after its summary. These exact
@@ -6519,7 +6514,7 @@ public:
     }
 
     void clear_tile_geometry_cache() {
-        world_gpu_residency_ready=world_backing_released=false;world_gpu_records.clear();world_gpu_current.clear();resident_world_clear();
+        world_gpu_residency_ready=false;world_gpu_records.clear();world_gpu_current.clear();resident_world_clear();
         sandbox_shadow_meshes.clear();
         residency_candidates.clear();
         natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
@@ -9419,17 +9414,21 @@ public:
                 future+=OrderedRigidPackets::budget-std::min(OrderedRigidPackets::budget,ordered_rigid_packets.gpu_bytes());
                 future+=32u*Budget::mib-std::min(32u*Budget::mib,shared_instances.gpu_bytes());
                 auto owned=tile_geometry_cache_bytes+retired_content->bytes.load()+terrain_patch_index_bytes;
-                tile_geometry_runtime_budget=Budget::world_geometry(
+                auto gpu=measured_gpu && !world_gpu_allocation_pressure?gpu_headroom:0;
+                // The geometry tier sizes the explored world by the adapter's
+                // budget, not by free physical memory (review 88).
+                tile_geometry_runtime_budget=geometry_tier?Budget::world_tier(owned,gpu,future,ceiling):Budget::world_geometry(
                     std::size_t(content_memory.ullAvailPhys),std::size_t(content_memory.ullTotalPhys),
-                    owned,measured_gpu && !world_gpu_allocation_pressure?gpu_headroom:0,
-                    future,ceiling,requested_workers,loading_gpu_residency);
+                    owned,gpu,future,ceiling,requested_workers,loading_gpu_residency);
                 if(!prewarming && !loading_gpu_residency)
-                    tile_geometry_required_budget=std::max(tile_geometry_runtime_budget,Budget::required_geometry(
-                        std::size_t(content_memory.ullAvailPhys),std::size_t(content_memory.ullTotalPhys),
-                        owned,measured_gpu && !world_gpu_allocation_pressure?gpu_headroom:0,
-                        ceiling,requested_workers));
+                    tile_geometry_required_budget=std::max(tile_geometry_runtime_budget,geometry_tier?Budget::world_tier(owned,gpu,0,ceiling):
+                        Budget::required_geometry(std::size_t(content_memory.ullAvailPhys),std::size_t(content_memory.ullTotalPhys),
+                        owned,gpu,ceiling,requested_workers));
             }
-            if(!world_backing.configure(residency.prepared,[](auto const& key){return key.recipe.words.capacity()*sizeof(std::uint64_t);}))
+            // Its compressed recipes grow within the commit limit (review 88).
+            auto recipes=geometry_tier && world_gpu_residency_ready?c3x_renderer::render_core::FrameWorkingSet::world_recipes(
+                residency.prepared,std::size_t(stored.resident_bytes),std::size_t(content_memory.ullAvailPageFile)):residency.prepared;
+            if(!world_backing.configure(recipes,[](auto const& key){return key.recipe.words.capacity()*sizeof(std::uint64_t);}))
                 trace.write("world-ram-pressure","new admission frozen at live owned recipes",true);
             auto budget=c3x_renderer::render_core::FrameWorkingSet::content(
                 std::size_t(content_memory.ullAvailPhys),tile_geometry_cache_bytes,
@@ -9445,15 +9444,9 @@ public:
             // optimistic measurement to allocate more optional world content.
             tile_geometry_runtime_budget=tile_geometry_cache_bytes+retired_content->bytes.load()+terrain_patch_index_bytes;
         }
-        if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency){
-            // Without its RAM copy, evicting world tiles for free memory would
-            // compile them again; with it, they churned about 9 tiles per
-            // frame through restores on the busy save (review 87).
-            tile_geometry_runtime_budget=c3x_renderer::render_core::FrameWorkingSet::tier_geometry(tile_geometry_runtime_budget,
-                canonical_geometry_bytes()+retired_content->bytes.load()+terrain_patch_index_bytes,view_geometry_allowance,world_backing_released);
-            if(tile_geometry_required_budget)
-                tile_geometry_required_budget=std::max(tile_geometry_required_budget,tile_geometry_runtime_budget);
-        }
+        if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency)
+            tile_geometry_runtime_budget=std::min(tile_geometry_runtime_budget,canonical_geometry_bytes()+
+                retired_content->bytes.load()+terrain_patch_index_bytes+view_geometry_allowance);
         if(cpu_terrain_workers!=requested_workers){terrain_preparation.clear();cpu_terrain_workers=requested_workers;}
         bool const cpu_terrain_enabled=cpu_terrain_workers && fidelity_profile && retained_world;
         unsigned active_terrain_workers=cpu_terrain_workers;
@@ -16170,10 +16163,10 @@ private:
             }
             // A world key the sweep made GPU-resident has a valid owner, so
             // preparation schedules no job for it; its RAM copy would serve
-            // only restores after evictions, which the geometry tier no
-            // longer makes once it is released. Keys the sweep refused keep
-            // theirs (196-1,618 of 16,900 keys, 0.5-13 MB, on the busy save);
-            // they must fit the tier's view allowance, or nothing is released.
+            // only restores after evictions, which the adapter-sized geometry
+            // tier does not make for free memory (reviews 87, 88). Keys the sweep
+            // refused keep theirs; they must fit the tier's view allowance, or
+            // nothing is released. C3X_RENDERER_WORLD_BACKING_CONTROL=1 keeps all.
             std::size_t refused=0;
             for(auto const& record:renderer_state.world_gpu_records)if(record.second.state!=1)refused+=record.second.required;
             char control[4]={};
@@ -16182,7 +16175,7 @@ private:
                 auto before=renderer_state.world_backing.statistics();
                 for(auto const& record:renderer_state.world_gpu_records)
                     if(record.second.state==1)renderer_state.world_backing.invalidate(record.first);
-                auto after=renderer_state.world_backing.statistics();renderer_state.world_backing_released=true;
+                auto after=renderer_state.world_backing.statistics();
                 sprintf_s(detail,"released_records=%u released_bytes=%llu kept_records=%u kept_bytes=%llu",before.records-after.records,
                     static_cast<unsigned long long>(before.bytes-after.bytes),after.records,static_cast<unsigned long long>(after.bytes));
                 renderer_state.trace.write("world-backing-released",detail,true);

@@ -561,7 +561,7 @@ struct RendererState {
     static constexpr std::size_t view_geometry_allowance=384u<<20;
     std::vector<GpuRecord*> world_gpu_current;
     void world_gpu_report(bool){unexpected_gpu();}
-    bool geometry_tier=true,world_backing_released=false;
+    bool geometry_tier=true;
     bool initialize_device(){assert(native_transfer_test);return true;}
     bool prepare_world_sources(c3x_renderer_frame_v1 const&){return true;} // Source topology initialization is exercised by the loading-world fixture.
     Device owned_device;Context owned_context;Device* device=&owned_device;Context* context=&owned_context;

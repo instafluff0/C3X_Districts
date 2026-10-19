@@ -159,45 +159,61 @@ int main(){
         budget = source[source.index('        tile_geometry_required_budget=0;\n        if(GlobalMemoryStatusEx(&content_memory)){'):]
         budget = budget[:budget.index('cpu_preparation_budget=')]
         self.assertIn('if(!prewarming && !loading_gpu_residency)\n'
-                      '                    tile_geometry_required_budget=std::max(tile_geometry_runtime_budget,Budget::required_geometry(', budget)
+                      '                    tile_geometry_required_budget=std::max(tile_geometry_runtime_budget,geometry_tier?Budget::world_tier(owned,gpu,0,ceiling):\n'
+                      '                        Budget::required_geometry(', budget)
         self.assertEqual(budget.count('tile_geometry_required_budget='), 2)
 
 
     def test_tier_caps_the_budget_at_canonical_content_plus_view_allowance(self):
         source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
-        self.assertTrue('if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency){' in source)
-        self.assertTrue('tile_geometry_runtime_budget=c3x_renderer::render_core::FrameWorkingSet::tier_geometry(tile_geometry_runtime_budget,\n'
-                        '                canonical_geometry_bytes()+retired_content->bytes.load()+terrain_patch_index_bytes,view_geometry_allowance,world_backing_released);'
-                        in source)
+        self.assertTrue('if(geometry_tier && world_gpu_residency_ready && !loading_gpu_residency)\n'
+                        '            tile_geometry_runtime_budget=std::min(tile_geometry_runtime_budget,canonical_geometry_bytes()+\n'
+                        '                retired_content->bytes.load()+terrain_patch_index_bytes+view_geometry_allowance);' in source)
         self.assertTrue('static constexpr std::size_t view_geometry_allowance=384u*1024u*1024u;' in source)
 
-    def test_released_world_copy_keeps_the_resident_world(self):
-        """Busy save (review 87): the free-memory budget followed owned bytes
-        down as guest memory neared its reserve, so each frame evicted about 9
-        world tiles and restored others from the RAM copy (3,692 restores in a
-        `near` run). Once that copy is released, free memory no longer shrinks
-        the world's budget; the fixed tier alone bounds it."""
+    def test_whole_world_tier_follows_the_adapter_not_free_memory(self):
+        """On a 12 GB VM the busy save (world 1.27 GB) loaded with no world
+        geometry: the free-memory rule wanted about 4.7 GB free first (2.8 GB
+        system reserve plus 1.9 GB of attachments not yet allocated) and the
+        guest had 4.0 GB. After a debug reveal the camera jobs needed more
+        than the free-memory ceiling allowed and every one failed (review 88).
+        The geometry tier sizes the explored world by the adapter's budget."""
+        source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
+        self.assertIn('tile_geometry_runtime_budget=geometry_tier?Budget::world_tier(owned,gpu,future,ceiling):Budget::world_geometry(', source)
+        self.assertIn('tile_geometry_required_budget=std::max(tile_geometry_runtime_budget,geometry_tier?Budget::world_tier(owned,gpu,0,ceiling):', source)
+        self.assertIn('auto recipes=geometry_tier && world_gpu_residency_ready?c3x_renderer::render_core::FrameWorkingSet::world_recipes(', source)
+        self.assertIn('if(!world_backing.configure(recipes,', source)
         run_cpp(r'''
 #include "Renderer/native/render_core/frame_working_set.h"
 #include <cassert>
 #include <cstdio>
 using c3x_renderer::render_core::FrameWorkingSet;
 int main(){
- constexpr std::size_t mib=1024u*1024u,canonical=1600u*mib,allowance=384u*mib;
- // Plenty of free memory: canonical plus the allowance, either way.
- assert(FrameWorkingSet::tier_geometry(8192u*mib,canonical,allowance,false)==canonical+allowance);
- assert(FrameWorkingSet::tier_geometry(8192u*mib,canonical,allowance,true)==canonical+allowance);
- // With the RAM copy, free memory below the tier evicts, world tiles too.
- assert(FrameWorkingSet::tier_geometry(canonical+100u*mib,canonical,allowance,false)==canonical+100u*mib);
- assert(FrameWorkingSet::tier_geometry(canonical-200u*mib,canonical,allowance,false)==canonical-200u*mib);
- // Without it the resident world is kept whole, with room for the refused
- // keys and view-specific content within the tier.
- assert(FrameWorkingSet::tier_geometry(canonical+100u*mib,canonical,allowance,true)==canonical+allowance);
- assert(FrameWorkingSet::tier_geometry(canonical-200u*mib,canonical,allowance,true)==canonical+allowance);
- std::puts("PASS tier geometry: a released world copy keeps the resident world");
+ constexpr std::size_t mib=1024u*1024u,ceiling=8192u*mib,world=1269u*mib;
+ // Loading sweep on the 12 GB VM: 4.0 GB available, adapter budget 5.85 GB
+ // with 0.67 GB used (headroom 3.72 GB after its 25% reserve), 1.9 GB future.
+ std::size_t available=4000u*mib,physical=12288u*mib,headroom=3720u*mib,future=1900u*mib;
+ assert(FrameWorkingSet::world_geometry(available,physical,0,headroom,future,ceiling,4,true)<world); // the old rule: none of it
+ assert(FrameWorkingSet::world_tier(0,headroom,future,ceiling)>=world);
+ // Debug reveal: 2.82 GB available, 0.77 GB owned, adapter headroom 2.16 GB.
+ std::size_t owned=770u*mib;available=2820u*mib;headroom=2160u*mib;
+ assert(FrameWorkingSet::required_geometry(available,physical,owned,headroom,ceiling,4)<owned+world); // old: no room for the revealed world
+ assert(FrameWorkingSet::world_tier(owned,headroom,0,ceiling)>=owned+world);
+ // An exhausted adapter admits nothing new but never falls below what is owned;
+ // the ceiling still caps it.
+ assert(FrameWorkingSet::world_tier(owned,0,future,ceiling)==owned);
+ assert(FrameWorkingSet::world_tier(owned,headroom,0,owned+100u*mib)==owned+100u*mib);
+ // The reveal's required world pass stores 618 MB of compressed recipes. With
+ // 2.16 GB available the free-memory rule left the emptied store no capacity;
+ // the commit limit (8.7 GB available) admits them.
+ constexpr std::size_t recipes=618u*mib;
+ auto ram=FrameWorkingSet::residency(2160u*mib,physical,owned,0,headroom,ceiling,4);
+ assert(ram.prepared<recipes);
+ assert(FrameWorkingSet::world_recipes(ram.prepared,0,8700u*mib)>=recipes);
+ assert(FrameWorkingSet::world_recipes(ram.prepared,0,1024u*mib)==ram.prepared); // no commit headroom: unchanged
+ std::puts("PASS world tier: the explored world is sized by the adapter and commit limit, not free memory");
 }
 ''')
-
 
 if __name__ == '__main__':
     unittest.main()
