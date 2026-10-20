@@ -49,6 +49,7 @@ struct State {
  bool ensure_dds_texture(std::vector<std::uint8_t>const&,int&,bool,bool){return true;}
  unsigned read_u32(std::vector<std::uint8_t>const&,unsigned){return 0;}
  bool ensure_terrain_textures(){return step(5);}
+ void release_texture_files(){loaded.push_back(6);} // only after every texture is uploaded (review 89)
  bool ensure_scene_assets(){
 ''' + body + r'''
 };
@@ -59,15 +60,15 @@ int main(){
   for(int id:loaded)assert(id<=failing); // A failed dependency cannot report ready.
  }
  State state;fail=0;loaded.clear();assert(state.ensure_scene_assets());
- assert((loaded==std::vector<int>{1,2,3,4,5}));
+ assert((loaded==std::vector<int>{1,2,3,4,5,6}));
  loaded.clear();assert(state.ensure_scene_assets());
- assert((loaded==std::vector<int>{1,5})); // First map reuses loaded scene resources.
+ assert((loaded==std::vector<int>{1,5,6})); // First map reuses loaded scene resources.
  state.natural.ready=state.reflection.ready=state.cities.ready=false;
  loaded.clear();assert(state.ensure_scene_assets());
- assert((loaded==std::vector<int>{1,2,3,4,5})); // Device recovery rebuilds the same set.
+ assert((loaded==std::vector<int>{1,2,3,4,5,6})); // Device recovery rebuilds the same set.
  State compatibility;compatibility.environment_profile=compatibility.fidelity_profile=compatibility.city_profile=false;
  loaded.clear();assert(compatibility.ensure_scene_assets());
- assert((loaded==std::vector<int>{1,5}));
+ assert((loaded==std::vector<int>{1,5,6}));
 }
 ''')
         loading = source.split('// Production definitions are loaded under the native loading bar.', 1)[1]

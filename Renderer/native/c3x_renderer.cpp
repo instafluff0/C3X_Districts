@@ -1011,20 +1011,46 @@ public:
         std::size_t bytes=0;for(auto const& entry:tile_geometry_cache)if(entry.second.world_ground)bytes+=entry.second.byte_count;
         return bytes;
     }
-    // DDS file bytes kept beside their uploaded textures for device recovery.
-    std::size_t texture_file_bytes()const{
-        std::size_t dds=0;auto file=[&](std::vector<std::uint8_t> const& bytes){dds+=bytes.capacity();};
-        auto files=[&](auto const& list){for(auto const& bytes:list)file(bytes);};
-        for(auto const& t:terrain_textures){for(auto const* bytes:{&t.dds,&t.material_height_dds,&t.specular_dds,&t.elevated_dds,
+    // Every retained DDS texture member. Their bytes stay in RAM only until
+    // all textures are uploaded (release_texture_files).
+    template<class F> void each_texture_file(F file){
+        auto files=[&](auto& list){for(auto& bytes:list)file(bytes);};
+        for(auto& t:terrain_textures){for(auto* bytes:{&t.dds,&t.material_height_dds,&t.specular_dds,&t.elevated_dds,
             &t.elevated_height_dds,&t.elevated_specular_dds})file(*bytes);files(t.relief_layer_dds);files(t.water_surface_dds);}
-        for(auto const* bytes:{&dune_surface.dds,&dune_surface.material_height_dds,&dune_surface.specular_dds,&dune_decal_base_dds,&dune_decal_height_dds,
+        for(auto* bytes:{&dune_surface.dds,&dune_surface.material_height_dds,&dune_surface.specular_dds,&dune_decal_base_dds,&dune_decal_height_dds,
             &marsh_decal_base_dds,&marsh_decal_height_dds,&marsh_decal_specular_dds,&volcano_base_dds,&volcano_height_dds,&volcano_active_base_dds,
             &volcano_active_specular_dds,&water_clutter_base_dds,&water_clutter_height_dds,&grass_clutter_base_dds,&grass_clutter_height_dds,
             &plains_clutter_base_dds,&plains_clutter_height_dds})file(*bytes);
         files(feature_texture_dds);files(terrain_extra_dds);files(river_surface_dds);files(cliff_dds);files(river_rock_texture_dds);
         files(route_texture_dds);files(bridge_texture_dds);files(resource_texture_dds);files(city_base_dds);files(city_emissive_dds);
         files(wall_texture_dds);files(mine_base_dds);files(mine_emissive_dds);files(site_dds);files(farm_base_dds);files(farm_emissive_dds);
-        return dds;
+    }
+    std::size_t texture_file_bytes(){
+        std::size_t dds=0;each_texture_file([&](std::vector<std::uint8_t> const& bytes){dds+=bytes.capacity();});return dds;
+    }
+    // Records the pack file of a texture member. Bytes held anywhere else
+    // (later moved into a container) are kept, not released.
+    void texture_file(std::vector<std::uint8_t> const& bytes,char const* path){
+        auto at=reinterpret_cast<std::uintptr_t>(&bytes),self=reinterpret_cast<std::uintptr_t>(this);
+        if(at>=self && at<self+sizeof(*this))texture_files[&bytes]=path;
+    }
+    // Once every texture is uploaded its file bytes only served reset(),
+    // which drops the views: ensure_dds_texture now reads the recorded file
+    // again, as natural and city textures always have (591 MB on the busy
+    // save, review 89). The opt-in CPU terrain preview reads the terrain base
+    // colors, so those stay while it is enabled.
+    void release_texture_files(){
+        char preview[4]={};
+        bool keep_base=c3x_renderer::render_core::cached_environment("C3X_RENDERER_CAMERA_PREVIEW",preview,sizeof(preview)) && preview[0]=='1';
+        std::size_t released=0,kept=0;
+        each_texture_file([&](std::vector<std::uint8_t>& bytes){
+            if(bytes.empty())return;
+            bool base=keep_base && std::any_of(terrain_textures.begin(),terrain_textures.end(),[&](auto const& t){return &t.dds==&bytes;});
+            if(base || !texture_files.count(&bytes)){kept+=bytes.capacity();return;}
+            released+=bytes.capacity();std::vector<std::uint8_t>().swap(bytes);
+        });
+        if(released){char detail[96];sprintf_s(detail,"released_kb=%zu kept_kb=%zu",released>>10,kept>>10);
+            trace.write("texture-files-released",detail,true);}
     }
     void geometry_census(){
         struct Row {std::uint64_t unique=0,logical=0,vertices=0,indices=0,instances=0;unsigned chunks=0,rigid=0,aliases=0;std::array<unsigned,4> strides{};};
@@ -1199,6 +1225,9 @@ public:
     std::vector<c3x_renderer_u32> window_content_flags;
     std::array<TerrainTexture, c3x_renderer::terrain_type_count> terrain_textures;
     TerrainTexture dune_surface;
+    // Pack file of each texture member whose bytes may be released after
+    // upload (texture_file, release_texture_files).
+    std::unordered_map<std::vector<std::uint8_t> const*,std::string> texture_files;
     c3x_renderer::FeatureBundle feature_bundle;
     std::array<std::vector<std::uint8_t>, 8> feature_texture_dds;
     std::array<ID3D11ShaderResourceView *, 8> feature_texture_views = {};
@@ -2248,7 +2277,7 @@ public:
     }
 
     void clear_terrain_assets() {
-        material_views={};material_views_valid=false;
+        material_views={};material_views_valid=false;texture_files.clear();
         world_preparation_queue.clear();terrain_preparation.clear();world_backing.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         for(auto& scratch:world_ground_scratch){scratch.rivers.reset_world();scratch.reset_tile();}
@@ -2473,6 +2502,7 @@ public:
                 return false;
             mix_content_revision(dds);
             channels[index].second->swap(dds);
+            texture_file(*channels[index].second,path);
         }
         mix_content_revision(material);
         output.configured = true;
@@ -2494,6 +2524,7 @@ public:
             read_u32(output, 128) != expected_format)
             return false;
         mix_content_revision(output);
+        texture_file(output,path);
         return true;
     }
 
@@ -2510,6 +2541,7 @@ public:
              read_u32(output, 128) != alternate_format))
             return false;
         mix_content_revision(output);
+        texture_file(output,path);
         return true;
     }
 
@@ -2744,6 +2776,7 @@ public:
                     break;
                 }
                 mix_content_revision(feature_texture_dds[index]);
+                texture_file(feature_texture_dds[index],texture_path);
             }
         }
 
@@ -2833,6 +2866,7 @@ public:
                 if (!river_rocks_ready)
                     break;
                 mix_content_revision(river_rock_texture_dds[index]);
+                texture_file(river_rock_texture_dds[index],texture_path);
             }
         }
         river_assets_ready = river_surface_ready && river_rocks_ready;
@@ -3009,6 +3043,7 @@ public:
                     return false;
                 }
                 mix_content_revision(output);
+                texture_file(output,path);
             }
             return true;
         };
@@ -3063,7 +3098,7 @@ public:
             release(view);
         for (ID3D11ShaderResourceView *& view : texture.water_surface_views)
             release(view);
-        texture.dds.swap(dds);
+        texture.dds.swap(dds);texture_file(texture.dds,path);
         texture.material_height_dds.clear();
         texture.specular_dds.clear();
         texture.elevated_dds.clear();
@@ -3093,7 +3128,7 @@ public:
                 (read_u32(channel_dds, 128) != DXGI_FORMAT_BC4_UNORM &&
                  read_u32(channel_dds, 128) != DXGI_FORMAT_BC4_SNORM))
                 continue;
-            channel.second->swap(channel_dds);
+            channel.second->swap(channel_dds);texture_file(*channel.second,path);
         }
         std::size_t elevated_position = json_member_position(material, "elevated");
         if (elevated_position != std::string::npos) {
@@ -3117,7 +3152,7 @@ public:
                     (format == DXGI_FORMAT_BC4_UNORM || format == DXGI_FORMAT_BC4_SNORM);
                 if (!format_valid)
                     return false;
-                channel.second->swap(channel_dds);
+                channel.second->swap(channel_dds);texture_file(*channel.second,path);
             }
         }
         std::size_t authored_layers_position = json_member_position(material, "authored_layers");
@@ -3147,7 +3182,7 @@ public:
                     (read_u32(channel_dds, 128) != DXGI_FORMAT_BC3_UNORM &&
                      read_u32(channel_dds, 128) != DXGI_FORMAT_BC3_UNORM_SRGB))
                     return false;
-                texture.relief_layer_dds[layer_index].swap(channel_dds);
+                texture.relief_layer_dds[layer_index].swap(channel_dds);texture_file(texture.relief_layer_dds[layer_index],path);
             }
         }
         std::size_t water_surface_position = json_member_position(material, "water_surface");
@@ -3178,7 +3213,7 @@ public:
                     (channel_index == 4 && format == DXGI_FORMAT_BC3_UNORM);
                 if (!format_matches)
                     return false;
-                texture.water_surface_dds[channel_index].swap(channel_dds);
+                texture.water_surface_dds[channel_index].swap(channel_dds);texture_file(texture.water_surface_dds[channel_index],path);
             }
         }
         std::size_t relief_position = json_member_position(material, "relief");
@@ -3533,15 +3568,25 @@ public:
             trace.write("native-failure","terrain-textures",true);return false;
         }
         load_phase("load-retained-textures");
+        release_texture_files();
         return true;
     }
 
-    bool ensure_dds_texture(std::vector<std::uint8_t> const & dds,
+    bool ensure_dds_texture(std::vector<std::uint8_t> const & retained,
                             ID3D11ShaderResourceView *& view, bool required, bool full_resolution = false) {
         if (view != nullptr)
             return true;
-        if (dds.empty())
-            return !required;
+        // Released bytes (release_texture_files) are read from their pack
+        // file again for this upload only.
+        std::vector<std::uint8_t> file;
+        if (retained.empty()) {
+            auto source = texture_files.find(&retained);
+            if (source == texture_files.end())
+                return !required;
+            if (!read_file(source->second.c_str(), file))
+                return false;
+        }
+        auto const & dds = file.empty() ? retained : file;
         if (device == nullptr || dds.size() < 156)
             return false;
         material_views_valid=false;

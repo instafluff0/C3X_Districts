@@ -4552,10 +4552,10 @@ camera job took 5.9 s); both B runs passed.
 | Busy `near` | A | B |
 | --- | --- | --- |
 | 1× idle, 3× idle, 1× idle at the end | 52, 58, 55 fps | 51, 58, 53 fps |
-| 1× scroll x: step / adoption p50, map px/s | 233 / 189 ms, 374 | 233 / 191 ms, 1,903 |
+| 1× scroll x: step / adoption p50, steps | 233 / 189 ms, 17.5 | 233 / 191 ms, 26 |
 | 1× scroll y: step / adoption p50 | 156 / 134 ms | 232 / 178 ms (B1 307 / 220, B2 157 / 136) |
-| 2× scroll: step / adoption p50, map px/s | 499 / 565 ms, 333 | 156 / 131 ms, 4,760 |
-| 3× scroll: step / adoption p50, map px/s | 155 / 120 ms, 958 | 118 / 94 ms, 6,896 |
+| 2× scroll: step / adoption p50, steps | 499 / 565 ms, 6.5 | 156 / 131 ms, 30 |
+| 3× scroll: step / adoption p50, steps | 155 / 120 ms, 19 | 118 / 94 ms, 40 |
 | Zoom in to 2×, to 3×, out to 1× | 28, 54, 35 fps | 37, 55, 36 fps |
 | Jump 2 | 1,188 ms | 485 ms |
 
@@ -4594,3 +4594,112 @@ adoption 60 ms).
 - macOS stayed at normal pressure through both profiled zoom-out runs.
 - The targets of section 87 (4.5 GB private, 2.5 GB GPU) are still unmet.
   What remains is unchanged from that section.
+
+## 89. Pack texture files leave RAM after upload (October 19)
+
+**Why.** Section 87 found 591 MB of DDS file bytes kept in the helper's RAM
+beside the textures uploaded from them (`geometry-census-cpu dds_kb`). They
+served one purpose: `reset()` drops every view, and the next
+`ensure_scene_assets()` uploaded the textures again from those bytes. In the
+VM every byte of them is private memory. Natural and city textures already
+read their files again after a reset and kept nothing.
+
+The terrain material textures dominate. Several base colors are 4096² BC3
+files (21 MB each) whose GPU textures start at the 2048² level, so RAM held
+four times what the GPU did.
+
+**Change** (`c3x_renderer.cpp`):
+- Each DDS loader records the pack file of the texture member it fills
+  (`texture_file`): the terrain material channels, `load_material_only`,
+  `load_decal_channel`, `load_dds_bytes`, vegetation, river rocks and
+  improvements. Bytes held anywhere else, such as resource animations moved
+  into their list, record nothing and are kept.
+- After `ensure_scene_assets()` has uploaded every texture,
+  `release_texture_files()` frees the bytes of recorded members and traces
+  `texture-files-released`.
+- `ensure_dds_texture` given released (empty) bytes with a recorded file reads
+  that file again for that upload only. Absent textures keep their contract:
+  optional succeeds, required fails, and a missing file fails the upload.
+- The opt-in CPU terrain preview (`C3X_RENDERER_CAMERA_PREVIEW=1`, off under
+  GPU presentation) samples the terrain base colors, so they stay while it is
+  enabled.
+- The sandbox's `SANDBOX_PREPARATION material_bytes` diagnostic now reports
+  the bytes still retained.
+
+**Tests.**
+- `test_texture_file_release` compiles the renderer's own release, census
+  and upload code against a stub device. It checks:
+  - recorded members are freed and other bytes are kept;
+  - after a reset the files are read again and uploaded byte for byte;
+  - the re-read bytes are not retained;
+  - absent and missing textures keep their contract;
+  - the preview keeps the terrain base colors.
+  Four mutants fail it: no release, no re-read, recording temporaries, and
+  ignoring the preview.
+- `test_scene_asset_loading` requires the release only after every scene
+  asset has loaded.
+
+**Measured** (12 GB VM, busy 1498 AD save unless noted; A = a6c74701,
+B = this change; peak private / GPU in MB):
+
+| Run | A | B |
+| --- | --- | --- |
+| Busy `near` (3 runs each) | 5,108-5,178 / 3,222-3,299 | 4,598-4,642 / 3,367-3,412 |
+| Busy `near`, census (1 each) | 5,108 / 3,371 | 4,546 / 3,346 |
+| Busy `zoom-out` (2 each) | 5,414-5,417 / 3,367-3,563 | 4,768-4,910 / 3,503-3,555 |
+| Light `near` (2 each) | 2,557-2,570 / 1,645-1,673 | 1,931-1,966 / 1,640-1,647 |
+
+- The census run traces `texture-files-released released_kb=605626
+  kept_kb=0`, and `geometry-census-cpu dds_kb` falls from 605,626 to 0.
+  Loading is unchanged: `load-retained-textures` 44.5 → 45.3 ms.
+- Peaks fall by 470-650 MB on every save. The median of the last minute of a
+  busy `near` run falls by about 560 MB (4,706-4,771 → 4,117-4,205).
+- GPU memory is untouched by the change; its peaks vary by ±150 MB between
+  runs on both sides.
+- The guest's minimum free memory over the busy `near` runs was 1.6-2.2 GB
+  with A and 2.1-2.7 GB with B (the census pair: 2.4 and 2.1 GB).
+- The busy peak is now 4.55-4.64 GB, about 0.1 GB over section 87's 4.5 GB
+  target. GPU memory (3.3-3.6 GB) remains the larger gap to the 2.5 GB
+  target.
+
+**Speed A/B** (user rule; `-MeasureCadence`, alternating; means of each
+side's runs). After loading, the only new work is one pass over about 260
+empty byte vectors whenever scene assets are ensured.
+
+| Busy `near` (3 and 3) | A | B |
+| --- | --- | --- |
+| 1× idle, 3× idle, 1× idle at the end | 52, 58, 50 fps | 54, 58, 50 fps |
+| 1× scroll x: step / adoption p50, steps | 234 / 205 ms, 24.3 | 249 / 211 ms, 23.0 |
+| 1× scroll y: step / adoption p50 | 157 / 136 ms | 157 / 137 ms |
+| 2× scroll: step / adoption p50, steps | 156 / 132 ms, 25.3 | 169 / 134 ms, 23.3 |
+| 3× scroll: step / adoption p50, steps | 152 / 108 ms, 40.3 | 152 / 118 ms, 38.3 |
+| Zoom in to 2×, to 3×, out to 1× | 37, 57, 32 fps | 35, 58, 31 fps |
+| Jump 1, jump 2 | 206, 612 ms | 194, 544 ms |
+
+- The B means include one slow segment each in B1 (1× x step 277 ms) and B2
+  (2× step 193 ms). Without them B matches A: 1× x 229 and 241 ms, 2× 156
+  and 157 ms. A1's 3× adoption (84 ms) is the low outlier of that row; per
+  run the two sides overlap (A 84-123, B 104-127 ms).
+- No run on either side logged a reset, GPU failure, camera error or texture
+  re-read.
+
+Busy `zoom-out` (2 and 2): zoom start 115 → 111 ms, settle 607 → 612 ms,
+fps 21 → 21, longest presentation gap 97 → 103 ms, fps in the second after
+settling 22 → 22. `check_navigation_cadence` passed both A runs (0.77,
+0.85 s without progress) and B2 (0.85 s). B1 had one 1.23 s stall; section
+87's unchanged A runs failed it too (1.13 and 1.04 s).
+
+Light save `near` (2 and 2): equal in every segment (idle 60 fps; scroll
+steps 78 ms, adoption 60-62 ms). Jumps 56 and 54 ms in A, 86 and 67 ms in B.
+B2 alone took 105 and 85 ms, within the 33-95 ms these jumps varied over
+section 87's unchanged runs.
+
+**A reading error in sections 87-88.** `near_report.py` adds up the
+distance between adopted camera positions, so the camera's world-wrap jump
+(8,192 px on the busy save) counts as travel. A run whose last x-scroll step
+lands just after the segment ends loses that jump and reports a quarter of
+the "screen px/s" of a run that includes it, with the same 128 px steps.
+B1's and B3's 1× x scrolls here (470 and 493 against 1,846-1,882 px/s),
+B2's 2× scroll and A3's 2× and 3× scrolls differ only by that jump. Section 88's table compared these
+figures; it now lists step counts. Compare steps and step/adoption times,
+not px/s, until the report handles the wrap.
