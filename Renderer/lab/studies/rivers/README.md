@@ -52,8 +52,14 @@ river shader change, rerun `Renderer/tools/overlay_river_shading.py`
   A translucent dark layer darkens the land beside the water instead of
   painting a soil ribbon, and authored river gravel collects along it.
   Shallows keep the channel color, so no pale rim outlines the water.
-- **Delta.** At a mouth, two narrower distributaries leave the last reach and
-  fan out to the sea beside the main outlet (`river_corridor.h`).
+- **Delta.** At a mouth, two to four narrower distributaries leave the last
+  reach and fan out beside the main outlet (`river_corridor.h`). Each ends at
+  its own water tile's centre, as the outlet does: only there is the noisy
+  optical shore always sea. Fixed-angle branches stopped on the beach (user,
+  2026-10-19). Targets lie within 1.6 tiles, within 55 degrees of the seaward
+  direction, and are reached through water tiles, so no branch runs along
+  the shore or across a headland. River pages hold a five-cell halo for
+  them. Lab: `deltas.py` (bay, straight coast, headland, inlet).
   Tests: `Renderer/native/test_river_delta.py`.
 - **Bridge waterline.** Bridge models continue below their base (a quarter of
   the stone arch, half of the industrial and modern piers). The old river

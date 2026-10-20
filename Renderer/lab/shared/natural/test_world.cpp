@@ -17,13 +17,14 @@ struct OriginalWorld : NaturalData {
     river::Corridor const& river_page(double x,double y){
         int pc=int(std::floor(x/8)),pr=int(std::floor(y/8));++river_epoch;
         for(auto&p:river_pages)if(p.c==pc && p.r==pr){p.used=river_epoch;return p.field;}
-        // Sixteen 8x8 pages, each with a four-cell authoritative support halo.
+        // Sixteen 8x8 pages, each with a five-cell authoritative support halo
+        // (a delta reaches water tiles up to two cells from its mouth).
         // Distant jumps evict LRU fields instead of building the whole map.
         if(river_pages.size()==16){auto it=std::min_element(river_pages.begin(),river_pages.end(),[](auto const&a,auto const&b){return a.used<b.used;});river_pages.erase(it);}
         RiverPage page;page.c=pc;page.r=pr;page.used=river_epoch;
         auto const&w=*river_world;auto dims=w.dimensions();hydro::Field field;
         field.map_width=dims.width;field.map_height=dims.height;field.wraps=dims.wrap_x;
-        for(int r=pr*8-4;r<pr*8+12;r++)for(int c=pc*8-4;c<pc*8+12;c++){
+        for(int r=pr*8-5;r<pr*8+13;r++)for(int c=pc*8-5;c<pc*8+13;c++){
             auto bits=w.at(w.index(c,r));if(bits==0xffffffffu)continue;
             int rx=c+r,ry=c-r;if(dims.wrap_x)rx=render_core::mod(rx,dims.width);if(dims.wrap_y)ry=render_core::mod(ry,dims.height);
             field.tiles[{c,r}]={c,r,rx,ry,int(bits&255),int((bits>>8)&255),unsigned((bits>>16)&255)};

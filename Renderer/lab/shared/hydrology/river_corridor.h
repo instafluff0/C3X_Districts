@@ -194,26 +194,58 @@ struct Corridor {
                 // The water-tile center lies beyond the optical shore, allowing
                 // the same corridor to cut through the beach and enter the sea.
                 insert(p,*chosen,e.flow?1:0);
-                // A small delta: two narrower distributaries leave the last
-                // reach upstream and fan out to the sea on either side of the
-                // main outlet, each with its own deterministic branch point,
-                // angle and length.
-                P outlet=*chosen-p;outlet=outlet*(1/std::max(1e-12,hydro::length(outlet)));
+                // A delta: two to four narrower distributaries leave the last
+                // reach upstream and fan out to their own water tiles beside
+                // the main outlet. Each ends at its tile's center, like the
+                // outlet: the optical shore keeps a water core around every
+                // water center, so every branch enters the sea. Branches at a
+                // fixed angle and length often stopped on the beach (user,
+                // October 19). Candidates are water centers within 1.6 tiles,
+                // within 55 degrees of the seaward direction (toward the
+                // mouth's water tiles), reached through water rather than
+                // across a headland; nearest first, alternating sides. The
+                // river page halo (five cells) holds all of them.
+                P seaward{};for(P w:water)seaward=seaward+(w-p);
+                seaward=seaward*(1/std::max(1e-12,hydro::length(seaward)));
+                double outlet_cross=seaward.x*(chosen->y-p.y)-seaward.y*(chosen->x-p.x);
+                std::vector<P> near_side,far_side;
+                for(int y=int(p.y)-2;y<=int(p.y)+1;++y)for(int x=int(p.x)-2;x<=int(p.x)+1;++x) {
+                    P center{x+.5,y+.5},d=center-p;
+                    auto t=field.tiles.find({x,y});
+                    if(t==field.tiles.end() || !hydro::water(t->second.base) || hydro::length(center-*chosen)<1e-9 ||
+                       hydro::length(d)>1.6 || hydro::dot(d,seaward)<.57*hydro::length(d))continue;
+                    bool through_water=true;
+                    for(double u:{.3,.45,.6,.75,.9}) {
+                        P q=p+d*u;auto crossed=field.tiles.find({int(std::floor(q.x)),int(std::floor(q.y))});
+                        through_water=through_water && crossed!=field.tiles.end() && hydro::water(crossed->second.base);
+                    }
+                    if(!through_water)continue;
+                    // The main outlet's side of the seaward axis, or the other.
+                    double cross=seaward.x*d.y-seaward.y*d.x;
+                    (cross*(std::abs(outlet_cross)>1e-9?outlet_cross:1.)>0?near_side:far_side).push_back(center);
+                }
+                for(auto* side:{&near_side,&far_side})std::sort(side->begin(),side->end(),[&](P a,P b){
+                    double da=hydro::length(a-p),db=hydro::length(b-p);
+                    return da!=db?da<db:(a.x!=b.x?a.x<b.x:a.y<b.y);});
                 uint32_t branch_seed=hydro::hash(uint32_t(e.id)^uint32_t(e.id>>32)^0x64656c74u);
-                for(int side:{-1,1}) {
+                std::size_t count=std::min<std::size_t>(near_side.size()+far_side.size(),2+branch_seed%3);
+                std::vector<P> targets;
+                for(std::size_t a=0,b=0;targets.size()<count;) {
+                    // Start opposite the outlet so two branches flank it.
+                    bool opposite=(targets.size()%2==0 && b<far_side.size()) || a>=near_side.size();
+                    targets.push_back(opposite?far_side[b++]:near_side[a++]);
+                }
+                for(P to:targets) {
                     branch_seed=hydro::hash(branch_seed);
-                    double upstream=.40+.25*double(branch_seed&1023)/1023.;
-                    double angle=side*(.55+.30*double((branch_seed>>10)&1023)/1023.);
-                    double length=.60+.30*double((branch_seed>>20)&1023)/1023.;
+                    // Farther targets leave the channel a little earlier.
+                    double upstream=std::min(.85,.40+.25*double(branch_seed&1023)/1023.+.15*(hydro::length(to-p)-.71));
                     auto step=std::size_t(std::lround(upstream*double(e.points.size()-1)));
                     P from=from_a?e.points[step]:e.points[e.points.size()-1-step];
-                    P direction{outlet.x*std::cos(angle)-outlet.y*std::sin(angle),
-                                outlet.x*std::sin(angle)+outlet.y*std::cos(angle)};
                     // Leave along the channel, then fan out across the beach,
                     // so each branch reaches the sea as a separate channel.
-                    P control=from+(p-from)*.55,to=p+direction*length,last=from;
-                    for(int j=1;j<=10;++j) {
-                        double u=j/10.,v=1-u;
+                    P control=from+(p-from)*.55,last=from;
+                    for(int j=1;j<=12;++j) {
+                        double u=j/12.,v=1-u;
                         P next=from*(v*v)+control*(2*u*v)+to*(u*u);
                         insert(last,next,e.flow?1:0,1.8);last=next;
                     }
