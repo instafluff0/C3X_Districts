@@ -23,7 +23,14 @@ Measured at 128-pixel tiles, idle, median over eight directions.
   layer). Now one shadow per unit, at the shared dynamic-shadow strength.
 - Size: the old fit put each unit's largest idle extent at 56 px, weapons and
   mounts included. Foot units were 1.2-1.4x Civ III's linear size; mounted,
-  siege and ships 0.4-0.85x, with same-class pairs disagreeing.
+  siege and ships 0.4-0.85x, with same-class pairs disagreeing. The per-unit
+  Civ III area fit that replaced it then made lone Civ VI figures match sprites
+  that draw a crew or mount: TOW Infantry's head at 51 px and Conquistador's at
+  56 px against 32-40 px for other foot units. Since 2026-10-20 land units keep
+  Civ VI proportions (heads 30-39 px, the spread being pose); review sheets
+  `proportions-humans.png` and `proportions-others.png` in the output folder.
+  Uncapped, Civ VI vehicles grew up to 2x (two Tanks hid a city at 3x zoom), so
+  no unit exceeds its Civ III sprite area; vehicles and siege keep their size.
 - Brightness: median body luma 52 against Civ III's 89 (owner palette ntp01).
 - Ownership: civ colour covered about 5% of a unit against Civ III's 24%; several
   modern units showed none. Look A brings coverage to 24% and luma to 63.

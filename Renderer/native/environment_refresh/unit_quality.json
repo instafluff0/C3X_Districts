@@ -41,7 +41,12 @@
   },
   "sizing": {
     "sprites": "Renderer/inventory/civ3_unit_sprite_sizes.json",
-    "factor": 1.0
+    "factor": 1.0,
+    "policy": "source_proportions",
+    "native_domains": [
+      "sea",
+      "air"
+    ]
   },
   "look": {
     "gain": 0.5,

@@ -153,6 +153,34 @@ class UnitPreparation(unittest.TestCase):
         self.assertAlmostEqual(bindings["unit1"]["scale"], 2.0, places=6)
         self.assertEqual(bindings["unit1"]["fit_policy"], "native_sprite_area_shape_neighbors")
 
+    def test_source_proportions_share_one_scale(self):
+        # One standing figure under five native keys. B's sprite draws a crew
+        # (16x the area), as Civ III's TOW Infantry does; it must not grow to it.
+        quad = [(-.1, 0, 0), (.1, 0, 0), (.1, 0, .5), (-.1, 0, .5)]
+        blob = b"C3XANM1\0" + struct.pack("<6I", 1, 4, 6, 1, 1, 0)
+        for x, y, z in quad:
+            blob += struct.pack("<8f4I4f", x, y, z, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0)
+        blob += struct.pack("<6I", 0, 1, 2, 0, 2, 3) + struct.pack("<16f", 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+        target = self.root / "Renderer/sized"
+        (target / "clips").mkdir(parents=True)
+        (target / "clips/quad.bin").write_bytes(blob)
+        idle = {"part_count": 1, "part0": {"mesh": "clips/quad.bin"}}
+        keys = ("PRTO_A", "PRTO_B", "PRTO_C", "PRTO_E", "PRTO_Procedural")
+        bindings = {"unit" + str(i): {"key_count": 1, "key0": key, "scale": 1.0, "offset_z": 0.0, "idle": idle}
+                    for i, key in enumerate(keys)}
+        ours = units.silhouette(*units.idle_geometry(blob), 1.0, 0.0, 225.0)["area"]
+        sprites = dict(zip(keys, ({"area": ours * k * k} for k in (2, 4, 3, 1, 5))))
+        # Area fits imply source scales 2/1, 4/1, 3/0.5 and 1/1: the shared scale is 3.
+        units.fit_sizes(bindings, target, sprites, 1.0, {"PRTO_A": 1.0, "PRTO_B": 1.0, "PRTO_C": 0.5, "PRTO_E": 1.0})
+        scales = [bindings["unit" + str(i)]["scale"] for i in range(5)]
+        for value, expected in zip(scales, (2.0, 3.0, 1.5, 1.0, 5.0)):
+            self.assertAlmostEqual(value, expected, places=6)
+        policies = [bindings["unit" + str(i)]["fit_policy"] for i in range(5)]
+        # A and E would outgrow their native sprites, so they stop at them; a
+        # procedural source has no authored scale and keeps its native fit.
+        self.assertEqual(policies, ["native_sprite_area_cap", "shared_source_proportion", "shared_source_proportion",
+                                    "native_sprite_area_cap", "native_sprite_area"])
+
     def test_stray_rigid_primitive_does_not_lift_a_skinned_body(self):
         def payload(name, points, bones):
             # Vertices skin to joint 0; a skinned payload carries `bones` identity joints.

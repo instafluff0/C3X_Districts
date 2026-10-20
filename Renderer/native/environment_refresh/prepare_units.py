@@ -109,9 +109,15 @@ def hover_flying_units(bindings,target,sprites,factor,minimum,flight=None):
         binding['hover_policy']='native_sprite_lift';hovering.append(binding['key0'])
         if flight and flight>factor:binding['flight_lift']=round(sprite['lift']*(flight-factor)/(Z_PIXELS*binding['scale']),5)
     return hovering
-def fit_sizes(bindings,target,sprites,factor):
+def fit_sizes(bindings,target,sprites,factor,proportions=None):
     """Match each idle silhouette to its native sprite's area. Units without a
-    sprite take the median change of measured units with a similar shape."""
+    sprite take the median change of measured units with a similar shape.
+
+    `proportions` (native key -> authored source scale) keeps imported units in
+    their source's relative sizes instead: they share one scale, the median of
+    their per-unit area fits, so a lone figure is never inflated to a native
+    sprite that draws a crew, a mount or a second soldier. No unit grows past
+    its native sprite's area: a source vehicle would otherwise hide a city."""
     measured,pending=[],[]
     for binding in bindings.values():
         if not isinstance(binding,dict) or 'idle' not in binding:continue
@@ -127,6 +133,13 @@ def fit_sizes(bindings,target,sprites,factor):
     for binding,aspect in pending:
         near=[c for a,c in measured if abs(math.log(a/aspect))<math.log(1.25)] or [c for _,c in measured] or [1.0]
         binding['scale']*=float(np.median(near))*factor;binding['fit_policy']='native_sprite_area_shape_neighbors'
+    authored=[b for b in bindings.values() if isinstance(b,dict) and 'idle' in b and b['key0'] in (proportions or {})]
+    if authored:
+        shared=float(np.median([b['scale']/proportions[b['key0']] for b in authored]))
+        for binding in authored:
+            native=binding['scale'] if binding['fit_policy']=='native_sprite_area' else math.inf
+            binding['scale']=min(shared*proportions[binding['key0']],native)
+            binding['fit_policy']='shared_source_proportion' if binding['scale']<native else 'native_sprite_area_cap'
     return len(measured),len(pending)
 def build_pack(target=None, source=None, quality_path=None):
     source=Path(source or PACKS/'UnitAnimationRuntime')
@@ -269,8 +282,17 @@ def build_pack(target=None, source=None, quality_path=None):
     sizing=quality.get('sizing');fitted=None;sprites=None
     if sizing:
         # Floating hulls match the native sprite on their visible area.
-        sprites=read(ROOT/sizing['sprites'])['units']
-        fitted=fit_sizes(bindings,target,sprites,float(sizing.get('factor',1)))
+        sprites=read(ROOT/sizing['sprites'])['units'];proportions=None
+        if sizing.get('policy')=='source_proportions':
+            # Imported units carry their source member scale. Procedural sources
+            # have no recipe and keep the per-unit native fit, as do domains whose
+            # source scales follow formation size or scenario rather than the unit.
+            native=set(sizing.get('native_domains',[]));proportions={}
+            for unit in manifest['units'].values():
+                recipe=PACKS/unit['source_pack']/unit.get('source_recipe','')
+                if recipe.is_file() and read(recipe).get('domain') not in native:
+                    proportions.update((key,float(unit['member_scale'])) for key in unit['civ3_ids'])
+        fitted=fit_sizes(bindings,target,sprites,float(sizing.get('factor',1)),proportions)
     hover=quality.get('hover');hovering=None
     if hover:hovering=hover_flying_units(bindings,target,sprites or read(ROOT/hover['sprites'])['units'],float(hover['factor']),float(hover['minimum']),
         float(hover['flight']) if 'flight' in hover else None)
@@ -323,7 +345,8 @@ def build_pack(target=None, source=None, quality_path=None):
         (target/name).write_text(json.dumps(data,indent=2,sort_keys=True)+'\n')
     evidence={'status':'pass','source_manifest_sha256':sha(source/'manifest.json'),'bindings_sha256':digest(target/'bindings.json'),
       'unit_count':len(manifest['units']),'native_keys':sum(v['key_count'] for v in bindings.values() if isinstance(v,dict)),
-      'address_mode_parts':modes,'sizing':{'native_sprite':fitted[0],'shape_neighbors':fitted[1]} if fitted else None,'owner_garments':painted,'grounded':grounded,
+      'address_mode_parts':modes,'sizing':{'native_sprite':fitted[0],'shape_neighbors':fitted[1],
+        'source_proportion':sum(isinstance(b,dict) and b.get('fit_policy')=='shared_source_proportion' for b in bindings.values())} if fitted else None,'owner_garments':painted,'grounded':grounded,
       'waterline':floated,'hover':hovering,'owner_marks':marked,'combat':armed,'normal_payloads':len(updates),'unchanged_palette_frames':poses,'source_sha256':pins,
       'settings':{'msaa':4,'anisotropy':16,'mip_bias':0,'render_scale':'pack selected 1 or 4'},
       'limits':['Original generic assets preserve their authored normals; imported components use fingerprinted source octahedral normals.',

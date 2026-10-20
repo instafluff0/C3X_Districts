@@ -34,11 +34,18 @@ calibration rather than confirmed source-engine attachment behavior.
 Readability (user-accepted 2026-10-07, see the
 [unit readability study](../../../studies/unit_readability/README.md)):
 
-- Size: `unit_quality.json` `sizing` scales each unit so its idle silhouette
-  matches the area of its native Civ III DEFAULT sprite, read from
-  `Renderer/inventory/civ3_unit_sprite_sizes.json` (numbers only). Units without
-  a sprite take the median change of similar shapes. Regenerate the table for a
-  scenario's own art with `python3 -m Renderer.tools.asset_compiler.civ3_unit_sprites --scenario-root PATH`.
+- Size (`unit_quality.json` `sizing`, policy `source_proportions`, user-accepted
+  2026-10-20): imported land units keep their source's relative sizes (geometry
+  times the recipe's member scale) under one shared scale, the median of their
+  per-unit fits to the native Civ III DEFAULT sprite area. A Civ III sprite may
+  draw a crew or a mount (TOW Infantry, Conquistador), so a per-unit area fit
+  inflated lone figures. No unit grows past its own sprite area, so source
+  vehicles and siege engines (Tank, Artillery) never hide a city. Sea and air
+  (`native_domains`), whose source scales
+  follow formation size, and procedural units keep the per-unit area fit; units
+  without a sprite take the median change of similar shapes. Areas come from
+  `Renderer/inventory/civ3_unit_sprite_sizes.json` (numbers only); regenerate it
+  for a scenario's own art with `python3 -m Renderer.tools.asset_compiler.civ3_unit_sprites --scenario-root PATH`.
 - Look: `unit_quality.json` `look` (gain, saturation, owner ramp) is published
   as `look_*` pack metadata and applied by the shared unit shader. Owner colour
   never exceeds the civ colour itself and skips the extra saturation, so it
