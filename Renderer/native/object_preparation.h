@@ -15,7 +15,8 @@ struct PreparationInput {
     bool compact_vertices=false; // route meshes elide constant integrated elements
     bool quantized=false; // and store half vector elements
     // A farm's resource parts as tile-local (u0,v0,u1,v1) boxes it keeps open.
-    std::vector<std::array<float,4>> farm_resource;
+    std::vector<std::array<float,4>> resource_boxes;   // its resource's parts, kept open by a farm
+    std::vector<std::array<float,4>> animal_boxes;     // its resource's animals, which a mine stands beside
 };
 struct PreparedPart {
     render_core::PreparedMesh mesh;
@@ -112,10 +113,11 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     // neighboring tiles agree.
     constexpr float tunnel_foot=4.f,tunnel_reach=.2f;
     // The rendered mesh's own shape (lab/shared/natural/mountain_shape.h),
-    // built only for route and volcano tiles, so routes lie on its rock and a
-    // plume leaves its crater.
+    // built only for route, volcano and mine tiles, so routes and a mine lie on
+    // its rock and a plume leaves its crater.
     MountainShape mountain_shape;
-    if(input.projection.tile.road_mask || input.projection.tile.railroad_mask || volcano)
+    if(input.projection.tile.road_mask || input.projection.tile.railroad_mask || volcano ||
+       (input.mine_ready && (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE)))
         mountain_shape=MountainShape(natural,nc,nr,lookup_natural,[](int,int){return false;});
     unsigned const mountain_count=mountain_shape.count;
     auto route_height=[&](float x,float y){
@@ -212,8 +214,9 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP|
         C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS);
     if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,plan))return {};
+    settle_mine(plan,assets,tile,input.animal_boxes);
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
-        clear_farm(plan,plan,assets,input.farm_resource);
+        clear_farm(plan,plan,assets,input.resource_boxes);
         // A plot kit lays out the areas it shares with neighbouring farms:
         // their routes and irrigation are dependencies, as the routes' are.
         settle_farm_fields(plan,tile,assets,relief,[&](int dx,int dy)->c3x_renderer_tile_v1 const*{
@@ -264,10 +267,11 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             }
             if(shared_rigid_mesh(asset)){
                 result->draws.push_back({unsigned(instance.layer),0,0,unsigned(result->rigid.size())});
-                // A tunnel entrance stands on its rail.
-                bool tunnel_part=asset.id.rfind("route/tunnel/",0)==0;
+                // A tunnel entrance stands on its rail, and a mine on the drawn rock
+                // at a mountain's foot (on the natural ground the rock covered it).
+                bool on_rock=asset.id.rfind("route/tunnel/",0)==0 || instance.family==mine_family;
                 result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,
-                    [&](float x,float y){return tunnel_part?route_height(x,y):height_natural(x,y);},
+                    [&](float x,float y){return on_rock?route_height(x,y):height_natural(x,y);},
                     plan.farm_kit && instance.family==farm_family));
             }else{
                 unsigned count=unsigned(asset.indices.size());

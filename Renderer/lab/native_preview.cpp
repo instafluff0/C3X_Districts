@@ -104,9 +104,11 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
                     tile.resource_id=100+index;tile.resource_class=0;
                     std::memcpy(tile.resource_name,entry+used,length);tile.resource_name[length]='\0';
                     // "Name|road" or "Name|rail" also lays that route; "|road" alone is a bare route tile.
+                    // "Name|mine" builds a mine on the resource's tile.
                     if(char* bar=std::strchr(tile.resource_name,'|')){
                         if(!std::strcmp(bar+1,"rail"))tile.road_mask=tile.railroad_mask=1;
                         else if(!std::strcmp(bar+1,"road"))tile.road_mask=1;
+                        else if(!std::strcmp(bar+1,"mine"))tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_MINE;
                         *bar='\0';
                         if(!tile.resource_name[0])tile.resource_id=-1;
                     }

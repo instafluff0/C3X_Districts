@@ -14,6 +14,9 @@ Cases:
 - oasis-roads: oases on desert crossed by a straight road, an L junction, a
   straight railroad and a crossroads, beside one without routes. Roster names
   ending in "|road" or "|rail" give that tile a route ("|road" alone: no resource).
+- mines: resources sharing their tile with a mine ("Name|mine"), on flat land,
+  hills and mountains; the mine stands beside an animal and among any other
+  resource's pieces, on a mountain at its foot.
 - mountain-water: mountain minerals where the mountain mesh eases its rise out,
   on mountains whose south corner meets the coast and on mountains with a river
   along their south-west edge (their minerals sit at that corner).
@@ -50,7 +53,13 @@ def native() -> dict:
 
 
 def cases() -> tuple[str, ...]:
-    return ("roster", "relief", "oasis-roads", "mountain-water") + tuple("native-" + name for name in native()["batches"])
+    return ("roster", "relief", "oasis-roads", "mountain-water", "mines") + tuple("native-" + name for name in native()["batches"])
+
+
+# mines: (raw offset, resource, terrain) of resources whose tile also has a mine.
+MINED = (((-6, -4), "Cattle", "Grassland"), ((-2, -4), "Horses", "Plains"), ((2, -4), "Wheat", "Grassland"),
+         ((-6, 2), "Gold", "Hills"), ((-2, 2), "Coal", "Hills"), ((2, 2), "Gems", "Mountains"),
+         ((6, 2), "Iron", "Mountains"))
 
 
 # mountain-water. Raw offsets of mountains whose south corner meets the coast row,
@@ -146,6 +155,8 @@ def placements(case: str) -> list[tuple[int, int, str, str]]:
         return [(x, y, "Oasis", "Desert") for x, y, name in oasis_roads() if name.startswith("Oasis")]
     if case == "mountain-water":
         return mountain_water()
+    if case == "mines":
+        return [(x, y, name, terrain) for (x, y), name, terrain in MINED]
     return [(x, y, m["civ3_name"], "Hills" if case == "relief" and y < WATER_EDGE else
              "Coast" if y >= WATER_EDGE else "Grassland") for x, y, m in layout()]
 
@@ -161,6 +172,8 @@ def terrain(case: str, dx: int, dy: int, base: int, real: int) -> tuple[int, int
         return 2, 2
     if case == "mountain-water" and any((x, y) == (dx, dy) for x, y, _, _ in mountain_water()):
         return TERRAIN["Mountains"]
+    if case == "mines":
+        return next((TERRAIN[terrain] for (x, y), _, terrain in MINED if (x, y) == (dx, dy)), (2, 2))
     if dy >= WATER_EDGE:
         return (11, 11) if dy < WATER_EDGE + 4 else (12, 12)
     if case == "relief" and any((dx, dy) == (x, y) for x, y, m in layout() if m["civ3_name"] not in WATER):
@@ -172,6 +185,8 @@ def spec(case: str) -> str:
     """Compact environment value consumed by the native Lab preview."""
     if case == "oasis-roads":
         return ";".join(f"{x},{y},{name}" for x, y, name in oasis_roads())
+    if case == "mines":
+        return ";".join(f"{x},{y},{name}|mine" for (x, y), name, _ in MINED)
     return ";".join(f"{x},{y},{name}" for x, y, name, _ in placements(case))
 
 

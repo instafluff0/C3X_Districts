@@ -4718,13 +4718,15 @@ public:
         }
     }
 
-    // An irrigated tile's resource parts as tile-local (u0,v0,u1,v1) boxes:
-    // its farm keeps that ground open. Animated animals turn and shift as
-    // they graze, so their boxes keep a wider yard.
-    std::vector<std::array<float,4>> farm_resource_boxes(c3x_renderer_tile_v1 const & tile) const {
+    // A tile's resource parts as tile-local (u0,v0,u1,v1) boxes: its farm keeps
+    // that ground open, and its mine stands beside the animals (`animals`: only
+    // those). Animated animals turn and shift as they graze, so their boxes
+    // keep a wider yard.
+    std::vector<std::array<float,4>> resource_boxes(c3x_renderer_tile_v1 const & tile, bool animals = false) const {
         std::vector<std::array<float,4>> boxes;
         int c=(tile.tile_x+tile.tile_y)/2,r=(tile.tile_x-tile.tile_y)/2;
         resource_footprint(tile,c,r,[&](float x0,float y0,float x1,float y1,bool animated){
+            if(animals && !animated)return;
             float grow=animated?.04f:0.f;
             boxes.push_back({x0-float(c)-grow,float(r)+1-y1-grow,x1-float(c)+grow,float(r)+1-y0+grow});});
         return boxes;
@@ -4791,7 +4793,9 @@ public:
             unsigned sites=site_assets_ready?near_tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP):0u;
             if(sites || (mine_assets_ready && (near_tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE))){
                 c3x_renderer::objects::Plan plan;
-                if(c3x_renderer::objects::select_improvements(near_tile,object_assets,ground_type(near_tile),sites,mine_assets_ready,false,plan))
+                if(c3x_renderer::objects::select_improvements(near_tile,object_assets,ground_type(near_tile),sites,mine_assets_ready,false,plan)){
+                    if(mine_assets_ready && (near_tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE))
+                        c3x_renderer::objects::settle_mine(plan,object_assets,near_tile,resource_boxes(near_tile,true));
                     for(auto const&instance:plan.instances){
                         auto const&assets=object_assets[instance.family].assets;
                         if(instance.asset>=assets.size())continue;
@@ -4802,6 +4806,7 @@ public:
                             x0=std::min(x0,x);x1=std::max(x1,x);y0=std::min(y0,y);y1=std::max(y1,y);}
                         if(x0<=x1)keep(x0,y0,x1,y1);
                     }
+                }
             }
             resource_footprint(near_tile,c,r,[&](float x0,float y0,float x1,float y1,bool animated){
                 keep(x0,y0,x1,y1,!animated);
@@ -10350,7 +10355,9 @@ public:
             input.routes_enabled=diagnostic_routes!=2;
 #endif
             if(farm_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION))
-                input.farm_resource=farm_resource_boxes(tile);
+                input.resource_boxes=resource_boxes(tile);
+            if(mine_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE))
+                input.animal_boxes=resource_boxes(tile,true);
             return input;
         };
         auto compile_objects=[&](auto const& input,auto& scratch,auto stop,bool bounded=false){
@@ -12233,8 +12240,10 @@ public:
                     C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS):0u;
                 if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags|ground_states,
                         mine_assets_ready,farm_assets_ready,plan))return false;
+                if(mine_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE))
+                    c3x_renderer::objects::settle_mine(plan,object_assets,tile,resource_boxes(tile,true));
                 if(farmed){
-                    c3x_renderer::objects::clear_farm(plan,routes,object_assets,farm_resource_boxes(tile));
+                    c3x_renderer::objects::clear_farm(plan,routes,object_assets,resource_boxes(tile));
                     c3x_renderer::objects::settle_farm_fields(plan,tile,object_assets,relief_at_world,
                         [&](int dx,int dy)->c3x_renderer_tile_v1 const*{
                             auto found=ground_observations.current(observed_coordinate_key(tile.tile_x+dx,tile.tile_y+dy));
@@ -12242,7 +12251,13 @@ public:
                     c3x_renderer::objects::settle_farm_props(plan,tile,object_assets,relief_at_world);
                 }
                 object_instances+=unsigned(plan.instances.size());object_routes+=unsigned(plan.routes.size());
-                c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,natural_height_at,object_output);
+                // A mine on a mountain stands on the drawn rock at its foot, as the
+                // resources around it do; on the natural ground the rock covered it.
+                bool mined_peak=(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE) &&
+                    (tile.real_terrain_type==6 || tile.real_terrain_type==10);
+                if(mined_peak)c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,
+                    resource_height_at,object_output);
+                else c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,natural_height_at,object_output);
                 adopt_objects(object_output);
             }
             QueryPerformanceCounter(&phase_end);feature_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;

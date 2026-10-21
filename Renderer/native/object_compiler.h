@@ -2057,6 +2057,54 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
     // Never substitute the retired procedural city or wall meshes.
     return true;
 }
+// A mine sharing its tile with an animal resource stands beside it, not inside
+// it: at the clear spot nearest its usual anchor, preferring ground in front of
+// the animal so the animal does not hide it. On a hill it stays near the crown
+// and on a mountain it slides only along the camera-facing foot, standing on
+// the drawn rock there (the callers seat it on the mountain's shape). `resource`
+// holds the animals' tile-local (u0,v0,u1,v1) boxes; any other resource keeps
+// the mine at its anchor, among its pieces. Where nothing within reach is
+// clear the mine takes the least crowded spot. Returns the mine's footprint
+// (u, v, radius) and height (tile units); radius 0 without a mine.
+inline std::array<float,4> settle_mine(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 const& tile,
+        std::vector<std::array<float,4>> const& resource){
+    float u=0,v=0,radius=0,height=0;bool found=false;
+    for(auto const& instance:plan.instances){
+        if(instance.family!=mine_family || instance.asset>=assets[mine_family].assets.size())continue;
+        if(!found){u=instance.u;v=instance.v;found=true;}
+        for(auto const& p:assets[mine_family].assets[instance.asset].vertices){
+            radius=std::max(radius,std::hypot(p.position[0],p.position[1])*instance.scale);
+            height=std::max(height,p.position[2]*instance.scale);
+        }
+    }
+    if(!found)return {0.f,0.f,0.f,0.f};
+    if(resource.empty())return {u,v,radius,height};
+    // Gap between the mine's circle and the nearest resource box; negative overlaps.
+    auto clearance=[&](float cu,float cv){
+        float gap=1e9f;
+        for(auto const& box:resource)gap=std::min(gap,std::hypot(std::max({box[0]-cu,0.f,cu-box[2]}),
+            std::max({box[1]-cv,0.f,cv-box[3]}))-radius);
+        return gap;
+    };
+    float front=0;   // the resource's mean u+v: larger u+v is nearer the camera
+    for(auto const& box:resource)front+=(box[0]+box[2]+box[1]+box[3])*.5f;
+    front/=float(resource.size());
+    bool peak=tile.real_terrain_type==6 || tile.real_terrain_type==10;
+    float reach=peak?.2f:tile.real_terrain_type==5?.22f:2.f;
+    constexpr float clear=.02f;
+    float margin=std::min(.45f,radius+.04f),best_u=u,best_v=v,best=-1e9f;
+    if(clearance(u,v)<clear)for(int i=0;i<=16;++i)for(int j=0;j<=16;++j){
+        float cu=margin+(1-2*margin)*float(i)/16.f,cv=margin+(1-2*margin)*float(j)/16.f;
+        if(std::hypot(cu-u,cv-v)>reach || (peak && std::abs(cu+cv-u-v)>.08f))continue;
+        float gap=clearance(cu,cv);
+        // Any clear spot beats every crowded one; among clear spots the nearest
+        // wins, and one behind the resource counts half a tile farther.
+        float score=gap>=clear?10.f-std::hypot(cu-u,cv-v)-(cu+cv<front?.5f:0.f):gap;
+        if(score>best){best=score;best_u=cu;best_v=cv;}
+    }
+    for(auto& instance:plan.instances)if(instance.family==mine_family){instance.u=best_u;instance.v=best_v;}
+    return {best_u,best_v,radius,height};
+}
 // The ground a farm kit keeps open on its tile: its drawn routes with a
 // verge, and its resource's parts (tile-local boxes from the caller). Each
 // tile draws its own routes up to its edges, so its own route plan suffices.

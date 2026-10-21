@@ -68,6 +68,77 @@ int main(){
 }
 ''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
 
+    def test_mine_stands_beside_animals(self):
+        # A mine and its tile's resource shared one anchor (a flat tile's centre, a
+        # mountain's camera-facing foot), so cattle stood inside the mine.
+        # settle_mine moves a mine beside an animal (the
+        # caller passes only animals' boxes), in front of it when it can; on a
+        # hill it keeps near the crown, on a mountain to the foot. Any other
+        # resource keeps the mine at its anchor, among its pieces.
+        run_cpp(r'''
+#include "Renderer/native/object_compiler.h"
+#include <cassert>
+#include <cmath>
+using namespace c3x_renderer;
+int main(){
+ std::array<FeatureBundle,objects::family_count> bundles;objects::Assets assets{};
+ for(unsigned f=0;f<bundles.size();++f)assets.bundles[f]=&bundles[f];
+ FeatureAsset building;building.id="mine_0:e1";
+ building.vertices={{{-.1f,0,0},{0,0,1},{0,0}},{{.1f,0,0},{0,0,1},{1,0}},{{0,.1f,.1f},{0,0,1},{0,1}}};
+ bundles[objects::mine_family].assets.push_back(building);
+ auto mined=[&](float anchor,float scale){objects::Plan plan;
+  for(unsigned part=0;part<2;++part)plan.instances.push_back({objects::mine_family,0,objects::mine_layer,anchor,anchor,.1f,scale,21.f,.0235f,part==0});
+  return plan;};
+ auto gap=[](std::array<float,4> m,std::array<float,4> b){
+  return std::hypot(std::max({b[0]-m[0],0.f,m[0]-b[2]}),std::max({b[1]-m[1],0.f,m[1]-b[3]}))-m[2];};
+ c3x_renderer_tile_v1 tile{};tile.real_terrain_type=2;
+ // No animal: the mine keeps its anchor (any other resource it stands on).
+ auto plan=mined(.5f,2.f);auto alone=objects::settle_mine(plan,assets,tile,{});
+ assert(alone[0]==.5f && alone[1]==.5f && std::abs(alone[2]-.2f)<1e-6f && std::abs(alone[3]-.2f)<1e-6f);
+ // Cattle grazing at the centre: the mine stands clear of them, in front, inside the tile.
+ std::array<float,4> cattle{.42f,.42f,.58f,.58f};
+ plan=mined(.5f,2.f);auto beside=objects::settle_mine(plan,assets,tile,{cattle});
+ assert(gap(beside,cattle)>=.02f && beside[0]+beside[1]>1.f);
+ for(float c:{beside[0],beside[1]})assert(c>=beside[2] && c<=1-beside[2]);
+ for(auto const& part:plan.instances)assert(part.u==beside[0] && part.v==beside[1]);
+ // An animal on a hill: the mine stays near the crown.
+ tile.real_terrain_type=5;
+ plan=mined(.5f,1.8f);auto crown=objects::settle_mine(plan,assets,tile,{cattle});
+ assert(std::hypot(crown[0]-.5f,crown[1]-.5f)<=.22f+1e-4f && crown[0]+crown[1]>1.f);
+ // Minerals on a mountain foot: the mine keeps its anchor, among them.
+ tile.real_terrain_type=6;
+ plan=mined(.78f,1.5f);auto foot=objects::settle_mine(plan,assets,tile,{});
+ assert(foot[0]==.78f && foot[1]==.78f);
+}
+''')
+
+    def test_every_mine_caller_settles_beside_animals_only(self):
+        # Tile compile, Renderer64 object preparation and the forest clearing
+        # around it must agree on one spot.
+        renderer = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        preparation = (ROOT / "Renderer/native/object_preparation.h").read_text()
+        self.assertEqual(renderer.count("settle_mine("), 2)
+        self.assertEqual(renderer.count("resource_boxes(tile,true)") + renderer.count("resource_boxes(tile, true)") +
+                         renderer.count("resource_boxes(near_tile,true)"), 3)
+        self.assertIn("input.animal_boxes=resource_boxes(tile,true);", renderer)
+        self.assertIn("settle_mine(plan,assets,tile,input.animal_boxes);", preparation)
+
+    def test_mountain_mine_stands_on_the_drawn_rock(self):
+        # Mines were seated on the natural ground; at a mountain's camera-facing
+        # foot the drawn rock rises over it, so the mine vanished inside the
+        # mountain. Both object paths now seat it on the mountain's shape, as
+        # resources and routes are: Renderer64's rigid mines on route_height
+        # (whose shape is built for mine tiles) and the tile compiler's
+        # mountain mine plan on resource_height_at.
+        preparation = (ROOT / "Renderer/native/object_preparation.h").read_text()
+        renderer = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        self.assertIn("(input.mine_ready && (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE)))",
+                      preparation)
+        self.assertIn('bool on_rock=asset.id.rfind("route/tunnel/",0)==0 || instance.family==mine_family;', preparation)
+        self.assertIn("return on_rock?route_height(x,y):height_natural(x,y);", preparation)
+        self.assertIn("if(mined_peak)c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,\n"
+                      "                    resource_height_at,object_output);", renderer)
+
     @unittest.skipUnless((PACK / "manifest.json").is_file(), "local ImprovementsNormalized pack absent")
     def test_runtime_holds_the_chosen_building_for_every_era(self):
         from Renderer.tools.asset_compiler import build_mine_runtime as mine

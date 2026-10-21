@@ -16,6 +16,12 @@ unreplaced resources keep Civ III's sprite in game but are blank in Lab.
 `mountain-water` puts Gems, Gold and Iron on mountains whose south corner
 meets the coast and on mountains with a river along that edge, where the
 mountain mesh eases its rise out; their pieces must sit on the drawn ground.
+`mines` puts a mine (roster syntax `Name|mine`) on resource tiles. A mine
+stands beside an animal (`objects::settle_mine`): it takes the nearest ground
+clear of it, in front of it when it can, near the crown on a hill and along
+the camera-facing foot on a mountain, on the drawn rock. On any other
+resource the mine keeps its anchor among the resource's pieces, which may
+hide part of it.
 `python3 Renderer/lab/studies/resources/audit.py --label NAME` renders every case at
 128 and 256 and writes per-resource crops beside the original Civ III sprite to
 `Renderer/lab/out/resources/audit/NAME/index.html`.
