@@ -54,11 +54,22 @@ Version-5 runtime support (gated: earlier packs decode and render unchanged,
 verified pixel-identical):
 
 - `site_keeps` drops a marked body whose footprint reaches water or a
-  mountain, comes within 10 source pixels of a river centreline, sits within
-  the shore clearance or spans more than the composition's relief range.
+  mountain, comes within the river clearance (`clearance[3]` source pixels of
+  a river centreline: 4 in version 5, inside the drawn bank), sits within the
+  shore clearance or spans more than the composition's relief range.
   Bridges stand over channels, so they stay clear too. Forest clearing uses the
-  same test, so trees close in where a body yielded;
+  same site layout, so trees close in where a body yielded;
 - the ground plate fades out over water, mountains and river channels;
+- version 6 (the production default since 2026-10-21, user-accepted; same
+  wire layout; `--version 5` rebuilds the earlier pack) sets
+  the river clearance from `style.json` `site.river_pixels` (10: past the drawn
+  water and bank) and lets yielded buildings and accents move
+  (`SiteFilter::layout`): each takes the nearest free spot that passes the
+  same site test within 0.2 tile beyond the authored reach, on the city's own
+  bank before a nearer one across the river; trees under a moved body give
+  way. The plate ends at the river clearance, plate left under a vacated spot
+  goes, and a moved body brings its own plate patch. Version-5 packs keep
+  their layout and plate exactly;
 - the library's `look` (gain, contrast, saturation; zero is the identity) is
   applied to lit city bodies in `city_scene_material.hlsl`, with a highlight
   shoulder so whitewash and glass keep detail, damping on pale albedo
@@ -104,7 +115,7 @@ cases' culture, and `C3X_LAB_EFFECT_TIME` pins the effect clock
 `Renderer/lab/out/city-study/`.
 
 Tests: `Renderer.native.test_city_site` (site filter, plate fade, light owner
-indices, legacy packs; mutation-checked) and
+indices, version-6 moves and plate, legacy packs; mutation-checked) and
 `Renderer.lab.studies.city_readability.test_recompose` (no new collisions,
 bounds, flags, codec round trip); `test_city_site` also covers effect quads
 and v5 decode of look, flags and effects.

@@ -1,5 +1,6 @@
 """Version-five city packs: site-optional bodies and ground plates yield to rivers,
-water, mountains and steep relief; earlier packs keep every authored body."""
+water, mountains and steep relief, and a yielded body moves to a legal spot;
+earlier packs keep every authored body."""
 import unittest
 
 from Renderer.native.native_cpp_test import run_cpp
@@ -63,6 +64,18 @@ int main(){
  assert(lit.lights.size()==1 && lit.blockers.size()==1 && lit.lights[0].owner==0.f);
  // The plate fades over the channel but stays under the core.
  assert(plate_at(wet,0)>.99f && plate_at(wet,1)<.01f);
+ // Version six moves it, its light and its blocker to the city's own bank,
+ // clear of the 10-pixel river clearance.
+ library.compositions[0].site_moves=true;
+ city_fidelity::Surfaces moved;
+ assert(city_fidelity::compile(library,c,10,12,flat,projection,moved,city_fidelity::ContinueCompilation{},true,
+   city_fidelity::site_filter(c,10,12,land,shore,river,flat)));
+ assert(count_bodies(moved)==2);
+ auto const& relit=*moved.chunks.front().lighting;
+ assert(relit.lights.size()==2 && relit.blockers.size()==2 && relit.lights[1].owner==1.f);
+ assert(relit.blockers[1].high[0]<=11.1f-10.f/64.f && relit.blockers[1].low[0]>10.56f);
+ assert(plate_at(moved,0)>.99f && plate_at(moved,1)<.01f);
+ library.compositions[0].site_moves=false;
  // A dry site keeps the outskirt and the full plate.
  city_fidelity::Surfaces dry_site;
  assert(city_fidelity::compile(library,c,10,12,flat,projection,dry_site,city_fidelity::ContinueCompilation{},true,
@@ -91,6 +104,89 @@ int main(){
  std::puts("PASS city site filter: bodies, lights, blockers and plate yield; legacy unchanged");
 }
 ''')
+
+    def test_yielded_bodies_move_and_leave_no_plate_behind(self):
+        run_cpp(r"""
+#include "Renderer/native/city_fidelity/compiler.h"
+#include "Renderer/lab/shared/natural/ground.h"
+#include <cassert>
+#include <cstdio>
+using namespace c3x_renderer;
+int main(){
+ city_fidelity::Library library;library.materials.resize(2);
+ library.materials[0].channels=4;library.materials[1].channels=4;library.materials[1].ground=1;
+ city_fidelity::Model model;model.high[2]=.3f;city_fidelity::Part part;city_fidelity::Vertex vertex{};
+ vertex.normal[2]=1;part.vertices={vertex,vertex,vertex};part.vertices[1].position[0]=.05f;
+ part.vertices[2].position[1]=.05f;part.indices={0,1,2};model.parts.push_back(part);library.models.push_back(model);
+ // An unmarked core at the tile centre and a marked outskirt at x 11.04-11.16.
+ city_fidelity::Composition city;city.clearance[0]=.04f;city.clearance[1]=24;city.clearance[3]=10;
+ city_fidelity::Instance body;body.scale=1;body.bounds[0]=body.bounds[1]=-.06f;body.bounds[2]=body.bounds[3]=.06f;
+ city.instances.push_back(body);body.offset[0]=.6f;body.flags=city_fidelity::instance_site_optional;
+ city.instances.push_back(body);city.site_aware=city.site_moves=true;
+ // Plate vertices: by the core, and beyond the outskirt (x 11.2).
+ city.paving.material=1;city.paving.period[0]=city.paving.period[1]=.45f;
+ city.paving.vertices={{-.1f,0,1},{.7f,0,1},{0,.1f,1}};city.paving.indices={0,1,2};
+ library.compositions.push_back(city);auto const& c=library.compositions[0];
+ struct Land{int base=2,real=2;};struct Shore{double distance=100;};
+ auto land=[](int,int){return Land{};};auto shore=[](float,float){return Shore{};};
+ auto flat=[](float,float){return 2.5f;};auto dry=[](float,float){return 1000.;};
+ fidelity::GroundProjection projection{10,12,64,32,1,480};
+ auto plate=[](city_fidelity::Surfaces const& s){
+  for(auto const& chunk:s.chunks)if(chunk.terrain_conforming && !chunk.effect)return &chunk;return (city_fidelity::Chunk const*)nullptr;};
+ // A steep bank at x 11.0-11.2 only: the outskirt yields there and moves
+ // beside the core; the plate it left beyond the bank goes with it.
+ auto bank=[](float x,float){return x>11.f && x<11.2f?2.5f+(x-11.f)*400.f:2.5f;};
+ auto site=city_fidelity::site_filter(c,10,12,land,shore,dry,bank);
+ auto const& layout=site.layout(c);
+ assert(layout.size()==2 && !layout[0].moved && layout[1].moved && layout[1].index==1);
+ assert(layout[1].offset[0]<.6f && layout[1].offset[0]-.06f>.06f);
+ assert(city_fidelity::site_keeps(c,c.instances[1],10,12,land,shore,dry,bank,layout[1].offset));
+ assert(site.ground(10.4f,12.5f)>.99f && site.ground(11.2f,12.5f)<.01f);
+ city_fidelity::Surfaces steep;
+ assert(city_fidelity::compile(library,c,10,12,bank,projection,steep,city_fidelity::ContinueCompilation{},true,site));
+ auto const* moved_plate=plate(steep);
+ // The moved body brings its own plate, opaque at its centre.
+ assert(moved_plate && moved_plate->vertices.size()>3 && moved_plate->indices.size()>3);
+ float centre=0;
+ for(auto const& v:moved_plate->vertices)
+  if(std::abs(v.world_x-(10.5f+layout[1].offset[0]))<.011f && std::abs(v.world_y-12.5f)<.011f)centre=std::max(centre,v.base_terrain-62.f);
+ assert(centre>.99f);
+ // A river between the core and the outskirt: a spot across it is nearer,
+ // but the city's own bank wins.
+ auto between=[](float x,float){return double(std::abs(x-10.95f)*64.f);};
+ auto banks=city_fidelity::site_filter(c,10,12,land,shore,between,flat);
+ auto const& own=banks.layout(c);
+ assert(own.size()==2 && own[1].moved && 10.5f+own[1].offset[0]+.06f<=10.95f-10.f/64.f);
+ // Across is the fallback when the own bank has no legal spot.
+ auto tight=[](float x,float){return double(std::abs(x-10.9f)*64.f);};
+ auto cliff=[](float x,float){return x<10.8f?x*400.f:2.5f;};
+ auto cross=city_fidelity::site_filter(c,10,12,land,shore,tight,cliff);
+ auto const& far=cross.layout(c);
+ assert(far.size()==2 && far[1].moved && 10.5f+far[1].offset[0]-.06f>=10.9f+10.f/64.f);
+ // No legal spot: the body stays out and its plate goes too.
+ auto everywhere=[](float,float){return 0.;};
+ auto none=city_fidelity::site_filter(c,10,12,land,shore,everywhere,flat);
+ assert(none.layout(c).size()==1 && none.ground(11.2f,12.5f)<.01f);
+ // A planted tree under a moved body gives way.
+ auto& t=library.compositions[0];city_fidelity::Instance tree=t.instances[1];
+ tree.flags=city_fidelity::instance_site_optional|city_fidelity::instance_tree;
+ tree.offset[0]=layout[1].offset[0];tree.offset[1]=layout[1].offset[1];t.instances.push_back(tree);
+ auto planted=city_fidelity::site_filter(t,10,12,land,shore,dry,bank);
+ for(auto const& b:planted.layout(t))assert(b.index!=2);
+ // The plate keeps clear of the river: none at the body clearance, all of
+ // it six pixels further out.
+ auto near=[](float x,float){return double(std::abs(x-11.f)*64.f);};
+ assert(city_fidelity::site_ground(c,11.f-10.f/64.f,12.5f,land,shore,near)<.001f);
+ assert(city_fidelity::site_ground(c,11.f-16.f/64.f,12.5f,land,shore,near)>.999f);
+ // Version five keeps its layout and plate: the yielded body stays out,
+ // the plate it left stays, and the plate reaches two pixels nearer.
+ library.compositions[0].site_moves=false;library.compositions[0].instances.pop_back();
+ auto v5=city_fidelity::site_filter(c,10,12,land,shore,dry,bank);
+ assert(v5.layout(c).size()==1 && v5.ground(11.2f,12.5f)>.99f);
+ assert(city_fidelity::site_ground(c,11.f-10.f/64.f,12.5f,land,shore,near)>.25f);
+ std::puts("PASS city site layout: moved bodies keep the count on their own bank, plate follows them");
+}
+""")
 
     def test_attached_effects_become_upright_quads_with_their_bodies(self):
         run_cpp(r'''
@@ -134,14 +230,22 @@ int main(){
   assert(v[2].world_z>v[1].world_z && v[2].world_x==v[1].world_x && v[2].world_y==v[1].world_y);
   assert(v[0].macro_v>0 && v[0].relief_owner_u>0);
  }
- // A marked body that yields to a river takes its night light with it.
- auto river=[](float x,float){return double(std::abs(x-11.1f)*64.f);};
+ // A marked body that yields to a river takes its night light with it; one
+ // that moves to its own bank carries the light there.
  struct Land{int base=2,real=2;};struct Shore{double distance=100;};
  auto land=[](int,int){return Land{};};auto shore=[](float,float){return Shore{};};
+ auto lake=[](int column,int){Land l;if(column!=10)l.base=12;return l;};
+ auto river=[](float x,float){return double(std::abs(x-11.1f)*64.f);};
+ auto everywhere=[](float,float){return 0.;};
  city_fidelity::Surfaces wet;assert(city_fidelity::compile(library,library.compositions[0],10,12,flat,projection,wet,
-   city_fidelity::ContinueCompilation{},false,city_fidelity::site_filter(library.compositions[0],10,12,land,shore,river,flat)));
+   city_fidelity::ContinueCompilation{},false,city_fidelity::site_filter(library.compositions[0],10,12,land,shore,everywhere,flat)));
  auto const* w=effect_chunk(wet);assert(w && w->vertices.size()==12);
  for(auto const& v:w->vertices)assert(v.base_terrain<91.5f);
+ library.compositions[0].site_moves=true;
+ city_fidelity::Surfaces moved;assert(city_fidelity::compile(library,library.compositions[0],10,12,flat,projection,moved,
+   city_fidelity::ContinueCompilation{},false,city_fidelity::site_filter(library.compositions[0],10,12,land,shore,river,flat)));
+ auto const* m=effect_chunk(moved);assert(m && m->vertices.size()==18);
+ for(auto const& v:m->vertices)if(v.base_terrain>91.5f)assert(v.world_x<11.1f-10.f/64.f);
  // An active volcano's plume: one quad rising from just above its crater,
  // kind 93, thickened (strength 1.6) by an eruption; none without the material.
  city_fidelity::Surfaces plume;
@@ -188,7 +292,13 @@ int main(){
  Library four;assert(four.decode(pack(false,0)));
  assert(four.look[0]==0 && four.compositions[0].instances[0].flags==0 && !four.compositions[0].site_aware);
  Library bad;assert(!bad.decode(pack(true,9.f)));
- std::puts("PASS version-five city decode: look and flags; version four unchanged");
+ // Version six shares the wire layout; only it lets yielded bodies move.
+ assert(!five.compositions[0].site_moves);
+ auto bytes=pack(true,.5f);bytes[7]='6';
+ Library six;assert(six.decode(bytes) && six.compositions[0].site_aware && six.compositions[0].site_moves);
+ assert(six.compositions[0].instances[0].effects.size()==1 && six.look[0]==.5f);
+ bytes[7]='7';Library seven;assert(!seven.decode(bytes));
+ std::puts("PASS version-five city decode: look and flags; version four unchanged; version six moves");
 }
 ''')
 

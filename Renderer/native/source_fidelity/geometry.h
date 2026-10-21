@@ -75,15 +75,17 @@ if(fidelity_profile) {
             auto it=ground_observations.current(observed_coordinate_key(c+r,c-r));if(!it)continue;
             auto const&city=it->occurrence;if(city.city_id<0)continue;
             if(auto composition=selected_city(city,c,r)){
-                for(auto const&i:composition->instances){
-                    BuildingBounds b={float(c)+.5f+i.offset[0]+i.bounds[0],float(r)+.5f-i.offset[1]-i.bounds[3],
-                        float(c)+.5f+i.offset[0]+i.bounds[2],float(r)+.5f-i.offset[1]-i.bounds[1]};
-                    // Only bodies reaching this tile's canopy can clip a tree; a
-                    // body that yielded to its site lets the stand close in.
+                // The city's site layout: a body that yielded lets the stand
+                // close in, and one moved elsewhere clears its new spot.
+                auto site=c3x_renderer::city_fidelity::site_filter(*composition,c,r,world_lookup,shore_sample_at,
+                    [&](float x,float y){return natural.river_sample({x,y}).distance;},height_natural);
+                for(auto const&body:site.layout(*composition)){
+                    auto const&i=composition->instances[body.index];
+                    BuildingBounds b={float(c)+.5f+body.offset[0]+i.bounds[0],float(r)+.5f-body.offset[1]-i.bounds[3],
+                        float(c)+.5f+body.offset[0]+i.bounds[2],float(r)+.5f-body.offset[1]-i.bounds[1]};
+                    // Only bodies reaching this tile's canopy can clip a tree.
                     if(b.x1<float(nc)-1.f || b.x0>float(nc)+2.f || b.y1<float(nr)-1.f || b.y0>float(nr)+2.f)continue;
-                    if(c3x_renderer::city_fidelity::site_keeps(*composition,i,c,r,world_lookup,shore_sample_at,
-                            [&](float x,float y){return natural.river_sample({x,y}).distance;},height_natural))
-                        buildings.push_back(b);
+                    buildings.push_back(b);
                 }
                 continue;
             }

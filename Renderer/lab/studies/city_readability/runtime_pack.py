@@ -5,7 +5,8 @@ offline recipe pipeline; its normalized source intakes are no longer needed to
 revise compositions. This codec keeps model geometry as opaque wire bytes and
 exposes materials, model bounds/hulls and composition placements for Lab
 recomposition. Version 5 adds the Lab readability fields described in
-README.md; versions 2-4 decode unchanged.
+README.md; version 6 has the same wire layout and lets yielded bodies move
+(city_fidelity::SiteFilter); versions 2-4 decode unchanged.
 """
 from __future__ import annotations
 
@@ -48,7 +49,7 @@ class Reader:
 def decode(path: Path) -> dict:
     data = Path(path).read_bytes()
     magic = data[:8]
-    if magic not in (b"C3XCITY2", b"C3XCITY3", b"C3XCITY4", b"C3XCITY5"):
+    if magic not in (b"C3XCITY2", b"C3XCITY3", b"C3XCITY4", b"C3XCITY5", b"C3XCITY6"):
         raise ValueError("not a city library")
     version = magic[7] - ord("0")
     r = Reader(data)
@@ -118,8 +119,8 @@ def decode(path: Path) -> dict:
 
 
 def encode(library: dict, version: int = 5) -> bytes:
-    if version not in (4, 5):
-        raise ValueError("Lab recomposition writes version 4 or 5")
+    if version not in (4, 5, 6):
+        raise ValueError("Lab recomposition writes version 4, 5 or 6")
     out = bytearray(f"C3XCITY{version}".encode())
 
     def u32(value):

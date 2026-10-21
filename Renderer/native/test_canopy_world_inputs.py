@@ -30,8 +30,15 @@ struct Bundle {std::vector<Asset> assets;};
 namespace c3x_renderer {
 Group const* find_feature_group(Bundle const&,char const*){return nullptr;}
 float stable_random(unsigned){return 0;}
-// These instances carry no site-optional flag, which production always keeps.
-namespace city_fidelity {template<class... Queries> bool site_keeps(Composition const&,Instance const&,int,int,Queries...){return true;}}
+// These instances carry no site-optional flag, which production always keeps
+// at their authored offsets.
+namespace city_fidelity {
+struct SiteBody {unsigned index;float offset[2];bool moved;};
+struct Site {std::vector<SiteBody> layout(Composition const& c)const{
+ std::vector<SiteBody> bodies;for(unsigned i=0;i<c.instances.size();++i)bodies.push_back({i,{c.instances[i].offset[0],c.instances[i].offset[1]},false});
+ return bodies;}};
+template<class... Queries> Site site_filter(Composition const&,int,int,Queries...){return {};}
+}
 }
 int main(){
  CapturedScene scene;auto& topology_cache=scene;

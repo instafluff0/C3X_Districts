@@ -53,6 +53,9 @@ struct Composition {
     unsigned culture=0,era=0,size=0,capital=0,environment=0;
     unsigned variant=0,walled=0,owns_walls=0,anchor_layout=0;
     bool site_aware=false; // any body carries instance_site_optional
+    // Version six: a yielded body moves to a legal spot, and the plate keeps
+    // to the bodies standing and clear of the river clearance.
+    bool site_moves=false;
     std::string authority;
     float clearance[4]={}; // dry shore, height range, vegetation margin, river pixels
     std::vector<Instance> instances;
@@ -164,8 +167,9 @@ struct Library {
         // usable library or cause native city suppression.
         if(bytes.size()<20 || bytes.size()>128u*1024u*1024u ||
             (std::memcmp(bytes.data(),"C3XCITY2",8) && std::memcmp(bytes.data(),"C3XCITY3",8) &&
-             std::memcmp(bytes.data(),"C3XCITY4",8) && std::memcmp(bytes.data(),"C3XCITY5",8)))return false;
-        bool with_foundations=bytes[7]>='3',with_variants=bytes[7]>='4',with_flags=bytes[7]=='5';
+             std::memcmp(bytes.data(),"C3XCITY4",8) && std::memcmp(bytes.data(),"C3XCITY5",8) &&
+             std::memcmp(bytes.data(),"C3XCITY6",8)))return false;
+        bool with_foundations=bytes[7]>='3',with_variants=bytes[7]>='4',with_flags=bytes[7]>='5';
         Library next;Reader r{bytes};
         unsigned nm=r.number(1024),nb=r.number(1024),nt=r.number(1024);
         if(!r.valid || !nm || !nb || !nt)return false;
@@ -206,6 +210,7 @@ struct Library {
                 if(!r.floats(&i.scale,1) || !r.floats(&i.yaw,1) || !r.floats(i.offset,2) || !r.floats(i.bounds,4))return false;
                 if(with_flags)i.flags=r.number(7);
                 t.site_aware=t.site_aware || (i.flags&instance_site_optional)!=0;
+                t.site_moves=t.site_aware && bytes[7]>='6';
                 if(i.scale<=0 || i.scale>100 || i.bounds[0]>=i.bounds[2] || i.bounds[1]>=i.bounds[3] || !r.records(i.lights,4))return false;
                 for(auto const&l:i.lights)if(l.range<=0 || l.range>1 || l.intensity<0)return false;
                 if(with_flags){

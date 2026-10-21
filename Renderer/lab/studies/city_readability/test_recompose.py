@@ -105,6 +105,10 @@ class RecomposeTests(unittest.TestCase):
         self.assertEqual(decoded["version"], 5)
         self.assertEqual(decoded["look"][:2], [.5, .25])
         self.assertEqual(decoded["templates"][0]["instances"][0]["flags"], rp.SITE_OPTIONAL | rp.TREE)
+        # Version six (yielded bodies move) changes only the magic.
+        six = rp.encode(library, 6)
+        self.assertEqual(six[:8], b"C3XCITY6")
+        self.assertEqual(six[8:], data[8:])
 
     def test_never_targets_the_production_pack(self):
         with self.assertRaises(ValueError):

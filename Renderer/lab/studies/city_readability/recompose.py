@@ -13,7 +13,8 @@ placement data in a separate candidate pack:
   Industrial/Modern settlements, replacing the plots they cover;
 - adds a crisp ground plate under buildings and lanes, from an era paving
   texture made tileable offline; and
-- marks bodies that may yield to a river, water or steep site (version 5).
+- marks bodies that may yield to a river, water or steep site (version 5);
+  version 6 (the default) lets them move to a legal spot instead.
 
 Input is the frozen pre-readability library, Renderer/packs/CityCompositionFrozen
 (the last pack the retired recipe builder made; its intermediates no longer
@@ -887,7 +888,7 @@ class Composer:
                                    "instances": len(instances)}
 
 
-def build(out: Path = OUT, version: int = 5, only=None, return_inputs=False):
+def build(out: Path = OUT, version: int = 6, only=None, return_inputs=False):
     style = json.loads(STYLE.read_text())
     here = Path(__file__).resolve()
     read = {here, here.with_name("runtime_pack.py"), here.with_name("extract_sockets.py"), STYLE.resolve(),
@@ -983,6 +984,10 @@ def build(out: Path = OUT, version: int = 5, only=None, return_inputs=False):
         template["instances"] = instances
         template["paving"] = paving
         template["authority"] = template["authority"].replace("lab-fixed-", "lab-readable-")
+        # Version-six bodies and plate keep this many source pixels from a
+        # river centreline: clear of the drawn water and its bank.
+        if version >= 6 and "site" in style:
+            template["clearance"][3] = float(style["site"]["river_pixels"])
         report.append({"template": index, "seed": seed, **stats, "paving_vertices": len(paving["vertices"])})
     library["look"] = style.get("look", [0.0] * rp.LOOK_FIELDS)
     data = rp.encode(library, version)
@@ -1018,7 +1023,7 @@ def declared_sources() -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", type=Path, default=OUT)
-    parser.add_argument("--version", type=int, default=5, choices=(4, 5))
+    parser.add_argument("--version", type=int, default=6, choices=(4, 5, 6))
     parser.add_argument("--ground", action="store_true", help="remake the era ground texture cache first")
     args = parser.parse_args()
     if args.ground:

@@ -2,6 +2,7 @@
 #include "runtime.h"
 #include "../c3x_renderer_api.h"
 #include "../../lab/shared/natural/vertex.h"
+#include <array>
 #include <memory>
 namespace c3x_renderer { namespace city_fidelity {
 // Stable composition selection and CPU output, without a renderer/GPU owner.
@@ -87,11 +88,13 @@ Composition const* select(Library const& library,c3x_renderer_tile_v1 const& rec
 // centreline, within clearance[0] tiles of the shore, or spans more than
 // clearance[1] relief units. Bridges stand over river channels, so the river
 // clearance also keeps them open. Unflagged bodies are always kept.
+// `offset` tests the body at another offset than its authored one.
 template<class World,class Shore,class River,class Height>
 bool site_keeps(Composition const& composition,Instance const& i,int nc,int nr,
-        World world_lookup,Shore shore_sample_at,River river_distance,Height height_natural){
+        World world_lookup,Shore shore_sample_at,River river_distance,Height height_natural,float const* offset=nullptr){
     if(!(i.flags&instance_site_optional))return true;
-    float cx=float(nc)+.5f+i.offset[0],cy=float(nr)+.5f-i.offset[1];
+    if(!offset)offset=i.offset;
+    float cx=float(nc)+.5f+offset[0],cy=float(nr)+.5f-offset[1];
     float x0=cx+i.bounds[0],x1=cx+i.bounds[2],y0=cy-i.bounds[3],y1=cy-i.bounds[1];
     for(int row=int(std::floor(y0));row<=int(std::floor(y1));++row)
         for(int column=int(std::floor(x0));column<=int(std::floor(x1));++column){
@@ -111,6 +114,7 @@ bool site_keeps(Composition const& composition,Instance const& i,int nc,int nr,
 }
 // The ground plate of a site-aware composition fades out over water and
 // mountain tiles and toward the same shore and river clearances as its bodies.
+// From version six no plate lies nearer a river than a body may stand.
 template<class World,class Shore,class River>
 float site_ground(Composition const& composition,float x,float y,World world_lookup,Shore shore_sample_at,River river_distance){
     auto land=world_lookup(int(std::floor(x)),int(std::floor(y)));
@@ -119,36 +123,165 @@ float site_ground(Composition const& composition,float x,float y,World world_loo
         float t=std::clamp((value-low)/(high-low),0.f,1.f);return t*t*(3.f-2.f*t);};
     float shore=float(shore_sample_at(x,y).distance);
     float coverage=ramp(shore,composition.clearance[0],composition.clearance[0]+.06f);
+    float river=composition.clearance[3]-(composition.site_moves?0.f:2.f);
     if(composition.clearance[3]>0)
-        coverage=std::min(coverage,ramp(float(river_distance(x,y)),composition.clearance[3]-2.f,composition.clearance[3]+4.f));
+        coverage=std::min(coverage,ramp(float(river_distance(x,y)),river,river+6.f));
     return coverage;
 }
 struct ContinueCompilation {bool operator()()const{return false;}};
+// A body where its site puts it: the instance and its offset in tiles. A
+// moved body left its authored offset for a legal one.
+struct SiteBody {unsigned index;float offset[2];bool moved;};
 // Packs before version five carry no site flags: every body and the complete
 // ground plate are kept.
 struct EverySite {
-    bool keep(Instance const&)const{return true;}
+    std::vector<SiteBody> layout(Composition const& composition)const{
+        std::vector<SiteBody> bodies;
+        for(unsigned index=0;index<composition.instances.size();++index)
+            bodies.push_back({index,{composition.instances[index].offset[0],composition.instances[index].offset[1]},false});
+        return bodies;
+    }
     float ground(float,float)const{return 1.f;}
 };
+// Offset-space boxes: x is the column offset, y the authored (row-up) offset.
+inline float site_box_distance(std::array<float,4> const& b,float x,float y){
+    return std::hypot(std::max({b[0]-x,0.f,x-b[2]}),std::max({b[1]-y,0.f,y-b[3]}));
+}
 template<class World,class Shore,class River,class Height>
 struct SiteFilter {
     Composition const& composition;int nc,nr;World world;Shore shore;River river;Height height;
     // Most sites have no water or mountain within reach of the plate: one
     // centre/neighbour test then spares a query per plate vertex.
     mutable int clear=-1;
-    bool keep(Instance const& i)const{return site_keeps(composition,i,nc,nr,world,shore,river,height);}
+    mutable bool laid=false;
+    mutable std::vector<SiteBody> bodies;
+    // Plate owners: bodies standing (kept or moved) and spots left empty.
+    mutable std::vector<std::array<float,4>> standing,vacated;
+    // Version six: a building or accent that yields moves to the nearest
+    // free spot that passes the same site test, within 0.2 tile beyond the
+    // authored reach, so a city by a river or a coast keeps its count of
+    // buildings. A spot on the city's own bank wins over a nearer one across
+    // the river. Trees under a moved body give way. A body with no such spot
+    // stays out, as every yielded body does in earlier packs.
+    std::vector<SiteBody> const& layout(Composition const&)const{
+        if(laid)return bodies;
+        laid=true;
+        auto const& c=composition;
+        auto box=[](Instance const& i,float x,float y){
+            return std::array<float,4>{x+i.bounds[0],y+i.bounds[1],x+i.bounds[2],y+i.bounds[3]};};
+        auto reach=[](std::array<float,4> const& b){
+            float r=0;
+            for(float x:{b[0],b[2]})for(float y:{b[1],b[3]})
+                r=std::max(r,std::pow(std::pow(std::abs(x),6.f)+std::pow(std::abs(y),6.f),1.f/6.f));
+            return r;};
+        std::vector<char> kept(c.instances.size(),1);
+        std::vector<unsigned> yielded;
+        float limit=0;
+        for(unsigned index=0;index<c.instances.size();++index){
+            auto const& i=c.instances[index];
+            bool tree=(i.flags&instance_tree)!=0;
+            auto b=box(i,i.offset[0],i.offset[1]);
+            if(!tree)limit=std::max(limit,reach(b));
+            if(!c.site_aware || site_keeps(c,i,nc,nr,world,shore,river,height)){
+                if(!tree)standing.push_back(b);
+                continue;
+            }
+            kept[index]=0;
+            if(!tree){vacated.push_back(b);yielded.push_back(index);}
+        }
+        limit+=.2f;
+        constexpr float step=.03f,radius=.8f,gap=.006f;
+        constexpr int span=int(radius/step);
+        std::vector<std::pair<float,int>> order;
+        std::vector<SiteBody> moved;
+        unsigned tests=0;
+        if(!c.site_moves)yielded.clear();
+        for(unsigned index:yielded){
+            auto const& i=c.instances[index];
+            order.clear();
+            for(int gy=-span;gy<=span;++gy)for(int gx=-span;gx<=span;++gx){
+                float dx=float(gx)*step,dy=float(gy)*step,d=std::hypot(dx,dy);
+                // Nearest to the authored spot, then nearer the city centre.
+                if(d>0 && d<=radius)order.push_back({d+.35f*std::hypot(i.offset[0]+dx,i.offset[1]+dy),
+                    (gy+span)*(2*span+1)+gx+span});
+            }
+            std::sort(order.begin(),order.end());
+            // found: 0 no spot yet, 1 one across a river, 2 one on the own bank.
+            unsigned own_tests=0,skipped=0,found=0;float spot[2]={};
+            for(auto const& candidate:order){
+                float x=i.offset[0]+float(candidate.second%(2*span+1)-span)*step;
+                float y=i.offset[1]+float(candidate.second/(2*span+1)-span)*step;
+                auto b=box(i,x,y);
+                if(reach(b)>limit)continue;
+                bool free=true;
+                for(auto const& other:standing)
+                    if(b[2]+gap>other[0] && other[2]+gap>b[0] && b[3]+gap>other[1] && other[3]+gap>b[1]){free=false;break;}
+                // The site test always samples the corners: a cheap first check.
+                for(float px:{b[0],b[2]})for(float py:{b[1],b[3]}){
+                    float wx=float(nc)+.5f+px,wy=float(nr)+.5f-py;
+                    free=free && shore(wx,wy).distance>=c.clearance[0] &&
+                        (c.clearance[3]<=0 || river(wx,wy)>=c.clearance[3]);
+                }
+                if(!free)continue;
+                // On the city's own bank the way from the centre never
+                // crosses river water: samples under 8 pixels apart always
+                // land in the 12-pixel band nearer than 6 to its centreline.
+                float cx=(b[0]+b[2])*.5f,cy=(b[1]+b[3])*.5f;
+                unsigned samples=unsigned(std::ceil(std::hypot(cx,cy)/.06f));
+                bool crossing=false;
+                for(unsigned s=1;s<=samples && !crossing;++s){
+                    float t=float(s)/float(samples);
+                    crossing=river(float(nc)+.5f+cx*t,float(nr)+.5f-cy*t)<6.;
+                }
+                // With a spot across the river in hand, only the own bank is sought.
+                if(crossing && found){if(++skipped>48)break;continue;}
+                if(++own_tests>24 || ++tests>192)break;
+                float offset[2]={x,y};
+                if(!site_keeps(c,i,nc,nr,world,shore,river,height,offset))continue;
+                if(!found || !crossing){spot[0]=x;spot[1]=y;found=crossing?1:2;}
+                if(found==2)break;
+            }
+            if(found){standing.push_back(box(i,spot[0],spot[1]));moved.push_back({index,{spot[0],spot[1]},true});}
+        }
+        for(unsigned index=0;index<c.instances.size();++index){
+            auto const& i=c.instances[index];
+            if(!kept[index])continue;
+            if(i.flags&instance_tree){
+                auto b=box(i,i.offset[0],i.offset[1]);bool under=false;
+                for(auto const& m:moved){
+                    auto o=box(c.instances[m.index],m.offset[0],m.offset[1]);
+                    under=under || (b[2]>o[0] && o[2]>b[0] && b[3]>o[1] && o[3]>b[1]);
+                }
+                if(under)continue;
+            }
+            bodies.push_back({index,{i.offset[0],i.offset[1]},false});
+        }
+        bodies.insert(bodies.end(),moved.begin(),moved.end());
+        return bodies;
+    }
     float ground(float x,float y)const{
         if(!composition.site_aware)return 1.f;
         if(clear<0){
             float cx=float(nc)+.5f,cy=float(nr)+.5f,reach=1.3f; // plate stays within ~0.9 tile per axis
             clear=float(shore(cx,cy).distance)>composition.clearance[0]+reach+.06f &&
-                (composition.clearance[3]<=0 || float(river(cx,cy))>composition.clearance[3]+4.f+reach*64.f);
+                (composition.clearance[3]<=0 || float(river(cx,cy))>composition.clearance[3]+6.f+reach*64.f);
             for(int r=nr-1;r<=nr+1 && clear;++r)for(int c=nc-1;c<=nc+1 && clear;++c){
                 auto land=world(c,r);
                 if(land.base<0 || land.base>=11 || land.real==6 || land.real==10)clear=0;
             }
         }
-        return clear?1.f:site_ground(composition,x,y,world,shore,river);
+        float coverage=clear?1.f:site_ground(composition,x,y,world,shore,river);
+        layout(composition);
+        if(!composition.site_moves || vacated.empty() || coverage<=0)return coverage;
+        // Plate laid for a body that left goes with it; plate nearer a
+        // standing body (or the central plaza) stays.
+        float ox=x-float(nc)-.5f,oy=float(nr)+.5f-y;
+        float near_standing=std::max(0.f,std::hypot(ox,oy)-.12f),near_vacated=1e9f;
+        for(auto const& b:standing)near_standing=std::min(near_standing,site_box_distance(b,ox,oy));
+        for(auto const& b:vacated)near_vacated=std::min(near_vacated,site_box_distance(b,ox,oy));
+        auto ramp=[](float value,float low,float high){
+            float t=std::clamp((value-low)/(high-low),0.f,1.f);return t*t*(3.f-2.f*t);};
+        return coverage*(1.f-ramp(near_standing-near_vacated,0.f,.03f)*ramp(near_standing,.05f,.09f));
     }
 };
 template<class World,class Shore,class River,class Height>
@@ -220,13 +353,13 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
     // bodies they belong to.
     std::vector<EffectAnchor> anchors;
     lighting->blockers.reserve(composition->instances.size());
-    for(unsigned owner_index=0;owner_index<composition->instances.size();owner_index++){
+    auto const& bodies=site.layout(*composition);
+    for(auto const& body:bodies){
         if(stop())return false;
-        auto const&i=composition->instances[owner_index];auto const&m=library.models[i.model];
-        if(!site.keep(i))continue;
+        auto const&i=composition->instances[body.index];auto const&m=library.models[i.model];
         // Lights name their own body's blocker, so skipped bodies leave no gap.
         unsigned const owner=unsigned(lighting->blockers.size());
-        float center_x=float(nc)+.5f+i.offset[0],center_y=float(nr)+.5f-i.offset[1];
+        float center_x=float(nc)+.5f+body.offset[0],center_y=float(nr)+.5f-body.offset[1];
         float ground_center=height_natural(center_x,center_y);
         float x_low=center_x+i.bounds[0],x_high=center_x+i.bounds[2];
         float y_low=center_y-i.bounds[3],y_high=center_y-i.bounds[1];
@@ -245,7 +378,7 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
         bool terrace=composition->foundation_material!=~0u &&
             ground_high-ground_low>.75f;
         float lowest_source=std::min(0.f,m.low[2]*i.scale/source_z_metric);
-        auto placement=place(i,float(nc)+.5f,float(nr)+.5f,
+        auto placement=place(i,center_x-i.offset[0],center_y+i.offset[1],
                              terrace?ground_high-lowest_source+.02f:ground_center);
         for(auto const&l:i.lights)lighting->lights.push_back(placement.light(l,owner));
         for(auto const&e:i.effects){EffectAnchor a;placement.position(e.position,a.world);a.effect=e;anchors.push_back(a);}
@@ -376,17 +509,44 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
         Chunk chunk;chunk.material=p.material;chunk.lighting=lighting;chunk.terrain_conforming=true;
         std::copy(p.atlas,p.atlas+4,chunk.atlas);
         std::vector<fidelity::MapVertex> transformed;transformed.reserve(p.vertices.size());
-        for(auto const&v:p.vertices){
-            float x=float(nc)+.5f+v.x,y=float(nr)+.5f+v.y;
+        // A paving material with source normal detail uses a distinct
+        // shader tag. The coverage still controls its feathered edge.
+        float const tag=(library.materials[p.material].channels&2u)?64.f:62.f;
+        auto pave=[&](float x,float y,float coverage){
             auto out=project_natural(x,y,height_natural(x,y)+.005f);
             out.u=x/p.period[0];out.v=y/p.period[1];
-            // A paving material with source normal detail uses a distinct
-            // shader tag. The coverage still controls its feathered edge.
-            out.base_terrain=((library.materials[p.material].channels&2u)?64.f:62.f)+v.coverage*site.ground(x,y);
+            out.base_terrain=tag+coverage*site.ground(x,y);
             transformed.push_back(out);
+        };
+        for(auto const&v:p.vertices)pave(float(nc)+.5f+v.x,float(nr)+.5f+v.y,v.coverage);
+        std::vector<unsigned> indices(p.indices.begin(),p.indices.end());
+        // A moved body brings its own plate, edged like the authored one
+        // (margin .04, feather .016 and jitter .012 tiles on a .02 grid).
+        for(auto const& body:bodies)if(body.moved){
+            constexpr float margin=.04f,feather=.016f,jitter=.012f,cell=.02f,reach=margin+feather+jitter;
+            auto const& i=composition->instances[body.index];
+            std::array<float,4> b{body.offset[0]+i.bounds[0],body.offset[1]+i.bounds[1],
+                                  body.offset[0]+i.bounds[2],body.offset[1]+i.bounds[3]};
+            unsigned across=unsigned(std::ceil((b[2]-b[0]+2*reach)/cell))+1,deep=unsigned(std::ceil((b[3]-b[1]+2*reach)/cell))+1;
+            unsigned first=unsigned(transformed.size());
+            std::vector<float> alpha(across*deep);
+            for(unsigned gy=0;gy<deep;++gy)for(unsigned gx=0;gx<across;++gx){
+                float ox=b[0]-reach+float(gx)*cell,oy=b[1]-reach+float(gy)*cell;
+                unsigned h=(gx/3u*73856093u)^(gy/3u*19349663u)^(body.index*83492791u);
+                h=(h^(h>>13))*0x5bd1e995u;h^=h>>15;
+                float t=std::clamp((margin-site_box_distance(b,ox,oy)-(float(h&1023u)/1023.f-.5f)*2.f*jitter)/feather,0.f,1.f);
+                alpha[gy*across+gx]=t*t*(3.f-2.f*t);
+                pave(float(nc)+.5f+ox,float(nr)+.5f-oy,alpha[gy*across+gx]);
+            }
+            for(unsigned gy=0;gy+1<deep;++gy)for(unsigned gx=0;gx+1<across;++gx){
+                unsigned k=gy*across+gx;
+                if(std::max({alpha[k],alpha[k+1],alpha[k+across],alpha[k+across+1]})<=0)continue;
+                unsigned quad[]={k,k+1,k+across,k+1,k+across+1,k+across};
+                for(unsigned q:quad)indices.push_back(first+q);
+            }
         }
-        if(indexed){chunk.vertices=std::move(transformed);chunk.indices.assign(p.indices.begin(),p.indices.end());}
-        else for(unsigned vertex_index:p.indices)chunk.vertices.push_back(transformed[vertex_index]);
+        if(indexed){chunk.vertices=std::move(transformed);chunk.indices=std::move(indices);}
+        else for(unsigned vertex_index:indices)chunk.vertices.push_back(transformed[vertex_index]);
         // Paving precedes the source ground and bodies; depth is read-only.
         output.chunks.insert(output.chunks.begin(),std::move(chunk));
     }

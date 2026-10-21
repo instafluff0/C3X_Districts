@@ -22,7 +22,10 @@ class Pickup(unittest.TestCase):
 
     def test_recorded_inputs_and_texture_closure(self):
         self.assertEqual(self.manifest['builder'], 'Renderer/lab/studies/city_readability/recompose.py')
-        self.assertEqual(self.library['version'], 5)
+        # Version six: yielded bodies move; bodies and plate keep 10 source
+        # pixels from a river centreline.
+        self.assertEqual(self.library['version'], 6)
+        self.assertEqual({t['clearance'][3] for t in self.library['templates']}, {10.0})
         self.assertIn('Renderer/packs/CityCompositionFrozen/city.bin', self.manifest['source_sha256'])
         for path, digest in self.manifest['source_sha256'].items():
             self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), digest, path)
