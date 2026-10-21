@@ -43,6 +43,8 @@
     "Renderer.native.test_resource_composition_priority",
     "Renderer.native.test_animated_compositions",
     "Renderer.native.test_resource_body_depth",
+    "Renderer.native.test_resource_aquatic_metadata",
+    "Renderer.native.test_resource_look",
     "Renderer.native.test_resource_instances",
     "Renderer.native.test_scene_depth",
     "Renderer.native.test_resource_production_pack",

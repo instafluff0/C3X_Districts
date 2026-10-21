@@ -852,6 +852,10 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
     if len(slots) < TEXTURE_SLOTS:
         (output / "textures/unused.dds").write_bytes(dds_header(4, 4, 1, MODEL_ATLAS[3], 8) + bytes(8))
     (output / "resource_runtime.bin").write_bytes(blob)
+    # The bodies' readability look (as the units' look), read by the runtime.
+    look = profiles.get("look", {})
+    (output / "look.json").write_text(json.dumps({"look_gain": float(look.get("gain", 0)),
+                                                  "look_saturation": float(look.get("saturation", 0))}) + "\n")
     report["textures"] = padded
     report["layouts"] = {name: [{"terrain_mask": mask, "instances": [{k: (list(v) if isinstance(v, tuple) else v)
                                   for k, v in item.items()} for item in instances]} for mask, instances in variants]

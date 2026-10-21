@@ -1,6 +1,11 @@
 {
   "schema": "c3x.resource_composition_profiles.v0",
   "purpose": "Offline art direction for baked resource tile compositions. The runtime consumes only the baked layouts; every size, count, sink and decal choice lives here or in the normalized source placements.",
+  "look": {
+    "gain": 1.0,
+    "saturation": 0.0,
+    "note": "Readability look for every resource body (not its ground decals), as the units' unit_quality.json look: extra saturation about the luminance, then extra gain, rolled off below the bloom knee. Zeros keep the shared feature response. User choice 2026-10-21 (look C): gain 1.0 lifts the in-game elephant from luma 43 to 62, level with units; no extra saturation, since the units' +0.25 turned wheat and gold neon. Baked into the pack's look.json; C3X_RENDERER_RESOURCE_LOOK=gain,saturation overrides it for review."
+  },
   "units": "Normalized source units are 12 Civ VI units; world_scale 0.12 would match Civ VI's own size (100 Civ VI units per tile, the unit-model calibration); 0.24 doubles every outcrop for Civ III's far camera, where Civ VI's flat rocks would read as pebbles. Model burial is Civ VI's authored vertical origin (ResourceCompositionSources keeps it); sink is extra burial as a fraction of model height. Decal sizes are calibrated separately: decal_world_scale is the half-size in tiles per unit of source decal scale. Layout positions are tile UV (0..1). Animal subject_scale multiplies the animation pack's binding scale; at 0.5 a Civ VI horse is about a sixth of a tile long.",
   "defaults": {
     "variants": 4,

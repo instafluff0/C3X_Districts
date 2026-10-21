@@ -115,10 +115,14 @@ float4 ShadeWaterSurface(PixelInput input) {
     float3 sun = environment_sun_color * environment_sun_intensity;
     float blend = max(fresnel * reflection_strength * .68, .25 * open_object);
     float3 color = lerp(refracted, reflected, blend);
+    // A marine body swims just under the surface: seen through that thin
+    // water (absorbed toward its blue-green, plus the water's own scatter), it
+    // hides the bed and deeper water behind it, so it stays in view over a
+    // shallow coast bed; reflection, glints and foam still lie over it.
     float marine_coverage = saturate(aquatic.a * 1.6) * (1 - blend);
     float3 marine_body = aquatic.rgb / max(aquatic.a, .01);
-    color = lerp(color, color * float3(.12, .30, .42) +
-        marine_body * .035, marine_coverage);
+    color = lerp(color, marine_body * float3(.38, .62, .70) + refracted * .45,
+        marine_coverage);
     color += shadow * saturate(specular * sun) * lerp(.06, 1, open_ocean);
     // The broad low-sun reflection shares the forest-ray time window. Keep
     // the wave normals and angular specular term so this remains moving water,
@@ -165,6 +169,7 @@ float4 ShadeWaterSurface(PixelInput input) {
     alpha = lerp(alpha, 1, foam * .65);
     float bed_window = coast_family * (1 - smoothstep(.18, .58, depth));
     alpha *= 1 - .62 * bed_window; // Reveal the authored coast bed
+    alpha = lerp(alpha, 1, marine_coverage); // ...except behind a marine body
     return q6_scene_output(float4(color, alpha)).color;
 }
 float4 PSWaterSurface(PixelInput input) : SV_Target {

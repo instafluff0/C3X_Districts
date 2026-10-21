@@ -27,9 +27,9 @@ struct Sampler {
  VisibilityCoverage visibility_coverage;bool visibility_pass=true,world_backdrops=true;
  int width=2240,height=1260;
  struct {unsigned pose_samples=0,backdrop_blocks=0;}resource_preparation;
- struct Anchor {unsigned asset=0,seed=0;int tile_x=4,tile_y=4;};
+ struct Anchor {unsigned asset=0,seed=0;int tile_x=4,tile_y=4;float ground=0,depth_lift=0;bool submerged=true;};
  std::vector<Anchor> resource_anchors=std::vector<Anchor>(1);
- struct Animation {std::string name="whales";AnimationMesh mesh;};
+ struct Animation {std::string name="whales";float submersion=.17f;AnimationMesh mesh;};
  std::vector<Animation> resource_animations=std::vector<Animation>(1);
  std::vector<std::pair<double,float>> posed;
 ''' + clock + r'''

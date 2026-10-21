@@ -61,3 +61,22 @@ inputs or compilers change. Composition inputs are the profiles and
 Builders use disposable output and preserve source bytes, animated root deltas,
 marine school facing and the accepted fish surface offset. Historical runtime
 enablement/checkpoint flags and release numbers are not workflow state.
+
+The runtime never keys behaviour on resource names, because scenarios bring
+their own resources. An animation binding with `"medium": "water"` swims its
+`submersion` (tiles) below the surface of a coast, sea or ocean tile. Renderer64
+draws it in the underwater layer that `sandbox/water_surface.hlsl` composites,
+without a ground shadow. On a marsh the same binding stays at the surface.
+Animated bodies stand upright on their anchor's ground like units. Their depth
+uses the highest ground under their footprint (`footprint_ground`), so rising
+ground behind an animal never hides a leg.
+
+Resource bodies take the profiles' `look` (gain, saturation; the pack's
+`look.json`), as units take theirs. The user chose gain 1.0 with no extra
+saturation on 2026-10-21. In game, look values must be judged through
+Renderer64's filmic display, which the Lab tone map does not reproduce. Use
+`scripted_game_test.ps1 -Scenario resources` with
+`-RendererOptions C3X_RENDERER_RESOURCE_LOOK=gain,saturation` to compare.
+`overlay_resource_shading.py --match game_resource_look` carries the look into
+the pinned pack. The marine blend in `water_surface.hlsl` has no "resource" text,
+so copy that file by hand.

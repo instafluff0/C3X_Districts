@@ -90,6 +90,15 @@ save and leaves its selected settler idle. It requires a completed map and no
 renderer failures. Inspect the window samples for the automatic city-site
 overlays when that C3X setting is enabled, then confirm the reported cleanup.
 
+`-Scenario resources -Seconds 190 -SampleHz 4` runs the `units` camera script
+on the 1498 AD save, aimed at its ivory beside rivers and its fish and whales.
+At each target it zooms two steps further in than `units` does; the save opens
+zoomed out, so the close-ups reach about 1x. Review animal grounding on slopes,
+resource body brightness and marine bodies under the water surface.
+`-RendererOptions C3X_RENDERER_RESOURCE_LOOK=gain,saturation` previews a
+resource look. The first run after a shader change recompiles during load and
+may not reach the last target; run it again.
+
 `-Scenario reveal-scroll -Seconds 240 -SampleHz 10 -MeasureCadence -ProfileRenderer`
 extends the fresh 4000 BC `research-turn` witness: found a city, zoom to 1.75×,
 move the worker and Scout through three reveals, finish the first turn, then

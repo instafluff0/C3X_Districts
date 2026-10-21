@@ -73,6 +73,19 @@ inline void slope_resource_pose(unsigned bones,float a,float b,float c,float* ou
     }
 }
 
+// The ground an upright animated body's depth stands on: the highest surface
+// at its anchor and on two rings out to its reach (tiles). Like units, a body
+// stands on its anchor's ground regardless of slope and draws over the terrain
+// under it, so ground rising behind it no longer hides a leg; world features
+// beyond its footprint still sort in front.
+template<class Surface>
+float footprint_ground(Surface const& surface,float u,float v,float reach){
+    float high=surface(u,v);
+    for(float ring:{.5f,1.f})for(int k=0;k<8;++k){float angle=.785398163f*float(k);
+        high=std::max(high,surface(u+std::cos(angle)*reach*ring,v+std::sin(angle)*reach*ring));}
+    return high;
+}
+
 // Where a layout makes room for routes (an oasis): {shrink, du, dv}. Sizes from
 // `largest` down to `smallest` of the group's full reach `radius` are tried; the
 // first that has a spot inside the tile (moving up to `reach` tiles) clear of

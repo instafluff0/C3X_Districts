@@ -3683,6 +3683,7 @@ struct SandboxFreshPipeline {
         settings.water_specular=environment.water_specular;
         settings.emissive_scale=environment.emissive_scale;
         settings.hour=hour;
+        std::copy(std::begin(renderer.resource_look),std::end(renderer.resource_look),settings.resource_look);
         renderer.context->UpdateSubresource(renderer.terrain_settings_buffer,0,nullptr,&settings,0,0);work.upload_buffer(renderer.terrain_settings_buffer);
         renderer.display_exposure=environment.exposure;
         renderer.shadow_basis=c3x_renderer::fidelity::light_frame(environment);

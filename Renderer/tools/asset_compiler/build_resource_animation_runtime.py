@@ -213,6 +213,10 @@ def build(animated: Path, landmarks: Path, output: Path, *, consumed=None) -> di
     bindings = {}
     forward_y = {"horses": -1, "cattle": 1, "game": -1, "furs": -1, "ivory": -1,
                  "whales": 0, "fish": 0, "wheat": -1, "bananas": -1, "rubber": -1}
+    # Marine subjects swim this many tiles below the waterline. The runtime reads
+    # "medium"/"submersion" from each binding (derived ones inherit them) and
+    # never matches resource names, so a scenario's own pack decides.
+    submerged = {"fish": .015, "whales": .17}
     for resource, subjects in result["resources"].items():
         name = resource.split("/")[-1]
         selected = 2 if name == "cattle" else 0
@@ -250,6 +254,8 @@ def build(animated: Path, landmarks: Path, output: Path, *, consumed=None) -> di
                 "offset_z": offset[2], "yaw": -math.atan2(forward_y[name], 0 if forward_y[name] else 1),
                 "orientation_evidence": ("each_school_body_head_minus_tail_aligned_to_SE" if part.get("facing") else
                                          "source_rest_bones; visual checkpoint pending")}
+            if name in submerged:
+                bindings[key].update(medium="water", submersion=submerged[name])
     # Derived schools for compositions: fewer, larger members on the authored
     # swim paths, so the school keeps its footprint inside the tile.
     for key, (source, keep, body_scale) in {"fish.few": ("fish", 4, 3.0)}.items():

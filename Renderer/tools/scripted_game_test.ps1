@@ -1,16 +1,18 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,360)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','volcanoes','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','navigation','camera','forest-shadow')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','volcanoes','resources','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','navigation','camera','forest-shadow')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1,
       # Renderer diagnostics for the game child only, e.g. C3X_SANDBOX_PASS_COUNTS=1;C3X_RENDERER_PROFILE=1
       [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='')
 $ErrorActionPreference = 'Stop'
-# 'volcanoes' is the units camera script aimed at the 1498 AD save's volcano groups.
+# 'volcanoes' is the units camera script aimed at the 1498 AD save's volcano groups;
+# 'resources' aims it at that save's ivory near rivers and its fish and whales.
 $volcanoTargets=$Scenario -eq 'volcanoes'
-if ($volcanoTargets) { $Scenario='units' }
+$resourceTargets=$Scenario -eq 'resources'
+if ($volcanoTargets -or $resourceTargets) { $Scenario='units' }
 if ($Scenario -eq 'camera' -and $Seconds -lt 100) { throw 'camera requires at least 100 seconds.' }
 if ($Scenario -in @('navigation','zoom-out','near','units') -and $Seconds -lt 120) { throw 'navigation requires at least 120 seconds.' }
 if ($Scenario -eq 'city-builds' -and $Seconds -lt 180) { throw 'city-builds requires at least 180 seconds.' }
@@ -202,12 +204,15 @@ try {
         # Nagoya Bomber, the two ships off the southern peninsula and the
         # north-eastern harbour, each at 2x and then 3x. Zoom keeps the center.
         $in=@(0..3|%{0.5*$_}); $out=@(0..5|%{0.5*$_})
+        # Resource close-ups go two steps further in (the save opens zoomed out).
+        if ($resourceTargets) { $in=@(0..5|%{0.5*$_}); $out=@(0..7|%{0.5*$_}) }
         $mouseSteps=@(@(40,0,0,0))
         $t=46
         # Volcanoes: minimap pixel (33+3.5x, 970+1.62y) for map tile (x,y) on that
         # client; the southern group near (95,91), the south-western group near
         # (40,103) and the western pair near (31,40).
-        $targets=if ($volcanoTargets) {@(@(-754,521),@(-947,541),@(-978,439))} else {@(@(-738,498),@(-671,527),@(-661,553),@(-661,505))}
+        # Resources: ivory at (91,85) and (98,92), fish and whales around (119,94).
+        $targets=if ($volcanoTargets) {@(@(-754,521),@(-947,541),@(-978,439))} elseif ($resourceTargets) {@(@(-768,512),@(-744,523),@(-671,527))} else {@(@(-738,498),@(-671,527),@(-661,553),@(-661,505))}
         foreach($target in $targets){
             $mouseSteps+=@(@($t,$target[0],$target[1],2),@(($t+0.1),$target[0],$target[1],4),@(($t+2),0,0,0))
             $mouseSteps+=$in|%{,@(($t+4+$_),0,0,0x800,120)}; $mouseSteps+=,@(($t+12),0,0,0x800,240)

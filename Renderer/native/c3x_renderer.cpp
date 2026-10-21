@@ -224,6 +224,7 @@ struct TerrainShaderSettings {
     float water_specular;
     float emissive_scale;
     float hour;
+    float resource_look[4];   // resource bodies' gain, saturation (pack look.json); reserved
 };
 
 struct ViewportShaderSettings {
@@ -359,11 +360,18 @@ struct ResourceAnimation {
     ID3D11ShaderResourceView * view = nullptr;
     ID3D11Buffer * indices = nullptr;
     float scale = 1, yaw = 0, offset[3] = {};
+    float reach = 0;   // farthest rest-pose body point from the anchor (tiles, at anchor scale 1)
+    // Bindings with "medium": "water" swim "submersion" tiles below the surface
+    // of a water tile (Renderer64's underwater layer); the pack says so, not the
+    // resource name. Elsewhere (a marsh) they keep to the surface.
+    bool aquatic = false; float submersion = 0;
     unsigned count = 1;
 };
 struct ResourceAnchor {
     unsigned asset = 0, seed = 0;
     float u = .5f, v = .5f, world_u = 0, world_v = 0, ground = 0;
+    float depth_lift = 0;   // depth stands this far above ground: the footprint's highest ground
+    bool submerged = false;   // an aquatic body on a water tile swims in the underwater layer
     float yaw = 0, scale = 1;   // composition facing offset and size multiplier
     float slope_x = 0, slope_y = 0;   // ground rise (tiles) per tile of local x/y under the body
     int anchor_x = 0, anchor_y = 0, tile_x = 0, tile_y = 0;
@@ -1488,6 +1496,7 @@ public:
     bool river_assets_ready = false;
     bool route_assets_ready = false;
     bool resource_assets_ready = false;
+    float resource_look[4] = {};   // gain, saturation of resource bodies, as the units' look
     bool city_assets_ready = false;
     bool mine_assets_ready = false;
     bool farm_assets_ready = false;
@@ -2932,6 +2941,19 @@ public:
         std::string resource_root = packs_root + "\\" + resource_pack;
         resource_assets_ready = load_runtime_bundle(
             resource_root, "resource_runtime.bin", resource_bundle, resource_texture_dds, true);
+        // Resource bodies take a readability look like the units' (the pack's look.json:
+        // look_gain, look_saturation; zeros keep the authored response).
+        // C3X_RENDERER_RESOURCE_LOOK=gain,saturation overrides it for review.
+        std::fill(std::begin(resource_look), std::end(resource_look), 0.f);
+        char look_option[64] = {}; std::vector<std::uint8_t> look_data;
+        if (GetEnvironmentVariableA("C3X_RENDERER_RESOURCE_LOOK", look_option, sizeof(look_option)) &&
+            sscanf_s(look_option, "%f,%f", &resource_look[0], &resource_look[1]) == 2) {}
+        else if (resource_assets_ready && read_file((resource_root + "\\look.json").c_str(), look_data)) {
+            json_number_after(look_data, "look_gain", 0, resource_look[0]);
+            json_number_after(look_data, "look_saturation", 0, resource_look[1]);
+            mix_content_revision(look_data);
+        }
+        for (auto & value : resource_look) value = std::isfinite(value) ? std::clamp(value, 0.f, 2.f) : 0.f;
 
         // Bind the catalog once. Payloads are resident only when needed.
         char unit_pack[128]="UnitAnimationFidelity",unit_root[4*MAX_PATH];
@@ -2978,6 +3000,13 @@ public:
                             DXGI_FORMAT_BC1_UNORM_SRGB,DXGI_FORMAT_BC1_UNORM);
                     if (ok) {
                         animation.count = static_cast<unsigned>(count);
+                        std::string medium;
+                        animation.aquatic = json_string_after(definitions,"medium",record,medium) && medium == "water";
+                        if (!animation.aquatic || !json_number_after(definitions,"submersion",record,animation.submersion) ||
+                            !(animation.submersion >= 0 && animation.submersion < 1)) animation.submersion = 0;
+                        for (auto const & vertex : animation.mesh.vertices)
+                            animation.reach = std::max(animation.reach, std::hypot(vertex.source.position[0] + animation.offset[0],
+                                vertex.source.position[1] + animation.offset[1]) * animation.scale);
                         mix_content_revision(bytes); mix_content_revision(animation.dds);
                         resource_animations.push_back(std::move(animation));
                     }
@@ -5088,11 +5117,11 @@ public:
         for (auto const & anchor:resource_anchors) {
             if (anchor.asset>=resource_animations.size()) return false;
             auto & animation=resource_animations[anchor.asset];
-            // In the sandbox's direct scene pass, keep the animated marine
-            // bodies at the waterline. The source whale mesh spans roughly
-            // 0.22 tile units above its anchored base after scaling.
-            float submersion=pose_only && animation.name=="whales"?0.17f:
-                pose_only && animation.name=="fish"?0.015f:0.f;
+            // In the sandbox's direct scene pass, aquatic bodies swim their
+            // binding's submersion below the waterline (underwater layer).
+            float submersion=pose_only && anchor.submerged?animation.submersion:0.f;
+            // A body's depth stands on the highest ground under its footprint.
+            float depth_ground=anchor.ground+anchor.depth_lift;
             unsigned visibility=visibility_pass?visibility_coverage.state(anchor.tile_x,anchor.tile_y):2;
             if(!visibility)continue; // Never-explored objects contribute no body or shadow.
             // Explored resources keep moving in fog, as water does (the user,
@@ -5131,7 +5160,7 @@ public:
                         bounds.top=std::min(bounds.top,LONG(std::floor(py))-2);bounds.bottom=std::max(bounds.bottom,LONG(std::ceil(py))+2);
                     };
                     extend(chunk.bounds,sx,sy);extend(chunk.bounds,shadow_x,shadow_y);extend(shadow_chunk.bounds,shadow_x,shadow_y);
-                    float world[]={anchor.world_u+anchor.u+lx,anchor.world_v+1-anchor.v-ly,(anchor.ground+2.5f+feature_height)/112.f};
+                    float world[]={anchor.world_u+anchor.u+lx,anchor.world_v+1-anchor.v-ly,(depth_ground+2.5f+feature_height)/112.f};
                     for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=std::min(chunk.world_bounds.low[a],world[a]);chunk.world_bounds.high[a]=std::max(chunk.world_bounds.high[a],world[a]);}
                 }
                 D3D11_RECT visible={std::max<LONG>(0,chunk.bounds.left+dx),std::max<LONG>(0,chunk.bounds.top+dy),
@@ -5170,7 +5199,7 @@ public:
                 if(FAILED(context->Map(pool.vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
                 auto values=static_cast<float*>(mapped.pData);
                 float placement[]={cosine,sine,scale,c3x_renderer::lighting::object_height_to_world,
-                    animation.offset[0],animation.offset[1],animation.offset[2]-submersion/scale,anchor.ground,
+                    animation.offset[0],animation.offset[1],animation.offset[2]-submersion/scale,depth_ground,
                     center_x,center_y,anchor.world_u+anchor.u,anchor.world_v+1-anchor.v,
                     half_w,half_h,projection,float(content_view_height)};
                 std::copy(std::begin(placement),std::end(placement),values);
@@ -5188,7 +5217,7 @@ public:
                 chunk.index_count=shadow_chunk.index_count=unsigned(animation.mesh.indices.size());
                 chunk.animation_texture=shadow_chunk.animation_texture=animation.view;
                 buffers[geometry_shadow].push_back(shadow_chunk);buffers[geometry_feature].push_back(chunk);
-                aquatic_resource.push_back(animation.name=="fish" || animation.name=="whales");
+                aquatic_resource.push_back(anchor.submerged);
                 ++visible_resource_animations;++moving_resources;continue;
             }
             if (!c3x_renderer::sample_animation_mesh(animation.mesh,time,true,posed)) {
@@ -5211,8 +5240,8 @@ public:
                 float feature_height=lz*150.f/.82f;
                 float sx=center_x+(lx-ly)*half_w,sy=center_y+(lx+ly)*half_h-lz*150.f*projection;
                 // Natural terrain depth basis, as VSResourceBody uses.
-                float depth=center_y+anchor.ground*relief+(lx+ly)*half_h+
-                    (anchor.ground+feature_height)*.0016f*content_view_height;
+                float depth=center_y+depth_ground*relief+(lx+ly)*half_h+
+                    (depth_ground+feature_height)*.0016f*content_view_height;
                 auto & v=vertices[i];
                 auto normal=c3x_renderer::lighting::object_normal(
                     source.normal[0]*cosine-source.normal[1]*sine,
@@ -5220,7 +5249,7 @@ public:
                 v={sx,sy,depth,source.uv[0],source.uv[1],
                     normal[0],normal[1],normal[2],21.f,
                     anchor.world_u+anchor.u+lx,anchor.world_v+1-anchor.v-ly,
-                    (anchor.ground+2.5f+feature_height)/112.f};
+                    (depth_ground+2.5f+feature_height)/112.f};
                 chunk.bounds.left=std::min(chunk.bounds.left,LONG(std::floor(sx))-2);
                 chunk.bounds.top=std::min(chunk.bounds.top,LONG(std::floor(sy))-2);
                 chunk.bounds.right=std::max(chunk.bounds.right,LONG(std::ceil(sx))+2);
@@ -5242,7 +5271,7 @@ public:
                 Vertex projected={};
                 projected.x=shadow_x;projected.y=shadow_y;
                 // Natural terrain depth on the ground, lifted two height units (as VSResourceShadow).
-                projected.z=shadow_y+anchor.ground*relief+(anchor.ground+2.f)*.0016f*content_view_height;
+                projected.z=shadow_y+depth_ground*relief+(depth_ground+2.f)*.0016f*content_view_height;
                 projected.u=source.uv[0];projected.v=source.uv[1];projected.panel=1.f;
                 projected.normal_z=1.f;projected.shadow_visibility=1.f;
                 projected.ambient_visibility=1.f;projected.surface_kind=15.f;
@@ -5307,7 +5336,7 @@ public:
             shadow_chunk.animation_texture=animation.view;
             buffers[geometry_shadow].push_back(shadow_chunk);
             buffers[geometry_feature].push_back(chunk);
-            aquatic_resource.push_back(animation.name=="fish" || animation.name=="whales");
+            aquatic_resource.push_back(anchor.submerged);
             ++visible_resource_animations;++moving_resources;
         }
         timing.phase(3);
@@ -9947,6 +9976,7 @@ public:
             city_glow.gain=GetEnvironmentVariableA("C3X_RENDERER_CITY_GLOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0?0.f:6.f;
         }
         frame_settings.hour = static_cast<float>(frame.hour);
+        std::copy(std::begin(resource_look), std::end(resource_look), std::begin(frame_settings.resource_look));
         reflection.height_pixels=112.f*.82f*float(frame.tile_width)/224.f;
         reflection.depth_metric=112.f*.0016f*float(content_view_height);
         region_reflection.height_pixels=reflection.height_pixels;region_reflection.depth_metric=reflection.depth_metric;
@@ -12109,6 +12139,10 @@ public:
                     anchor.world_u=float(tile.tile_x+tile.tile_y)*.5f;
                     anchor.world_v=float(tile.tile_x-tile.tile_y)*.5f;
                     anchor.ground=relief_at_world(anchor.world_u+anchor.u,anchor.world_v+1-anchor.v)[0];
+                    anchor.depth_lift=c3x_renderer::render_core::footprint_ground(
+                        [&](float u,float v){return relief_at_world(u,v)[0];},
+                        anchor.world_u+anchor.u,anchor.world_v+1-anchor.v,animation.reach)-anchor.ground;
+                    anchor.submerged=animation.aquatic && tile.terrain_type>=11;
                     tile_resource_anchors.push_back(anchor);
                 }
             } else if (auto const * composition = tile.city_id < 0 && resource_assets_ready && tile.resource_id >= 0 ?
@@ -12129,8 +12163,9 @@ public:
                     item.scale = baked.scale*layout[0]; item.lift = baked.lift*layout[0];
                     item.ground_fit = baked.ground_fit*layout[0];
                     // "animated/<binding>" places that animated subject: the pack bakes its
-                    // position, facing and size; it stands on the highest ground under its
-                    // footprint so no part of the body is buried.
+                    // position, facing and size. Like a unit it stands upright on its anchor's
+                    // ground and draws over the terrain under it: its depth stands on the
+                    // highest ground under its footprint, so no part of the body is buried.
                     auto const & id = resource_bundle.assets[item.asset].id;
                     if (id.rfind("clearance/", 0) == 0) continue;   // a layout rule, not a piece
                     if (id.rfind("animated/", 0) == 0) {
@@ -12152,6 +12187,9 @@ public:
                                 std::max(relief, resource_height_at(u, v)-2.5f) : relief;
                         };
                         anchor.ground = surface(world_u, world_v);
+                        anchor.depth_lift = c3x_renderer::render_core::footprint_ground(surface, world_u, world_v,
+                            found->reach*item.scale) - anchor.ground;
+                        anchor.submerged = found->aquatic && tile.terrain_type >= 11;
                         if (pickup_profile && item.ground_fit > 0) {
                             // The body follows the ground plane under its footprint: local x runs
                             // along world u and local y against world v; heights convert to tiles.

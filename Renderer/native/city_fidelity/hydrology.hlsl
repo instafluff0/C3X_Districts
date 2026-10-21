@@ -187,6 +187,7 @@ cbuffer TerrainSettings : register(b0)
     float game_water_specular;
     float game_emissive_scale;
     float game_hour;
+    float4 game_resource_look; // resource bodies' gain, saturation (pack look.json); reserved
 };
 #define lab_mode 8.0
 #define beauty_relief_enabled 1.0
@@ -1637,6 +1638,21 @@ float4 q6_raw_feature(FeaturePixelInput input)
     float3 lit_color = albedo * light + emissive *
         saturate(city_weight + mine_weight + raised_infrastructure_weight) *
         environment_night_activation * environment_emissive_scale * 1.45;
+#ifdef C3X_GAME_RENDERER
+    // Resource bodies take the units' readability look from their pack
+    // (gain, saturation; zeros keep this response exactly): saturation about
+    // the luminance, then gain, rolled off below the bloom knee so sunlit
+    // faces do not halo. Ground decals and the rest of the scene are unchanged.
+    if (resource_weight > 0.5 && (game_resource_look.x > 0 || game_resource_look.y > 0))
+    {
+        float look_luma = dot(lit_color, float3(0.2126, 0.7152, 0.0722));
+        lit_color = max(0, lerp(look_luma.xxx, lit_color, 1 + game_resource_look.y)) *
+                    (1 + game_resource_look.x);
+        float look_peak = max(lit_color.r, max(lit_color.g, lit_color.b));
+        if (look_peak > 1.6)
+            lit_color *= (1.6 + (look_peak - 1.6) / (1 + (look_peak - 1.6) / 0.8)) / look_peak;
+    }
+#endif
     float3 display_color = (frame_tone_map(
         lit_color * frame_output_exposure()));
     float2 ground_local_uv = frac(input.uv * 2.0);

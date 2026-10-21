@@ -525,7 +525,7 @@ int main() {
         self.assertIn('#include "terrain_rendering.hlsl"', adapter)
         self.assertNotIn("terrain_lab", adapter)
         self.assertEqual(
-            "e1216eb007348fee650c8583e4d90dcb800cdfce0850aa76e34a2fccd8ec5dec",
+            "51efb9b92e11418dad09b72615a27fc4fdd91fe137e1cab04fe2877e131707a4",
             # Git may check this text shader out as CRLF on Windows. Pin the
             # same source content independently of checkout newline conversion.
             hashlib.sha256(production_shader.encode("utf-8")).hexdigest(),

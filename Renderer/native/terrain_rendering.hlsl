@@ -152,6 +152,7 @@ cbuffer TerrainSettings : register(b0)
     float game_water_specular;
     float game_emissive_scale;
     float game_hour;
+    float4 game_resource_look; // resource bodies' gain, saturation (pack look.json); reserved
 };
 #define lab_mode 8.0
 #define beauty_relief_enabled 1.0
