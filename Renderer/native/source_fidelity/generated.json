@@ -64,7 +64,7 @@
     },
     {
       "path": "generated/shaders/objects/city_scene_material.hlsl",
-      "sha256": "a336434a7bdc05cb8550871580a40793ec2a4af48730d2947aa75f359f6b4fb9"
+      "sha256": "7c2e919d8813df4db1d4fef84b960f90d525a3255005ce561f4e1b31b898c2b5"
     },
     {
       "path": "generated/shaders/objects/instance_geometry.hlsl",

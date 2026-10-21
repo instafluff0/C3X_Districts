@@ -149,9 +149,9 @@
   "effects": {
     "per_city": 24,
     "accent/smoke": {
-      "width": 0.22,
-      "height": 0.85,
-      "strength": 0.75,
+      "width": 0.17,
+      "height": 0.5,
+      "strength": 0.5,
       "priority": 0
     },
     "accent/flame": {
@@ -185,9 +185,9 @@
       "priority": 3
     },
     "smoke": {
-      "width": 0.1,
-      "height": 0.32,
-      "strength": 0.35,
+      "width": 0.08,
+      "height": 0.22,
+      "strength": 0.25,
       "priority": 4
     },
     "authored": {

@@ -160,7 +160,8 @@ float4 q8_city_effect(FeaturePixelInput p){
   float4 result=q8_effect_over(flame,halo);
   clip(result.a-.004);return result;
  }
- if(kind<1.5)return q8_effect_plume(q,pixel,t,seed,strength,night,float4(2.6,.82,.3,.55),float3(.13,.36,.08));
+ // Chimney smoke drifts at 0.6 of the clock: a slow, subtle plume.
+ if(kind<1.5)return q8_effect_plume(q,pixel,t*.6,seed,strength,night,float4(2.6,.82,.3,.55),float3(.13,.36,.08));
  if(kind>2.5){
   // A volcano's plume (93): a darker, slower ash column; strength 1.6
   // (erupting) thickens it, quickens it and lights its base from the crater.

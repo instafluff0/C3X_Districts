@@ -80,9 +80,10 @@ verified pixel-identical):
   so it does not bloom), a billowing smoke plume of nine looping puffs with a
   stem at the mouth (darker with a furnace glow at night) and a night glow,
   all stateless functions of the visual clock and a per-point seed. Renderer64
-  redraws them per frame through the fresh pipeline's effect layer; that path
-  compiles and is inert with the production pack in game, but the animation
-  itself is unverified in game.
+  redraws them per frame through the fresh pipeline's effect layer. Chimney
+  smoke is deliberately subtle (user choice "A", 2026-10-21): stack plumes
+  0.17 wide by 0.5 tall at strength 0.5, other chimneys 0.08 by 0.22 at 0.25,
+  drifting at 0.6 of the clock; volcano plumes keep their own pace.
 
 `style.json` holds every knob: growth per era, extents per size, infill,
 accents and widths, plate margin/feather/lane/plaza/noise/period, ground
