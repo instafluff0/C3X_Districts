@@ -41,6 +41,7 @@
     "Renderer.native.test_render_core",
     "Renderer.native.test_resource_alpha_cutout",
     "Renderer.native.test_resource_composition_priority",
+    "Renderer.native.test_runtime_resource_names",
     "Renderer.native.test_animated_compositions",
     "Renderer.native.test_resource_body_depth",
     "Renderer.native.test_resource_aquatic_metadata",

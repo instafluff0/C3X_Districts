@@ -62,27 +62,54 @@ int main() {
 }
 ''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
     def test_runtime_loads_only_the_subjects_a_pack_names(self):
+        # The animation pack's "aliases" (map resource name -> binding) and the resource
+        # pack's "animated/<binding>" assets name every binding the runtime loads; it
+        # keeps no list of resource names of its own.
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
-        start = source.index("std::vector<std::string> names = {")
+        json = source[source.index("std::size_t json_member_position("):source.index("class RendererState {")]
+        strings = source[source.index("    static bool safe_relative("):source.index("    static bool json_number_after(")]
+        start = source.index('auto aliases = json_member_position(definitions, "aliases");')
         names = source[start:source.index("for (auto const & name_entry : names) {", start)]
+        start = source.index("for (auto const & [alias, binding] : aliased)")
+        resolve = source[start:source.index("mix_content_revision(definitions);", start)]
         run_cpp(r'''
 #include <algorithm>
 #include <cassert>
+#include <cctype>
+#include <cstdint>
+#include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
+''' + json + strings + r'''
 struct Asset { std::string id; };
 struct Bundle { std::vector<Asset> assets; };
-std::vector<std::string> requested(Bundle const & resource_bundle, bool resource_assets_ready) {
+struct Animation { std::string name; };
+struct Loaded { std::vector<std::string> names; std::vector<std::pair<std::string,unsigned>> aliases; };
+Loaded load(std::string const & text, Bundle const & resource_bundle, bool resource_assets_ready,
+            char const * rejected = "") {
+    std::vector<std::uint8_t> definitions(text.begin(), text.end());
     ''' + names + r'''
-    return names;
+    std::vector<Animation> resource_animations;
+    for (auto const & name : names) if (name != rejected) resource_animations.push_back({name});
+    std::vector<std::pair<std::string,unsigned>> resource_animation_aliases;
+    ''' + resolve + r'''
+    return {names, resource_animation_aliases};
 }
 int main() {
+    std::string pack = R"({"aliases": {"Bananas": "bananas", "Horses": "horses", "Tropical Fruit": "bananas"},
+        "bindings": {"bananas": {"mesh": "a"}, "horses": {"mesh": "b"}, "cattle.3": {"mesh": "c"}}})";
     Bundle production{{{"resource/assets/res_iron_rock01"}, {"source/res_wheat_tuft01"}}};
-    assert(requested(production, true).size() == 10);
+    auto loaded = load(pack, production, true);
+    assert((loaded.names == std::vector<std::string>{"bananas", "horses"}));   // each aliased binding once
+    assert(loaded.aliases.size() == 3 && loaded.aliases[2].first == "Tropical Fruit" && loaded.aliases[2].second == 0);
     Bundle lab{{{"animated/cattle.3"}, {"animated/horses"}, {"animated/cattle.3"}, {"source/boulder_01"}}};
-    auto names = requested(lab, true);
-    assert(names.size() == 11 && names.back() == "cattle.3");     // added once; primaries not duplicated
-    assert(requested(lab, false).size() == 10);                    // an unloaded pack names nothing
+    loaded = load(pack, lab, true);
+    assert(loaded.names.size() == 3 && loaded.names.back() == "cattle.3");     // added once; aliased not duplicated
+    assert(load(pack, lab, false).names.size() == 2);                          // an unloaded pack names nothing
+    assert(load(R"({"bindings": {"horses": {"mesh": "b"}}})", production, true).names.empty());
+    loaded = load(pack, production, true, "bananas");                          // a rejected binding animates nothing
+    assert(loaded.aliases.size() == 1 && loaded.aliases[0].first == "Horses" && loaded.aliases[0].second == 0);
 }
 ''')
 

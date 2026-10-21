@@ -42,6 +42,15 @@ as `fish.few` from `school_orientation.thin_school`) come from
 carries the current resource shading into it (review with `--dry-run`; `--match TEXT`
 keeps other features' unaccepted shader edits that mention resources out of the game).
 
+A tile's resource name selects a body only through pack aliases, matched
+exactly and case-insensitively. A composition alias wins. Otherwise the name
+must be listed under `"aliases"` in `ResourceAnimationRuntime/bindings.json`,
+which `build_resource_animation_runtime.py` writes from the profiles' Civ III
+names. A name with neither has no body; no legacy static groups remain. The
+runtime loads only the animation bindings those aliases or the compositions
+name. `native/test_runtime_resource_names.py` fails on any resource or unit
+name literal in the Renderer64 DLL sources.
+
 The fixed references preserve the earlier black-backdrop defect around animated
 resources. Current code fixes guarded scene-linear backdrop accumulation.
 Comparison will show that intended difference; it does not block Integration.

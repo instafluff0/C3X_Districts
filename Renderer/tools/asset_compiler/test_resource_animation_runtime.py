@@ -7,7 +7,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from Renderer.tools.asset_compiler import normalized_animation as animation
-from Renderer.tools.asset_compiler.build_resource_animation_runtime import calibrated_resource_poses, clip_translation_scales, build
+from Renderer.tools.asset_compiler.build_resource_animation_runtime import (calibrated_resource_poses,
+    clip_translation_scales, build, resource_aliases)
 from Renderer.tools.asset_compiler import build_resource_runtime as static
 
 
@@ -77,6 +78,23 @@ class ResourceAnimationCalibrationTests(unittest.TestCase):
         for pose in (start, end):
             self.assertAlmostEqual(pose[1][13], .2)  # Authored child uses converted units.
             self.assertAlmostEqual(pose[2][14], .3)  # Missing track already uses normalized rest units.
+
+
+class ResourceAnimationAliases(unittest.TestCase):
+    """The pack, not the runtime, says which map resources each binding animates."""
+
+    def test_primary_bindings_take_their_profiles_civ3_names(self):
+        profiles = {"horses": ["Horses"], "tropical_fruit": ["Tropical Fruit", "Bananas"], "iron": ["Iron"]}
+        bindings = {"horses": {}, "horses.1": {}, "bananas": {}, "fish": {}, "fish.few": {}}
+        self.assertEqual(resource_aliases(bindings, profiles),
+                         {"Horses": "horses", "Tropical Fruit": "bananas", "Bananas": "bananas"})
+
+    def test_aliases_are_plain_names_for_one_binding(self):
+        for alias in ('Café', 'Say "hi"', 'back\\slash', 'tab\there'):
+            with self.assertRaisesRegex(ValueError, "plain ASCII"):
+                resource_aliases({"horses": {}}, {"horses": [alias]})
+        with self.assertRaisesRegex(ValueError, "two animated"):
+            resource_aliases({"horses": {}, "cattle": {}}, {"horses": ["Herd"], "cattle": ["Herd"]})
 
 
 class StaticResourcePreparation(unittest.TestCase):

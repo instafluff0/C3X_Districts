@@ -18,6 +18,27 @@ from Renderer.tools.asset_compiler.unit_model_extractor import SOURCE_UNITS_PER_
 
 ROOT = Path(__file__).resolve().parents[3]
 CLIP_UNITS = ROOT / "Renderer/lab/shared/resources/clip_units.json"
+# The Civ III names of each resource ("bindings": profile -> names).
+PROFILES = ROOT / "Renderer/inventory/resource_composition_profiles.json"
+# Primary subjects whose resource profile has another name.
+PROFILE_NAMES = {"bananas": "tropical_fruit"}
+
+
+def resource_aliases(bindings, profile_names: dict) -> dict:
+    """Map map resource names to the primary binding that animates them.
+
+    The runtime matches a tile's resource name against these exactly and
+    case-insensitively (a baked composition for that name wins), so names stay
+    pack data. Derived bindings ("<name>.<index>") are composition subjects only.
+    """
+    aliases = {}
+    for key in bindings:
+        for alias in profile_names.get(PROFILE_NAMES.get(key, key), ()) if "." not in key else ():
+            if not (alias.isascii() and alias.isprintable()) or '"' in alias or "\\" in alias:
+                raise ValueError(f"{alias!r}: resource aliases are plain ASCII names")
+            if aliases.setdefault(alias, key) != key:
+                raise ValueError(f"{alias!r} names two animated resources")
+    return aliases
 
 
 def pack_path(root: Path, relative: str) -> Path:
@@ -266,7 +287,8 @@ def build(animated: Path, landmarks: Path, output: Path, *, consumed=None) -> di
         total += len(payload)
         bindings[key] = {**bindings[source], "mesh": filename}
         result["schools"] = {**result.get("schools", {}), key: {"from": source, "bodies": kept, "body_scale": body_scale}}
-    (output / "bindings.json").write_text(json.dumps({"schema": "c3x.resource_animation_bindings.v1",
+    (output / "bindings.json").write_text(json.dumps({"schema": "c3x.resource_animation_bindings.v2",
+        "aliases": resource_aliases(bindings, read(PROFILES)["bindings"]),
         "bindings": bindings}, indent=2, sort_keys=True)+"\n")
     result["payload_bytes"] = total
     (output / "manifest.json").write_text(json.dumps(result, indent=2, sort_keys=True)+"\n")

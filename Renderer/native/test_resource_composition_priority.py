@@ -1,12 +1,15 @@
-"""A baked resource composition wins over the animated name match.
+"""A baked resource composition wins over the animation pack's alias.
 
-Animated resource presentations are chosen by a lowercase substring of the
-resource name ("wheat", "banana", "cocoa"). A pack that bakes a composition
-for a resource, such as a static wheat field, must replace that presentation:
-otherwise the composition branch was never reached and the Lab drew the single
-animated subject instead. resource_animation_for, which both the build and
-the redraw scheduler use, now declines when an exact-name composition exists.
-This test compiles that member function against a small shim.
+A resource without a composition is animated when the animation pack lists
+its name ("aliases" in ResourceAnimationRuntime/bindings.json), matched exactly
+and case-insensitively as compositions match theirs. It used to be a lowercase
+substring of the resource name, so a scenario's "Wild Wheat" took the wheat
+animation by accident. A pack that bakes a composition for a resource, such as
+a static wheat field, must replace that presentation: otherwise the
+composition branch was never reached and the Lab drew the single animated
+subject instead. resource_animation_for, which both the build and the redraw
+scheduler use, declines when a composition exists. This test compiles that
+member function against a small shim.
 """
 import unittest
 
@@ -25,7 +28,7 @@ def function(text, signature):
 
 
 class ResourceCompositionPriorityTests(unittest.TestCase):
-    def test_composition_beats_animated_substring_match(self):
+    def test_composition_beats_the_animation_alias(self):
         source = (ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
         lookup = function(source, 'int resource_animation_for(c3x_renderer_tile_v1 const & tile) const')
         program = r'''
@@ -35,7 +38,12 @@ class ResourceCompositionPriorityTests(unittest.TestCase):
 #include <cstring>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
+#ifndef _WIN32
+#include <strings.h>
+#define _stricmp strcasecmp
+#endif
 struct c3x_renderer_tile_v1 { int city_id; int resource_id; char resource_name[32]; };
 namespace c3x_renderer {
 struct FeatureComposition { std::string name; };
@@ -48,6 +56,7 @@ FeatureComposition const * find_feature_composition(FeatureBundle const & bundle
 struct Animation { std::string name; };
 struct Renderer {
     std::vector<Animation> resource_animations{{"banana"}, {"wheat"}};
+    std::vector<std::pair<std::string, unsigned>> resource_animation_aliases{{"Bananas", 0}, {"Wheat", 1}};
     c3x_renderer::FeatureBundle resource_bundle;
     bool resource_assets_ready = true;
 ''' + lookup + r'''
@@ -64,6 +73,12 @@ int main() {
     std::strcpy(tile.resource_name, "Bananas");
     renderer.resource_assets_ready = true;
     if (renderer.resource_animation_for(tile) != 0) { std::puts("FAIL other names keep animation"); ++failures; }
+    std::strcpy(tile.resource_name, "WHEAT");
+    if (renderer.resource_animation_for(tile) != 1) { std::puts("FAIL aliases ignore case"); ++failures; }
+    std::strcpy(tile.resource_name, "Wild Wheat");
+    if (renderer.resource_animation_for(tile) != -1) { std::puts("FAIL no substring match"); ++failures; }
+    std::strcpy(tile.resource_name, "banana");
+    if (renderer.resource_animation_for(tile) != -1) { std::puts("FAIL binding names are not aliases"); ++failures; }
     return failures;
 }
 '''

@@ -28,6 +28,7 @@ ZOOMS = (128, 256)
 CIV3_SPRITES = ROOT.parent / "Art/resources.pcx"
 NORMALIZED = ROOT / "Renderer/packs/ResourceNormalized/manifest.json"
 ANIMATED = ROOT / "Renderer/packs/ResourceAnimationRuntime/bindings.json"
+PROFILES = ROOT / "Renderer/inventory/resource_composition_profiles.json"
 
 
 def read_bmp(path: Path):
@@ -95,13 +96,15 @@ def civ3_sprites() -> dict[int, tuple[int, int, list[bytes]]]:
 
 
 def production_path(name: str) -> str:
-    """Mirror the renderer's current name-substring selection for the census label."""
+    """Mirror the renderer's selection for the census label: the packs' aliases, matched exactly
+    and case-insensitively (a composition, else an animated binding, else no body)."""
     lowered = name.lower()
-    animated = json.loads(ANIMATED.read_text())["bindings"] if ANIMATED.is_file() else {}
-    if any(key in lowered for key in animated):
+    compositions = json.loads(PROFILES.read_text())["bindings"]
+    if any(lowered == alias.lower() for aliases in compositions.values() for alias in aliases):
+        return "composition"
+    animated = json.loads(ANIMATED.read_text()).get("aliases", {}) if ANIMATED.is_file() else {}
+    if any(lowered == alias.lower() for alias in animated):
         return "animated"
-    if any(key in lowered for key in ("horses", "iron", "uranium", "gold", "dye", "wheat", "cattle", "fish")):
-        return "static"
     return "native sprite"
 
 

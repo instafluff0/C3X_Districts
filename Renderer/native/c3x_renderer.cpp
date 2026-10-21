@@ -543,8 +543,10 @@ struct SceneTopology : c3x_renderer::render_core::CapturedScene {
 // Locate a direct member within one JSON object. Never cross into a nested
 // authored layer or a sibling when a channel is absent. Material files are
 // key-order independent (the selected skin sorts authored_layers before base).
+// With names, every direct member name is collected instead (key is unused).
 std::size_t json_member_position(std::vector<std::uint8_t> const& data,
-                                char const* key, std::size_t start=0) {
+                                char const* key, std::size_t start=0,
+                                std::vector<std::string>* names=nullptr) {
     auto whitespace=[&](std::size_t& p) {while(p<data.size() && std::isspace(data[p])) ++p;};
     auto string_end=[&](std::size_t p) {
         for(++p;p<data.size();++p) {
@@ -567,13 +569,22 @@ std::size_t json_member_position(std::vector<std::uint8_t> const& data,
         if(data[p]=='"') {
             auto end=string_end(p);if(end==std::string::npos)return end;
             auto after=end+1;whitespace(after);
-            if(depth==1 && after<data.size() && data[after]==':' &&
-                end-p-1==std::strlen(key) && std::memcmp(data.data()+p+1,key,end-p-1)==0)return p;
+            if(depth==1 && after<data.size() && data[after]==':') {
+                if(names)names->emplace_back(data.begin()+std::ptrdiff_t(p+1),data.begin()+std::ptrdiff_t(end));
+                else if(end-p-1==std::strlen(key) && std::memcmp(data.data()+p+1,key,end-p-1)==0)return p;
+            }
             p=end;
         } else if(data[p]=='{' || data[p]=='[')++depth;
         else if(data[p]=='}' || data[p]==']') {if(--depth==0)break;}
     }
     return std::string::npos;
+}
+
+// The direct member names of one JSON object, as written (escapes stay encoded).
+std::vector<std::string> json_member_names(std::vector<std::uint8_t> const& data, std::size_t start=0) {
+    std::vector<std::string> names;
+    json_member_position(data,nullptr,start,&names);
+    return names;
 }
 
 class RendererState {
@@ -1327,6 +1338,8 @@ public:
     c3x_renderer_u32 cached_fallback_tile_count = 0;
     c3x_renderer_u32 cached_textured_tile_count = 0;
     std::vector<ResourceAnimation> resource_animations;
+    // The animation pack's map resource names, each with its resource_animations index.
+    std::vector<std::pair<std::string,unsigned>> resource_animation_aliases;
     std::vector<ResourceAnchor> resource_anchors;
     std::vector<ResourceBuffer> resource_buffers;
     GeometryDrawView::Records sandbox_resource_poses;
@@ -2445,7 +2458,7 @@ public:
         river_assets_ready = false;
         route_assets_ready = false;
         resource_assets_ready = false;
-        reset_resource_buffers(); resource_animations.clear();
+        reset_resource_buffers(); resource_animations.clear(); resource_animation_aliases.clear();
         unit_asset_preparation.clear();frame_mesh_leases.clear();frame_texture_leases.clear();
         unit_source_plan={};unit_source_requested.clear();unit_source_plan_valid=false;unit_sources_ready=false;
         unit_source_catalogue=unit_source_device=0;
@@ -2969,9 +2982,18 @@ public:
             std::vector<std::uint8_t> definitions;
             if (read_file((root + "\\bindings.json").c_str(), definitions)) {
                 auto bindings = json_member_position(definitions, "bindings");
-                std::vector<std::string> names = {"horses","cattle","wheat","fish","whales","game","furs","ivory","bananas","rubber"};
-                // Subjects that the active resource pack's compositions name ("animated/<binding>")
-                // load too; packs without compositions load exactly the primary bindings.
+                // The pack names the map resources it animates ("aliases": resource name ->
+                // binding), and the active resource pack's compositions name their subjects
+                // ("animated/<binding>"). Only those bindings load; the runtime knows no names.
+                auto aliases = json_member_position(definitions, "aliases");
+                std::vector<std::pair<std::string,std::string>> aliased;
+                std::vector<std::string> names;
+                for (auto const & alias : json_member_names(definitions, aliases)) {
+                    std::string binding;
+                    if (!json_string_after(definitions, alias.c_str(), aliases, binding)) continue;
+                    aliased.push_back({alias, binding});
+                    if (std::find(names.begin(), names.end(), binding) == names.end()) names.push_back(binding);
+                }
                 if (resource_assets_ready)
                     for (auto const & asset : resource_bundle.assets)
                         if (asset.id.rfind("animated/", 0) == 0 &&
@@ -3013,6 +3035,9 @@ public:
                     char detail[192]; sprintf_s(detail,"resource=%s result=%s facing=SE payload_bytes=%zu",
                         name,ok?"ready":"rejected",bytes.size()); trace.write("animation-bind",detail,true);
                 }
+                for (auto const & [alias, binding] : aliased)
+                    for (unsigned index = 0; index < resource_animations.size(); ++index)
+                        if (resource_animations[index].name == binding) {resource_animation_aliases.push_back({alias, index}); break;}
                 mix_content_revision(definitions);
             }
         }
@@ -4585,14 +4610,14 @@ public:
 
     int resource_animation_for(c3x_renderer_tile_v1 const & tile) const {
         if (tile.city_id >= 0 || tile.resource_id < 0 || resource_animations.empty()) return -1;
-        // A baked composition bound to this exact name beats the animated
-        // presentation's substring match (e.g. a static wheat field over "wheat").
+        // A baked composition bound to this name beats the animation pack's own
+        // alias for it (e.g. a static wheat field over the animated wheat).
         if (resource_assets_ready && c3x_renderer::find_feature_composition(resource_bundle, tile.resource_name))
             return -1;
+        // Exact and case-insensitive, as compositions match their aliases.
         std::string name(tile.resource_name, std::find(std::begin(tile.resource_name),std::end(tile.resource_name),'\0'));
-        std::transform(name.begin(),name.end(),name.begin(),[](unsigned char c){return char(std::tolower(c));});
-        for (unsigned i=0;i<resource_animations.size();++i)
-            if (name.find(resource_animations[i].name)!=std::string::npos) return int(i);
+        for (auto const & [alias, index] : resource_animation_aliases)
+            if (_stricmp(alias.c_str(), name.c_str()) == 0) return int(index);
         return -1;
     }
 
@@ -4690,27 +4715,6 @@ public:
                 body(resource_bundle.assets[item.asset], item.u, item.v, item.rotation, item.scale,
                      id.rfind("decal/", 0) == 0 ? .6f : 1.f);
             }
-            return;
-        }
-        std::string name = tile.resource_name;
-        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char value) { return char(std::tolower(value)); });
-        for (char const * candidate : {"horses", "iron", "uranium", "gold", "dye", "wheat", "cattle", "fish"}) {
-            if (name.find(candidate) == std::string::npos) continue;
-            auto const * group = c3x_renderer::find_feature_group(resource_bundle, candidate);
-            if (group == nullptr || group->placements.empty() ||
-                group->placements.front().asset_index >= resource_bundle.assets.size()) return;
-            auto const & placement = group->placements.front();
-            unsigned count = std::max(1u, placement.count);
-            for (unsigned index = 0; index < count; ++index) {
-                float angle = 6.28318530718f*(float(index)/float(count) +
-                    c3x_renderer::stable_random(tile.variant_seed*101u + index*37u)*0.11f);
-                float ring = count == 1u ? 0.f : (index == 0u ? .045f : .10f + .055f*float((index - 1u)%3u));
-                float variation = (c3x_renderer::stable_random(tile.variant_seed*59u + index*71u + 13u)*2 - 1)*placement.scale_variation;
-                float rotation = c3x_renderer::stable_random(tile.variant_seed*83u + index*97u + 29u)*6.28318530718f;
-                body(resource_bundle.assets[placement.asset_index], .5f + std::cos(angle)*ring,
-                     .5f + std::sin(angle)*ring*.78f, rotation, placement.scale*(1 + variation)*.72f, 1);
-            }
-            return;
         }
     }
 
@@ -11564,13 +11568,6 @@ public:
             object_projection.tile=tile;object_projection.left=left;object_projection.top=top;
             object_projection.relief_projection_scale=relief_projection_scale;
             object_projection.feature_projection_scale=feature_projection_scale;
-            auto append_feature_instance=[&](auto const& bundle,auto const& placement,float u,float v,float rotation,
-                    float scale,float material,float owner,bool shadow,std::vector<Vertex>& target,bool natural=false,float lift=0.f,
-                    float ground_fit=0.f){
-                c3x_renderer::objects::append_instance(object_projection,bundle,placement,u,v,rotation,scale,
-                    material,owner,shadow,natural || &bundle==&site_bundle,relief_at_world,natural_height_at,target,shadow_vertices,
-                    nullptr,lift,ground_fit);
-            };
             auto adopt_objects=[&](c3x_renderer::objects::Surfaces& result){
                 std::vector<Vertex>* layers[]={&route_vertices,&feature_vertices,&city_vertices,&wall_vertices,&mine_vertices,&farm_vertices,&site_vertices};
                 for(unsigned layer=0;layer<c3x_renderer::objects::layer_count;++layer){
@@ -12207,43 +12204,6 @@ public:
                         item.u, item.v, item.rotation, item.scale, 21.0f, 0.0f, true, tile.terrain_type < 11,
                         relief_at_world, resource_height_at, feature_vertices, shadow_vertices, nullptr,
                         item.lift, item.ground_fit);
-                }
-            } else if (tile.city_id < 0 && resource_assets_ready && tile.resource_id >= 0) {
-                std::string resource_name = tile.resource_name;
-                std::transform(resource_name.begin(), resource_name.end(), resource_name.begin(),
-                    [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
-                char const * group_name = nullptr;
-                for (char const * candidate : {"horses", "iron", "uranium", "gold",
-                                               "dye", "wheat", "cattle", "fish"}) {
-                    if (resource_name.find(candidate) != std::string::npos) {
-                        group_name = candidate;
-                        break;
-                    }
-                }
-                c3x_renderer::FeatureGroup const * group = group_name == nullptr ? nullptr :
-                    c3x_renderer::find_feature_group(resource_bundle, group_name);
-                if (group != nullptr && !group->placements.empty()) {
-                    build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
-                    c3x_renderer::FeaturePlacement const & placement = group->placements.front();
-                    unsigned count = std::max(1u, placement.count);
-                    for (unsigned body = 0; body < count; ++body) {
-                        float angle = 6.28318530718f *
-                            (static_cast<float>(body) / static_cast<float>(count) +
-                             c3x_renderer::stable_random(tile.variant_seed * 101u + body * 37u) * 0.11f);
-                        float ring = count == 1u ? 0.0f :
-                            (body == 0u ? 0.045f : 0.10f + 0.055f * static_cast<float>((body - 1u) % 3u));
-                        float variation =
-                            (c3x_renderer::stable_random(tile.variant_seed * 59u + body * 71u + 13u) *
-                             2.0f - 1.0f) * placement.scale_variation;
-                        float scale = placement.scale * (1.0f + variation) * 0.72f;
-                        float rotation = c3x_renderer::stable_random(
-                            tile.variant_seed * 83u + body * 97u + 29u) * 6.28318530718f;
-                        bool fish = std::strcmp(group_name, "fish") == 0;
-                        append_feature_instance(resource_bundle, placement,
-                            0.5f + std::cos(angle) * ring,
-                            0.5f + std::sin(angle) * ring * 0.78f,
-                            rotation, scale, 21.0f, 0.0f, !fish, feature_vertices);
-                    }
                 }
             }
             if(!prepared_objects){

@@ -692,7 +692,7 @@ int main() {
         ):
             self.assertIn(register, shader)
         for implementation in (
-            "append_route_segment", "bridge_", "resource_name.find(candidate)",
+            "append_route_segment", "bridge_", "find_feature_composition(resource_bundle, tile.resource_name)",
             "city_emissive_views",
         ):
             self.assertIn(implementation, renderer + (C3X_ROOT / "Renderer/native/object_compiler.h").read_text())

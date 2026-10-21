@@ -26,7 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
-from Renderer.tools.asset_compiler.build_resource_runtime import SELECTIONS, bundle_string, material_texture
+from Renderer.tools.asset_compiler.build_resource_runtime import bundle_string, material_texture
 from Renderer.tools.asset_compiler import resource_composition_sources
 
 PROFILES = ROOT / "Renderer/inventory/resource_composition_profiles.json"
@@ -525,7 +525,7 @@ def bake_variant(key: str, setting: dict, pieces: list, decals: list, *, model, 
 
 def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = None) -> dict:
     """alternates=False bakes only the recommended compositions (promotion);
-    catalog names one of the profile's Lab reference catalogs to bake alone, without legacy groups."""
+    catalog names one of the profile's Lab reference catalogs to bake alone."""
     profiles = read(PROFILES)
     sources = resource_composition_sources.ensure(SOURCES, PROFILES)
     legacy_manifest = read(LEGACY / "manifest.json")
@@ -752,16 +752,8 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
         report["resources"][name] = {"source": profile.get("source"), "models": len(pieces), "decals": len(decals),
                                      "variants": len(variants), "terrain_overrides": sorted(overrides)}
 
-    # Production's legacy static groups stay available for resources without a
-    # composition; a group whose name a composition alias covers is unreachable.
-    covered = [alias.lower() for values in profiles["bindings"].values() for alias in values]
-    legacy = []
-    for name, asset_id, scale, count in () if catalog else SELECTIONS:
-        if any(name in alias for alias in covered):
-            continue
-        legacy.append((name, asset_id, scale, count))
-        model(asset_id, .060 if name == "fish" else 0.0)
-
+    # A resource without a composition (or an animation alias) keeps no body:
+    # the runtime never guesses one from its name, so the bundle has no groups.
     # Textures: BC1 model atlases, BC3 masked-model atlases, then BC3 decal
     # atlases, padded to the slot count.
     opaque = list(dict.fromkeys(meta["texture"] for meta in models.values() if not meta["masked"] and meta["texture"]))
@@ -812,16 +804,11 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
         raise ValueError("Composition pack exceeds the runtime asset limit")
 
     blob = bytearray(MAGIC)
-    blob.extend(struct.pack("<IIII", 2, TEXTURE_SLOTS, len(assets), len(legacy)))
+    blob.extend(struct.pack("<IIII", 2, TEXTURE_SLOTS, len(assets), 0))
     for texture in padded:
         blob.extend(bundle_string(texture))
     for payload in assets:
         blob.extend(payload)
-    for name, asset_id, scale, count in legacy:
-        blob.extend(bundle_string(name))
-        blob.extend(struct.pack("<I", 1))
-        blob.extend(struct.pack("<IffIIIIff", asset_index[asset_id], scale, 0.10 if count > 1 else 0.03,
-                                count, 1, 5, 0, 0.0, 0.0))
     blob.extend(struct.pack("<I", len(compositions)))
     for name, variants in compositions:
         blob.extend(bundle_string(name))
