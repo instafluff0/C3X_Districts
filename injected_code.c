@@ -29471,6 +29471,13 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 		log_custom_renderer_event ("halo-skip-allocation", C3X_RENDERER_RESULT_OK);
 		return;
 	}
+	// Halo tiles extend the native lattice from the reference anchor.
+	// tile_to_screen_coords folds tiles over half a map from the view's
+	// corner, even on an axis that does not wrap; one folded row made the
+	// renderer reject the city view's world window (black unexplored holes).
+	int origin_anchor_x = is->custom_renderer_tiles[reference].anchor_x;
+	int origin_anchor_y = is->custom_renderer_tiles[reference].anchor_y;
+	int half_width = p_bic_data->is_zoomed_out ? 32 : 64, half_height = half_width / 2;
 	for (int i = 0; i < count; i++) {
 		struct c3x_renderer_tile_v1 * tile = &is->custom_renderer_tiles[i];
 		if (! (tile->tile_flags & C3X_RENDERER_TILE_RENDER)) continue;
@@ -29486,13 +29493,12 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 			wrap_tile_coords (map, &x, &y);
 			Tile * tile = tile_at (x, y);
 			if (tile == NULL || tile == p_null_tile) continue;
-			Main_Screen_Form_tile_to_screen_coords (p_main_screen_form, __, x, y, &native_x, &native_y);
 			// Keep hidden topology for coast/transition queries without building
 			// off-screen art the current viewer has never explored.
 			bool prepare_appearance = dx >= warm_min_x && dx <= warm_max_x &&
 				dy >= warm_min_y && dy <= warm_max_y &&
 				(capture_custom_renderer_visibility (tile, viewer, x, y) & C3X_RENDERER_TILE_EXPLORED);
-			if (! capture_custom_renderer_tile (viewer, native_x + offset_x, native_y + offset_y,
+			if (! capture_custom_renderer_tile (viewer, origin_anchor_x + dx * half_width, origin_anchor_y + dy * half_height,
 				is->custom_renderer_target, visibility_mask, x, y, tile, ! prepare_appearance)) {
 				is->custom_renderer_tile_count = count;
 				free (captured);

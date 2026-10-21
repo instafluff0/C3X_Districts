@@ -789,6 +789,13 @@ levels. Inspect the city terrain and fixed native panels in the window samples;
 passing input markers alone do not establish visible correctness. The same
 save-copy, process ownership and cleanup rules above apply.
 
+Halo regression (2026-10-21): with `-ProfileRenderer`, run this scenario on
+`Renderer/.cache/city-view-halo-20261021/user-4000BC-hut.SAV` (100x100 map).
+Founding pops an adjacent goody hut whose map leaves unexplored holes. The 1x
+city view must log `world-window valid=1`; its halo once folded past half the
+map and voided the window, drawing the holes as hard-edged black tiles.
+`test_city_view_halo.py` covers the cause without the game.
+
 
 ### Graphics-quality comparisons
 

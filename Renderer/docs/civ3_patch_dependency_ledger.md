@@ -3059,3 +3059,26 @@ supported-build address is added.
   calls; nothing new.
 - **Config-off:** the world seed runs only for custom rendering.
 
+
+## City-view halo on the native lattice (2026-10-21)
+
+`required_user_action: ["Re-run INSTALL.bat"]` (done for evaluation on
+October 21). No patch-table entry, injected-state field, signature or
+supported-build address is added.
+
+- **What changes:** with custom zoom off (the city view, or zoom disabled),
+  `capture_custom_renderer_topology` places its halo tiles at the reference
+  tile's anchor plus their lattice offset, instead of calling
+  `Main_Screen_Form_tile_to_screen_coords` for each one.
+- **Why:** native `tile_to_screen_coords` moves a tile that is more than half
+  a map from `TileX_Min`/`TileY_Min` by one map size, even on an axis that
+  does not wrap. On a 100x100 map the 1x city view's 40 rows plus the
+  12-tile halo crossed that line. The folded rows lay outside the world, so
+  `WorldWindow::build` rejected the frame. The city view then drew no hidden
+  ring, and unexplored tiles beside explored land were hard-edged black
+  holes. A goody-hut map popped by a new city's border made them obvious.
+- **Existing symbols relied on:** `Main_Screen_Form_tile_to_screen_coords`
+  still checks the native anchors before the halo is used; nothing new.
+- **Config-off:** the capture runs only for custom rendering.
+- **Test:** `Renderer/native/test_city_view_halo.py` (fails on the folded
+  anchors).
