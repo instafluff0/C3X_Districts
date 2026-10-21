@@ -330,7 +330,11 @@ Output PSSandboxTerrainMaterial(P input) { return shade(input); }
 )");
         if(std::strcmp(entry,"PSSandboxReflectionTerrainMaterial")==0)shader.append(R"(
 Output PSSandboxReflectionTerrainMaterial(P input) {
-    clip(input.world.z-NativeReflection.z-.0001);
+    // Ground within one height unit of the water plane mirrors onto itself
+    // (under a pixel). Terrain decals ride .18 units over their ground, so a
+    // floor patch's rim past the shore floated over the sea; the coast took
+    // that faint, dark mirror image as full coverage: dark blotches offshore.
+    clip(input.world.z-NativeReflection.z-1./112);
     return shade(input);
 }
 )");
