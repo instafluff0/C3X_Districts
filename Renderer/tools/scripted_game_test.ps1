@@ -1,7 +1,7 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,360)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','volcanoes','resources','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','navigation','camera','forest-shadow')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','volcanoes','resources','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','navigation','camera','forest-shadow','pedia-hover')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1,
@@ -16,6 +16,7 @@ if ($volcanoTargets -or $resourceTargets) { $Scenario='units' }
 if ($Scenario -eq 'camera' -and $Seconds -lt 100) { throw 'camera requires at least 100 seconds.' }
 if ($Scenario -in @('navigation','zoom-out','near','units') -and $Seconds -lt 120) { throw 'navigation requires at least 120 seconds.' }
 if ($Scenario -eq 'city-builds' -and $Seconds -lt 180) { throw 'city-builds requires at least 180 seconds.' }
+if ($Scenario -eq 'pedia-hover' -and $Seconds -lt 85) { throw 'pedia-hover requires at least 85 seconds.' }
 if ($Scenario -eq 'route-city' -and $Seconds -lt 245) { throw 'route-city requires at least 245 seconds.' }
 if ($Scenario -eq 'route-zoom' -and $Seconds -lt 120) { throw 'route-zoom requires at least 120 seconds.' }
 if ($Scenario -in @('research-turn','reveal-scroll') -and $Seconds -lt 200) { throw 'research-turn requires at least 200 seconds.' }
@@ -135,12 +136,12 @@ try {
     $env:C3X_RENDERER_UNIT_PACK=$UnitPack
     if ($SceneSamples -gt 0) { $env:C3X_RENDERER_SCENE_SAMPLES=[string]$SceneSamples }
     if ($SceneSharpness -ge 0) { $env:C3X_RENDERER_SCENE_SHARPNESS=$SceneSharpness.ToString([cultureinfo]::InvariantCulture) }
-    if ($Scenario -in @('mouse','zoom','zoom-out','near','units','hud','city','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll')) { $env:C3X_RENDERER_TRACE_INPUT='1' }
+    if ($Scenario -in @('mouse','zoom','zoom-out','near','units','hud','city','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','pedia-hover')) { $env:C3X_RENDERER_TRACE_INPUT='1' }
     if ($MeasureCadence -and -not $ProfileRenderer) { $env:C3X_RENDERER_TRACE='0' }
     if ($ProfileRenderer) {
         $env:C3X_RENDERER_TRACE='2'
         $env:C3X_RENDERER_TRACE_BUFFERED='1'
-        if ($Scenario -in @('turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','zoom-out','near','units','city')) { $env:C3X_RENDERER_TRACE_MIB='64' }
+        if ($Scenario -in @('turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','zoom-out','near','units','city','pedia-hover')) { $env:C3X_RENDERER_TRACE_MIB='64' }
         if ($Scenario -in @('turn-stress','debug-scroll','route-city','city-builds')) {
             # Preserve failure evidence even when a stalled helper must be killed.
             $env:C3X_RENDERER_TRACE_BUFFERED='0'
@@ -234,6 +235,14 @@ try {
     }
     if ($Scenario -eq 'city') {
         $mouseSteps=@(@(54,0,0,0x800,240),@(56,-1100,0,0),@(58,0,0,0),@(66,0,0,0x800,-240),@(68,1100,0,0),@(70,0,0,0))
+    }
+    if ($Scenario -eq 'pedia-hover') {
+        # Circle the pointer over the new city screen's lower-centre production
+        # box, where Civ III swaps to its software Civilopedia cursor: every
+        # move restores and re-saves the screen under the cursor sprite.
+        $mouseSteps=@()
+        for($n=0;$n -lt 600;++$n){$phase=2*[Math]::PI*$n/40
+            $mouseSteps+=,@((40+0.05*$n),[int](90+28*[Math]::Cos($phase)),[int](255+18*[Math]::Sin($phase)),0)}
     }
     if ($Scenario -eq 'forest-shadow') {
         # research-turn at the closest zoom: zoom to 3x, found the city, close
@@ -335,6 +344,9 @@ try {
     }
     if ($Scenario -eq 'city') {
         $interaction=@(@(31,66,'found-city'),@(34,13,'accept-city-name'),@(44,90,'city-native-zoom-out'),@(60,90,'city-native-zoom-in'),@(77,13,'close-city-screen'))
+    }
+    if ($Scenario -eq 'pedia-hover') {
+        $interaction=@(@(31,66,'found-city'),@(34,13,'accept-city-name'),@(75,13,'close-city-screen'))
     }
     if ($Scenario -eq 'turn') {
         $interaction=@(@(36,32,'skip-first-unit'),@(39,32,'skip-second-unit'),@(42,13,'end-turn'),@(65,32,'skip-first-unit-next-turn'),@(68,32,'skip-second-unit-next-turn'),@(71,13,'end-second-turn'))
@@ -465,7 +477,7 @@ try {
                         foreground=([RendererGameCommand]::GetForegroundWindow() -eq $window) }
                 }
             }
-            if ($Scenario -in @('mouse','zoom','zoom-out','near','units','city','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','forest-shadow') -and $mouseIndex -lt $mouseSteps.Count -and $inputElapsed -ge $mouseSteps[$mouseIndex][0]) {
+            if ($Scenario -in @('mouse','zoom','zoom-out','near','units','city','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','forest-shadow','pedia-hover') -and $mouseIndex -lt $mouseSteps.Count -and $inputElapsed -ge $mouseSteps[$mouseIndex][0]) {
                 $step=$mouseSteps[$mouseIndex]
                 if ($mouseIndex -eq 0) { [void][RendererGameCommand]::SetForegroundWindow($window) }
                 if ([RendererGameCommand]::GetForegroundWindow() -ne $window) { throw 'Diagnostic game lost foreground before mouse input.' }
@@ -521,7 +533,7 @@ try {
                 Write-Host 'Interaction command: combat-zoom-key'
             }
             if ($key -eq 0) {
-                $pollMs=if ($Scenario -in @('zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','unit-motion')) {20} else {1000}
+                $pollMs=if ($Scenario -in @('zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','unit-motion','pedia-hover')) {20} else {1000}
                 Start-Sleep -Milliseconds $pollMs; continue
             }
             if ($Scenario -eq 'lifecycle' -and $key -eq 81) {
@@ -552,7 +564,7 @@ try {
             ++$sent
         }
         # Keep cadence observation running after Z as well as mouse input.
-        Start-Sleep -Milliseconds $(if ($Scenario -in @('zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','unit-motion')) {20} else {1000})
+        Start-Sleep -Milliseconds $(if ($Scenario -in @('zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','unit-motion','pedia-hover')) {20} else {1000})
     }
     if ($child.HasExited) { $earlyExit=$true; $gameExitCode=$child.ExitCode }
     Write-Host ('Posted diagnostic commands: '+$sent)
@@ -587,7 +599,7 @@ if ($MeasureCadence) {
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'cadence.json')
 }
 $log=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
-if ($Scenario -in @('mouse','zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll')) {
+if ($Scenario -in @('mouse','zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','pedia-hover')) {
     [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; events=$mouseEvents } |
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'mouse-events.json')
 }
@@ -684,6 +696,7 @@ if ($Scenario -eq 'navigation') {
 }
 
 if ($Scenario -eq 'city-builds' -and $interactionIndex -ne $interaction.Count) { Write-Error 'Incomplete city build-item interaction coverage.'; exit 1 }
+if ($Scenario -eq 'pedia-hover' -and ($interactionIndex -ne $interaction.Count -or $mouseIndex -ne $mouseSteps.Count)) { Write-Error 'Incomplete Civilopedia-cursor hover coverage.'; exit 1 }
 if ($Scenario -eq 'route-city' -and ($interactionIndex -ne $interaction.Count -or $moves -lt 1 -or $log -notmatch 'stage=route-line')) { Write-Error 'Incomplete held-route and city cycling coverage.'; exit 1 }
 if ($Scenario -eq 'route-zoom' -and ($log -notmatch 'stage=route-line' -or $log -notmatch 'stage=zoom-target[^\r\n]*new_width=256 ' -or $log -notmatch 'stage=zoom-target[^\r\n]*new_width=384 ')) { Write-Error 'Incomplete zoomed held-route coverage.'; exit 1 }
 if ($Scenario -in @('research-turn','reveal-scroll') -and ($turns.Count -ne 1 -or $preparedTurns -ne 1 -or $moves -lt 3 -or $steps.Count -ne 1 -or $readyEvents -ne 1 -or $interactionIndex -ne $interaction.Count)) { Write-Error 'Incomplete first-turn research and idle animation coverage.'; exit 1 }

@@ -231,6 +231,14 @@ renderer failures and continued presentations. Verify that the production
 portrait/name actually changes among Settler, Worker, Scout, Warrior, Barracks
 and Granary in the window evidence; arrow-key input does not establish this.
 
+`-Scenario pedia-hover -Seconds 95 -SampleHz 2 -ProfileRenderer` uses the
+new-game save (`newgame-4000BC.SAV`). It founds a city, accepts its name and
+circles the pointer for 30 s (600 moves) over the city screen's lower panel
+(centre offset +90,+255), where Civ III swaps to its software Civilopedia
+cursor, then closes the city. Require all 600 mouse events and the three
+interactions, and check the frames for the "C" cursor over the commerce rows.
+Read it with `check_cursor_hover.py` below (performance review 90).
+
 For user-controlled play instead of a scripted fixture, use
 [`CAPTURE_GAMEPLAY.bat`](../docs/gameplay_profile.md). Its console can finish
 collecting evidence while the game remains frozen.
@@ -538,6 +546,15 @@ capture from before its fix and to pass after it (performance review 4t, 4v,
   It fails if any 2 s window spent more than 300 ms with Civ III's thread
   blocked on the input-coverage worker. Before the fix this reached 940 ms
   while scrolling; after it, the worst window was about 240 ms.
+
+- `python3 Renderer/tools/check_cursor_hover.py CAPTURE [max_growth]` needs
+  `-ProfileRenderer`, or a `CAPTURE_GAMEPLAY.bat` session that hovers
+  Civilopedia links. It fails unless Civ III's software cursor was active
+  and the retained node count grew by at most 128 during the hover. Each
+  restore of the cursor's save used to chain to the previous save: the
+  user's diplomacy hover grew 736 nodes and failed it. `pedia-hover` passes
+  with or without that fix, because city-screen redraws cut the chain
+  (review 90).
 
 - `python3 Renderer/tools/check_camera_jobs.py CAPTURE` needs
   `-ProfileRenderer`. It fails if any camera job failed. A failed job leaves

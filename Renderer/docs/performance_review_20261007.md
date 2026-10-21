@@ -4703,3 +4703,68 @@ B1's and B3's 1× x scrolls here (470 and 493 against 1,846-1,882 px/s),
 B2's 2× scroll and A3's 2× and 3× scrolls differ only by that jump. Section 88's table compared these
 figures; it now lists step counts. Compare steps and step/adoption times,
 not px/s, until the report handles the wrap.
+
+## 90. The Civilopedia cursor chained every restore (October 21)
+
+**Report** (the user's `CAPTURE_GAMEPLAY.bat` session, 2240x1192).
+- Diplomacy slowed sharply while the pointer hovered technologies or
+  resources, where it turns into the Civilopedia cursor.
+- The city screen slowed the same way near the centre of its lower panel.
+- In those places the pointer also travelled a different distance for the
+  same hand movement.
+
+**Cause.** Over such links Civ III draws a software cursor
+(`FUN_00606b70`). It hides the Windows cursor, then on every move:
+1. copies its 32x32 save image back over the old position (`FUN_00606aa0`);
+2. copies the screen under the new position into the save image;
+3. draws the sprite in `JGL_present_screen` and presents both rectangles.
+
+A form redraw under the cursor also re-saves that part (`FUN_006092f0`).
+Both copies are shifted, so `RetainedComposition::record` executed them as
+nodes: each restore read the previous save, which read the previous restore.
+Over the animated map every node of that chain is animated, and each frame
+re-evaluated all of it. In the user's diplomacy hover:
+- retained nodes grew from 130 to 1,071;
+- the worst visual frame took 218 ms (141 M copied pixels);
+- native presents (op 103) took 1.1-1.6 s of every 2 s of the game thread,
+  because each present waits for the helper (at most two in flight,
+  section 48).
+
+**Change** (`retained_composition.h`, `record`). A shifted copy whose source
+region is entirely plain shifted copies with the opposite offset now selects
+those copies' source version, like an equal-coordinate copy. The restore
+becomes the saved patches and the chain ends. Detail planes, aliased
+self-copies, partial coverage, placement and direct passes keep the general
+path.
+
+**Tests.**
+- `test_cursor_save_restore.py` replays 300 cursor moves through the
+  production `record` against a pixel model, including edge-clipped saves and
+  UI redraws with partial re-saves. Every screen and save pixel equals the
+  general path at three animation times. Chain depth stays at 3 and live
+  nodes at 12 or fewer (general path: 155 and 527). With the selection
+  disabled it fails.
+- `check_cursor_hover.py` reads a profiled capture. It requires an active
+  software cursor and node growth of at most 128 during the hover. It fails on
+  the user's capture (growth 736).
+- New scripted scenario `pedia-hover`: the city screen with 600 moves over
+  the commerce rows.
+
+**Checked** (`pedia-hover`, one private build with a temporary switch that
+disabled the selection; arms alternated, no other VM work):
+- The city screen does not chain: its panel redraws cut the history. Nodes
+  stay at 446-477 with or without the change, and every run passes the check.
+- City-screen frame cost follows run order, not the change. The first run of
+  each pair drew 50-61 ms frames, before and during the hover; the second drew
+  6 ms, whichever arm went first. Work per frame was the same (about 1,035
+  copies and 29.5 M copied pixels); the slow runs waited on the GPU (display
+  about 28 ms plus fence about 22 ms per frame).
+- There is no scripted diplomacy fixture. The diplomacy fix rests on the model
+  test and the user's next session.
+
+**Pointer distance.** The VM has Parallels "Smart mouse optimized for games:
+auto". While Civ III hides the Windows cursor for its sprite cursor, Parallels
+switches to relative game input with its own acceleration; vanilla Civ III
+does the same in this VM. The change removes the stalls but not this switch.
+Turning that Parallels option off should keep pointer travel the same
+everywhere.

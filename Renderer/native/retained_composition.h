@@ -1483,6 +1483,29 @@ public:
            c.source_x==c.area.left&&c.source_y==c.area.top&&images.at(c.source).format==target->second.format){
             auto selected=read(c.source,area);replace(target->second,area,selected.patches);return;
         }
+        // Civ III's software cursor (Civilopedia links, city screen) saves the
+        // screen under it into a small image and copies that save back on the
+        // next move. A shifted copy whose source is entirely shifted copies
+        // with the opposite offset selects their source version, exactly like
+        // an equal-coordinate copy. Executing it instead chained each restore
+        // to the previous save: hovering grew ~1000 animated nodes that every
+        // frame re-evaluated, and native presents waited ~0.2 s each.
+        if(!placement&&c.kind==Kind::copy&&!c.detail&&!direct.draw&&!direct.revision&&!direct.animated&&!direct.input_bytes&&
+           images.at(c.source).format==target->second.format){
+            int dx=c.area.left-c.source_x,dy=c.area.top-c.source_y;
+            auto saved=read(c.source,{area.left-dx,area.top-dy,area.right-dx,area.bottom-dy});
+            std::vector<Patch> selected;std::uint64_t covered=0;bool exact=saved.partitioned;
+            for(auto const& patch:saved.patches){
+                auto const& n=*patch.node;auto const& s=n.command;
+                if(!exact||!n.operation||patch.output||s.kind!=Kind::copy||s.detail||n.placement||n.direct.draw||n.direct.revision||
+                   n.direct.animated||n.direct.input_bytes||s.area.left-s.source_x!=-dx||s.area.top-s.source_y!=-dy||
+                   n.inputs[1].format!=target->second.format||!n.inputs[1].partitioned){exact=false;break;}
+                Rect wanted={patch.area.left+dx,patch.area.top+dy,patch.area.right+dx,patch.area.bottom+dy};
+                for(auto const& q:n.inputs[1].patches){auto r=intersect(q.area,wanted);
+                    if(!empty(r)){covered+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);selected.push_back({r,q.node,q.output});}}
+            }
+            if(exact&&covered==std::uint64_t(area.right-area.left)*(area.bottom-area.top)){replace(target->second,area,selected);return;}
+        }
         // JGL's unscaled opaque transfer is the same version selection for
         // both its native words and full-color companion. Replaying it as a
         // stretch shader rebuilt entire animated map canvases every frame.
