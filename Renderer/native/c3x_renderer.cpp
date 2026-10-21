@@ -11340,7 +11340,15 @@ public:
                     resource_mountains=c3x_renderer::fidelity::MountainShape(natural,resource_c,resource_r,
                         [&](int mc,int mr){return queries.natural_tile(mc,mr);},[](int,int){return false;});}
                 if(!resource_mountains.count)return height;
-                return height+resource_mountains.sample(natural,u,v).displacement*queries.hidden_taper(u,v);
+                // As the mesh draws it (relief_mesh_body.h): the rise eases out at
+                // the coast and beside rivers. Without that, gems seated by water
+                // stood on rock that is not drawn and hovered over the bank.
+                float displacement=resource_mountains.sample(natural,u,v).displacement;
+                auto shore=queries.shore(u,v);
+                float river_scale=natural.river_world?c3x_renderer::render_core::smooth01(
+                    (float(natural.river_sample({u,v}).distance)-6.f)/16.f):1.f;
+                return height+displacement*c3x_renderer::fidelity::coast_relief(float(shore.distance),
+                    float(shore.beach_width))*river_scale*queries.hidden_taper(u,v);
             };
             auto relief_at_world = [&](float world_u, float world_v) {
                 if (pickup_profile) {

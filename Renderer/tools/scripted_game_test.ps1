@@ -9,7 +9,7 @@ param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory
       [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='')
 $ErrorActionPreference = 'Stop'
 # 'volcanoes' is the units camera script aimed at the 1498 AD save's volcano groups;
-# 'resources' aims it at that save's ivory near rivers and its fish and whales.
+# 'resources' aims it at that save's ivory near rivers, fish and whales, and coastal gems.
 $volcanoTargets=$Scenario -eq 'volcanoes'
 $resourceTargets=$Scenario -eq 'resources'
 if ($volcanoTargets -or $resourceTargets) { $Scenario='units' }
@@ -211,8 +211,9 @@ try {
         # Volcanoes: minimap pixel (33+3.5x, 970+1.62y) for map tile (x,y) on that
         # client; the southern group near (95,91), the south-western group near
         # (40,103) and the western pair near (31,40).
-        # Resources: ivory at (91,85) and (98,92), fish and whales around (119,94).
-        $targets=if ($volcanoTargets) {@(@(-754,521),@(-947,541),@(-978,439))} elseif ($resourceTargets) {@(@(-768,512),@(-744,523),@(-671,527))} else {@(@(-738,498),@(-671,527),@(-661,553),@(-661,505))}
+        # Resources: ivory at (91,85), fish and whales around (119,94), and gems on
+        # mountains at the coast at (29,103) and (49,107).
+        $targets=if ($volcanoTargets) {@(@(-754,521),@(-947,541),@(-978,439))} elseif ($resourceTargets) {@(@(-768,512),@(-671,527),@(-985,541),@(-916,547))} else {@(@(-738,498),@(-671,527),@(-661,553),@(-661,505))}
         foreach($target in $targets){
             $mouseSteps+=@(@($t,$target[0],$target[1],2),@(($t+0.1),$target[0],$target[1],4),@(($t+2),0,0,0))
             $mouseSteps+=$in|%{,@(($t+4+$_),0,0,0x800,120)}; $mouseSteps+=,@(($t+12),0,0,0x800,240)

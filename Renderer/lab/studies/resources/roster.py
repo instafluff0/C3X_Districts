@@ -14,6 +14,9 @@ Cases:
 - oasis-roads: oases on desert crossed by a straight road, an L junction, a
   straight railroad and a crossroads, beside one without routes. Roster names
   ending in "|road" or "|rail" give that tile a route ("|road" alone: no resource).
+- mountain-water: mountain minerals where the mountain mesh eases its rise out,
+  on mountains whose south corner meets the coast and on mountains with a river
+  along their south-west edge (their minerals sit at that corner).
 """
 from __future__ import annotations
 
@@ -47,7 +50,33 @@ def native() -> dict:
 
 
 def cases() -> tuple[str, ...]:
-    return ("roster", "relief", "oasis-roads") + tuple("native-" + name for name in native()["batches"])
+    return ("roster", "relief", "oasis-roads", "mountain-water") + tuple("native-" + name for name in native()["batches"])
+
+
+# mountain-water. Raw offsets of mountains whose south corner meets the coast row,
+# then natural (c, r) river mountains (raw = c + r, c - r): the river follows the
+# south-west edges of row RIVER_ROW (Civ III edge bit 32; its neighbour holds bit 2).
+WATER_MINERALS = ("Gems", "Gold", "Iron")
+SHORE_MOUNTAINS = ((-5, 5), (-1, 5), (3, 5))
+RIVER_ROW, RIVER_NODES, RIVER_MOUNTAINS = 1, range(10, 20), (12, 15, 18)
+
+
+def mountain_water() -> list[tuple[int, int, str, str]]:
+    shore = [(x, y, name, "Mountains") for (x, y), name in zip(SHORE_MOUNTAINS, WATER_MINERALS)]
+    return shore + [(c + RIVER_ROW - 16, c - RIVER_ROW - 16, name, "Mountains")
+                    for c, name in zip(RIVER_MOUNTAINS, WATER_MINERALS)]
+
+
+def river(case: str, dx: int, dy: int, bits: int) -> int:
+    """Civ III river edge bits of the Lab tile at raw offset (dx, dy)."""
+    if case != "mountain-water":
+        return bits
+    c, r = (dx + dy + 32) // 2, (dx - dy) // 2
+    if r == RIVER_ROW and c in RIVER_NODES:
+        bits |= 32
+    if r == RIVER_ROW - 1 and c in RIVER_NODES:
+        bits |= 2
+    return bits
 
 
 # Raw Civ III neighbour offsets: east-west (+-2, 0), north-south (0, +-2).
@@ -115,6 +144,8 @@ def placements(case: str) -> list[tuple[int, int, str, str]]:
         return list(native_layout(case))
     if case == "oasis-roads":
         return [(x, y, "Oasis", "Desert") for x, y, name in oasis_roads() if name.startswith("Oasis")]
+    if case == "mountain-water":
+        return mountain_water()
     return [(x, y, m["civ3_name"], "Hills" if case == "relief" and y < WATER_EDGE else
              "Coast" if y >= WATER_EDGE else "Grassland") for x, y, m in layout()]
 
@@ -128,6 +159,8 @@ def terrain(case: str, dx: int, dy: int, base: int, real: int) -> tuple[int, int
             if (x, y) == (dx, dy):
                 return TERRAIN[label]
         return 2, 2
+    if case == "mountain-water" and any((x, y) == (dx, dy) for x, y, _, _ in mountain_water()):
+        return TERRAIN["Mountains"]
     if dy >= WATER_EDGE:
         return (11, 11) if dy < WATER_EDGE + 4 else (12, 12)
     if case == "relief" and any((dx, dy) == (x, y) for x, y, m in layout() if m["civ3_name"] not in WATER):

@@ -90,11 +90,13 @@ save and leaves its selected settler idle. It requires a completed map and no
 renderer failures. Inspect the window samples for the automatic city-site
 overlays when that C3X setting is enabled, then confirm the reported cleanup.
 
-`-Scenario resources -Seconds 190 -SampleHz 4` runs the `units` camera script
-on the 1498 AD save, aimed at its ivory beside rivers and its fish and whales.
+`-Scenario resources -Seconds 215 -SampleHz 4` runs the `units` camera script
+on the 1498 AD save, aimed at its ivory beside rivers, its fish and whales, and
+its gems on mountains at the coast.
 At each target it zooms two steps further in than `units` does; the save opens
 zoomed out, so the close-ups reach about 1x. Review animal grounding on slopes,
-resource body brightness and marine bodies under the water surface.
+resource body brightness, marine bodies under the water surface and minerals
+seated on the drawn mountain foot.
 `-RendererOptions C3X_RENDERER_RESOURCE_LOOK=gain,saturation` previews a
 resource look. The first run after a shader change recompiles during load and
 may not reach the last target; run it again.

@@ -489,6 +489,7 @@ def scene(category, case, destination, *, world_size=32):
                     base = real = 2 if x < 10 else 11
             if category == "resources" and case in resource_roster.CASES:
                 base, real = resource_roster.terrain(case, x - 16, y - 16, base, real)
+                river = resource_roster.river(case, x - 16, y - 16, river)
             if category == "shadows":
                 # Stable adjacent systems, all under one captured environment.
                 # Keep the lower center flat for the native unit sprite API.

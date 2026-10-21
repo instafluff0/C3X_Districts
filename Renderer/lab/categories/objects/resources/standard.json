@@ -31,7 +31,8 @@
       "native-animals",
       "native-specials",
       "native-mountain-minerals",
-      "oasis-roads"
+      "oasis-roads",
+      "mountain-water"
     ]
   },
   "tests": [
@@ -53,6 +54,7 @@
     "Renderer.tools.asset_compiler.test_school_orientation",
     "Renderer.tools.asset_compiler.test_herd_spacing",
     "Renderer.native.test_resource_decal_slope",
+    "Renderer.native.test_resource_mountain_seating",
     "Renderer.native.test_resource_route_clearance",
     "Renderer.native.test_resource_shadow_union",
     "Renderer.native.test_dynamic_shadow_opacity"

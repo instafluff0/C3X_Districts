@@ -13,6 +13,9 @@ unreplaced resources keep Civ III's sprite in game but are blank in Lab.
 `native-minerals` places each mineral on every terrain Conquests allows it
 (`Renderer/lab/studies/resources/native_terrains.json`), including mountains;
 `native-minerals-alternates` shows Lab-only `Name~label` alternates beside them.
+`mountain-water` puts Gems, Gold and Iron on mountains whose south corner
+meets the coast and on mountains with a river along that edge, where the
+mountain mesh eases its rise out; their pieces must sit on the drawn ground.
 `python3 Renderer/lab/studies/resources/audit.py --label NAME` renders every case at
 128 and 256 and writes per-resource crops beside the original Civ III sprite to
 `Renderer/lab/out/resources/audit/NAME/index.html`.
