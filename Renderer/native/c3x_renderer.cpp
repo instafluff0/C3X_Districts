@@ -17425,8 +17425,8 @@ private:
                             renderer_state.gpu_composition->visual_nodes());
                         renderer_state.trace.write("retained-recipe-reuse",detail,true);
                         auto plans=renderer_state.gpu_composition->visual_plan_reuse();auto gpu=renderer_state.gpu_composition->visual_gpu_counts();
-                        std::snprintf(detail,sizeof(detail),"topology_builds=%llu topology_reuses=%llu batch_builds=%llu batch_reuses=%llu source_binds=%llu source_reuses=%llu plan_nodes=%zu spatial_plans=%llu spatial_dispatches=%llu spatial_commands=%llu source_copies=%llu interpreter_dispatches=%llu interpreter_copies=%llu interpreter_copied_pixels=%llu",
-                            plans.builds,plans.reuses,plans.batch_builds,plans.batch_reuses,plans.source_binds,plans.source_reuses,plans.nodes,
+                        std::snprintf(detail,sizeof(detail),"topology_builds=%llu topology_reuses=%llu batch_builds=%llu batch_reuses=%llu source_binds=%llu source_reuses=%llu plan_nodes=%zu plan_depth=%u spatial_plans=%llu spatial_dispatches=%llu spatial_commands=%llu source_copies=%llu interpreter_dispatches=%llu interpreter_copies=%llu interpreter_copied_pixels=%llu",
+                            plans.builds,plans.reuses,plans.batch_builds,plans.batch_reuses,plans.source_binds,plans.source_reuses,plans.nodes,plans.depth,
                             gpu.spatial_compilations,gpu.spatial_dispatches,gpu.spatial_commands,gpu.spatial_source_copies,
                             gpu.interpreter_dispatches,gpu.interpreter_copies,gpu.interpreter_copied_pixels);
                         renderer_state.trace.write("retained-execution-counts",detail,true);

@@ -49,3 +49,7 @@ for memory, presentation intervals and per-operation publication queue/service
 times. The analyzer distinguishes an intentionally absent replay journal from
 missing evidence. `Renderer.tools.inspect_window_witness` reviews the `window`
 directory without requiring a replay inspection directory.
+`python3 Renderer/tools/check_retained_growth.py SESSION_DIR` scans the whole
+session for retained-composition build-up: stretches where the composition
+plan keeps deepening (`plan_depth`), with their times, node counts, slowest
+frames and whether Civ III's software cursor was up (review 90-91).

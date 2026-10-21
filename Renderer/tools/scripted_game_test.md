@@ -237,7 +237,7 @@ circles the pointer for 30 s (600 moves) over the city screen's lower panel
 (centre offset +90,+255), where Civ III swaps to its software Civilopedia
 cursor, then closes the city. Require all 600 mouse events and the three
 interactions, and check the frames for the "C" cursor over the commerce rows.
-Read it with `check_cursor_hover.py` below (performance review 90).
+Read it with `check_retained_growth.py --hover` below (performance review 90-91).
 
 For user-controlled play instead of a scripted fixture, use
 [`CAPTURE_GAMEPLAY.bat`](../docs/gameplay_profile.md). Its console can finish
@@ -547,14 +547,18 @@ capture from before its fix and to pass after it (performance review 4t, 4v,
   blocked on the input-coverage worker. Before the fix this reached 940 ms
   while scrolling; after it, the worst window was about 240 ms.
 
-- `python3 Renderer/tools/check_cursor_hover.py CAPTURE [max_growth]` needs
-  `-ProfileRenderer`, or a `CAPTURE_GAMEPLAY.bat` session that hovers
-  Civilopedia links. It fails unless Civ III's software cursor was active
-  and the retained node count grew by at most 128 during the hover. Each
-  restore of the cursor's save used to chain to the previous save: the
-  user's diplomacy hover grew 736 nodes and failed it. `pedia-hover` passes
-  with or without that fix, because city-screen redraws cut the chain
-  (review 90).
+- `python3 Renderer/tools/check_retained_growth.py CAPTURE [--hover]`
+  needs `-ProfileRenderer` or a `CAPTURE_GAMEPLAY.bat` session. It scans the
+  whole capture and fails on every stretch whose composition plan is deeper
+  than `--max-depth` (default 64): versions that each read the previous one,
+  whatever caused them. Normal depths are 5-11 on the busy map and 34 in the
+  city screen. Each stretch is listed with its node count, slowest
+  frame and cursor-sized presents. Captures without `plan_depth` (before
+  review 91) fall back to the cursor case: more than 128 nodes of growth
+  during a software-cursor hover. The user's diplomacy hover failed it that
+  way, gaining 298 nodes. `--hover` also requires an active software cursor
+  (`pedia-hover`). `pedia-hover` passes with or without the cursor fix,
+  because city-screen redraws cut the chain (review 90).
 
 - `python3 Renderer/tools/check_camera_jobs.py CAPTURE` needs
   `-ProfileRenderer`. It fails if any camera job failed. A failed job leaves

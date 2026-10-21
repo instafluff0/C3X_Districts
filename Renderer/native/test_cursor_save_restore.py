@@ -38,9 +38,17 @@ struct ''' + name + r''' {
  struct Node;
  struct Patch {Rect area;std::shared_ptr<Node> node;unsigned output=0;};
  struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;std::uint64_t version=0;Rect required{};};
+ struct BatchOp {Picture inputs[6];};
  struct Node {Rect area{},recipe_clip{};Command command{};bool operation=false,dynamic=false,map_dynamic=false,constant=false,view_dependent=false,retired=false;
-  Picture inputs[6];Id original[6]={};Direct direct;std::shared_ptr<c3x_renderer::ZoomTransition> placement;int anchor_x=0,anchor_y=0;};
+  Picture inputs[6];Id original[6]={};Direct direct;std::shared_ptr<c3x_renderer::ZoomTransition> placement;int anchor_x=0,anchor_y=0;
+  std::vector<BatchOp> batch;bool projects_scene=false;std::shared_ptr<c3x_renderer::ZoomTransition> view;};
+ struct PlanNode {std::weak_ptr<Node> node;bool project=false;};
+ struct PrepareNode {std::weak_ptr<Node> node;bool project=false;std::weak_ptr<c3x_renderer::ZoomTransition> scale;};
+ struct PlanReuse {std::uint64_t builds=0,reuses=0;std::size_t nodes=0;unsigned depth=0;};
  std::map<Id,Picture> images;std::uint64_t serial=0,direct_bytes=0;bool admitted=true;std::size_t nodes=0;
+ Picture front;std::uint64_t front_revision=0,topology_revision=0,planned_front=~std::uint64_t(0),planned_topology=~std::uint64_t(0);
+ std::vector<PlanNode> collect_plan;std::vector<PrepareNode> prepare_plan;PlanReuse plan_counts;bool trace_evaluated=false;void trace_plan(){}
+ unsigned plan_depth(Id id){front=images.at(id);++front_revision;compile_plan();return plan_counts.depth;}
  Rect intersect(Rect a,Rect b)const{return intersection(a,b);}
  bool empty(Rect r)const{return r.left>=r.right||r.top>=r.bottom;}
  Rect extent(Picture const& p)const{return {0,0,int(p.width),int(p.height)};}
@@ -56,7 +64,7 @@ class CursorSaveRestoreTests(unittest.TestCase):
         source = (ROOT / 'Renderer/native/retained_composition.h').read_text()
         methods = '\n'.join(method(source, s) for s in (
             '    Picture read(Id id,Rect region){', '    void replace(Picture& image,',
-            '    void write(Picture& image,', '    void record(Command const& c,'))
+            '    void write(Picture& image,', '    void record(Command const& c,', '    void compile_plan(){'))
         begin = methods.index("        // Civ III's software cursor")
         end = methods.index("        // JGL's unscaled opaque transfer")
         general = methods[:begin] + methods[end:]
@@ -140,6 +148,11 @@ int main(){
  std::fprintf(stderr,"current chain=%d nodes=%zu; general chain=%d nodes=%zu\n",largest,most,chain(general,screen),general.nodes);
  // The general path is the defect being guarded: it chains every move.
  assert(chain(general,screen)>100&&general.nodes>300);
+ // The production plan reports that chain as plan_depth in the trace,
+ // which check_retained_growth.py reads from gameplay captures.
+ unsigned shallow=current.plan_depth(screen),deep=general.plan_depth(screen);
+ std::fprintf(stderr,"plan depth current=%u general=%u\n",shallow,deep);
+ if(shallow!=unsigned(chain(current,screen)-1)||deep!=unsigned(chain(general,screen)-1)){std::fprintf(stderr,"plan depth disagrees with the chain\n");return 1;}
  // A restore leaves the sprite over the current fill/base, nothing deeper.
  if(largest>3||most>16){std::fprintf(stderr,"cursor restore chained: depth %d, %zu live nodes\n",largest,most);return 1;}
 }

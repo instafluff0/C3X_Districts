@@ -4744,9 +4744,8 @@ path.
   general path at three animation times. Chain depth stays at 3 and live
   nodes at 12 or fewer (general path: 155 and 527). With the selection
   disabled it fails.
-- `check_cursor_hover.py` reads a profiled capture. It requires an active
-  software cursor and node growth of at most 128 during the hover. It fails on
-  the user's capture (growth 736).
+- A capture checker for the hover (now `check_retained_growth.py`, section
+  91). It fails on the user's capture.
 - New scripted scenario `pedia-hover`: the city screen with 600 moves over
   the commerce rows.
 
@@ -4768,3 +4767,54 @@ switches to relative game input with its own acceleration; vanilla Civ III
 does the same in this VM. The change removes the stalls but not this switch.
 Turning that Parallels option off should keep pointer travel the same
 everywhere.
+
+## 91. Build-up anywhere in a capture: plan depth (October 21)
+
+**Why.** The user asked for a check that finds any screen whose retained
+composition keeps building up, not just the Civilopedia cursor of section
+90. Node counts cannot decide this. On the busy 1498 AD save, normal runs
+rise 350-640 nodes in single steps when a screen opens or a busy area loads,
+up to 1,131 nodes. That overlaps the user's diplomacy build-up (+700).
+
+**Change.**
+- `RetainedComposition::compile_plan` now returns each node's height, its
+  longest input path, memoized in the same traversal. `PlanReuse::depth` is
+  the deepest front patch.
+- The helper traces it as `plan_depth` in `retained-execution-counts`, with
+  every eighth direct visual frame (`c3x_renderer.cpp`).
+- `check_retained_growth.py` replaces `check_cursor_hover.py`. It scans a
+  whole capture and fails on each stretch deeper than `--max-depth`
+  (default 64). Each stretch is listed with its time, depth, node count,
+  slowest frame and cursor-sized presents. It also prints the deepest plan.
+- Older captures without `plan_depth` list their largest node rises as
+  leads. They fail only on more than 128 nodes of growth during a
+  software-cursor hover; the user's capture fails that way.
+
+**What depth looks like** (private build with a temporary switch for the
+section 90 selection; scripted runs):
+
+| Run | plan_depth |
+| --- | --- |
+| Busy 1498 AD `units`, 260 s | 5-11 |
+| `pedia-hover` city screen, cursor fix on | 12 → 34 when the screen opens, then flat |
+| `pedia-hover`, cursor fix off | 34-39: the cursor chain, cut by panel redraws |
+
+A screen's depth is set when it opens. A chain gains about one level per
+version: the cursor gains one per mouse move. The helper refuses any
+composition deeper than 256. The 64 limit is about twice the deepest
+screen measured and a quarter of that refusal.
+
+**Tests.**
+- `test_cursor_save_restore.py` now compiles the production `compile_plan`
+  on the replayed cursor sequence. Its depth equals the model chain: 1 with
+  the fix, 154 on the general path.
+- `Renderer/tools/test_check_retained_growth.py` covers the user's node
+  timeline (fails on the diplomacy hover), a screen opening (passes), a
+  shallow and a steady deep plan (pass), a deepening plan (fails with its
+  stretch), `--hover` without a cursor, and a capture without samples.
+- The four busy-save captures under `Renderer/.cache` used for calibration
+  pass.
+
+**Not covered.** No scripted fixture reproduces the runaway diplomacy chain,
+so the 64 limit has not yet been seen failing in game. The user's next
+`CAPTURE_GAMEPLAY.bat` session will show diplomacy's depth.

@@ -40,7 +40,10 @@ public:
         work.executed+=item;
     }
     struct RecipeReuse {std::uint64_t eligible=0,probed=0,reused=0;};
-    struct PlanReuse {std::uint64_t builds=0,reuses=0,source_binds=0,source_reuses=0,batch_builds=0,batch_reuses=0;std::size_t nodes=0;};
+    // depth: the last plan's longest input path from the front, in hops.
+    // It stays small for a screen; a chain of versions that each read the
+    // previous one (Civ III's cursor restores, review 90) keeps deepening.
+    struct PlanReuse {std::uint64_t builds=0,reuses=0,source_binds=0,source_reuses=0,batch_builds=0,batch_reuses=0;std::size_t nodes=0;unsigned depth=0;};
     using Texture=ComPtr<ID3D11Texture2D>;
     struct Placed {
         Command command;int x=0,y=0;
@@ -385,18 +388,20 @@ private:
     void compile_plan(){
         if(planned_front==front_revision&&planned_topology==topology_revision){++plan_counts.reuses;return;}
         collect_plan.clear();prepare_plan.clear();
-        std::map<Node const*,unsigned> collected,prepared;
-        std::function<void(std::shared_ptr<Node> const&,unsigned,bool)> gather;
-        gather=[&](std::shared_ptr<Node> const& n,unsigned depth,bool project){
+        // gather returns a node's height: its longest input path, memoized.
+        std::map<Node const*,unsigned> collected,prepared,heights;unsigned deepest=0;
+        std::function<unsigned(std::shared_ptr<Node> const&,unsigned,bool)> gather;
+        gather=[&](std::shared_ptr<Node> const& n,unsigned depth,bool project)->unsigned{
             if(depth>256)throw std::runtime_error("retained composition dependency depth");
             project|=n->projects_scene;unsigned bit=project?2:1;auto& seen=collected[n.get()];
-            if(seen&bit)return;seen|=bit;
+            if(seen&bit)return heights[n.get()];seen|=bit;
             if(collected.size()>32768)throw std::runtime_error("retained composition plan budget");
-            collect_plan.push_back({n,project});
-            for(auto const& input:n->inputs)for(auto const& patch:input.patches)gather(patch.node,depth+1,project);
-            for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)gather(patch.node,depth+1,project);
+            collect_plan.push_back({n,project});unsigned height=0;
+            for(auto const& input:n->inputs)for(auto const& patch:input.patches)height=std::max(height,1+gather(patch.node,depth+1,project));
+            for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)height=std::max(height,1+gather(patch.node,depth+1,project));
+            auto& h=heights[n.get()];return h=std::max(h,height);
         };
-        for(auto const& patch:front.patches)gather(patch.node,0,false);
+        for(auto const& patch:front.patches)deepest=std::max(deepest,gather(patch.node,0,false));
         std::function<void(std::shared_ptr<Node> const&,unsigned,bool,std::shared_ptr<c3x_renderer::ZoomTransition>)> preparation;
         preparation=[&](std::shared_ptr<Node> const& n,unsigned depth,bool project,std::shared_ptr<c3x_renderer::ZoomTransition> scale){
             if(depth>256)throw std::runtime_error("retained preparation dependency depth");
@@ -408,7 +413,7 @@ private:
         };
         for(auto const& patch:front.patches)preparation(patch.node,0,false,{});
         planned_front=front_revision;planned_topology=topology_revision;
-        ++plan_counts.builds;plan_counts.nodes=collected.size();
+        ++plan_counts.builds;plan_counts.nodes=collected.size();plan_counts.depth=deepest;
         if(trace_evaluated)trace_plan();
     }
     // Trace only (C3X_RENDERER_TRACE_EVALUATED=1): the front's node graph,
