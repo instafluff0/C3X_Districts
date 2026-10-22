@@ -7,10 +7,9 @@ replies from the Winter and Spring sessions, and traces of the current C3X
 season clock and renderer pipeline. File references are relative to `Renderer/`
 unless they name `injected_code.c` / `C3X.h`.
 
-Approved looks to reproduce: Autumn **v18**, Winter **v24-laden**. Spring is
-still choosing its final look: v23 added posies (bunches of up to 5 touching
-heads); v24, with tighter posies, is rendering. The Spring session names the
-final version once the user picks. Each study's private shader root is
+Approved looks to reproduce: Autumn **v18**, Winter **v24-laden**, Spring
+**v28**. The user confirmed v28's direction; small tweaks may still come at
+final sign-off. The rejected posies (v23–v25) are not part of the port. Each study's private shader root is
 the visual reference; the port must match it in the Lab before anything is
 staged, and the user accepts each season's in-game look separately.
 
@@ -146,7 +145,10 @@ needs the following, so the hook set includes them from Phase 0:
 - Spring's bloom pixels in the relief hook: in/out lighting normal (an upright
   head, the slope normal bent toward +z) and specular map; the frame light
   direction (`ShadowL.xy`, for petal top light and contact shadow); and the
-  screen derivatives of world xy. Upright blooms also use screen-proportional
+  screen derivatives of world xy (the pixel footprint: below 1.4 px a bloom is
+  exactly one solid pixel or a five-pixel plus); and the biome weights at the
+  pixel, since the plains share picks drift palettes. Upright blooms also use
+  screen-proportional
   units derived from the native projection (x = 0.7071(wx+wy),
   y = 0.35355(wx−wy) − 0.57983·z, from `relief_scale` tile/224·.82) and snap
   their centres to pixel centres. The hook takes these from the projection
@@ -330,8 +332,8 @@ scenarios, at least three alternated runs per side):
 5. Early-outs before per-cell work. Spring samples its drift field once per
    pixel and skips the whole bloom-cell loop where it is below threshold minus
    a margin: that covers the ~50–70% of grass that is bare. Without it, each
-   grass pixel evaluates 2 layers × 4 cells, or × 9 with posies, each with
-   drift fbm and clump noise before its density test.
+   grass pixel evaluates 2 layers × 4 cells, each with drift fbm and clump
+   noise before its density test.
 6. Only if measurement still demands it: a map-sized, wrap-periodic "season
    fields" texture (4–8 texels per tile, generated once per map) holding broad
    patch, drift, clump and palette fields, shared by Winter's scour and drifts,
@@ -366,7 +368,7 @@ isolated A/B trio method for timing.
 | --- | --- | --- |
 | 0. Foundations | D1 constants and Summer-parity tests; Lab water parity (the preview draws open water with the game's `PSWaterSurface`, or season water is judged on the x64 path only); D2 library skeleton and hooks wired into the generator and pack overlay; D5 conifer marker and ground-use mask; D6 roles sidecar; D7 periodic noise; D9 clock decoupling (+ ledger); season override and harness | Autumn session (lead) |
 | 1a. Autumn port | `season_autumn.hlsl` through the hooks; match v18 | Autumn session |
-| 1b. Spring port | `season_spring.hlsl`; meadow on the ground-use mask; wrap-safe drifts; drift early-out; match the final Spring look (version named by the Spring session) | Spring session, after the user picks the final look |
+| 1b. Spring port | `season_spring.hlsl`; meadow on the ground-use mask and biome weights; wrap-safe drifts; drift early-out; match v28 (or its signed-off successor) | Spring session |
 | 1c. Winter port | `season_winter.hlsl`; precomputed winter pine stands (after the Lab comparison against v24); flurry effect list. The Winter session drafts the pipeline changes for the lead to review. Must match v24-laden (stills: `lab/out/winter/final24`, regenerated with `flurry_tree.py prepare` / `build`, then `study.py render … --look v24-laden --tree flurry --winter-pines`) | Winter session |
 | 2. Performance | budgets per season; cheapening steps 1–6 as needed; flurry A/B on a mountain-heavy save | lead, with each season's owner |
 | 3. Verification and staging | Lab `seasons` category (four seasons × key views); x64 path check; in-game flips, save/load, config-off, scroll/zoom/wrap, reflection, dusk/night; user acceptance per season; then staging | lead; user accepts |
@@ -398,7 +400,8 @@ The user approved every recommended default:
    its native seasonal PCX sprites while custom rendering is on. They still
    load when custom rendering is off.
 
-Spring reviewed and agreed (2026-10-22). Still open: Spring's final look.
+Spring reviewed and agreed (2026-10-22). Its look is v28; final sign-off may
+still bring small tweaks.
 
 ## 6. Risks
 
@@ -411,8 +414,8 @@ Spring reviewed and agreed (2026-10-22). Still open: Spring's final look.
   season is accepted on the x64 path.
 - Calibration: snow white, sky fill and water strength were tuned per study.
   The shared library must keep each approved look while unifying the constants.
-- Spring's look is still moving: posies need a 3×3 cell search. Spring is the
-  season most likely to need the early-out and precomputed fields to meet the
-  static-raster budget. Its port starts from its final committed look.
+- Spring is the season most likely to need the early-out and precomputed
+  fields to meet the static-raster budget (8 cell evaluations per grass pixel
+  in v28). Its port starts from its final committed look.
 - The Lab preview and the game draw open water with different shaders (D10).
   Any water decision made from Lab renders alone can be wrong.
