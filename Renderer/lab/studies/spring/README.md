@@ -185,13 +185,21 @@ looks re-render close to, not exactly as, their recorded images.
   v28: on plains most drifts take pink, blue or lilac palettes
   (`SPRING_STRAW_COLOR`), since white and yellow vanish against straw.
 
-The current look is **v28** (blossoms included); the user confirmed its direction.
-Against the concept view it measures turf L .69/C .11/h 116–118 (target .67–.69/.11–.12/116–118),
-crowns L .52 h 120 (target .535/121), deep water L .425 C .056 h 246 (target .42/.055/248),
-4.2% petal pixels on open grass (target 3.8%) and 64% bare 12 px grass blocks (target 71%).
-At the 3x stand-in blooms measure round on screen (width/height 1.00).
+The approved look is **v20** (blossoms included): the user chose it over v28
+for the look of the flowers, and it is the look being integrated into
+Renderer64 (`LOOKS["v20"]`). It measures turf L .68/C .11/h 116–117 (target
+.67–.69/.11–.12/116–118), crowns L .52 h 119 (target .535/121), deep water
+L .425 C .056 h 246 (target .42/.055/248) and 3.6% petal pixels on open grass
+(target 3.8%); at the 3x stand-in blooms measure round on screen
+(width/height 1.00). Today's `spring_common.hlsl` reproduces v20 pixel-identically (re-render
+of the concept view on 2026-10-22, maximum difference 0): every
+code path added for v21–v28 (posies and the 3x3 search, pixel sizes, plains
+colours) is gated off by v20's settings, and v20 and v28 run the same
+anchored edits, differing only in `#define`s. v21–v28 stay in `spring.py` for
+reference; none of them fixed a v20 bug.
 
-The review page (summer, target and v15 across concept, close, 3x, village,
-18:00 and night, with a 3x pixel loupe) is a private claude.ai artifact.
+The review page (summer, target and the latest look across concept, close,
+3x, village, 18:00 and night, with a 3x pixel loupe) is a private claude.ai
+artifact; it last showed v28.
 Outputs live under `Renderer/lab/out/spring/` (ignored, disposable); superseded
 looks were deleted after review, since `spring.py` can re-render them.
