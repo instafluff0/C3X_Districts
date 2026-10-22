@@ -97,7 +97,21 @@ deep water L .47 C .096 h 249, forests dark navy-green under white boughs.
 centre in the `seas` view (test.biq 60,26, tile 96) and prints the OKLab
 distance between class means (about 2 is barely noticeable, 5+ clear).
 
-Production today, Summer and Winter alike: Coast–Sea 8.6, **Sea–Ocean 1.2**,
+**Correction (2026-10-22, the user via the Autumn session):** the measurements
+below are of the Lab preview's `q3_water_material` path, which has no class
+tint. In the game, Renderer64 draws open water with `PSWaterSurface`
+(`sandbox/water_surface.hlsl`, appended to hydrology.hlsl in
+`fresh_pipeline.h`), which tints by `surface_coordinate` family (coast teal lift,
+smaller sea lift, ocean deep base). On the Sep 28 x64 concept capture: Coast–Sea
+4.9, Sea–Ocean 2.1 (hue 229° vs 244°), Coast–Ocean 7.0. So the game already tells
+the classes apart and Summer water does not change. Winter's open-water recolour
+belongs in `PSWaterSurface` as a relative change after the family tint (one hue
+rotation plus chroma/lightness scales, the shape of v11's rotation), never a
+pull to one hue; the class term below is not needed. Judge water on x64
+renders. Rivers do reach the game (`PSRiverSurface` → `q6_raw_main`), so the
+river patches stand.
+
+Lab preview path, Summer and Winter alike: Coast–Sea 8.6, **Sea–Ocean 1.2**,
 Coast–Ocean 7.6. The water's depth tint comes only from shore distance
 (`lab/shared/hydrology/field.h`: `depth=.46*(1-exp(-offshore/.85))`), which
 saturates about two tiles out, so Sea and Ocean share one body colour in every
@@ -107,9 +121,8 @@ a per-class step (Coast lighter teal, Ocean deeper navy): Sea–Ocean 6.4, but
 the step shows the tiles' diamonds because a pixel cannot see its neighbours'
 class. v11 darkens open water smoothly with tiles from shore (the interpolated
 depth inverts exactly) and keeps a milder exact step: Coast–Sea 10.4,
-Sea–Ocean 5.6, Coast–Ocean 15.9, with faint depth bands. A production fix
-belongs in the shared water for all seasons: a class term in the hydrology
-depth would also blend smoothly across tile borders.
+Sea–Ocean 5.6, Coast–Ocean 15.9, with faint depth bands. (These Lab-path
+findings do not carry over to the game; see the correction above.)
 
 ## Mountain snow flurry (user, 2026-10-21)
 

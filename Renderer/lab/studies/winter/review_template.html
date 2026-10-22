@@ -159,7 +159,7 @@ ul { margin: 0; padding-left: 1.2rem; max-width: 72ch; display: grid; gap: .45re
   </section>
 
   <section aria-labelledby="h-water">
-    <h2 id="h-water">Coast, Sea and Ocean stay apart</h2>
+    <h2 id="h-water">Coast, Sea and Ocean (Lab preview path)</h2>
     <p>Players must be able to tell the three water types apart. Each tile's centre is sampled on a stretch of <code>test.biq</code> with wide bands of all three; separation is the colour distance between the class means (about 2 is barely noticeable, 5 and up is clear).</p>
     <div class="pair">
       <figure><img src="{{seas_summer}}" alt="Coast, sea and ocean in Summer"><figcaption><b>Summer</b> · tile 96</figcaption></figure>
@@ -169,9 +169,8 @@ ul { margin: 0; padding-left: 1.2rem; max-width: 72ch; display: grid; gap: .45re
       <thead><tr><th>Render</th><th>Coast–Sea</th><th>Sea–Ocean</th><th>Coast–Ocean</th></tr></thead>
       <tbody>{{water_rows}}</tbody>
     </table></div>
-    <p>Production today cannot tell Sea from Ocean in any season: the water's depth tint follows distance from shore only and is the same beyond about two tiles. Winter now darkens open water smoothly with distance and adds a mild step from each tile's own Civ III class, so a Sea tile far from land still reads as Sea. A step from the class alone separates them cleanly but shows the tiles' diamonds:</p>
+    <p><b>Correction:</b> these numbers come from the Lab preview's water path, which lacks the class tint the game applies. In the game, Renderer64's open-water shader already tints Coast, Sea and Ocean apart (an x64 capture measures Coast–Sea 4.9, Sea–Ocean 2.1, Coast–Ocean 7.0), so Summer water stays as it is and Winter only needs a relative recolour on top of that tint. The class step below was a Lab-only experiment:</p>
     <figure><img src="{{seas_step}}" alt="Class step without blending shows tile diamonds" style="max-width:560px"><figcaption>Class step alone: readable, but blocky</figcaption></figure>
-    <p class="hint">A smooth and exact version needs one production change: carry each tile corner's class blend in the water's vertex data, so the shader interpolates classes across borders the way it already interpolates depth.</p>
   </section>
 
   <section aria-labelledby="h-land">
@@ -226,7 +225,7 @@ ul { margin: 0; padding-left: 1.2rem; max-width: 72ch; display: grid; gap: .45re
       <li>Foliage classes (broadleaf, pine, snowy pine) come from atlas colour in the Lab. Production should read a pack flag, never names.</li>
       <li>The relief draw has no snow texture bound, so ground snow is procedural. Binding the pack's ground snow material would give a richer crust.</li>
       <li>The mountain flurry is one new effect kind plus an emitter per mountain tile in both object paths, gated on Winter instead of the Lab switch. Every view with a mountain then redraws continuously, as a smoking city already does.</li>
-      <li>Coast, Sea and Ocean: a per-corner class blend in the water's vertex data would make the class step smooth and exact, in every season.</li>
+      <li>Open water: the game's water shader already separates Coast, Sea and Ocean; Winter's recolour goes there as one hue rotation with chroma and lightness scales, judged on x64 renders.</li>
       <li>Not attempted yet: frozen lake sheets, season transitions, frost on units.</li>
       <li>These are Lab previews on the Windows VM, not in-game captures.</li>
     </ul>
