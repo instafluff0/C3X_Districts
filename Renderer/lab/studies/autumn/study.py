@@ -9,6 +9,9 @@ Production shaders, packs and staged binaries are never modified.
 
     python3 Renderer/lab/studies/autumn/study.py render summer
     python3 Renderer/lab/studies/autumn/study.py render v1 --look v1
+    python3 Renderer/lab/studies/autumn/study.py build             # once, for v17+
+    python3 Renderer/lab/studies/autumn/study.py render v18 --look v18 \
+        --dll Renderer/native/build/autumn-src/Renderer/native/build/candidate/C3XRenderer.dll
     python3 Renderer/lab/studies/autumn/study.py sheet summer v1        # needs Pillow
 
 Outputs are disposable and stay under Renderer/lab/out/autumn/.
@@ -33,6 +36,15 @@ from Renderer.lab.studies.autumn import autumn
 BIQ = ROOT / "Renderer/packs/RendererSourceStudies/maps/test.biq"
 PREVIEW = ROOT / "Renderer/lab/.cache/native_preview.exe"
 CANDIDATE = ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"
+# Private build (ignored): the working tree plus the one-line conifer floor
+# marker the fallen-leaf looks (v17+) need to keep leaves out of pine stands.
+PRIVATE = ROOT / "Renderer/native/build/autumn-src"
+PRIVATE_DLL = PRIVATE / "Renderer/native/build/candidate/C3XRenderer.dll"
+FLOOR_BODY = "Renderer/lab/shared/natural/vegetation_floor_mesh_body.h"
+FLOOR_MARKER = ("                out.material_plains=vegetation_kind==7?3.f:4.f;",
+                "                // Lab autumn study: 3.25 marks a conifer stand's floor (Civ III\n"
+                "                // pine flag) so the autumn shader adds no fallen broadleaf leaves.\n"
+                "                out.material_plains=vegetation_kind==7?(clearing.variety!=0u?3.25f:3.f):4.f;")
 OUT = ROOT / "Renderer/lab/out/autumn"
 TARGET = ROOT / "Renderer/lab/out/seasons/scene-concepts/fall.png"
 SAVE_1498 = ROOT / "Renderer/.cache/frame-delivery-step/input-1498AD.SAV"
@@ -217,7 +229,7 @@ def capture(label: str, view: str, dll: Path, scene: Path, look: str | None, sea
             ("C3X_LAB_UNIT_STUDY" in context and "PASS category unit study" not in result["output_tail"]):
         if retry:
             print(f"Retrying {label}/{view} once after a failed preview", flush=True)
-            return capture(label, view, dll, scene, look, season, retry=False)
+            return capture(label, view, dll, scene, look, season, retry=False, extra=extra)
         raise RuntimeError(f"Autumn preview failed: {label}/{view}: {result['output_tail']}")
     png = folder / "preview.png"
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(image), str(png)], check=True)
@@ -225,7 +237,34 @@ def capture(label: str, view: str, dll: Path, scene: Path, look: str | None, sea
     return png
 
 
-def render(label: str, look: str | None, season: int, views, dll: Path) -> None:
+def build_private() -> Path:
+    """Snapshot the working tree, apply the conifer floor marker, build the DLL."""
+    from Renderer.lab.platform import native_command_result
+    files = subprocess.run(["git", "ls-files", "-c", "-o", "--exclude-standard", "Renderer/native", "Renderer/sandbox",
+                            "Renderer/lab/shared", "Renderer/lab/studies/borders", "Renderer/lab/native_preview.cpp",
+                            "Renderer/lab/build_native_preview.bat", "Renderer/lab/volcano_witness.h",
+                            "Renderer/default.custom_rendering.txt"],
+                           cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines()
+    for name in files:
+        if name.startswith("Renderer/native/build/"):
+            continue
+        target = PRIVATE / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / name, target)
+    body = PRIVATE / FLOOR_BODY
+    text = (ROOT / FLOOR_BODY).read_text()
+    if text.count(FLOOR_MARKER[0]) != 1:
+        raise RuntimeError("Conifer floor marker anchor changed in " + FLOOR_BODY)
+    body.write_text(text.replace(*FLOOR_MARKER))
+    wait_for_vm()
+    result = native_command_result(PRIVATE.relative_to(ROOT).as_posix() + "/Renderer/native",
+                                   "call BUILD.bat candidate-compile", timeout_seconds=1500)
+    if result["status"] != "pass" or not PRIVATE_DLL.is_file():
+        raise RuntimeError("Private autumn build failed")
+    return PRIVATE_DLL
+
+
+def render(label: str, look: str | None, season: int, views, dll: Path, extra=None) -> None:
     if not dll.is_file() or not PREVIEW.is_file():
         raise FileNotFoundError("Candidate DLL or native preview tool is missing")
     OUT.mkdir(parents=True, exist_ok=True)
@@ -233,7 +272,7 @@ def render(label: str, look: str | None, season: int, views, dll: Path) -> None:
     if not scene.is_file():
         subprocess.run(["node", str(ROOT / "Renderer/sandbox/export_biq.js"), str(BIQ), str(scene)],
                        cwd=ROOT, check=True)
-    images = {view: capture(label, view, dll, scene, look, season) for view in views}
+    images = {view: capture(label, view, dll, scene, look, season, extra=extra) for view in views}
     (OUT / label / "render.json").write_text(json.dumps({
         "label": label, "look": look, "season": season, "dll_sha256": digest(dll),
         "preview_sha256": digest(PREVIEW), "scene_sha256": digest(scene),
@@ -279,19 +318,27 @@ def main():
     run.add_argument("--season", type=int, help="frame season (default: 1 with a look, else 0)")
     run.add_argument("--views", nargs="*", default=["concept"], choices=list(VIEWS))
     run.add_argument("--dll", type=Path, default=CANDIDATE)
+    run.add_argument("--env", nargs="*", default=[], metavar="KEY=VALUE",
+                     help="extra C3X_* switches, e.g. C3X_LAB_AUTUMN_LITTER=1 for a private build")
     compare = sub.add_parser("sheet")
     compare.add_argument("labels", nargs="+")
     compare.add_argument("--view", default="concept", choices=list(VIEWS))
     compare.add_argument("--crop", nargs=4, type=float, help="fractions: left top right bottom")
     compare.add_argument("--target", action="store_true", help="lead with the concept image")
+    sub.add_parser("build", help="private DLL with the conifer floor marker (use with --dll)")
     roots = sub.add_parser("shaders")
     roots.add_argument("look", choices=autumn.LOOKS)
     args = parser.parse_args()
     if args.command == "render":
         season = args.season if args.season is not None else (1 if args.look else 0)
-        render(args.label, args.look, season, args.views, args.dll.resolve())
+        extra = dict(item.split("=", 1) for item in args.env)
+        if any(not key.startswith("C3X_") for key in extra):
+            parser.error("--env keys must be C3X_* switches")
+        render(args.label, args.look, season, args.views, args.dll.resolve(), extra)
     elif args.command == "sheet":
         sheet(args.labels, args.view, args.crop, args.target)
+    elif args.command == "build":
+        print(build_private())
     else:
         print(shader_root(args.look))
 

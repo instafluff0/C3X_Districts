@@ -19,7 +19,12 @@ production renderer** instead.
 - `autumn_common.hlsl` holds the shared colour work (OKLab hue/chroma moves that
   keep the source texture's lightness detail).
 - `study.py sheet A B --target [--crop l t r b]` builds labelled comparisons.
-- Earlier looks (v1–v6) stay in `autumn.py` so each step can be re-rendered.
+- Earlier looks (v1–v17) stay in `autumn.py` so each step can be re-rendered.
+  v17+ renders with the private build's DLL: `study.py build` snapshots the
+  working tree into ignored `Renderer/native/build/autumn-src`, adds the conifer
+  floor marker and compiles it on the VM; then pass `--dll` (see the docstring).
+- `field_contrast.py` measures farm vs open-turf contrast the same way
+  `water_tiers.py` measures coast/sea/ocean.
 - Gameplay-context views: `village` / `village-night` add ancient cities,
   roads, irrigated farms and a hill mine to the concept's test.biq land (tile
   overlay bits on, so Civ III pine flags apply); `salamanca*` cut a 32x32
@@ -27,7 +32,7 @@ production renderer** instead.
 - Before each render the harness waits until no other `prlctl exec` is running
   (peer sessions share the VM) and retries one failed dispatch.
 
-## Current look (v10) and what each layer does
+## Current look (v18) and what each layer does
 
 Colour targets were measured on the concept in OKLab (lightness/chroma/hue):
 
@@ -41,7 +46,8 @@ Colour targets were measured on the concept in OKLab (lightness/chroma/hue):
 | Crown light | object shader | ellipsoid crown normal blended in, dark crown undersides, brighter tops, softened leaf speckle |
 | Leaf glow | object shader | transmission through backlit leaves; subtle at noon, visible at 18:00 when the sun is behind the crowns |
 | Pines | object shader | unchanged (dark green contrast); pine-flagged forests stay evergreen |
-| Farms | feature shaders | planted crops take one pale harvest-gold tint over their rows; farm ground follows the turf |
+| Farms | feature shaders | planted crops take one ochre-gold tint, darker than the turf (village field–turf ΔE 9.9 vs Summer 14.2, `field_contrast.py`); farm ground follows the turf |
+| Fallen leaves | relief shader | subtle leaf piles in broadleaf forest-floor patches; none under pines (needs the private build's conifer floor marker) |
 | Roads | coast/route shader | dirt roads slightly darker so they read on gold turf |
 | Water | coast/water shader | deep water pulled from teal toward a clear blue, chroma ×1.9; rivers at half strength; eased back at night |
 
@@ -64,10 +70,26 @@ Colour targets were measured on the concept in OKLab (lightness/chroma/hue):
   and rejected by the user ("looks a bit odd").
 - The user asked for farms to be tinted simply; a per-plot harvest patchwork
   (v8 `autumn_field`) was dropped for the single tint (v9 mustard, v10 paler).
+  On 2026-10-22 the user found v10's pale fields hard to tell from the turf;
+  v18 darkens them back to near-Summer field contrast.
 - Cities are unchanged (only the ground around them follows the turf).
 - The Lab's unit roster fails to load in the 32-bit preview ("required unit
   source admission incomplete", an existing issue), so units are unverified
   here; units use their own shaders, which autumn does not touch.
+
+## Fallen leaves (2026-10-22)
+
+- Forest-floor decals under broadleaf trees take the existing jungle-floor
+  leaf-clump texture (Civ VI's top-down leaf decal), recoloured in small
+  gold/orange/russet/brown patches with leaf relief (`fallen=True`, v12+).
+- The user preferred the subtle under-tree piles to leaves spilling past the
+  canopy (tried with enlarged, every-tree patches in a private build) and asked
+  for them subtler still (v17). No fallen leaves under pines.
+- Pine guard: the shader cannot tell a conifer stand's floor from a broadleaf
+  one. A private Lab build marks conifer floors as material 3.25 in
+  `vegetation_floor_mesh_body.h` (`clearing.variety`); v17 skips leaves there.
+  The port needs that one-line marker (or an equivalent pack/flag) in
+  production code.
 
 ## Coast, sea and ocean (2026-10-21)
 

@@ -73,6 +73,31 @@ float3 autumn_litter(float3 albedo, float2 world) {
     lch.x *= lerp(1.0, 1.18, leaf);
     return autumn_from_lch(lch);
 }
+float3 autumn_keep(float3 albedo, float2 world) { return albedo; }
+// Fallen leaves: a top-down leaf-clump pattern (the jungle-floor decal) takes
+// small world patches of gold, orange, russet and brown, keeping each leaf's
+// own light and dark shape.
+float3 autumn_fallen(float3 leaf, float average_light, float2 world) {
+    float3 lch = autumn_lch(leaf);
+    float n = autumn_noise(world * AUTUMN_LEAF_PATCH) * 0.7 + autumn_noise(world * AUTUMN_LEAF_PATCH * 2.7 + 9.2) * 0.3;
+    float3 pal = n < AUTUMN_LEAF_GOLD ? float3(0.70, 0.150, 84) : n < AUTUMN_LEAF_ORANGE ? float3(0.63, 0.160, 60) :
+                 n < AUTUMN_LEAF_RED ? float3(0.53, 0.150, 42) : float3(0.45, 0.075, 58);
+    return autumn_from_lch(float3(max(pal.x * AUTUMN_LEAF_LIGHTNESS + (lch.x - average_light) * 1.1, 0.05),
+                                  pal.y * AUTUMN_LEAF_SAT, pal.z));
+}
+// Single fallen leaves sprinkled over the turf: one small, randomly placed
+// leaf-shaped fleck per world cell, kept with a chance that falls with r
+// (0 at a pile's centre, 1 at its rim).
+float autumn_sprinkle(float2 world, float r) {
+    float2 p = world * AUTUMN_LEAF_SCATTER_CELLS;
+    float2 cell = floor(p), f = frac(p) - 0.5;
+    float2 offset = float2(autumn_hash(cell + 3.3), autumn_hash(cell + 7.7)) - 0.5;
+    float angle = autumn_hash(cell + 11.9) * 6.2831853;
+    float2 q = f - offset * 0.5;
+    q = float2(q.x * cos(angle) - q.y * sin(angle), q.x * sin(angle) + q.y * cos(angle)) * float2(1.0, 1.8);
+    float leaf = 1 - smoothstep(0.17, 0.24, length(q));
+    return leaf * step(autumn_hash(cell + 0.71), AUTUMN_LEAF_SCATTER * saturate(1.15 - r));
+}
 // Harvest: planted plots become golden stubble, ripe amber, a few dark
 // ploughed or still-green fields, chosen per plot-sized world cell.
 float3 autumn_field(float3 albedo, float2 world) {

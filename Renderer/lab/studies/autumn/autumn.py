@@ -45,7 +45,12 @@ V1 = {
     "AUTUMN_HILL_FLOOR": 0.0201, "AUTUMN_FIELD_CELLS": 2.5, "AUTUMN_LARCH_SHARE": 0, "AUTUMN_SHRUB_SHARE": 0,
     "AUTUMN_ROAD_DARK": "float3(1, 1, 1)", "AUTUMN_WATER_NIGHT": 1.0, "AUTUMN_FIELD": "autumn_field",
     "AUTUMN_FARM_HUE": 82, "AUTUMN_FARM_PULL": 0.85, "AUTUMN_FARM_CHROMA": 0.85, "AUTUMN_FARM_LIGHT": 1.04,
-    "AUTUMN_WATER_PULL_START": 100,
+    "AUTUMN_WATER_PULL_START": 100, "AUTUMN_LITTER_END": "autumn_litter",
+    "AUTUMN_LEAF_COVER": 1.0, "AUTUMN_LEAF_SHADE": 0.85, "AUTUMN_LEAF_PATCH": 12,
+    "AUTUMN_LEAF_GOLD": 0.36, "AUTUMN_LEAF_ORANGE": 0.62, "AUTUMN_LEAF_RED": 0.82,
+    "AUTUMN_LEAF_SAT": 1.0, "AUTUMN_LEAF_LIGHTNESS": 1.0,
+    "AUTUMN_LEAF_FALLOFF": 0, "AUTUMN_LEAF_GAPS": 0, "AUTUMN_LEAF_SCATTER": 0, "AUTUMN_LEAF_SCATTER_CELLS": 40,
+    "AUTUMN_LEAF_DECAL_RADIUS": 0,
 }
 V2 = {**V1, "AUTUMN_PATCH_LIGHT": 0.18, "AUTUMN_PATCH_HUE": 18, "AUTUMN_LEAF_DETAIL": 1.35,
       "AUTUMN_CROWN": 0.7, "AUTUMN_WRAP": 0.12, "AUTUMN_FILL": 0.80, "AUTUMN_TURF": 1.1,
@@ -70,6 +75,31 @@ V8 = {**V7, "AUTUMN_LARCH_SHARE": 0.28, "AUTUMN_SHRUB_SHARE": 0.7,
 V9 = {**V8, "AUTUMN_LARCH_SHARE": 0, "AUTUMN_SHRUB_SHARE": 0, "AUTUMN_FIELD": "autumn_farm"}
 # Paler harvest-gold plots keep the field pattern readable against olive turf.
 V10 = {**V9, "AUTUMN_FARM_HUE": 88, "AUTUMN_FARM_CHROMA": 0.75, "AUTUMN_FARM_LIGHT": 1.16}
+# Fallen leaves: forest-floor decals become leaf piles (no new art).
+V12 = {**V10, "AUTUMN_LITTER_END": "autumn_keep"}
+# Leaf-level colour mixing, fewer reds, a little less chroma: piles, not stickers.
+V13 = {**V12, "AUTUMN_LEAF_PATCH": 34, "AUTUMN_LEAF_GOLD": 0.40, "AUTUMN_LEAF_ORANGE": 0.70,
+       "AUTUMN_LEAF_RED": 0.82, "AUTUMN_LEAF_SAT": 0.82, "AUTUMN_LEAF_LIGHTNESS": 0.96}
+# v13 hid gold leaves in gold turf; keep v12's colour, fewer reds, mid patches.
+V14 = {**V12, "AUTUMN_LEAF_PATCH": 18, "AUTUMN_LEAF_GOLD": 0.34, "AUTUMN_LEAF_ORANGE": 0.68,
+       "AUTUMN_LEAF_RED": 0.84, "AUTUMN_LEAF_SAT": 0.94}
+# For the larger spilled patches (private build): dense centres thinning to
+# the rim, grass gaps, single leaves sprinkled past the pile, more brown.
+V15 = {**V14, "AUTUMN_LEAF_FALLOFF": 1, "AUTUMN_LEAF_GAPS": 0.30, "AUTUMN_LEAF_SCATTER": 0.55,
+       "AUTUMN_LEAF_SCATTER_CELLS": 34, "AUTUMN_LEAF_SAT": 0.86, "AUTUMN_LEAF_GOLD": 0.30,
+       "AUTUMN_LEAF_ORANGE": 0.60, "AUTUMN_LEAF_RED": 0.76}
+# Thin toward each spilled patch's own rim (one decal holds nine sub-piles).
+V16 = {**V15, "AUTUMN_LEAF_DECAL_RADIUS": 1}
+# User, 2026-10-22: prefers the subtle under-tree piles (no spill), and even
+# subtler. Fewer, quieter piles that sit in the turf; gold kept low so the
+# piles stay visible against gold grass without shouting.
+V17 = {**V14, "AUTUMN_LEAF_COVER": 0.75, "AUTUMN_LEAF_GAPS": 0.22, "AUTUMN_LEAF_SAT": 0.76,
+       "AUTUMN_LEAF_LIGHTNESS": 0.93, "AUTUMN_LEAF_SHADE": 0.74, "AUTUMN_LEAF_GOLD": 0.28,
+       "AUTUMN_LEAF_ORANGE": 0.62, "AUTUMN_LEAF_RED": 0.78}
+# User, 2026-10-22: farms too close to the turf to spot. Summer fields sit
+# ~14 OKLab L below the turf; v10's pale tint left ~5. Darker ochre plots
+# bring the gap back to ~11 (field_contrast.py).
+V18 = {**V17, "AUTUMN_FARM_LIGHT": 1.02, "AUTUMN_FARM_CHROMA": 0.85, "AUTUMN_FARM_HUE": 86}
 # Coast keeps its teal hue (v10 pulled it halfway to the sea's blue).
 V11 = {**V10, "AUTUMN_WATER_PULL_START": 205}
 
@@ -93,7 +123,7 @@ def palette(entries) -> str:
 
 
 def edits(values, leaves, *, turf=False, mountains=False, warm_hills=False, water=False, fields=False,
-          conifers=False):
+          conifers=False, fallen=False):
     common = "".join(f"#define {key} {value}\n" for key, value in values.items()) + COMMON + palette(leaves)
     result = [
         # Per-tree seed and an ellipsoidal crown normal travel with each instance.
@@ -140,7 +170,7 @@ def edits(values, leaves, *, turf=False, mountains=False, warm_hills=False, wate
          "    float foliage_fill = autumn_leaf ? AUTUMN_FILL : (kind > 0.5 && kind < 1.5 ? 0.72 : 1.0);"),
         # Land ground, hills, hill decals and forest floor (natural relief shader).
         ((RELIEF,), "#ifdef BEAUTY_COMPOSED_SHADOWS\n    // Q6ShadowL is also the projection direction",
-         "    if (input.material.y > 2.5 && input.material.y < 3.5) albedo = autumn_litter(albedo, input.world.xy);\n"
+         "    if (input.material.y > 2.5 && input.material.y < 3.5) albedo = AUTUMN_LITTER_END(albedo, input.world.xy);\n"
          "    else if (!(input.material.y > 3.5 && input.material.y < 4.5)) {\n"
          "        albedo = autumn_ground(albedo, input.world.xy);\n"
          "        float autumn_hill = input.material.y < 1.5 ? input.material.z * smoothstep(0.02, 0.2, input.material.x) : 0;\n"
@@ -238,6 +268,47 @@ def edits(values, leaves, *, turf=False, mountains=False, warm_hills=False, wate
              "        if (has_normal)\n            normal = mapped_normal(geometric, input.world, input.uv,\n"
              "                                   foliage || repeat_address);"),
         ]
+    if fallen:
+        old = ("        float4 floor_sample = jungle_floor ? JungleFloorColor.Sample(Clamp, input.uv) :\n"
+               "                                             ForestFloorColor.Sample(Clamp, input.uv);\n"
+               "        float2 floor_normal = jungle_floor ? JungleFloorHeight.Sample(Clamp, input.uv).rg :\n"
+               "                                             ForestFloorHeight.Sample(Clamp, input.uv).rg;\n"
+               "        clip(floor_sample.a - 0.06);\n")
+        new = ("        float4 floor_sample = jungle_floor ? JungleFloorColor.Sample(Clamp, input.uv) :\n"
+               "                                             ForestFloorColor.Sample(Clamp, input.uv);\n"
+               "        float2 floor_normal = jungle_floor ? JungleFloorHeight.Sample(Clamp, input.uv).rg :\n"
+               "                                             ForestFloorHeight.Sample(Clamp, input.uv).rg;\n"
+               "        // Autumn: each 3x3 forest-floor cell borrows one of the four 2x2\n"
+               "        // leaf clumps (mirrored by cell) as a pile of fallen leaves.\n"
+               "        float autumn_leaf_weight = 0;\n"
+               "        float3 autumn_leaf_color = 0;\n"
+               "        // A conifer stand's floor (marked 3.25 by the private Lab build) keeps its needles.\n"
+               "        if (!jungle_floor && input.material.y < 3.125) {\n"
+               "            float2 cell = floor(saturate(input.uv) * 2.9999);\n"
+               "            float2 local = frac(saturate(input.uv) * 3);\n"
+               "            if (fmod(cell.x + cell.y, 2) > 0.5) local.x = 1 - local.x;\n"
+               "            float pick = fmod(cell.x + cell.y * 3, 4);\n"
+               "            float2 leaf_uv = (float2(fmod(pick, 2), floor(pick / 2)) + local * 0.98 + 0.01) * 0.5;\n"
+               "            float4 leaves = JungleFloorColor.Sample(Clamp, leaf_uv);\n"
+               "            float average_light = autumn_lch(JungleFloorColor.SampleLevel(Clamp, leaf_uv, 9).rgb).x;\n"
+               "            float r = length((AUTUMN_LEAF_DECAL_RADIUS > 0 ? saturate(input.uv) : local) - 0.5) * 2;\n"
+               "            float gaps = AUTUMN_LEAF_GAPS > 0 ? smoothstep(AUTUMN_LEAF_GAPS, AUTUMN_LEAF_GAPS + 0.35,\n"
+               "                autumn_noise(input.world.xy * 7.0 + 3.1)) : 1;\n"
+               "            float pile = saturate(leaves.a * AUTUMN_LEAF_COVER * 1.4) * gaps *\n"
+               "                lerp(1, 1 - smoothstep(0.30, 1.0, r), AUTUMN_LEAF_FALLOFF);\n"
+               "            float sprinkle = AUTUMN_LEAF_SCATTER > 0 ? autumn_sprinkle(input.world.xy, r) : 0;\n"
+               "            autumn_leaf_weight = max(pile, sprinkle);\n"
+               "            float3 average_leaf = JungleFloorColor.SampleLevel(Clamp, leaf_uv, 9).rgb;\n"
+               "            autumn_leaf_color = autumn_fallen(sprinkle > pile ? average_leaf : leaves.rgb, average_light, input.world.xy);\n"
+               "            floor_sample.rgb = autumn_litter(floor_sample.rgb, input.world.xy);\n"
+               "            floor_normal = lerp(floor_normal, JungleFloorHeight.Sample(Clamp, leaf_uv).rg, autumn_leaf_weight);\n"
+               "            floor_sample.a = max(floor_sample.a, autumn_leaf_weight);\n"
+               "        }\n"
+               "        clip(floor_sample.a - 0.06);\n")
+        tint_old = "        albedo = floor_sample.rgb * canopy_tint;\n"
+        tint_new = ("        albedo = lerp(floor_sample.rgb * canopy_tint, autumn_leaf_color * AUTUMN_LEAF_SHADE,\n"
+                    "                      autumn_leaf_weight / max(floor_sample.a, 0.001));\n")
+        result += [((RELIEF,), old, new), ((RELIEF,), tint_old, tint_new)]
     if mountains:
         result += [
             ((MOUNTAIN,), "Output shade(P input) {", common + "Output shade(P input) {"),
@@ -308,6 +379,13 @@ LOOKS["v8"] = edits(V8, PALETTE_V4, turf=True, mountains=True, warm_hills=True, 
 LOOKS["v9"] = edits(V9, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True)
 LOOKS["v10"] = edits(V10, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True)
 LOOKS["v11"] = edits(V11, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True)
+LOOKS["v12"] = edits(V12, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True, fallen=True)
+LOOKS["v13"] = edits(V13, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True, fallen=True)
+LOOKS["v14"] = edits(V14, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True, fallen=True)
+LOOKS["v15"] = edits(V15, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True, fallen=True)
+LOOKS["v16"] = edits(V16, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True, fallen=True)
+LOOKS["v17"] = edits(V17, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True, fallen=True)
+LOOKS["v18"] = edits(V18, PALETTE_V4, turf=True, mountains=True, warm_hills=True, water=True, fields=True, fallen=True)
 LOOKS["summer-tall"] = taller(1.4)
 LOOKS["summer-tiers"] = tiers()
 # Diagnostic: natural-water pixels painted by the vertex type value
