@@ -49,7 +49,7 @@ Colour targets were measured on the concept in OKLab (lightness/chroma/hue):
 | Farms | feature shaders | planted crops take one ochre-gold tint, darker than the turf (village field–turf ΔE 9.9 vs Summer 14.2, `field_contrast.py`); farm ground follows the turf |
 | Fallen leaves | relief shader | subtle leaf piles in broadleaf forest-floor patches; none under pines (needs the private build's conifer floor marker) |
 | Roads | coast/route shader | dirt roads slightly darker so they read on gold turf |
-| Water | coast/water shader | deep water pulled from teal toward a clear blue, chroma ×1.9; rivers at half strength; eased back at night |
+| Water | coast/water shader (Lab path) | deep water pulled from teal toward a clear blue, chroma ×1.9; rivers at half strength; eased back at night. Port as a relative recolour in the game's `PSWaterSurface` (see Coast, sea and ocean) |
 
 ## Lab-only stand-ins that production must replace
 
@@ -91,19 +91,21 @@ Colour targets were measured on the concept in OKLab (lightness/chroma/hue):
   The port needs that one-line marker (or an equivalent pack/flag) in
   production code.
 
-## Coast, sea and ocean (2026-10-21)
+## Coast, sea and ocean (2026-10-21, corrected 2026-10-22)
 
 `water_tiers.py` samples every water tile centre (exact preview anchors) and
-reports OKLab tier means and separation. Coast–sea ΔE is 6–18 in Summer and
-slightly larger in autumn. Sea–ocean ΔE is only 0.5–2.5 in **Summer too**:
-production water depth is distance-to-shore only (`.46*(1-exp(-d/.85))`,
-`render_core/world_coast.h`), levelling off ~2 tiles out, and
-`q3_natural_water` never reads the tile type. Every water vertex already
-carries a smooth per-type value (`surface_coordinate`: coast .34, sea .68,
-ocean 1.0). The season-independent `tiers()` patch uses it to darken ocean's
-final colour and hide more bed (looks `summer-tiers`, `v11-tiers`): sea–ocean
-ΔE 4.3–7.6 with no tile-shaped edges. It changes the approved water look, so
-it needs its own approval; it is not part of the autumn look.
+reports OKLab tier means and separation. **It must be run on game-path (x64)
+renders.** The Lab preview draws open water with `q3_water_material`, which
+has no Civ III family tint, so Sea and Ocean measured nearly identical there
+(ΔE 0.5–2.5). The game draws open water with `PSWaterSurface`
+(`sandbox/water_surface.hlsl`), which already tints coast, sea and ocean from
+`surface_coordinate`. On the Sep 28 x64 capture of the concept view it
+measures Coast–Sea 4.9, Sea–Ocean 2.1 (hue 229° vs 244°) and Coast–Ocean 7.0.
+Summer water therefore stays as it is. The `tiers()` looks (`summer-tiers`,
+`v11-tiers`) were Lab experiments built on the wrong premise. Autumn's water
+grade pulls blues toward 240° and would merge sea and ocean on the game path,
+so the port makes it a relative rotation (see
+`docs/seasons_integration_plan.md`, D10).
 
 ## Experiments
 
