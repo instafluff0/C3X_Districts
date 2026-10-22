@@ -1,0 +1,251 @@
+<title>Renderer64 Winter Study</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one viewing column, renders first and prose beside them; a sibling of the Autumn study page.
+   Dark-first like a map screen at night; glacial blue is the one accent. */
+:root {
+  --ground: #0d1319; --panel: #141c24; --line: #263340;
+  --ink: #e9eff4; --muted: #93a4b3; --ice: #8ccfee; --on-ice: #08161f;
+  --display: "Alegreya", Georgia, "Times New Roman", serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --ground: #e8eef2; --panel: #f7f9fb; --line: #c8d3dc; --ink: #13202b; --muted: #526272; --ice: #1d6a92; --on-ice: #f4fbff; color-scheme: light } }
+:root[data-theme="light"] { --ground: #e8eef2; --panel: #f7f9fb; --line: #c8d3dc; --ink: #13202b; --muted: #526272; --ice: #1d6a92; --on-ice: #f4fbff; color-scheme: light }
+body { background: var(--ground); color: var(--ink); font: 400 1rem/1.55 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 2.2rem 4rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 3.2rem; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 4.5vw, 3.1rem); line-height: 1.05; }
+h2 { font-size: 1.7rem; }
+h3 { font-size: 1.15rem; font-weight: 500; }
+p { margin: 0; max-width: 66ch; }
+.eyebrow { font: 500 .74rem/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ice); }
+.lede { color: var(--muted); font-size: 1.08rem; }
+header, section { display: grid; gap: 1rem; }
+.meta { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; font: .82rem var(--mono); color: var(--muted); }
+/* Comparison slider */
+.compare { position: relative; overflow: hidden; border-radius: 6px; background: var(--panel); aspect-ratio: 16 / 9; max-width: 100%; user-select: none; touch-action: pan-y; }
+.compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.compare .top { clip-path: inset(0 0 0 var(--cut, 50%)); }
+.compare .rule { position: absolute; top: 0; bottom: 0; left: var(--cut, 50%); width: 2px; background: var(--ice); transform: translateX(-1px); pointer-events: none; }
+.compare .tag { position: absolute; top: .7rem; font: 500 .72rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: .35rem .5rem; background: rgba(8,14,20,.74); color: #eef4f8; border-radius: 3px; }
+.compare .tag.l { left: .7rem; } .compare .tag.r { right: .7rem; }
+.compare input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; margin: 0; }
+.compare input:focus-visible + .rule { box-shadow: 0 0 0 3px var(--ice); }
+.modes { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.modes button { font: 600 .9rem var(--body); color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: .4rem .9rem; cursor: pointer; }
+.modes button[aria-pressed="true"] { background: var(--ice); border-color: var(--ice); color: var(--on-ice); }
+.modes button:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+.hint { color: var(--muted); font-size: .88rem; }
+/* Image grids */
+.pair, .triple, .options { display: grid; gap: .7rem; }
+.pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.triple { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+figure { margin: 0; display: grid; gap: .35rem; min-width: 0; }
+figure img, figure video { width: 100%; height: auto; border-radius: 4px; display: block; background: var(--panel); }
+figcaption { font: .8rem var(--mono); color: var(--muted); }
+figcaption b { color: var(--ink); font-weight: 500; }
+@media (max-width: 760px) { .triple { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .pair { grid-template-columns: 1fr; } }
+/* Decisions */
+.options { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1.4rem; }
+.option { display: grid; gap: .8rem; align-content: start; padding: 1.1rem; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.option .rec { font: 500 .78rem var(--mono); color: var(--ice); }
+/* Layer table */
+.table { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: .93rem; }
+th, td { text-align: left; vertical-align: top; padding: .55rem .7rem; border-bottom: 1px solid var(--line); }
+th { font: 500 .74rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td:first-child { font-weight: 600; white-space: nowrap; }
+code { font: .86em var(--mono); color: var(--ice); }
+ul { margin: 0; padding-left: 1.2rem; max-width: 72ch; display: grid; gap: .45rem; }
+.swatches { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; font: .78rem var(--mono); color: var(--muted); }
+.swatches span { width: 2.1rem; height: 1.3rem; border-radius: 3px; border: 1px solid var(--line); }
+@media (prefers-reduced-motion: no-preference) { .compare .top, .compare .rule { transition: clip-path .05s linear, left .05s linear; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Renderer Lab · Seasons · Winter</span>
+    <h1>Winter on Renderer64</h1>
+    <p class="lede">The concept's own view and two city scenes, rendered by today's production renderer with a winter shader set kept in the Lab. Same maps, cameras, models and lighting rig as Summer; snow cover, materials and water change.</p>
+    <div class="meta"><span>test.biq · camera 20,75</span><span>tile 128 · 12:00</span><span>frame season 2</span><span>candidate DLL · private shader root · look {{look}}</span></div>
+    <div class="swatches" aria-label="Concept colour targets">
+      <span style="background:#d9e3f7"></span>lit snow
+      <span style="background:#8ca5cf"></span>snow in shade
+      <span style="background:#2c5f92"></span>deep water
+      <span style="background:#1e2a35"></span>needles
+    </div>
+  </header>
+
+  <section aria-labelledby="h-compare">
+    <h2 id="h-compare">Drag to compare</h2>
+    <div class="modes" role="group" aria-label="Left image">
+      <button type="button" id="mode-summer" aria-pressed="true">Summer ↔ Winter</button>
+      <button type="button" id="mode-target" aria-pressed="false">Concept ↔ Winter</button>
+      <button type="button" id="mode-base" aria-pressed="false">Winter today ↔ Winter</button>
+    </div>
+    <div class="compare" id="compare" style="--cut:50%">
+      <img id="left" src="{{concept_summer}}" alt="Left comparison image">
+      <img class="top" src="{{concept_winter}}" alt="Winter look rendered by Renderer64">
+      <span class="tag l" id="left-tag">Summer</span><span class="tag r">Winter</span>
+      <input type="range" id="cut" min="0" max="100" value="50" aria-label="Comparison divider">
+      <span class="rule"></span>
+    </div>
+    <p class="hint">The concept's view through the Lab tile overlays, which draw the map's own pine forests as the game does. "Winter today" is what production draws in season 2 now: Summer materials with a cooler ambient. The concept is an image edit of the same view and frames it only approximately.</p>
+  </section>
+
+  <section aria-labelledby="h-town">
+    <h2 id="h-town">Towns, farms and roads</h2>
+    <p>Ancient towns on <code>test.biq</code> through the Lab tile overlays, which draw the map's own pine forests as the game does. Roofs and ledges take a snow coat as bright as the ground's, mottled at building scale with a few bare dabs where the roof shows through; walls keep their timber and plaster, so towns stay legible. Farm plots keep their shapes: snow settles in the furrows and each plot reads as fallow, ploughed or stubble.</p>
+    <div class="pair">
+      <figure><img src="{{village_summer}}" alt="Summer village, tile 256"><figcaption><b>Summer</b> · tile 256</figcaption></figure>
+      <figure><img src="{{village_winter}}" alt="Winter village, tile 256"><figcaption><b>Winter</b> · tile 256</figcaption></figure>
+    </div>
+    <div class="triple">
+      <figure><img src="{{crop_roofs}}" alt="Snow on town roofs"><figcaption>Snow on roofs, trodden snow in the streets</figcaption></figure>
+      <figure><img src="{{crop_farms}}" alt="Winter farm plots"><figcaption>Farms: furrows, hedgerows, haystacks</figcaption></figure>
+      <figure><img src="{{crop_rocks}}" alt="Shoreline rocks with snow"><figcaption>Shoreline rocks: grey stone, snow on top</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="{{roofs_before}}" alt="Earlier roof snow, flat grey"><figcaption><b>Before</b>: roof snow squeezed to a flat grey by the city look</figcaption></figure>
+      <figure><img src="{{roofs_after}}" alt="Roof snow lit like the ground"><figcaption><b>Now</b>: lit like the ground snow, mottled, a few bare dabs</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="{{crop_river_summer}}" alt="Summer river"><figcaption><b>Summer</b> river</figcaption></figure>
+      <figure><img src="{{crop_river}}" alt="Icy winter river"><figcaption><b>Winter</b> river: the sea's blue, shelf ice in some reaches, a few floes</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="{{banks_before}}" alt="Earlier river bank, an even grey strip"><figcaption><b>Before</b>: an even grey strip of shelf ice along every bank</figcaption></figure>
+      <figure><img src="{{banks_after}}" alt="River bank with snow to the water and scalloped shelf ice"><figcaption><b>Now</b>: the ground's snow runs to the water; scalloped shelf ice in some reaches, a thin glassy edge</figcaption></figure>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-later">
+    <h2 id="h-later">A later era</h2>
+    <p>A window of the 1498 AD save: industrial towns, dense roads and rails, irrigation everywhere, mountains and a bay. Roads become trodden grey-brown tracks rather than dark lines, so the network stays readable without dominating the snow.</p>
+    <div class="pair">
+      <figure><img src="{{salamanca_summer}}" alt="Summer, 1498 AD save"><figcaption><b>Summer</b> · 1498 AD · tile 224</figcaption></figure>
+      <figure><img src="{{salamanca_winter}}" alt="Winter, 1498 AD save"><figcaption><b>Winter</b> · 1498 AD · tile 224</figcaption></figure>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-light">
+    <h2 id="h-light">Evening and night</h2>
+    <p>No new lights. The existing day cycle on snow: warm low sun against blue shade at 18:00, moonlit snow and glowing windows at midnight.</p>
+    <div class="pair">
+      <figure><img src="{{evening_summer}}" alt="Summer at 18:00"><figcaption><b>Summer</b> · 18:00</figcaption></figure>
+      <figure><img src="{{evening_winter}}" alt="Winter at 18:00"><figcaption><b>Winter</b> · 18:00</figcaption></figure>
+      <figure><img src="{{night_summer}}" alt="Summer village at midnight"><figcaption><b>Summer</b> · 00:00</figcaption></figure>
+      <figure><img src="{{night_winter}}" alt="Winter village at midnight"><figcaption><b>Winter</b> · 00:00</figcaption></figure>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-flurry">
+    <h2 id="h-flurry">Snow flurries over mountains</h2>
+    <p>A gentle flurry of small flakes falls only over mountain tiles, drawn by Renderer64 itself in the per-frame effect layer that animates chimney smoke and volcano plumes: one quad stands on each mountain tile, and three parallax layers of flakes drift down it, fading in above the peak and out near the ground. Built in a private Lab tree; nothing in the checkout changed.</p>
+    <div class="pair">
+      <figure><video src="flurry-day.mp4" autoplay muted loop playsinline aria-label="Snow flurry over mountains at noon"></video><figcaption><b>Noon</b> · concept view</figcaption></figure>
+      <figure><video src="flurry-night.mp4" autoplay muted loop playsinline aria-label="Snow flurry over mountains at midnight"></video><figcaption><b>Midnight</b> · moonlit flakes, same peaks</figcaption></figure>
+    </div>
+    <p class="hint">{{flurry_note}}</p>
+  </section>
+
+  <section aria-labelledby="h-water">
+    <h2 id="h-water">Coast, Sea and Ocean stay apart</h2>
+    <p>Players must be able to tell the three water types apart. Each tile's centre is sampled on a stretch of <code>test.biq</code> with wide bands of all three; separation is the colour distance between the class means (about 2 is barely noticeable, 5 and up is clear).</p>
+    <div class="pair">
+      <figure><img src="{{seas_summer}}" alt="Coast, sea and ocean in Summer"><figcaption><b>Summer</b> · tile 96</figcaption></figure>
+      <figure><img src="{{seas_winter}}" alt="Coast, sea and ocean in Winter"><figcaption><b>Winter</b> · tile 96</figcaption></figure>
+    </div>
+    <div class="table"><table>
+      <thead><tr><th>Render</th><th>Coast–Sea</th><th>Sea–Ocean</th><th>Coast–Ocean</th></tr></thead>
+      <tbody>{{water_rows}}</tbody>
+    </table></div>
+    <p>Production today cannot tell Sea from Ocean in any season: the water's depth tint follows distance from shore only and is the same beyond about two tiles. Winter now darkens open water smoothly with distance and adds a mild step from each tile's own Civ III class, so a Sea tile far from land still reads as Sea. A step from the class alone separates them cleanly but shows the tiles' diamonds:</p>
+    <figure><img src="{{seas_step}}" alt="Class step without blending shows tile diamonds" style="max-width:560px"><figcaption>Class step alone: readable, but blocky</figcaption></figure>
+    <p class="hint">A smooth and exact version needs one production change: carry each tile corner's class blend in the water's vertex data, so the shader interpolates classes across borders the way it already interpolates depth.</p>
+  </section>
+
+  <section aria-labelledby="h-land">
+    <h2 id="h-land">Desert, Plains, Grassland and Tundra stay apart</h2>
+    <p>One snow over everything made the four open land types identical. Grassland stays a clean, smooth white; the others differ through the snow itself rather than bare patches: plains carry a scatter of small gold stubble flecks, desert snow is a gentle cream shaped by dune ripples, and tundra lies under a cooler blue-grey snow with a wind-crusted surface. The type weights blend continuously, so borders stay soft. Texture carries much of the difference, so the colour numbers below understate it.</p>
+    <div class="pair">
+      <figure><img src="{{land_summer}}" alt="Desert, plains and grassland in Summer"><figcaption><b>Summer</b> · desert, plains, grassland</figcaption></figure>
+      <figure><img src="{{land_winter}}" alt="Desert, plains and grassland in Winter"><figcaption><b>Winter</b> · desert, plains, grassland</figcaption></figure>
+      <figure><img src="{{tundra_summer}}" alt="Tundra and grassland in Summer"><figcaption><b>Summer</b> · tundra beside grassland</figcaption></figure>
+      <figure><img src="{{tundra_winter}}" alt="Tundra and grassland in Winter"><figcaption><b>Winter</b> · tundra beside grassland</figcaption></figure>
+    </div>
+    <div class="table"><table>
+      <thead><tr><th>Render</th><th>Desert–Plains</th><th>Desert–Grass</th><th>Desert–Tundra</th><th>Plains–Grass</th><th>Plains–Tundra</th><th>Grass–Tundra</th></tr></thead>
+      <tbody>{{land_rows}}</tbody>
+    </table></div>
+    <p class="hint">Plains and grassland are the subtlest pair: the same white, told apart by the plains' fine stipple of stubble rather than by colour. More flecks or a warmer plains snow would separate them further, at some cost to the clean look.</p>
+  </section>
+
+  <section aria-labelledby="h-forests">
+    <h2 id="h-forests">Forests</h2>
+    <div class="pair">
+      <figure><img src="{{crop_laden}}" alt="Snow-laden broadleaf crowns"><figcaption><b>Broadleaf</b> · snow-laden crowns</figcaption></figure>
+      <figure><img src="{{crop_pines_sp}}" alt="Authored snowy pines"><figcaption><b>Pines</b> · the authored snowy-pine variety</figcaption></figure>
+    </div>
+    <p>Your picks. Broadleaf crowns carry snow on their upper leaves over darker shaded foliage. Pine forests switch to the snowy-pine variety Renderer64 already ships (same meshes, authored snow). Production uses it only for pines on tundra today, so choosing it in Winter is one small production change; the Lab previews exactly that change behind a switch in a private build.</p>
+  </section>
+
+  <section aria-labelledby="h-layers">
+    <h2 id="h-layers">What changes, layer by layer</h2>
+    <div class="table"><table>
+      <thead><tr><th>Layer</th><th>Winter treatment</th></tr></thead>
+      <tbody>
+        <tr><td>Ground</td><td>Snow sheds on steep faces and thins in wind-scoured patches; crust grain from the surface-detail map; soft drifts replace most micro relief. Grassland and mountains stay fully covered; plains show sparse gold stubble flecks, desert a cream snow with dune ripples, tundra a blue-grey wind crust.</td></tr>
+        <tr><td>Hills, mountains</td><td>Snow over hills with grey stone on steep faces; every mountain uses the authored mountain snow lower down, exposed rock cool grey.</td></tr>
+        <tr><td>Shade</td><td>Cool sky fill on snow. A violet fill under the warm sun read pink, so the fill leans cyan.</td></tr>
+        <tr><td>Trees</td><td>Pines: the authored snowy-pine variety. Broadleaf: snow on up-facing crowns over darker foliage; tree snow keeps the canopy's shading but takes the concept's cool white (the canopy's sunlight is orange).</td></tr>
+        <tr><td>Coasts, lakes</td><td>Beaches snowed; shore and lake beds snow at the waterline and pale ice further out; shoreline rocks grey with snow on top.</td></tr>
+        <tr><td>Water</td><td>Deeper, more saturated blue.</td></tr>
+        <tr><td>Rivers</td><td>The open channel takes the sea's winter blue; shelf ice grows from the banks in some reaches and not others, scalloped and snow-covered to a thin glassy edge; a few floes drift mid-channel; the banks carry the ground's snow to the water.</td></tr>
+        <tr><td>Farms</td><td>Rows measured against each plot's own mean; per-plot fallow, ploughed or stubble; field paths as dark hedgerows.</td></tr>
+        <tr><td>Towns</td><td>Snow coat on roofs and ledges, lit like the ground outside the city look, with mottling and bare dabs; trodden snow on settlement ground; windows still glow at night.</td></tr>
+        <tr><td>Roads, rails</td><td>Trodden grey-brown tracks; rail beds snowed, ballast and steel kept.</td></tr>
+        <tr><td>Resources, rocks, plants</td><td>Snow on up-facing surfaces, partly dormant colour. Units unchanged.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section aria-labelledby="h-port">
+    <h2 id="h-port">Before any of this reaches Renderer64</h2>
+    <ul>
+      <li>The frame season is already in <code>frame.season</code>; production needs it in a shader constant with these functions behind it. Today the Lab's private shader root is the winter variant.</li>
+      <li>Foliage classes (broadleaf, pine, snowy pine) come from atlas colour in the Lab. Production should read a pack flag, never names.</li>
+      <li>The relief draw has no snow texture bound, so ground snow is procedural. Binding the pack's ground snow material would give a richer crust.</li>
+      <li>The mountain flurry is one new effect kind plus an emitter per mountain tile in both object paths, gated on Winter instead of the Lab switch. Every view with a mountain then redraws continuously, as a smoking city already does.</li>
+      <li>Coast, Sea and Ocean: a per-corner class blend in the water's vertex data would make the class step smooth and exact, in every season.</li>
+      <li>Not attempted yet: frozen lake sheets, season transitions, frost on units.</li>
+      <li>These are Lab previews on the Windows VM, not in-game captures.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const images = { summer: "{{concept_summer}}", target: "{{concept_target}}", base: "{{concept_base}}" };
+  const labels = { summer: "Summer", target: "Concept", base: "Winter today" };
+  const box = document.getElementById("compare"), cut = document.getElementById("cut");
+  const left = document.getElementById("left"), tag = document.getElementById("left-tag");
+  cut.addEventListener("input", () => box.style.setProperty("--cut", cut.value + "%"));
+  for (const mode of Object.keys(images)) {
+    const button = document.getElementById("mode-" + mode);
+    button.addEventListener("click", () => {
+      left.src = images[mode]; tag.textContent = labels[mode];
+      document.querySelectorAll(".modes button").forEach(b => b.setAttribute("aria-pressed", String(b === button)));
+    });
+  }
+})();
+</script>
