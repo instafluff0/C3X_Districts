@@ -32,7 +32,12 @@ tile keeps a thinner stand (9-12 trees) spread between the resource and the
 tile edge, after the source resource clutter sets that replace the full forest
 with a few trees. Stationary resources (plants, rocks, decals) let that stand
 close in to 70% of the opening and hide them with half the reach; animated
-animals keep the full clearance because they move. Floor decals keep their core off the same ground and off
+animals keep the full clearance because they move. A hut village or camp keeps
+clear only the ground its standing pieces (huts, palisade, tents) cover, on a
+0.05-tile grid; crowns may lie over its low mats and stones. A lone site keeps the
+full stand, spread from 70% of its standing extent to the tile edge, so the tile
+still reads as forest. (The merged village bounds once spanned the whole tile and
+removed every tree there.) Floor decals keep their core off the same ground and off
 river channels and the shore; the clearing is part of the terrain compile key.
 The hiding fraction, stand size and path widths are C3X choices. Cases `roads`, `resources`, `rivers-sites` and
 `pines` (Lab study: `Renderer/lab/studies/vegetation/`) exercise them.

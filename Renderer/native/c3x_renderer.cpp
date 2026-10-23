@@ -4774,7 +4774,7 @@ public:
             clearing.variety=unsigned(std::max_element(votes,votes+forest_kinds::forest_variety_count)-votes);
             clearing.winter_variety=unsigned(std::max_element(winter_votes,winter_votes+forest_kinds::forest_variety_count)-winter_votes);
         }
-        forest_kinds::BuildingBounds own{1e9f,1e9f,-1e9f,-1e9f};bool own_animated=false;
+        forest_kinds::BuildingBounds own{1e9f,1e9f,-1e9f,-1e9f};bool own_animated=false,own_resource=false;
         for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++){
             int c=nc+dc,r=nr+dr;
             c3x_renderer_tile_v1 near_tile=tile;
@@ -4813,27 +4813,63 @@ public:
                     for(auto const&instance:plan.instances){
                         auto const&assets=object_assets[instance.family].assets;
                         if(instance.asset>=assets.size())continue;
+                        auto const&asset=assets[instance.asset];
                         float co=std::cos(instance.rotation),si=std::sin(instance.rotation),x0=1e9f,y0=1e9f,x1=-1e9f,y1=-1e9f;
-                        for(auto const&p:assets[instance.asset].vertices){
+                        std::vector<std::array<float,3>> ground(asset.vertices.size());
+                        for(std::size_t i=0;i<ground.size();i++){auto const&p=asset.vertices[i];
                             float x=float(c)+instance.u+(p.position[0]*co-p.position[1]*si)*instance.scale;
                             float y=float(r)+1-instance.v-(p.position[0]*si+p.position[1]*co)*instance.scale;
+                            ground[i]={x,y,p.position[2]*instance.scale};
                             x0=std::min(x0,x);x1=std::max(x1,x);y0=std::min(y0,y);y1=std::max(y1,y);}
-                        if(x0<=x1)keep(x0,y0,x1,y1);
+                        if(x0>x1)continue;
+                        if(instance.family!=c3x_renderer::objects::site_family){keep(x0,y0,x1,y1);continue;}
+                        // A hut village or camp merges its pieces into a few assets
+                        // whose bounds span the whole tile, which cleared every tree
+                        // there. Keep the ground its standing pieces cover, on a grid,
+                        // in row runs; crowns may lie over its low mats and stones.
+                        constexpr float cell=.05f,standing=.04f;
+                        int columns=int((x1-x0)/cell)+1,rows=int((y1-y0)/cell)+1;
+                        std::vector<char> covered(std::size_t(columns)*std::size_t(rows));
+                        auto corner=[&](std::size_t i){return asset.indices.empty()?i:asset.indices[i];};
+                        std::size_t corners=asset.indices.empty()?ground.size():asset.indices.size();
+                        for(std::size_t i=0;i+2<corners;i+=3){
+                            float tx0=1e9f,ty0=1e9f,tx1=-1e9f,ty1=-1e9f,top=0;bool valid=true;
+                            for(std::size_t k=i;k<i+3;k++){
+                                if(corner(k)>=ground.size()){valid=false;break;}
+                                auto const&q=ground[corner(k)];top=std::max(top,q[2]);
+                                tx0=std::min(tx0,q[0]);tx1=std::max(tx1,q[0]);ty0=std::min(ty0,q[1]);ty1=std::max(ty1,q[1]);}
+                            if(!valid || top<standing)continue;
+                            for(int row=int((ty0-y0)/cell);row<=int((ty1-y0)/cell);row++)
+                                for(int column=int((tx0-x0)/cell);column<=int((tx1-x0)/cell);column++)
+                                    covered[std::size_t(row)*std::size_t(columns)+std::size_t(column)]=1;
+                        }
+                        for(int row=0;row<rows;row++)for(int column=0;column<columns;){
+                            if(!covered[std::size_t(row)*std::size_t(columns)+std::size_t(column)]){column++;continue;}
+                            int end=column;
+                            while(end<columns && covered[std::size_t(row)*std::size_t(columns)+std::size_t(end)])end++;
+                            float bx0=x0+float(column)*cell,by0=y0+float(row)*cell;
+                            float bx1=std::min(x1,x0+float(end)*cell),by1=std::min(y1,y0+float(row+1)*cell);
+                            keep(bx0,by0,bx1,by1);
+                            if(!dc && !dr){own.x0=std::min(own.x0,bx0);own.y0=std::min(own.y0,by0);own.x1=std::max(own.x1,bx1);own.y1=std::max(own.y1,by1);}
+                            column=end;
+                        }
                     }
                 }
             }
             resource_footprint(near_tile,c,r,[&](float x0,float y0,float x1,float y1,bool animated){
                 keep(x0,y0,x1,y1,!animated);
                 if(!dc && !dr){own.x0=std::min(own.x0,x0);own.y0=std::min(own.y0,y0);own.x1=std::max(own.x1,x1);own.y1=std::max(own.y1,y1);
-                    own_animated=own_animated || animated;}
+                    own_animated=own_animated || animated;own_resource=true;}
             });
         }
-        // The resource tile's thinner stand stays outside its parts.
+        // The stand stays outside a resource's parts or a site's standing
+        // pieces: thinner on a resource tile, full around a lone hut or camp.
         if(own.x0<=own.x1 && (tile.real_terrain_type==7 || tile.real_terrain_type==8)){
             clearing.open_x=(own.x0+own.x1)*.5f;clearing.open_y=(own.y0+own.y1)*.5f;
             clearing.open_radius=std::max(own.x1-own.x0,own.y1-own.y0)*.5f;
-            // Stationary plants, rocks and decals let the stand close in.
+            // Stationary plants, rocks, decals and sites let the stand close in.
             clearing.open_scale=own_animated?1.f:.7f;
+            clearing.thin_stand=own_resource;
         }
         return clearing;
     }

@@ -2,7 +2,7 @@
 // shadow pipeline. Match the forest's varied spiral placement across tiles.
         std::uint32_t seed=std::uint32_t(owner.source_x*0x193u)^std::uint32_t(owner.source_y*0x217u);
         bool opening=clearing.open_radius>0 && !raised_canopy && !hill_jungle;
-        unsigned density=raised_canopy?4u:hill_jungle?16u:opening?9u+hash(seed^0x5c1du)%4u:31u+hash(seed^0xa53du)%11u;
+        unsigned density=raised_canopy?4u:hill_jungle?16u:opening && clearing.thin_stand?9u+hash(seed^0x5c1du)%4u:31u+hash(seed^0xa53du)%11u;
         for(unsigned i=0;i<density;i++){
             if(cancelled())return false;
             unsigned selected=hash(seed+i*31u)%121u;Recipe const*recipe=nullptr;

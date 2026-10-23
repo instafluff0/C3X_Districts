@@ -20,8 +20,8 @@ the existing source geometry path.
 
 Jungle shares the forest's canopy clearing: routes, resources, mines and
 sites of its tile and its neighbours stay visible, and a resource tile keeps a
-thinner stand around the resource; floor decals keep clear too (see the
-forest notes). Cases `roads`,
+thinner stand around the resource, and a lone hut or camp the full stand around
+its standing pieces; floor decals keep clear too (see the forest notes). Cases `roads`,
 `resources` and `rivers-sites` exercise it.
 
 `standard.json` identifies the shared implementation, dependencies, fixture recipe

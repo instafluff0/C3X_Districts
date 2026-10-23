@@ -5,7 +5,7 @@
         // A resource tile keeps a thinner stand around it, as the source
         // resource clutter sets replace the full forest with a few trees.
         bool opening=clearing.open_radius>0 && !raised_canopy && !hill_forest;
-        unsigned density=raised_canopy?4u:hill_forest?16u:opening?9u+hash(seed^0x5c1du)%4u:31+hash(seed^0xa53du)%11u;
+        unsigned density=raised_canopy?4u:hill_forest?16u:opening && clearing.thin_stand?9u+hash(seed^0x5c1du)%4u:31+hash(seed^0xa53du)%11u;
         for(unsigned i=0;i<density;i++){
             if(cancelled())return false;
             unsigned selected=hash(seed+i*31u)%set.weight;Recipe const*recipe=nullptr;

@@ -40,7 +40,8 @@
     "Renderer.native.test_tile_sites",
     "Renderer.native.test_native_bridge_contract",
     "Renderer.native.test_render_core",
-    "Renderer.native.test_ground_states"
+    "Renderer.native.test_ground_states",
+    "Renderer.native.test_canopy_world_inputs"
   ],
   "references": {
     "d3d11": []

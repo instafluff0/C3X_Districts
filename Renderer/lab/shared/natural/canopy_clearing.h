@@ -18,6 +18,9 @@ struct CanopyClearing {
     // A resource tile keeps a thinner stand outside this disc (radius 0: none),
     // scaled down when the resource is stationary.
     float open_x=0,open_y=0,open_radius=0,open_scale=1;
+    // A hut or camp without a resource keeps the full stand, spread outside
+    // its opening, so the tile still reads as forest around the village.
+    bool thin_stand=true;
     unsigned variety=broadleaf_forest;
     // The variety in Winter, when every pine forest takes the snow-pine set
     // (seasons D4); a stand whose Winter variety differs keeps both stands.
@@ -62,6 +65,7 @@ struct CanopyClearing {
             mix(-1.f);
         }
         mix(open_x);mix(open_y);mix(open_radius);mix(open_scale);
+        if(!thin_stand)mix(-2.f);
         return boxes.empty() && near_boxes.empty() && open_radius<=0?0:value;
     }
 };
