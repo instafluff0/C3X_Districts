@@ -123,13 +123,13 @@
 #define WINTER_TUNDRA_SNOW float3(0.85, 0.94, 1.10)
 #define WINTER_TUNDRA_SMOOTH 0.6
 #define WINTER_SHOW float3(2.0, 0.665, 2.0)
-#define WINTER_RIPPLE_FREQ 26.0
+#define WINTER_DUNE_FREQ 1.2
 #define WINTER_STUBBLE_SCALE 38.0
 #define WINTER_PLAINS_SNOW float3(1.015, 1.0, 0.965)
 #define WINTER_DESERT_SNOW float3(1.09, 1.0, 0.83)
 #define WINTER_TUNDRA_CRUST 1.2
 #define WINTER_TUNDRA_GLOSS 0.15
-#define WINTER_DESERT_RELIEF 0.25
+#define WINTER_DESERT_RELIEF 0.12
 #define WINTER_ROOF_AO 0.35
 #define WINTER_ROOF_DAB 9.0
 #define WINTER_ROOF_BARE 0.24
@@ -222,11 +222,19 @@ float4 winter_types(float plains, float desert, float tundra) {
     float4 types = float4(saturate(1 - plains - desert - tundra), plains, desert, tundra);
     return types / max(dot(types, float4(1, 1, 1, 1)), 1e-4);
 }
-// Wandering dune ripples (1 on crests).
+// Broad, low snow-covered dunes under the desert snow (user's pick, 2026-10-23;
+// the earlier wandering ripple drew swirly contour lines). Crests run across one
+// regional wind that turns only slowly over many tiles, meander gently, rise
+// slowly and drop on a short lee face, with crest height varying along each
+// dune. The relief fades where a dune spans too few pixels to resolve.
 float winter_ripple(float2 world) {
-    float turn = (winter_fbm(world * 0.6) - 0.5) * 2.4;
-    float2 wind = float2(cos(turn), sin(turn));
-    return 0.5 + 0.5 * sin(dot(world, wind) * WINTER_RIPPLE_FREQ + winter_fbm(world * 2.3) * 8.0);
+    float turn = (winter_noise(world * 0.12) - 0.5) * 0.8;
+    float2 wind = float2(cos(0.6 + turn), sin(0.6 + turn));
+    float along = dot(world, wind) * WINTER_DUNE_FREQ + (winter_noise(world * 0.9) - 0.5) * 1.6;
+    float phase = frac(along);
+    float profile = smoothstep(0.0, 0.78, phase) * (1 - smoothstep(0.78, 1.0, phase));
+    float resolved = 1 - smoothstep(0.08, 0.25, fwidth(along));
+    return 0.5 + (profile * (0.6 + 0.4 * winter_noise(world * 0.7 + 4.1)) - 0.35) * resolved;
 }
 float winter_type_shown(float4 types, float2 world) {
     float clump = winter_fbm(world * WINTER_TUSSOCK_SCALE) + (winter_noise(world * 35.0) - 0.5) * 0.25;
