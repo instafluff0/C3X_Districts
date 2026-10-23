@@ -232,39 +232,74 @@ AUTUMN_EDITS = [
 # ---------------------------------------------------------------- Winter
 # Winter's mountain flurry (seasons D4; by the Winter session): effect kind 6,
 # whose quads the renderer builds per view only in Winter (prepare_flurry).
-# The approved Lab effect (studies/winter/flurry_tree.py), its layers thinned
-# by zoom: three from a 128-pixel tile, two from 96, one below (none below 64).
+# v2 (user, 2026-10-22: "needs far more randomness ... the same rectangle
+# shape of interweaving parallel snowflakes"): every column falls at its own
+# speed and offset; every flake has its own spot, size, brightness and wide,
+# slow sway; each parallax layer slants at its own angle around the mountain's
+# wind; the flakes fill a ragged plume (width, height, density per mountain,
+# noisy edges, an uneven foot) that drifts with slow gusts. Integer hash and a
+# bounded clock keep it exact late in a game. Layers thin by zoom: three from
+# a 128-pixel tile, two from 96, one below (the renderer draws none below 64).
+# Lab: studies/winter/winter.py FLURRY2 (look v24-flurry4).
 WINTER_FLURRY = """// Seasons D4: a gentle flurry of small snowflakes over a mountain tile (96).
-// Three parallax layers of cells fall through the quad; each cell holds at most
-// one flake at a hashed position with a hashed sway phase. Sizes are screen
-// pixels at tile width 128, scaled with the zoom; the column fades in at its
-// top and out at its foot.
-// Integer hash: a sin hash lost precision as the game's visual clock grew, and
-// the flakes snapped to a regular lattice (the Lab clips start near time 0).
+// Three parallax layers of tall cells, one flake per cell at most. Each column
+// falls at its own speed with its own offset; each flake has its own spot,
+// size, brightness and sway; each mountain its own plume (width, height,
+// density, wind slant) whose rounded edge and density drift with slow gusts.
+// Units are pixels at tile width 128; the layers thin with the zoom.
 float q8_flurry_hash(float2 p,float s){
   uint3 v=uint3(int3(int2(floor(p)),int(s*97.)));
   uint h=v.x*1597334677u^v.y*3812015801u^v.z*2654435761u;
   h^=h>>16;h*=2246822519u;h^=h>>13;h*=3266489917u;h^=h>>16;
   return float(h&0xffffffu)*(1./16777216.);
 }
+float q8_flurry_noise(float2 p,float s){
+  float2 i=floor(p),f=frac(p);f=f*f*(3-2*f);
+  return lerp(lerp(q8_flurry_hash(i,s),q8_flurry_hash(i+float2(1,0),s),f.x),
+              lerp(q8_flurry_hash(i+float2(0,1),s),q8_flurry_hash(i+float2(1,1),s),f.x),f.y);
+}
 float4 q8_effect_flurry(float2 q,float2 pixel,float t,float seed,float strength,float night){
-  float2 s=float2(q.x/pixel.x,q.y/pixel.y);
   float zoom=(2/pixel.x)/(1.05*128);
   int layers=zoom>=1?3:zoom>=.75?2:1;
+  t=fmod(t,1800.);
+  float2 u=float2(q.x/pixel.x,q.y/pixel.y)/zoom;
+  // This mountain's plume.
+  float wind=(q8_flurry_hash(float2(seed,1),7.)-.5)*.7;
+  float density=.8+.5*q8_flurry_hash(float2(seed,2),7.);
+  float half_width=.62+.3*q8_flurry_hash(float2(seed,3),7.);
+  float top=.62+.3*q8_flurry_hash(float2(seed,4),7.);
+  // Straight noisy sides down to the foot, a rounded top: a plume over the peak.
+  float2 e=float2(q.x/half_width,max(0.,q.y-.35*top)/(.65*top));
+  float edge=length(e)+(q8_flurry_noise(float2(q.x*4.5,q.y*6.-t*.09),seed+21.)-.5)*.6
+                     +(q8_flurry_noise(float2(q.x*1.6,q.y*2.2+t*.05),seed+23.)-.5)*.5;
+  // A ragged foot: the flakes thin out at uneven heights, not on one line.
+  float foot=.06+.3*q8_flurry_noise(float2(q.x*3.5,t*.05),seed+25.);
+  float envelope=smoothstep(1.,.45,edge)*smoothstep(foot-.06,foot+.08,q.y);
+  float gust=q8_flurry_noise(float2(u.x/70.,u.y/55.+t*.11),seed+31.);
   float alpha=0;
   [unroll]for(int layer=0;layer<3;layer++)if(layer<layers){
-   float cell=(layer==0?22.:layer==1?15.:10.)*zoom,speed=(layer==0?20.:layer==1?14.:9.)*zoom;
-   float radius=(layer==0?1.25:layer==1?.95:.7)*zoom,sway=(layer==0?3.:layer==1?2.2:1.5)*zoom;
-   float opacity=layer==0?.9:layer==1?.7:.5,share=layer==2?.5:.55;
-   float2 g=float2(s.x,s.y+speed*t);
-   float column=floor(g.x/cell);
-   g.x+=sway*sin(6.2832*(t/2.6+q8_flurry_hash(float2(column,layer),seed+3.1)));
-   float2 id=floor(g/cell),f=frac(g/cell);
-   float2 c=.2+.6*float2(q8_flurry_hash(id,seed+layer),q8_flurry_hash(id.yx,seed+layer+9.3));
-   float present=step(q8_flurry_hash(id+17,seed+layer*5),share);
-   alpha=max(alpha,present*opacity*saturate(radius+.6-length((f-c)*cell)));
+   float w=layer==0?24.:layer==1?17.:12.,h=w*1.3,fall=layer==0?20.:layer==1?14.:9.;
+   // Each layer slants at its own angle around the mountain's wind.
+   float drift=(wind+(q8_flurry_hash(float2(layer,5),seed+9.)-.5)*.5)*fall*t;
+   float column=floor((u.x-drift)/w);
+   float speed=fall*(.7+.6*q8_flurry_hash(float2(column,layer),seed+11.));
+   float offset=q8_flurry_hash(float2(column,layer+7),seed+13.)*h;
+   float2 g=float2(u.x-drift,u.y+speed*t+offset);
+   float2 id=floor(g/float2(w,h)),f=frac(g/float2(w,h))*float2(w,h);
+   float a=q8_flurry_hash(id,seed+layer),b=q8_flurry_hash(id.yx+3,seed+layer),
+         c=q8_flurry_hash(id+17,seed+layer*5),d=q8_flurry_hash(id+29,seed+layer*3);
+   float share=(layer==2?.6:.75)*density*(.45+gust);
+   if(q8_flurry_hash(id+41,seed+layer*7)<share){
+    float scale=layer==0?1.:layer==1?.75:.5;
+    // Wide, slow flutter: up to a fifth of the cell each way, inside the cell.
+    float sway=(.3+.7*d)*.2*w*sin(6.2832*(t/(1.6+2.6*c)+a*3.));
+    float2 spot=float2((.3+.4*a)*w+sway,(.1+.8*b)*h);
+    float radius=(layer==0?1.25:layer==1?.95:.7)*(.75+.5*d);
+    float opacity=(layer==0?.9:layer==1?.7:.5)*(.7+.3*b);
+    alpha=max(alpha,opacity*saturate((radius-length(f-spot))*zoom+.6));
+   }
   }
-  alpha*=smoothstep(1,.65,q.y)*smoothstep(0,.2,q.y)*smoothstep(1,.75,abs(q.x))*strength;
+  alpha*=envelope*strength;
   clip(alpha-.004);
   // Bright as the other effects (scene white near 1.3 after grading); moonlit at night.
   return float4(lerp(float3(1.26,1.28,1.32),float3(.50,.58,.82),night),alpha);

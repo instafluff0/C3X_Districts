@@ -447,8 +447,14 @@ What landed, against the architecture above:
   - the flurry as a per-view ambient layer like the waves: Winter only, tiles
     of 64 px or more, never in reflections.
   - The flurry's sin hash snapped flakes to a lattice at the game's large
-    clock values; it now uses an integer hash. The user asked for far more
-    randomness; that redesign is the Winter session's next step.
+    clock values; it now uses an integer hash with a bounded clock.
+  - The user asked for far more randomness, so the Winter session redesigned
+    it (Lab look v24-flurry4):
+    - per-column speeds and offsets;
+    - per-flake size, brightness and wide sway;
+    - per-layer wind slant;
+    - a ragged per-mountain plume with gusts.
+    In game, Winter at 3× idle is 59.4–59.5 fps (Summer 58.6–58.9).
 - **D5:** conifer floor marker 3.25 in `vegetation_floor_mesh_body.h`. No
   ground-use mask: v20 needs only biome weights, and roads, farms and cities
   draw over the meadow.
@@ -479,5 +485,4 @@ What landed, against the architecture above:
   - D7 wrap-periodic noise: on wrapping maps the date line may show a faint
     seam in broad seasonal patches;
   - per-season compile variants (`#define C3X_SEASON_INDEX n`), which would
-    restore the cold-compile budget;
-  - the flurry redesign.
+    restore the cold-compile budget.
