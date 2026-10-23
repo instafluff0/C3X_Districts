@@ -1,6 +1,7 @@
 # Seasons in Renderer64: integration plan
 
-Status: **plan approved, not implemented** (2026-10-22; decisions in section 5).
+Status: **first integration staged for in-game testing** (2026-10-22; decisions in
+section 5, what landed in section 7).
 Lead: the Autumn session.
 Inputs: the three Lab studies (`lab/studies/autumn/`, `winter/`, `spring/`),
 replies from the Winter and Spring sessions, and traces of the current C3X
@@ -8,8 +9,8 @@ season clock and renderer pipeline. File references are relative to `Renderer/`
 unless they name `injected_code.c` / `C3X.h`.
 
 Approved looks to reproduce: Autumn **v18**, Winter **v24-laden**, Spring
-**v28**. The user confirmed v28's direction; small tweaks may still come at
-final sign-off. The rejected posies (v23–v25) are not part of the port. Each study's private shader root is
+**v20**. The user first confirmed v28, then chose v20's flowers instead
+(2026-10-22, section 5). The rejected posies (v23–v25) are not part of the port. Each study's private shader root is
 the visual reference; the port must match it in the Lab before anything is
 staged, and the user accepts each season's in-game look separately.
 
@@ -400,8 +401,9 @@ The user approved every recommended default:
    its native seasonal PCX sprites while custom rendering is on. They still
    load when custom rendering is off.
 
-Spring reviewed and agreed (2026-10-22). Its look is v28; final sign-off may
-still bring small tweaks.
+Spring reviewed and agreed (2026-10-22). Its look was v28 until the user chose
+v20 for the look of its flowers (2026-10-22, before the first staging). v20
+and v28 run the same code; they differ only in the study's constants.
 
 ## 6. Risks
 
@@ -419,3 +421,63 @@ still bring small tweaks.
   in v28). Its port starts from its final committed look.
 - The Lab preview and the game draw open water with different shaders (D10).
   Any water decision made from Lab renders alone can be wrong.
+
+## 7. First integration (2026-10-22)
+
+The user asked for all three looks in the game ("integrate seasons and stage so
+I can test in the game after tests pass … make sure performance doesn't slip").
+What landed, against the architecture above:
+
+- **D1 constants:**
+  - `EnvironmentState::season` / `season_progress`, with progress 1;
+  - integrated shaders read `game_resource_look.zw`;
+  - natural shaders read `Frame.season`, the 7th `float4` (`C3XSeason`; `Frame` is 112 B).
+- **D2, simplified:** each study's own code is ported verbatim as marked
+  insertions with uniform `[branch]` guards (`lab/shared/seasons/seasons.py`,
+  libraries beside it). The tool is `tools/season_shading.py`; tests are in
+  `tools/test_season_shading.py`. Summer runs the unchanged code (Lab parity:
+  at most 1/255 in a few pixels, from compiler rounding). Every season matches
+  its study look in the Lab to the same 1/255.
+- **Water dispatch:** each season used to call `q3_water_material` itself,
+  which made PSIntegrated inline it four times (406 s fxc compile). The dispatch
+  now evaluates it once (`c3x_water`), each season recolours that, and the
+  original return sits under a marked `#if 0`.
+- **D4, Winter (by the Winter session):**
+  - precomputed snowy-pine stands, which match v24 in the Lab;
+  - the flurry as a per-view ambient layer like the waves: Winter only, tiles
+    of 64 px or more, never in reflections.
+  - The flurry's sin hash snapped flakes to a lattice at the game's large
+    clock values; it now uses an integer hash. The user asked for far more
+    randomness; that redesign is the Winter session's next step.
+- **D5:** conifer floor marker 3.25 in `vegetation_floor_mesh_body.h`. No
+  ground-use mask: v20 needs only biome weights, and roads, farms and cities
+  draw over the meadow.
+- **D6, partial:** jungle bodies (only the jungle recipes 25–34 place them) set
+  `InstanceMaterial.instance_secondary.z`. Autumn and Spring leave jungle
+  unchanged, like conifers (user). Other foliage classes still use the
+  studies' atlas-average colour tests, which are texture data, not names.
+- **D9:** the clock is decoupled and native PCX loading is skipped under
+  custom rendering (`injected_code.c`; ledger entry).
+- **D10, revised by the user:** the coast keeps Summer's translucent look in
+  every season.
+  - Shallow beds (q3 kind 4) never change; Winter's bed ice is removed.
+  - Every season's water grade fades in from Coast to Sea
+    (`smoothstep(.34, .63, surface_coordinate)`), in `water_surface.hlsl` and
+    in the q3 dispatch. Rivers keep their seasonal grade.
+- **Harness:** `C3X_RENDERER_SEASON_OVERRIDE=0..3` pins the rendered season for
+  scripted captures. It must reach both environment uploads (fresh
+  `update_environment` and the bridge's per-frame render); a test guards this.
+- **Performance** (busy 1498 AD save, `near`, warm caches, no foreign VM work
+  in the measured window):
+  - every season on the final build is within the baseline's run-to-run spread
+    on every segment, including Winter with stands and the three-layer flurry
+    (3× idle 57–59 fps against 58–60);
+  - cold compile is larger: game-blocking shader compiles after a shader change
+    take about 3 bounded runs (PSIntegrated about 95 s against 50 s pristine
+    with fxc). It is cached per shader version.
+- **Not yet:**
+  - D7 wrap-periodic noise: on wrapping maps the date line may show a faint
+    seam in broad seasonal patches;
+  - per-season compile variants (`#define C3X_SEASON_INDEX n`), which would
+    restore the cold-compile budget;
+  - the flurry redesign.

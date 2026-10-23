@@ -76,7 +76,7 @@ void valid_data(NaturalData const&data,unsigned surface_count=4){
         auto light=light_frame(environment);
         auto frames=data.frame_settings(environment,light.data()+8);
         for(auto const&frame:frames){
-            std::array<float,24> values;std::memcpy(values.data(),&frame,sizeof(frame));
+            std::array<float,sizeof(Frame)/sizeof(float)> values;std::memcpy(values.data(),&frame,sizeof(frame));
             for(float value:values)check(std::isfinite(value),"nonfinite frame setting");
             check(frame.sun[0]==light[8] && frame.sun[1]==light[9] && frame.sun[2]==light[10],"light basis");
         }
@@ -86,10 +86,14 @@ void valid_data(NaturalData const&data,unsigned surface_count=4){
         check(frames[2].detail[0]==.09f && frames[2].detail[1]==.82f,"object material response");
         if(hour==12)check(frames[0].sun[3]==2.08f && frames[1].sun[3]==2.18f && frames[2].sun[3]==2.05f,"noon strengths");
     }
+    // Seasonal shading reads the C3X season and its progress from the 7th float4.
+    auto winter=evaluate_environment(12.f,2);auto light=light_frame(winter);
+    for(auto const&frame:data.frame_settings(winter,light.data()+8))
+        check(frame.season[0]==2.f && frame.season[1]==1.f,"season constants");
 }
 
 int main(int argc,char**argv){try{
-    static_assert(sizeof(BodyVertex)==32 && sizeof(Material)==36 && sizeof(Recipe)==36 && sizeof(SurfaceRecipe)==32 && sizeof(SurfaceVertex)==16 && sizeof(Frame)==96,"wire layouts");
+    static_assert(sizeof(BodyVertex)==32 && sizeof(Material)==36 && sizeof(Recipe)==36 && sizeof(SurfaceRecipe)==32 && sizeof(SurfaceVertex)==16 && sizeof(Frame)==112,"wire layouts");
     Fixture fixture;NaturalData data;
     check(fixture.load(data),"valid fixture rejected");valid_data(data);
     auto const&field=data.fields[0];

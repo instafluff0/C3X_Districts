@@ -113,6 +113,8 @@ EnvironmentState evaluate_environment(float requested_hour, int season) {
     result.emissive_scale = 0.25f + 1.10f * result.night_activation;
     result.water_fresnel = 0.04f + 0.08f * result.night_activation;
     result.water_specular = clamp01(0.20f + 0.42f * result.sun_intensity + 0.30f * result.moon_intensity);
+    result.season = static_cast<float>(season >= 0 && season < 4 ? season : 0);
+    result.season_progress = 1.0f;
     return result;
 }
 

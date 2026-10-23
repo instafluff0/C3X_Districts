@@ -115,7 +115,9 @@
                 float h=height_natural(world_x,world_y)+.18f;
                 auto out=project_natural(world_x,world_y,h);
                 out.u=x/8.f;out.v=y/8.f;
-                out.material_plains=vegetation_kind==7?3.f:4.f;
+                // 3.25 marks a conifer stand's floor (Civ III pine flag), which
+                // seasonal shading leaves without fallen broadleaf leaves.
+                out.material_plains=vegetation_kind==7?(clearing.variety!=0u?3.25f:3.f):4.f;
                 out.base_terrain=-10+coverage_at(world_x,world_y);
                 return out;
             };

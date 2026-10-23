@@ -506,8 +506,10 @@ int main() {
         self.assertIn("DXGI_FORMAT_BC1_UNORM", renderer)
         self.assertIn("find_feature_placement_by_suffix", renderer)
         assembly = (Path(__file__).parent / "source_fidelity/geometry.h").read_text()
-        self.assertIn("forest_instances[body].push_back(instance)", assembly)
-        self.assertIn("forest_projected[body].include", assembly)
+        # Seasons D4: the Winter pass places a pine stand's second (Winter) stand.
+        self.assertIn("auto& placed=(winter_pass?winter_instances:forest_instances)[body];", assembly)
+        self.assertIn("placed.push_back(instance);", assembly)
+        self.assertIn("(winter_pass?winter_projected:forest_projected)[body].include", assembly)
         self.assertIn("feature_vertices", renderer)
         self.assertIn("terrain_marsh_decal_01.json", renderer)
         for literal in ("0.48, 0.52", "1.42", "0.24, 0.70", "0.86", "1.91", "0.76, 0.28", "0.72", "1.37", "0.88"):

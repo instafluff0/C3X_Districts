@@ -30,7 +30,8 @@ struct Material {unsigned channels[7]={},tint=0,repeat=0;};
 struct Recipe {unsigned object;float scale,variation;unsigned count,min_count,priority,flags;float width,reduction;};
 struct SurfaceRecipe {unsigned biome;float scale,variation;unsigned weight;float width,height;unsigned first,vertex_count;};
 struct SurfaceVertex {float x,y,u,v;};
-struct Frame {float sun[4],color[4],ambient[4],view[4],detail[4],quality[4];};
+// season: C3X season index and progress (EnvironmentState), read by seasonal shading.
+struct Frame {float sun[4],color[4],ambient[4],view[4],detail[4],quality[4],season[4];};
 // Forest recipe sets, as ranges of recipes: broadleaf, pine and snow-covered
 // pine. The two pine sets come from an optional pack file; without it every
 // forest keeps the broadleaf recipe.
@@ -239,6 +240,7 @@ struct NaturalData {
             if(i==1){f.detail[0]=fields[macro[1][0]].minimum;f.detail[1]=fields[macro[1][0]].maximum;f.detail[2]=1.72f;f.detail[3]=3.25f;
                 f.quality[0]=1;f.quality[1]=.72f;f.quality[2]=.105f;f.quality[3]=.72f;}
             if(i==2){f.detail[0]=.09f;f.detail[1]=.82f;f.detail[2]=.16f;f.detail[3]=1;}
+            f.season[0]=e.season;f.season[1]=e.season_progress;
             result[i]=f;
         }
         return result;

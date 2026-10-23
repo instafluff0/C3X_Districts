@@ -19,6 +19,9 @@ struct CanopyClearing {
     // scaled down when the resource is stationary.
     float open_x=0,open_y=0,open_radius=0,open_scale=1;
     unsigned variety=broadleaf_forest;
+    // The variety in Winter, when every pine forest takes the snow-pine set
+    // (seasons D4); a stand whose Winter variety differs keeps both stands.
+    unsigned winter_variety=broadleaf_forest;
     // A body unit of height is 150 pixels at a 128-pixel tile, where a world
     // unit of x-y spans 32 screen pixels. Moving (-1,+1) raises a point by 64.
     // Only the lower part of a crown needs to stay off what lies behind it.

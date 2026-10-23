@@ -117,6 +117,7 @@ int main(){
         run_cpp(r'''
 #include <algorithm>
 #include <cassert>
+#include <climits>
 #include <cstring>
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/environment_runtime.h"
@@ -133,6 +134,10 @@ struct Pipeline {
  unsigned lighting_revision=0;bool reflection_valid=true,reflected_terrain_material_valid=true;
  struct Rasters {unsigned invalidations=0;void invalidate_all(int){++invalidations;}} static_rasters;
  c3x_renderer::EnvironmentState copied{};
+ // Seasons: the renderer's (possibly pinned) frame season and the Winter forest
+ // stands, which a Winter flip swaps by retiring the geometry selection.
+ struct Renderer {bool winter_season=false;int frame_season(c3x_renderer_frame_v1 const& f)const{return f.season;}} renderer;
+ unsigned retirements=0;void retire_geometry_selection(){++retirements;}
 ''' + prefix + r'''
  copied=environment;
  }
@@ -159,6 +164,13 @@ int main(){
  assert(pipeline.visual_hour==24 && pipeline.lighting_revision==5);
  assert(std::memcmp(&first,&pipeline.copied,sizeof(first)) && frame.hour==0);
  assert(!(tile.tile_flags&C3X_RENDERER_TILE_VISIBLE));
+ // Entering and leaving Winter each retire the selection once (forest stands);
+ // other season changes only relight.
+ assert(pipeline.retirements==0 && !pipeline.renderer.winter_season);
+ cycle_enabled=false;frame.season=2;pipeline.update_environment(frame);
+ assert(pipeline.renderer.winter_season && pipeline.retirements==1 && pipeline.copied.season==2);
+ frame.season=1;pipeline.update_environment(frame);
+ assert(!pipeline.renderer.winter_season && pipeline.retirements==2);
 }
 ''',sources=('Renderer/native/environment_runtime.cpp',))
 

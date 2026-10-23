@@ -78,7 +78,7 @@ struct Natural : NaturalWorld {
                 e[7].Format=o.quantized && !o.zero_owner?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R32G32B32A32_FLOAT;
                 if(SUCCEEDED(hr))hr=device->CreateInputLayout(e,i<2?8:6,v->GetBufferPointer(),v->GetBufferSize(),&format_layout[i][f]);
             }
-            drop(v);drop(p);D3D11_BUFFER_DESC desc={};desc.ByteWidth=96;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+            drop(v);drop(p);D3D11_BUFFER_DESC desc={};desc.ByteWidth=sizeof(Frame);desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&frames[i]);
             if(FAILED(hr))return false;
         }
@@ -133,10 +133,15 @@ struct Natural : NaturalWorld {
         d.ByteWidth=UINT(indices.size()*sizeof(unsigned));d.BindFlags=D3D11_BIND_INDEX_BUFFER;input.pSysMem=indices.data();
         if(FAILED(device->CreateBuffer(&d,&input,&m.indices))){drop(m.vertices);return false;}
         auto const& material=materials[bodies[body].material];
+        // instance_secondary.z marks a body only the jungle recipes (25-34) place;
+        // seasonal crowns leave jungle unchanged, like conifers.
+        bool jungle=false,forest=false;
+        for(unsigned j=0;j<recipes.size();++j)if(recipes[j].object==body)(j>=25 && j<35?jungle:forest)=true;
         float values[]={1,(material.repeat?2.f:0.f)+
             (material.channels[1]!=0xffffffffu && material.channels[2]!=0xffffffffu?1.f:0.f),
             material.channels[3]!=0xffffffffu?1.f:0.f,
-            material.channels[4]!=0xffffffffu?1.f:0.f,float(material.tint),material.channels[6]!=0xffffffffu?1.f:0.f,0,0};
+            material.channels[4]!=0xffffffffu?1.f:0.f,float(material.tint),material.channels[6]!=0xffffffffu?1.f:0.f,
+            jungle && !forest?1.f:0.f,0};
         d.ByteWidth=sizeof(values);d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;input.pSysMem=values;
         if(FAILED(device->CreateBuffer(&d,&input,&m.material))){drop(m.vertices);drop(m.indices);return false;}
         m.count=unsigned(indices.size());instance_mesh_bytes+=bytes+sizeof(values);return true;

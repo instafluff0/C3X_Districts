@@ -41,7 +41,8 @@ if(fidelity_profile) {
     // Routes, resources, mines and sites of this tile and its neighbors stay
     // visible: canopy and vegetation floor keep their ground clear. The
     // retained proof records this 3x3 window and the routes' 5x5 lookups.
-    auto const clearing=canopy_clearing(tile,topology_lookup);
+    // Not const: a pine stand's Winter pass (below) borrows it with the Winter variety.
+    auto clearing=canopy_clearing(tile,topology_lookup);
     if(!retained_ground_terrain && !cpu_terrain_enabled) {
         #include "terrain_mesh_body.h"
     }
@@ -106,19 +107,22 @@ if(fidelity_profile) {
                 buildings.push_back(b);
             }
         }
+        // The Winter pass (seasons D4) fills the tile's second stand instead.
+        bool winter_pass=false;
         auto emit_forest_instance=[&](unsigned body,int c,int r,float u,float v,float co,float si,float scale,float ground_h){
             if(!tree_instances_enabled)return false;
             MeshInstance instance;float data[]={float(c),float(r),u,v,co,si,scale,ground_h};std::copy(data,data+8,instance.place);
-            forest_instances[body].push_back(instance);
-            auto& bounds=forest_bounds[body];
-            if(forest_instances[body].size()==1)for(unsigned axis=0;axis<3;++axis){bounds.low[axis]=1e9f;bounds.high[axis]=-1e9f;}
+            auto& placed=(winter_pass?winter_instances:forest_instances)[body];
+            placed.push_back(instance);
+            auto& bounds=(winter_pass?winter_bounds:forest_bounds)[body];
+            if(placed.size()==1)for(unsigned axis=0;axis<3;++axis){bounds.low[axis]=1e9f;bounds.high[axis]=-1e9f;}
             constexpr float z_basis=150.f/(.82f*64.f);
             for(auto const&p:natural.bodies[body].vertices){
                 float x=float(c)+u+(p.position[0]*co-p.position[1]*si)*scale;
                 float y=float(r)+1-v-(p.position[0]*si+p.position[1]*co)*scale;
                 float h=ground_h+p.position[2]*scale*z_basis*112;
                 float world[]={x,y,h/112};for(unsigned axis=0;axis<3;++axis){bounds.low[axis]=std::min(bounds.low[axis],world[axis]);bounds.high[axis]=std::max(bounds.high[axis],world[axis]);}
-                forest_projected[body].include(x,y,h/112);
+                (winter_pass?winter_projected:forest_projected)[body].include(x,y,h/112);
             }
             return true;
         };
@@ -126,7 +130,20 @@ if(fidelity_profile) {
         auto&random=c3x_renderer::stable_random;
         if(tile.real_terrain_type==7 || hill_forest){
             #include "../../lab/shared/natural/forest_mesh_body.h"
-        }else{
+        }
+        // Precomputed Winter stand (seasons D4): a pine stand whose Winter
+        // variety differs also places the snow-pine set from the same slots
+        // and clearing. Both stay resident; the season picks one at draw time.
+        if((tile.real_terrain_type==7 || hill_forest) && tree_instances_enabled &&
+           clearing.winter_variety!=clearing.variety && natural.forest_sets[clearing.winter_variety].weight){
+            auto const summer_variety=clearing.variety;
+            clearing.variety=clearing.winter_variety;winter_pass=true;
+            {
+                #include "../../lab/shared/natural/forest_mesh_body.h"
+            }
+            clearing.variety=summer_variety;winter_pass=false;winter_stand=true;
+        }
+        if(!(tile.real_terrain_type==7 || hill_forest)){
             bool hill_jungle=hill_vegetation==8 || raised_vegetation==8;
             #include "../../lab/shared/natural/jungle_mesh_body.h"
         }

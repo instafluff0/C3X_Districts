@@ -19589,6 +19589,9 @@ init_day_night_and_seasonal_images()
 		return;
 	if (is->cycle_imgs == NULL)
 		return;
+	// The custom renderer draws the hour and season itself; native seasonal art is not loaded.
+	if (is->current_config.enable_custom_rendering)
+		return;
 
 	int season = (is->current_config.seasonal_cycle_mode != SCM_OFF)   ? clamp (0, 3, is->current_seasonal_cycle) : CS_SUMMER;
 	int hour   = (is->current_config.day_night_cycle_mode != DNCM_OFF) ? clamp (0, 23, is->current_day_night_cycle) : 12;
@@ -35370,7 +35373,8 @@ patch_perform_interturn_in_main_loop ()
 	// whose individual native transitions have not yet been given renderer hooks.
 	is->custom_renderer_world_audit_needed = true;
 
-	if (is->day_night_cycle_img_state == IS_OK) {
+	// The custom renderer needs no native day/night art, so its clock advances without it.
+	if ((is->day_night_cycle_img_state == IS_OK) || is->current_config.enable_custom_rendering) {
 		bool redraw = false;
 		int old_hour = is->current_day_night_cycle;
 		int new_hour = old_hour;
@@ -35395,7 +35399,8 @@ patch_perform_interturn_in_main_loop ()
 				redraw = true;
 			}
 		}
-		if (redraw && ! reload_current_day_night_and_seasonal_images (&p_bic_data->Map.Renderer))
+		if (redraw && ! is->current_config.enable_custom_rendering &&
+		    ! reload_current_day_night_and_seasonal_images (&p_bic_data->Map.Renderer))
 			redraw = false;
 		if (redraw)
 			p_main_screen_form->vtable->m73_call_m22_Draw ((Base_Form *)p_main_screen_form);

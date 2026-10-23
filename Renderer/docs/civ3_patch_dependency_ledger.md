@@ -99,6 +99,26 @@ repl call, 0x4F0AF0, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
   - Making `Units_Image_Data_load_animation` an inlead. The effect-list
     watcher covers the SAM and SDI FLCs without it.
 
+## Season and hour clock without native day/night art
+
+`required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.
+
+- **Existing symbols relied on:** `perform_interturn_in_main_loop` (end-of-turn
+  hour and season step) and `Map_Renderer_load_images` (which reaches
+  `init_day_night_and_seasonal_images`). Signatures and supported-build
+  addresses are unchanged.
+- **What changes:** with custom rendering on, the end-of-turn step advances the
+  hour and season even when `day_night_cycle_img_state` is not `IS_OK`, and
+  redraws the map without reloading native art. `init_day_night_and_seasonal_images`
+  returns before loading the `Art/DayNight/<Season>/<Hour>` PCX set, so no
+  sprite proxies are built and native sprites keep their base art. The renderer
+  reads the season from `frame.season` (seasonal shading, `seasons_integration_plan.md`).
+- **Caveat:** C3X districts and natural wonders are deferred renderer scope
+  (M9–M11). Where they still draw native sprites under custom rendering, those
+  sprites show their base art in every season and hour.
+- **Not added:** no patch-table entry and no injected-state field.
+- **Config-off:** both paths are unchanged (the native load, swap and reload).
+
 ## City animations (fireworks, disorder, plague) under custom rendering
 
 `required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.

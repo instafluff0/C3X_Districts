@@ -324,6 +324,9 @@ struct CachedVertexChunk {
     unsigned city_material=0xffffffffu;
     bool city_environment=false;
     bool city_effect=false; // attached effect quads: per-frame layer, visual clock
+    // Seasons D4: 0 every season; 1 a summer forest stand hidden in Winter;
+    // 2 its precomputed Winter stand, drawn only in Winter.
+    unsigned char season_stand=0;
     float city_atlas[4]={};
     std::shared_ptr<c3x_renderer::city_fidelity::Lighting> city_lighting;
     float natural_projection[4] = {};
@@ -1175,6 +1178,8 @@ public:
     c3x_renderer::fidelity::PatchDetail patch_detail;
     unsigned patch_pixels=0;
     bool tree_instances_enabled=false;
+    // Frame season 2: forest tiles draw their Winter stands (seasons D4).
+    bool winter_season=false;
     std::map<unsigned,ID3D11Buffer*> terrain_patch_indices;
     std::size_t terrain_patch_index_bytes=0;
     unsigned frame_patch_index_reuses=0;
@@ -1373,6 +1378,10 @@ public:
     std::array<ID3D11ShaderResourceView*,3> wave_views={};
     std::vector<CachedVertexChunk> wave_chunks;
     std::uint64_t wave_signature=0;
+    // Winter mountain flurry (seasons D4): one effect quad per explored
+    // mountain tile of the frame, in the window's space like the waves. The
+    // fresh scene draws it after the attached effects, never in the mirror.
+    CachedVertexChunk flurry_chunk;unsigned flurry_quads=0;std::uint64_t flurry_signature=0;
     std::size_t wave_geometry_bytes=0,wave_upload_bytes=0;
     std::map<std::pair<int,int>,RetainedWaveCell> retained_wave_cells;
     std::uint64_t retained_wave_scope=0,retained_wave_epoch=0;
@@ -1383,6 +1392,7 @@ public:
         for(auto& c:wave_chunks){release(c.buffer);release(c.indices);}wave_chunks.clear();
         retained_wave_cells.clear();retained_wave_scope=retained_wave_epoch=0;
         wave_signature=0;visible_wave_animations=0;wave_geometry_bytes=wave_upload_bytes=0;
+        release(flurry_chunk.buffer);release(flurry_chunk.indices);flurry_chunk={};flurry_quads=0;flurry_signature=0;
     }
     c3x_renderer_u32 cached_visible_animation_count = 0;
     c3x_renderer_u32 cached_request_continuous_redraw = 0;
@@ -4752,13 +4762,17 @@ public:
         auto variety_of=[](c3x_renderer_tile_v1 const&t){
             return !(t.feature_flags&C3X_RENDERER_FEATURE_PINE)?unsigned(forest_kinds::broadleaf_forest):
                 t.terrain_type==3?unsigned(forest_kinds::snow_pine_forest):unsigned(forest_kinds::pine_forest);};
-        if(tile.real_terrain_type==7)clearing.variety=variety_of(tile);
+        // In Winter every pine forest is the snow-pine variety (seasons D4).
+        auto winter_of=[](c3x_renderer_tile_v1 const&t){
+            return !(t.feature_flags&C3X_RENDERER_FEATURE_PINE)?unsigned(forest_kinds::broadleaf_forest):unsigned(forest_kinds::snow_pine_forest);};
+        if(tile.real_terrain_type==7){clearing.variety=variety_of(tile);clearing.winter_variety=winter_of(tile);}
         else if(hill_forest){
             // Raised canopy follows the variety of the forests around it.
-            unsigned votes[forest_kinds::forest_variety_count]={};
+            unsigned votes[forest_kinds::forest_variety_count]={},winter_votes[forest_kinds::forest_variety_count]={};
             for(int dy:{-1,1})for(int dx:{-1,1})if(auto n=lookup(tile.tile_x+dx,tile.tile_y+dy))
-                if(n->occurrence.real_terrain_type==7)++votes[variety_of(n->occurrence)];
+                if(n->occurrence.real_terrain_type==7){++votes[variety_of(n->occurrence)];++winter_votes[winter_of(n->occurrence)];}
             clearing.variety=unsigned(std::max_element(votes,votes+forest_kinds::forest_variety_count)-votes);
+            clearing.winter_variety=unsigned(std::max_element(winter_votes,winter_votes+forest_kinds::forest_variety_count)-winter_votes);
         }
         forest_kinds::BuildingBounds own{1e9f,1e9f,-1e9f,-1e9f};bool own_animated=false;
         for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++){
@@ -5009,6 +5023,65 @@ public:
             wave_chunks.push_back(chunk);bytes+=size+indices.size()*4;
             wave_upload_bytes=wave_geometry_bytes=bytes;
         }
+        return true;
+    }
+
+    // Seasons D4: the Lab effect (studies/winter, kind 6) as a per-view list.
+    // Each explored mountain tile in the frame gets a camera-facing quad on its
+    // front corner, a tile wide and 3.6 tile heights tall, rising from the
+    // ground there, so nearer relief hides its foot through the retained depth.
+    bool prepare_flurry(c3x_renderer_frame_v1 const& frame) {
+        if(flurry_signature==cached_signature.complete)return true;
+        release(flurry_chunk.buffer);release(flurry_chunk.indices);flurry_chunk={};flurry_quads=0;
+        flurry_signature=cached_signature.complete;
+        auto const material=cities.library.effect_material;
+        if(frame_season(frame)!=2 || !fidelity_profile || !city_profile || !cities.ready || !frame.tile_count ||
+           material>=cities.library.materials.size() || !cities.library.materials[material].ground)return true;
+        float const hw=frame.tile_width*.5f,hh=frame.tile_height*.5f,relief=float(frame.tile_width)/224.f*.82f;
+        float const dx=geometry_viewport_settings.translation[0],dy=geometry_viewport_settings.translation[1];
+        std::vector<Vertex> vertices;std::vector<unsigned> indices;
+        CachedVertexChunk chunk;chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
+        for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=1e9f;chunk.world_bounds.high[a]=-1e9f;}
+        c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::ShoreSample> samples;
+        auto ignore=[](auto,auto){};
+        for(unsigned i=0;i<frame.tile_count;++i){auto const& t=frame.tiles[i];
+            if(!(t.tile_flags&C3X_RENDERER_TILE_RENDER) || t.real_terrain_type!=6)continue;
+            if(visibility_pass && !visibility_coverage.state(t.tile_x,t.tile_y))continue;
+            int c=(t.tile_x+t.tile_y)/2,r=(t.tile_x-t.tile_y)/2;
+            c3x_renderer::fidelity::SurfaceQueries query(world_coast,samples,t.tile_x,t.tile_y,ignore,ignore,true,&natural);
+            float const ground=2.5f+query.low_height(natural,float(c)+1.f,float(r));
+            c3x_renderer::fidelity::GroundProjection project{c,r,hw,hh,relief,float(frame.target_height)};
+            float const half=1.05f*.5f,seed=float((unsigned(c)*73u^unsigned(r)*151u)%64u);
+            float const uv[4][2]={{-1,0},{1,0},{1,1},{-1,1}};
+            Vertex quad[4];LONG left=LONG_MAX,top=LONG_MAX,right=LONG_MIN,bottom=LONG_MIN;
+            for(unsigned k=0;k<4;++k){
+                auto out=project(float(c)+1.f+uv[k][0]*half,float(r)+uv[k][0]*half,ground+(uv[k][1]?3.6f*112.f:0.f));
+                out.x+=float(t.anchor_x)-dx;out.y+=float(t.anchor_y)-dy;out.z+=float(t.anchor_y)-dy;
+                out.u=uv[k][0];out.v=uv[k][1];out.normal_x=out.normal_y=0;out.normal_z=1;
+                out.macro_u=seed;out.macro_v=1;out.material_grass=1;
+                out.relief_owner_u=1.05f;out.relief_owner_v=3.6f;out.base_terrain=96;quad[k]=out;
+                left=std::min(left,LONG(std::floor(out.x))-2);right=std::max(right,LONG(std::ceil(out.x))+2);
+                top=std::min(top,LONG(std::floor(out.y))-2);bottom=std::max(bottom,LONG(std::ceil(out.y))+2);
+            }
+            if(right+dx<=0 || left+dx>=width || bottom+dy<=0 || top+dy>=height)continue;
+            unsigned base=unsigned(vertices.size());
+            for(auto const& out:quad){vertices.push_back(out);
+                float w[]={out.world_x,out.world_y,out.world_z};for(unsigned a=0;a<3;++a){
+                    chunk.world_bounds.low[a]=std::min(chunk.world_bounds.low[a],w[a]);chunk.world_bounds.high[a]=std::max(chunk.world_bounds.high[a],w[a]);}}
+            chunk.bounds={std::min(chunk.bounds.left,left),std::min(chunk.bounds.top,top),
+                std::max(chunk.bounds.right,right),std::max(chunk.bounds.bottom,bottom)};
+            unsigned quad_indices[]={base,base+1,base+2,base,base+2,base+3};
+            indices.insert(indices.end(),std::begin(quad_indices),std::end(quad_indices));
+        }
+        if(indices.empty())return true;
+        D3D11_BUFFER_DESC desc={};desc.ByteWidth=unsigned(vertices.size()*sizeof(Vertex));desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+        D3D11_SUBRESOURCE_DATA data={};data.pSysMem=vertices.data();
+        if(FAILED(device->CreateBuffer(&desc,&data,&chunk.buffer)))return false;
+        desc.ByteWidth=unsigned(indices.size()*4);desc.BindFlags=D3D11_BIND_INDEX_BUFFER;data.pSysMem=indices.data();
+        if(FAILED(device->CreateBuffer(&desc,&data,&chunk.indices))){release(chunk.buffer);return false;}
+        chunk.vertex_stride=sizeof(Vertex);chunk.index_count=unsigned(indices.size());chunk.version=flurry_signature;
+        chunk.city_material=material;chunk.city_effect=true;chunk.city_lighting=std::make_shared<c3x_renderer::city_fidelity::Lighting>();
+        flurry_chunk=chunk;flurry_quads=unsigned(indices.size()/6);
         return true;
     }
 
@@ -5362,7 +5435,7 @@ public:
             }
             return true;
         }
-        if(!prepare_wave_chunks(frame))return false;
+        if(!prepare_wave_chunks(frame) || !prepare_flurry(frame))return false;
         visible_wave_animations=unsigned(std::count_if(wave_chunks.begin(),wave_chunks.end(),[](auto const& chunk){return chunk.visual_time<0;}));
         buffers[geometry_wave]=wave_chunks;
         if(!wave_chunks.empty()){
@@ -6924,6 +6997,18 @@ public:
         return footprint;
     }
 
+    // The frame's season, or C3X_RENDERER_SEASON_OVERRIDE (0-3) for captures;
+    // the game clock is unchanged.
+    int frame_season(c3x_renderer_frame_v1 const& frame) const {
+        char pinned[4]{};
+        return c3x_renderer::render_core::cached_environment("C3X_RENDERER_SEASON_OVERRIDE",pinned,sizeof(pinned)) &&
+            pinned[0]>='0' && pinned[0]<='3' && !pinned[1]?pinned[0]-'0':frame.season;
+    }
+    // Seasons D4: whether a chunk draws in the current season.
+    bool season_shown(CachedVertexChunk const& chunk) const {
+        return !chunk.season_stand || (chunk.season_stand==2)==winter_season;
+    }
+
     // window=false enters the tile into the resident world only (preparation
     // and prefetch preload it before any camera window reaches it).
     void append_tile_geometry(CachedTileGeometry & tile, c3x_renderer_tile_v1 const & occurrence, bool animated_view, bool window=true) {
@@ -7027,7 +7112,8 @@ public:
                 }
                 chunk.translation_x = anchor_x - source.anchor_x;
                 chunk.translation_y = anchor_y - source.anchor_y;
-                if(records)geometry_vertex_buffers.edit(layer).push_back(chunk);
+                // Each season draws one of a forest tile's two stands (seasons D4).
+                if(records && season_shown(source_chunk))geometry_vertex_buffers.edit(layer).push_back(chunk);
                 if(store){
                     auto world=chunk;world.translation_x=world_x-source.anchor_x;world.translation_y=world_y-source.anchor_y;
                     world.water_visible=resident_water_visible(record.tile_x,record.tile_y);
@@ -8080,7 +8166,7 @@ public:
             bool caster=(layer==geometry_land && !fidelity_profile) || (layer>=geometry_feature && layer!=geometry_natural_decal);
             if(chunk.content().city_material!=0xffffffffu && cities.library.materials[chunk.content().city_material].ground)caster=false;
             // Elided ground is fidelity-only, where ground layers never cast.
-            if(!caster || chunk.content().animation_texture || chunk.content().elided)continue;
+            if(!caster || chunk.content().animation_texture || chunk.content().elided || !season_shown(chunk.content()))continue;
             for(int wy=dims.wrap_y?-1:0;wy<=(dims.wrap_y?1:0);++wy)
                 for(int wx=dims.wrap_x?-1:0;wx<=(dims.wrap_x?1:0);++wx) {
                     Shadow::Caster c;c.vertices=chunk.content().buffer;c.indices=chunk.content().indices;c.count=chunk.content().index_count;
@@ -9943,8 +10029,11 @@ public:
         c3x_renderer_u32 fallback_tile_count = 0;
         build_fallback.clear();
         build_replacement.assign(frame.tile_count, 0u);
+        // frame_season: C3X_RENDERER_SEASON_OVERRIDE must reach these constants too,
+        // or this per-frame upload replaces the fresh pipeline's pinned season.
         c3x_renderer::EnvironmentState environment = c3x_renderer::evaluate_environment(
-            static_cast<float>(frame.hour), frame.season);
+            static_cast<float>(frame.hour), frame_season(frame));
+        winter_season=frame_season(frame)==2;
         TerrainShaderSettings frame_settings = {};
         frame_settings.height_texel[0] = 1.0f / 2048.0f;
         frame_settings.height_texel[1] = 1.0f / 2048.0f;
@@ -9986,6 +10075,9 @@ public:
         }
         frame_settings.hour = static_cast<float>(frame.hour);
         std::copy(std::begin(resource_look), std::end(resource_look), std::begin(frame_settings.resource_look));
+        // The pack look uses .xy; seasonal shading reads the season from .zw.
+        frame_settings.resource_look[2] = environment.season;
+        frame_settings.resource_look[3] = environment.season_progress;
         reflection.height_pixels=112.f*.82f*float(frame.tile_width)/224.f;
         reflection.depth_metric=112.f*.0016f*float(content_view_height);
         region_reflection.height_pixels=reflection.height_pixels;region_reflection.depth_metric=reflection.depth_metric;
@@ -12362,6 +12454,11 @@ public:
             std::array<std::vector<c3x_renderer::fidelity::MeshInstance>,tree_bodies> forest_instances;
             std::array<c3x_renderer::render_core::SourceShadow::Bounds,tree_bodies> forest_bounds;
             std::array<c3x_renderer::render_core::ProjectedMeshBounds,tree_bodies> forest_projected;
+            // A pine stand's precomputed Winter stand (seasons D4), drawn instead in Winter.
+            std::array<std::vector<c3x_renderer::fidelity::MeshInstance>,tree_bodies> winter_instances;
+            std::array<c3x_renderer::render_core::SourceShadow::Bounds,tree_bodies> winter_bounds;
+            std::array<c3x_renderer::render_core::ProjectedMeshBounds,tree_bodies> winter_projected;
+            bool winter_stand=false;
             auto natural_found=component_preparation?natural_mesh_cache.end():natural_mesh_cache.find(natural_key);
             bool natural_hit=!component_preparation && fidelity_profile && natural_found!=natural_mesh_cache.end();
             if(natural_hit && !natural.valid(natural_found->second.river_dependencies))natural_hit=false;
@@ -12634,22 +12731,32 @@ public:
                 }
                 bool natural_layer=layer>=geometry_natural_terrain;
                 if(shared_hit && !component_preparation && (natural_layer || (world_objects && layer>=geometry_route)))continue;
-                if(layer>=geometry_natural_forest0 && !forest_instances[layer-geometry_natural_forest0].empty()){
+                if(layer>=geometry_natural_forest0 && (!forest_instances[layer-geometry_natural_forest0].empty() ||
+                                                       !winter_instances[layer-geometry_natural_forest0].empty())){
                     unsigned body=unsigned(layer-geometry_natural_forest0);
-                    auto&instances=forest_instances[body];
                     if(!natural.ensure_instance_mesh(device,body))return false;
+                    // A tile with a Winter stand keeps both stands (seasons D4):
+                    // the summer one draws outside Winter, the Winter one only in it.
+                    for(unsigned stand=0;stand<2;++stand){
+                    auto&instances=(stand?winter_instances:forest_instances)[body];
+                    if(instances.empty())continue;
                     CachedVertexChunk chunk;chunk.byte_count=instances.capacity()*sizeof(instances[0])+sizeof(instances)+64;
                     if(!make_tile_cache_room(chunk.byte_count))return false;
                     chunk.instances=std::make_shared<std::vector<c3x_renderer::fidelity::MeshInstance> const>(std::move(instances));
-                    compiled.mesh->layers[layer].reserve(1);
+                    compiled.mesh->layers[layer].reserve(2);
                     auto const&mesh=natural.instance_meshes[body];chunk.buffer=mesh.vertices;chunk.indices=mesh.indices;chunk.shared_source_lease=natural.pin_instances();
                     chunk.buffer->AddRef();chunk.indices->AddRef();chunk.index_count=mesh.count;chunk.vertex_stride=32;
-                    chunk.version=compiled.version;chunk.world_bounds=forest_bounds[body];chunk.projected_bounds=forest_projected[body];
+                    // Its own version: shadow pages key casters by version, layer and count.
+                    chunk.version=stand?++tile_geometry_version:compiled.version;
+                    chunk.season_stand=stand?2:winter_stand?1:0;
+                    chunk.world_bounds=(stand?winter_bounds:forest_bounds)[body];chunk.projected_bounds=(stand?winter_projected:forest_projected)[body];
                     chunk.instance_material=natural.materials[natural.bodies[body].material].repeat?41.f:40.f;
                     auto b=chunk.projected_bounds.project((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,frame.tile_width);
                     chunk.bounds={b[0],b[1],b[2],b[3]};
                     tile_geometry_cache_bytes+=chunk.byte_count;compiled.byte_count+=chunk.byte_count;
-                    compiled.mesh->layers[layer].push_back(std::move(chunk));continue;
+                    compiled.mesh->layers[layer].push_back(std::move(chunk));
+                    }
+                    continue;
                 }
                 auto const* cached_mesh=natural_layer && natural_hit?&natural_found->second.layers[layer-geometry_natural_terrain]:nullptr;
                 auto* record_mesh=natural_layer && cache_natural && !natural_hit && !retain_ground_grids?&pending_natural.layers[layer-geometry_natural_terrain]:nullptr;
@@ -13173,6 +13280,7 @@ public:
                 return false;
             }
             trace.write("fresh-wave", "ready", true);
+            if(!prepare_flurry(native_frame)){fresh_path_failed=true;trace.write("fresh-path-required","winter flurry preparation failed",true);return false;}
             D3D11_TEXTURE2D_DESC description={};
             if(gpu_map_texture)gpu_map_texture->GetDesc(&description);
             if(!gpu_map_texture || description.Width!=UINT(width) || description.Height!=UINT(height)) {

@@ -32,6 +32,10 @@ struct EnvironmentState {
     float emissive_scale;
     float water_fresnel;
     float water_specular;
+    // C3X season (0 Summer, 1 Fall, 2 Winter, 3 Spring) for seasonal shading;
+    // progress is reserved for staged seasons and is 1 today.
+    float season;
+    float season_progress;
 };
 
 struct LocalTransform {

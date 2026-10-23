@@ -1051,7 +1051,8 @@ struct SandboxSceneShadow {
                     if(!tile || !seen.insert((std::uint64_t(std::uint32_t(cx))<<32)|std::uint32_t(cy)).second)continue;
                     for(auto const& owner:tile->owners)if(!selection.retain(owner.first,owner.second))return renderer.geometry_vertex_buffers.publish();
                     for(unsigned layer=0;layer<geometry_layer_count;++layer){auto& records=selection.edit(layer);
-                        for(auto i=tile->begin_of(layer);i<tile->end_of(layer);++i)records.push_back(tile->records[i]);}
+                        for(auto i=tile->begin_of(layer);i<tile->end_of(layer);++i)
+                            if(renderer.season_shown(tile->records[i].content()))records.push_back(tile->records[i]);}
                 }
             }
             return selection.publish();
@@ -1100,7 +1101,8 @@ struct SandboxSceneShadow {
                     entry.owners.insert(entry.owners.end(),tile->owners.begin(),tile->owners.end());
                     for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto i=tile->begin_of(layer);i<tile->end_of(layer);++i){
                         auto const& record=tile->records[i];records[layer].push_back(record);
-                        if(record.content().instances && !record.content().instances->empty())entry.instanced.push_back({layer,record});
+                        if(record.content().instances && !record.content().instances->empty() && renderer.season_shown(record.content()))
+                            entry.instanced.push_back({layer,record});
                     }
                 }
                 std::vector<Shadow::Caster> collected;renderer.collect_shadow_casters(records,collected);
@@ -2560,8 +2562,11 @@ struct SandboxFreshPipeline {
         // a valid empty selection, not a failure of the camera/animation sampler.
         return true;
     }
-    template<class Visit>void contributors(ViewportShaderSettings const& settings,D3D11_RECT clip,bool mirrored,Visit visit)const{
+    template<class Visit>void contributors(ViewportShaderSettings const& settings,D3D11_RECT clip,bool mirrored,Visit shown)const{
         if(clip.left>=clip.right || clip.top>=clip.bottom)return;
+        // Seasons D4: a forest tile's summer and Winter stands are both
+        // resident; every selection takes the current season's.
+        auto visit=[&](unsigned layer,auto const& record){if(renderer.season_shown(record.content()))shown(layer,record);};
 #ifdef C3X_RENDERER64_FRESH
         if(world_lease){
             // Store records need no basis; wrapped copies shift by one map width.
@@ -3663,11 +3668,24 @@ struct SandboxFreshPipeline {
             float(std::max<c3x_renderer_i64>(1,frame.presentation_frequency))/30.f:
             float(frame.hour);
         visual_hour=hour;
-        if(previous_hour==hour && previous_season==frame.season)return;
+        // C3X_RENDERER_SEASON_OVERRIDE (0-3) pins the season for captures; the game clock is unchanged.
+        int season=renderer.frame_season(frame);
+        if(previous_hour==hour && previous_season==season)return;
+        // Seasons D4: entering or leaving Winter swaps the forest stands. The
+        // selection, body placements and casters (and the per-block caster
+        // cache, which survives a retirement) follow; shadow pages refresh
+        // where the casters changed.
+        renderer.winter_season=season==2;
+        if(previous_season!=INT_MIN && (previous_season==2)!=(season==2)){
+            retire_geometry_selection();
+#ifdef C3X_RENDERER64_FRESH
+            shadow.block_casters.clear();
+#endif
+        }
         static_rasters.invalidate_all(c3x_renderer::render_core::raster_environment);
         ++lighting_revision;reflection_valid=false;reflected_terrain_material_valid=false;
-        previous_hour=hour;previous_season=frame.season;
-        auto environment=c3x_renderer::evaluate_environment(hour,frame.season);
+        previous_hour=hour;previous_season=season;
+        auto environment=c3x_renderer::evaluate_environment(hour,season);
         visual_sun_intensity=environment.sun_intensity;
         auto light=c3x_renderer::lighting::key_light(environment);
         TerrainShaderSettings settings{};
@@ -3688,6 +3706,8 @@ struct SandboxFreshPipeline {
         settings.emissive_scale=environment.emissive_scale;
         settings.hour=hour;
         std::copy(std::begin(renderer.resource_look),std::end(renderer.resource_look),settings.resource_look);
+        // The pack look uses .xy; seasonal shading reads the season from .zw.
+        settings.resource_look[2]=environment.season;settings.resource_look[3]=environment.season_progress;
         renderer.context->UpdateSubresource(renderer.terrain_settings_buffer,0,nullptr,&settings,0,0);work.upload_buffer(renderer.terrain_settings_buffer);
         renderer.display_exposure=environment.exposure;
         renderer.shadow_basis=c3x_renderer::fidelity::light_frame(environment);
@@ -5580,6 +5600,22 @@ struct SandboxFreshPipeline {
             preview_effects,sizeof(preview_effects)) && preview_effects[0]=='0';
         if(!(static_preview && skip_preview_effects) && !effect_visible[geometry_city].empty() && !draw_layer(effect_visible,geometry_city,settings,full,
                 glow.linear.target,static_preview?nullptr:glow.linear.depth,false,float(scene_scale)))return fail("city_effects");
+        // Winter mountain flurry (seasons D4): the renderer's per-view quads,
+        // drawn like the attached effects but only on screen (never mirrored),
+        // and only while a tile is at least 64 pixels wide; the shader thins
+        // its layers below 128 and 96. It keeps frames coming only while drawn.
+        bool const flurry=renderer.flurry_quads && tile_half_width*2.f*projection_zoom>=64.f &&
+            !(static_preview && skip_preview_effects);
+        if(flurry){
+            GeometryDrawView::Records snow{};GeometryDrawRecord record(renderer.flurry_chunk);
+#ifdef C3X_RENDERER64_FRESH
+            record.translation_x+=int(window_basis_x);record.translation_y+=int(window_basis_y);
+#endif
+            snow[geometry_city].push_back(record);
+            if(!draw_layer(snow,geometry_city,settings,full,glow.linear.target,static_preview?nullptr:glow.linear.depth,
+                    false,float(scene_scale)))return fail("winter_flurry");
+        }
+        renderer.visible_city_effects=unsigned(effect_visible[geometry_city].size())+(flurry?renderer.flurry_quads:0u);
         c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"water_city_effects");
         // World overlays finish before the foreground unit layer.
         auto border_clip=source_bounds(settings,full,false);
