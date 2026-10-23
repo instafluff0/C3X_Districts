@@ -508,21 +508,8 @@ SPRING_EDITS = [
                                        spring_bloom.a * SPRING_BLOOM_NORMAL));
             specular_map = lerp(specular_map, 0.02, spring_bloom.a * SPRING_BLOOM_NORMAL);
         }""")),
-    after("spring/turf", [TERRAIN], GRAIN, guard(SPRING, """        float3 lum = float3(0.2126, 0.7152, 0.0722);
-        float3 spring_fine = GrassColor.Sample(Wrap, uv0).rgb;
-        float3 grass_mean = SPRING_TURF_BIAS > 6 ? (GrassColor.SampleBias(Wrap, uv0, 7.0).rgb +
-            GrassColor.SampleBias(Wrap, uv0 + float2(.37, .11), 7.0).rgb +
-            GrassColor.SampleBias(Wrap, uv0 + float2(.13, .53), 7.0).rgb +
-            GrassColor.SampleBias(Wrap, uv0 + float2(.61, .71), 7.0).rgb) * .25 :
-            GrassColor.SampleBias(Wrap, uv0, SPRING_TURF_BIAS).rgb;
-        float grass_ratio = dot(spring_fine, lum) / max(dot(grass_mean, lum), 0.01);
-        float plains_ratio = dot(plains, lum) / max(dot(PlainsColor.SampleBias(Wrap, uv1, min(SPRING_TURF_BIAS, 5.0)).rgb, lum), 0.01);
-        float turf = clamp((lerp(grass_ratio, plains_ratio, plains_weight) - 1) * SPRING_TURF, -0.3, 0.35) *
-            (1 - tundra_weight) * (1 - desert_weight) * (1 - rocky_band);
-        float3 turf_lch = spring_lch(albedo);
-        turf_lch.x *= 1 + turf;
-        turf_lch.z -= turf * SPRING_TURF_HUE;
-        albedo = spring_from_lch(turf_lch);""")),
+    # No painterly turf: Spring keeps Summer's grass texture and only regrades
+    # its colour (user, 2026-10-23: the boosted fine detail looked gritty).
     between("spring/meadow", [TERRAIN], GRAIN, "\n    }", guard(SPRING, """        float spring_density = lerp(lerp(1, SPRING_PLAINS_DENSITY, plains_weight), SPRING_TUNDRA_DENSITY, tundra_weight) *
             (1 - desert_weight) * (1 - rocky_band * lerp(1 - SPRING_HILL_DENSITY, 1, hill_rock));
         spring_straw = plains_weight * (1 - desert_weight);

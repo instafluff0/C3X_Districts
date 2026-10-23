@@ -120,6 +120,9 @@ class SeasonShading(unittest.TestCase):
         spring = spring[:spring.index("c3x-season-end")]
         self.assertNotIn("SPRING_LEAF_SHADE", spring)
         self.assertIn("albedo = albedo * (1 - spring_bloom.a) + spring_bloom.rgb;", spring)
+        # Nor does Spring boost the turf's fine detail (the "painterly turf").
+        self.assertNotIn("c3x-season:spring/turf", relief)
+        self.assertNotIn("SPRING_TURF", relief[relief.index("c3x-season:spring/meadow"):])
 
     def test_game_water_recolour_is_relative(self):
         # Coast, Sea and Ocean keep their family tint: a hue offset, never a pull to one hue.
