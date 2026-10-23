@@ -53,7 +53,11 @@ The environment/clutter proof set now includes:
   its grass component uses a one-bone rigid-model binding, and its terrain
   contact decal supplies base color, fog color, and height channels;
 - five ordinary and five snow silk variants containing two or three rigid
-  models, per-material clamp/repeat addressing, and terrain-contact decals; and
+  models, per-material clamp/repeat addressing, and terrain-contact decals; their
+  webbing is a tinted veil whose strands are Civ VI's opacity map
+  (`TEXTURE_RES_Silk_O`, material slot 0x30), imported only where a mapping
+  entry sets `"opacity": true` (a `mask` material; the resource compositions
+  draw such parts as veils, blended through it); and
 - two shared snow-boulder clump entries whose source wrappers intentionally
   carry a one-bone model but no mesh containers; their actual visual payload is
   the normalized ground decal, represented as `skeleton_only_decal` rather than

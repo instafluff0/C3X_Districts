@@ -8,6 +8,7 @@ from pathlib import Path
 
 from Renderer.tools.asset_compiler.compound_landmark_importer import (
     MATERIAL_TEXTURE_SLOTS,
+    OPACITY_TEXTURE_SLOT,
     _attachment_semantic,
     _decode_terrain_edit,
     _normalize_geometry,
@@ -250,6 +251,25 @@ class CompoundLandmarkImporterTests(unittest.TestCase):
             path = Path(temporary) / "mapping.json"
             path.write_text(json.dumps(mapping), encoding="utf-8")
             self.assertEqual(mapping, load_mapping(path))
+
+    def test_opacity_is_a_boolean_opt_in(self) -> None:
+        # Civ VI's opacity map (silk webbing) is imported only where a landmark asks.
+        self.assertNotIn(0x30, [offset for offset, _, _ in MATERIAL_TEXTURE_SLOTS.values()])
+        self.assertEqual(OPACITY_TEXTURE_SLOT, {"opacity": (0x30, "Generic_OPAC", False)})
+        mapping = {
+            "schema": "c3x.source_compound_landmark_mapping.v0",
+            "packages": [{
+                "source_package": "Base/package.blp",
+                "shared_data": "Base/shared",
+                "source_units_per_tile": 100,
+                "assets": [{"source_entry": "A", "asset_id": "resource/test", "opacity": "yes"}],
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "mapping.json"
+            path.write_text(json.dumps(mapping), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "opacity must be true or false"):
+                load_mapping(path)
 
 
 if __name__ == "__main__":

@@ -116,6 +116,10 @@ def jobs():
         paths.extend("Renderer/tools/asset_compiler/" + name + ".py" for name in (
             "build_resource_compositions", "resource_composition_sources", "clutter_blp_extractor",
             "generic_decal_compiler", "indexed_static_package"))
+        # Compound materials name their textures by hash; a re-import that only
+        # adds a channel (silk opacity) leaves the manifest unchanged.
+        paths.extend(path.relative_to(ROOT).as_posix() for path in
+                     sorted((ROOT / "Renderer/packs/CompoundLandmarksNormalized/materials").rglob("*.json")))
         return {path: digest(ROOT / path) for path in paths}
 
     def build_resources(stage):

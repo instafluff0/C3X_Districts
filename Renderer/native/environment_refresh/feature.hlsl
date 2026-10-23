@@ -1064,6 +1064,9 @@ float4 q6_raw_feature(FeaturePixelInput input)
     // lit as flat ground, never shadow casters (caster cutout skips .25-.40).
     float resource_decal_weight = step(0.325, material_fraction) *
         (1.0 - step(0.385, material_fraction)) * source_decal_weight;
+    // Resource veils (the pack's last texture slot, 7: Civ VI's silk webbing)
+    // blend through their source opacity as the ground decals do.
+    float resource_veil_weight = resource_weight * step(27.5, input.material_index);
     float mine_weight = source_decal_weight *
         (1.0 - tile_object_weight) * (1.0 - infrastructure_weight) *
         (1.0 - unit_weight) * (1.0 - resource_decal_weight);
@@ -1177,7 +1180,7 @@ float4 q6_raw_feature(FeaturePixelInput input)
     }
     // Resource models cut out by their slot alpha too (masked plant cards);
     // opaque BC1 slots sample alpha 1, so solid bodies are unaffected.
-    clip(lerp(1.0, mine_sample.a - lerp(0.08, 0.004, saturate(resource_decal_weight + farm_kit_field_weight)),
+    clip(lerp(1.0, mine_sample.a - lerp(0.08, 0.004, saturate(resource_decal_weight + farm_kit_field_weight + resource_veil_weight)),
               saturate(source_decal_weight * (1.0 - unit_weight) + resource_weight)));
     float mine_emissive_code = floor(material_fraction * 100.0 + 0.5);
     if (mine_weight > 0.5 && mine_emissive_code > 1.5)
@@ -1340,7 +1343,7 @@ float4 q6_raw_feature(FeaturePixelInput input)
     float ground_alpha = lerp(1.0,
         lerp(crater_alpha, pollution_alpha, pollution_weight),
         ground_state_weight);
-    ground_alpha = lerp(ground_alpha, mine_sample.a, resource_decal_weight);
+    ground_alpha = lerp(ground_alpha, mine_sample.a, resource_decal_weight + resource_veil_weight);
     // A farm kit field fades in over its soft source fringe and the first
     // .03 tile from a tile, route, yard or water cut (its digits carry the
     // distance to the cut over .06 tile), so its edges stay organic.

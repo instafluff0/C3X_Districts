@@ -439,9 +439,6 @@
             1,
             2
           ],
-          "keyed_parts": [
-            2
-          ],
           "count": 2,
           "scale": 1.0,
           "scale_variation": 0.1
@@ -452,15 +449,12 @@
             0,
             1
           ],
-          "keyed_parts": [
-            1
-          ],
           "count": 1,
           "scale": 1.0,
           "scale_variation": 0.1
         }
       ],
-      "note": "Civ VI silk: mulberry bushes and their ground cover under white silk webbing. Civ VI draws the webbing with a translucent shader; here its bright strands are keyed into a cutout."
+      "note": "Civ VI silk: mulberry bushes and their ground cover under white silk webbing. Civ VI draws the webbing as a tinted veil through its opacity map (TEXTURE_RES_Silk_O); here too: the webbing is a veil (its id starts \"veil/\"), blended through that map from the pack's last texture slot."
     }
   },
   "bindings": {

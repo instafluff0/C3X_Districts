@@ -35,43 +35,53 @@
         },
         {
           "source_entry": "RES_Silk_01",
-          "asset_id": "resource/silk/variant_01"
+          "asset_id": "resource/silk/variant_01",
+          "opacity": true
         },
         {
           "source_entry": "RES_Silk_02",
-          "asset_id": "resource/silk/variant_02"
+          "asset_id": "resource/silk/variant_02",
+          "opacity": true
         },
         {
           "source_entry": "RES_Silk_03",
-          "asset_id": "resource/silk/variant_03"
+          "asset_id": "resource/silk/variant_03",
+          "opacity": true
         },
         {
           "source_entry": "RES_Silk_04",
-          "asset_id": "resource/silk/variant_04"
+          "asset_id": "resource/silk/variant_04",
+          "opacity": true
         },
         {
           "source_entry": "RES_Silk_05",
-          "asset_id": "resource/silk/variant_05"
+          "asset_id": "resource/silk/variant_05",
+          "opacity": true
         },
         {
           "source_entry": "RES_Silk_Snow_01",
-          "asset_id": "resource/silk/snow_variant_01"
+          "asset_id": "resource/silk/snow_variant_01",
+          "opacity": true
         },
         {
           "source_entry": "RES_Silk_Snow_02",
-          "asset_id": "resource/silk/snow_variant_02"
+          "asset_id": "resource/silk/snow_variant_02",
+          "opacity": true
         },
         {
           "source_entry": "RES_Silk_Snow_03",
-          "asset_id": "resource/silk/snow_variant_03"
+          "asset_id": "resource/silk/snow_variant_03",
+          "opacity": true
         },
         {
           "source_entry": "RES_Silk_Snow_04",
-          "asset_id": "resource/silk/snow_variant_04"
+          "asset_id": "resource/silk/snow_variant_04",
+          "opacity": true
         },
         {
           "source_entry": "RES_Silk_Snow_05",
-          "asset_id": "resource/silk/snow_variant_05"
+          "asset_id": "resource/silk/snow_variant_05",
+          "opacity": true
         },
         {
           "source_entry": "Boulder_Clump_Snow_01",

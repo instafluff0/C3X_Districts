@@ -36,6 +36,7 @@ OUTPUT = ROOT / "Renderer/packs/ResourceCompositionLab"
 CATALOG = ROOT / "Renderer/packs/ResourceCatalogLab"
 MAGIC = b"C3XVEG1\0"
 TEXTURE_SLOTS = 8
+VEIL_SLOT = TEXTURE_SLOTS - 1   # bodies blended through their alpha (Civ VI's silk webbing)
 CELL = 512
 MODEL_ATLAS = (4096, 8, 8, 72, (71, 72))      # size, mips, block bytes, DXGI, accepted sources
 MASKED_ATLAS = (4096, 8, 16, 78, (77, 78))    # alpha-masked bodies (BC3: opacity + colour)
@@ -165,36 +166,6 @@ def bc3_block(texels: list[tuple[float, float, float, float]]) -> bytes:
         nearest = min(range(4), key=lambda k: sum((colours[k][c] - texel[c]) ** 2 for c in range(3)))
         indices |= nearest << (2 * index)
     return struct.pack("<BB", a0, a1) + bits.to_bytes(6, "little") + struct.pack("<HHI", *codes, indices)
-
-
-def luma_keyed(colour: Path, cache: Path, low: float = 166.0, high: float = 186.0) -> Path:
-    """A cutout keyed from brightness: bright strands on a flat backing (Civ VI's
-    silk webbing, drawn there by a translucent shader) keep their BC1 colour
-    blocks (no recompression) under a BC3 alpha keyed at the top mip and
-    averaged down the chain, so thin strands thin out rather than vanish."""
-    size, dxgi, levels = levels_from(colour, 8)
-    blocks = size // 4
-    alpha = [[0.0] * size for _ in range(size)]
-    for index in range(blocks * blocks):
-        c0, c1, bits = struct.unpack_from("<HHI", levels[0], index * 8)
-        rgb = [((v >> 11) * 255 // 31, (v >> 5 & 63) * 255 // 63, (v & 31) * 255 // 31) for v in (c0, c1)]
-        luma = [.3 * r + .59 * g + .11 * b for r, g, b in rgb]
-        palette = luma + ([(2 * luma[0] + luma[1]) / 3, (luma[0] + 2 * luma[1]) / 3] if c0 > c1 else
-                          [(luma[0] + luma[1]) / 2, 0.0])
-        for texel in range(16):
-            value = palette[(bits >> (2 * texel)) & 3]
-            alpha[(index // blocks) * 4 + texel // 4][(index % blocks) * 4 + texel % 4] = \
-                255 * min(1.0, max(0.0, (value - low) / (high - low)))
-    keyed = []
-    for level in levels:
-        width = len(alpha)
-        keyed.append(b"".join(bc3_block([(0, 0, 0, alpha[by + j][bx + i]) for j in range(4) for i in range(4)])[:8] +
-                              level[((by // 4) * (width // 4) + bx // 4) * 8:((by // 4) * (width // 4) + bx // 4) * 8 + 8]
-                              for by in range(0, width, 4) for bx in range(0, width, 4)))
-        if width > 4:
-            alpha = [[sum(alpha[2 * y + j][2 * x + i] for i in range(2) for j in range(2)) / 4
-                      for x in range(width // 2)] for y in range(width // 2)]
-    return write_dds(cache / f"keyed_{colour.name}", size, len(keyed), 78 if dxgi == 72 else 77, 16, keyed)
 
 
 def generated_decal(name: str, cache: Path) -> Path:
@@ -540,13 +511,10 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
         if asset_id not in models and asset_id.startswith("compound:"):
             # A normalized compound model: each draw binding becomes its own asset;
             # the group shares one placement (see "parts").
-            # "compound:<landmark>[:i,j][:key=k]" optionally keeps only some draw
-            # bindings and keys some (bright strands) into cutouts by brightness.
+            # "compound:<landmark>[:i,j]" optionally keeps only some draw bindings.
             pack = ROOT / "Renderer/packs/CompoundLandmarksNormalized"
             landmark, _, keep = asset_id[9:].partition(":")
-            keep, _, key = keep.partition(":key=")
             keep = {int(value) for value in keep.split(",")} if keep else None
-            key = {int(value) for value in key.split(",")} if key else set()
             record = read(pack / read(pack / "manifest.json")["assets"][landmark]["landmark"])
             parts, low, high = [], [math.inf] * 3, [-math.inf] * 3
             for index, draw in enumerate(record["draw_bindings"]):
@@ -561,16 +529,17 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
                 opacity = opacity.get("texture") if isinstance(opacity, dict) else opacity
                 if opacity and fully_opaque(pack / opacity):
                     opacity = None
-                part = f"{asset_id}/{index}"
-                if index in key:
-                    colour, opacity = luma_keyed(colour, cache), None
+                # A part with its source opacity (Civ VI's silk webbing, opted in by
+                # the importer) is a veil, blended through it; its id starts "veil/".
+                part = ("veil/" if opacity else "") + f"{asset_id}/{index}"
                 vertices = [(list(v["position"]), v["normal"], v["uv0"]) for v in mesh["vertices"]]
                 for vertex in vertices:
                     for axis in range(3):
                         low[axis], high[axis] = min(low[axis], vertex[0][axis]), max(high[axis], vertex[0][axis])
-                models[part] = {"texture": masked(colour, pack / opacity, cache) if opacity else
-                                colour if index in key else fitted(colour, cache),
-                                "masked": bool(opacity) or index in key, "vertices": vertices, "indices": mesh["topology"]["indices"],
+                # A veil keeps the source's own (averaged) opacity mips: blended,
+                # their mean is its cover at a distance.
+                models[part] = {"texture": masked(colour, pack / opacity, cache) if opacity else fitted(colour, cache),
+                                "masked": bool(opacity), "veil": bool(opacity), "vertices": vertices, "indices": mesh["topology"]["indices"],
                                 "radius": 0.0, "height": 0.0}
                 parts.append(part)
             models[asset_id] = {"parts": parts, "radius": max(high[0] - low[0], high[1] - low[1]) * .5,
@@ -660,9 +629,8 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
                         "scale": extra.get("scale", 1.0), "scale_variation": extra.get("scale_variation", 0.0),
                         "count": extra["count"], "center": False}] * extra["count"]
         for extra in profile.get("compound_pieces", ()):
-            parts, keyed = extra.get("parts"), extra.get("keyed_parts")
-            key = "compound:" + extra["landmark"] + (":" + ",".join(map(str, parts)) if parts else "") + \
-                (":key=" + ",".join(map(str, keyed)) if keyed else "")
+            parts = extra.get("parts")
+            key = "compound:" + extra["landmark"] + (":" + ",".join(map(str, parts)) if parts else "")
             pieces += [{"asset": key, "kind": "model", "scale": extra.get("scale", 1.0),
                         "scale_variation": extra.get("scale_variation", 0.0), "count": extra["count"],
                         "center": False}] * extra["count"]
@@ -755,17 +723,30 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
     # A resource without a composition (or an animation alias) keeps no body:
     # the runtime never guesses one from its name, so the bundle has no groups.
     # Textures: BC1 model atlases, BC3 masked-model atlases, then BC3 decal
-    # atlases, padded to the slot count.
+    # atlases, padded to the slot count. The last slot is the veils' (bodies
+    # the shader blends through their alpha, render_core/terrain_scene.hlsl),
+    # so cut-out bodies never reach it, nor anything else when veils exist.
     opaque = list(dict.fromkeys(meta["texture"] for meta in models.values() if not meta["masked"] and meta["texture"]))
-    cutout = list(dict.fromkeys(meta["texture"] for meta in models.values() if meta["masked"]))
+    cutout = list(dict.fromkeys(meta["texture"] for meta in models.values() if meta["masked"] and not meta.get("veil")))
+    veils = list(dict.fromkeys(meta["texture"] for meta in models.values() if meta.get("veil")))
     atlases, atlas_place = pack_atlases(opaque, MODEL_ATLAS)
     for textures, kind in ((cutout, MASKED_ATLAS), (decal_textures, DECAL_ATLAS)):
         more, place = pack_atlases(textures, kind, len(atlases))
         atlases += more
         atlas_place.update(place)
+        if textures is cutout and len(atlases) > VEIL_SLOT:
+            raise ValueError(f"Cut-out bodies would reach the veil slot ({VEIL_SLOT})")
+    if veils:
+        if len(atlases) > VEIL_SLOT:
+            raise ValueError(f"Resource atlases would reach the veil slot ({VEIL_SLOT})")
+        more, place = pack_atlases(veils, MASKED_ATLAS, VEIL_SLOT)
+        if len(more) > 1:
+            raise ValueError("Veil textures need more than one atlas")
+        atlases += [None] * (VEIL_SLOT - len(atlases)) + more
+        atlas_place.update(place)
     if not atlases:   # only animated subjects: the bundle still needs one (unused) texture
         atlases.append(dds_header(4, 4, 1, MODEL_ATLAS[3], 8) + bytes(8))
-    slots = [f"textures/atlas_{i}.dds" for i in range(len(atlases))]
+    slots = [f"textures/atlas_{i}.dds" if data is not None else "textures/unused.dds" for i, data in enumerate(atlases)]
     if len(slots) > TEXTURE_SLOTS:
         raise ValueError(f"Composition pack needs {len(slots)} texture slots; the runtime binds {TEXTURE_SLOTS}")
     # Unused slots share one 4x4 placeholder: each slot is its own GPU texture,
@@ -817,11 +798,12 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
             count = sum(len(models[i.get("decal") or i["model"]].get("parts", [0]))
                         if (i.get("decal") or i["model"]) in models else 1 for i in instances)
             blob.extend(struct.pack("<II", mask, count))
-            for item in instances:
-                key = item.get("decal") or item["model"]
-                for part in models[key]["parts"] if key in models and "parts" in models[key] else [key]:
-                    blob.extend(struct.pack("<I6f", asset_index[part], item["u"], item["v"], item["rotation"],
-                                            item["scale"], item["lift"], item["ground_fit"]))
+            # Veils draw after everything else they stand among.
+            placed = [(item, part) for item in instances for key in [item.get("decal") or item["model"]]
+                      for part in (models[key]["parts"] if key in models and "parts" in models[key] else [key])]
+            for item, part in sorted(placed, key=lambda pair: str(pair[1]).startswith("veil/")):
+                blob.extend(struct.pack("<I6f", asset_index[part], item["u"], item["v"], item["rotation"],
+                                        item["scale"], item["lift"], item["ground_fit"]))
     names = [name for name, _ in compositions]
     aliases = [(name, index) for index, name in enumerate(names)] if catalog else \
         [(alias + name[len(base):], names.index(name)) for name in names
@@ -835,8 +817,9 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
         shutil.rmtree(output)
     (output / "textures").mkdir(parents=True)
     for index, data in enumerate(atlases):
-        (output / f"textures/atlas_{index}.dds").write_bytes(data)
-    if len(slots) < TEXTURE_SLOTS:
+        if data is not None:
+            (output / f"textures/atlas_{index}.dds").write_bytes(data)
+    if "textures/unused.dds" in padded:
         (output / "textures/unused.dds").write_bytes(dds_header(4, 4, 1, MODEL_ATLAS[3], 8) + bytes(8))
     (output / "resource_runtime.bin").write_bytes(blob)
     # The bodies' readability look (as the units' look), read by the runtime.

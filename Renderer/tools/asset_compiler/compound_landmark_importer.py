@@ -89,6 +89,10 @@ MATERIAL_TEXTURE_SLOTS = {
     "ambient_occlusion": (0x34, "Generic_AO", False),
     "emissive": (0x3C, "Generic_Emissive", False),
 }
+# Civ VI's opacity map (as clutter_blp_extractor reads it for vegetation). Opt-in
+# per landmark ("opacity": true in compound_landmark_sets.json): silk webbing is a
+# translucent veil whose strands are this map; other landmarks stay as imported.
+OPACITY_TEXTURE_SLOT = {"opacity": (0x30, "Generic_OPAC", False)}
 
 
 def _sha256(data: bytes) -> str:
@@ -147,6 +151,8 @@ def load_mapping(path: Path) -> dict[str, Any]:
                 raise ValueError(f"Duplicate compound-landmark source entry: {source_entry}")
             if asset_id in asset_ids:
                 raise ValueError(f"Duplicate normalized compound-landmark ID: {asset_id}")
+            if not isinstance(asset.get("opacity", False), bool):
+                raise ValueError(f"Compound-landmark opacity must be true or false: {asset_id}")
             source_entries.add(source_key)
             asset_ids.add(asset_id)
     return mapping
@@ -904,8 +910,10 @@ def _decode_materials(
     texture_cache: dict[tuple[str, str], tuple[str, dict[str, Any]]],
     artifact_family: str = "compound",
     adapter: str = "c3x.compound_landmark.v0",
+    opacity: bool = False,
 ) -> tuple[list[str], list[dict[str, Any]]]:
     texture_array = package.unique_allocation(TYPE_TEXTURE)
+    texture_slots = {**MATERIAL_TEXTURE_SLOTS, **(OPACITY_TEXTURE_SLOT if opacity else {})}
     outputs = []
     evidence = []
     source_material_count = package.allocations[material_array - 1]["element_count"]
@@ -931,7 +939,7 @@ def _decode_materials(
             raise ValueError("Compound material-data record must be 64 bytes")
         channels = {}
         slots = {}
-        for role, (offset, expected_class, required) in MATERIAL_TEXTURE_SLOTS.items():
+        for role, (offset, expected_class, required) in texture_slots.items():
             texture_index = struct.unpack_from("<I", raw, offset)[0]
             if texture_index == 0xFFFFFFFF:
                 if required:
@@ -979,7 +987,7 @@ def _decode_materials(
             "schema": "c3x.material.v0",
             "name": f"material_{output_index:02d}",
             "channels": channels,
-            "alpha_mode": "opaque",
+            "alpha_mode": "mask" if "opacity" in channels else "opaque",
             "provenance": {
                 "kind": "local_normalized_import",
                 "adapter": adapter,
@@ -1145,6 +1153,7 @@ def _compile_asset(
     static_bake: bool = False,
     auxiliary_uvs: bool = False,
     omit_empty_material_draws: bool = False,
+    opacity: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     package.select_direct_string(source_entry)
     landmark, landmark_user_data, base_model = landmark_base_model(package)
@@ -1401,6 +1410,7 @@ def _compile_asset(
             asset_stem,
             material_variants,
             texture_cache,
+            opacity=opacity,
         )
 
     terrain_fields = package.pointer_fields(landmark_user_data, TYPE_TERRAIN_EDIT_VECTOR)
@@ -1541,6 +1551,7 @@ def compile_compound_landmarks(
                     texture_cache,
                     terrain_edit_policy=terrain_edit_policy,
                     auxiliary_uvs=auxiliary_uvs,
+                    opacity=asset_mapping.get("opacity", False) is True,
                 )
             except (OSError, ValueError, KeyError, TypeError, struct.error) as exc:
                 raise ValueError(

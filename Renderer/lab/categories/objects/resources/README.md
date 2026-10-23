@@ -38,7 +38,10 @@ decal choice and terrain layout comes from
 baked instances, matches resource names by data aliases and picks a variant for
 the tile's terrain. Ground decals are flat `decal/` meshes with soft alpha;
 model and decal textures are block-copied into atlases for the eight resource
-texture slots.
+texture slots. The last slot (7) holds veils: compound parts that bring Civ VI's
+opacity map (the silk webbing, ids `veil/...`) are blended through it, as the
+ground decals are, and draw after the bodies they stand among; cut-out bodies
+never use that slot.
 
 Production resources are these compositions: the `resources` preparation job bakes
 `Renderer/packs/ResourceCompositions` without Lab alternates, and the runtime

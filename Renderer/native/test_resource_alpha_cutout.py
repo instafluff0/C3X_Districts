@@ -10,6 +10,10 @@ test compiles the shader's material-weight and clip statements as C++. A
 transparent texel of a resource body must be discarded and an opaque one kept,
 opaque BC1 bodies (alpha 1) stay whole, decals keep their soft cutoff, and unit
 materials are never clipped by this statement.
+
+Veils, the bodies in the pack's last slot (7: Civ VI's silk webbing), blend
+through their alpha like the decals instead of cutting out at the body cutoff:
+cut out, the webbing's faint haze drew as opaque white skirts.
 """
 import unittest
 
@@ -28,6 +32,7 @@ class ResourceAlphaCutoutTests(unittest.TestCase):
         weights = between(shader, '    float material_fraction = frac(input.material_index);',
                           '    float mine_slot')
         statement = between(shader, '    clip(lerp(1.0, mine_sample.a', ';') + ';'
+        alpha = between(shader, '    ground_alpha = lerp(ground_alpha, mine_sample.a, resource_decal_weight', ';') + ';'
         program = r'''
 #include <cstdio>
 #include <cmath>
@@ -39,9 +44,13 @@ float lerp(float a, float b, float t) { return a + (b - a) * t; }
 float saturate(float x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 float frac(float x) { return x - std::floor(x); }
 void clip(float x) { if (x < 0) clipped = true; }
+static float blended;
 bool kept(float material, float alpha) {
     Input input{material}; Sample mine_sample{alpha}; clipped = false;
 ''' + weights + statement + r'''
+    float ground_alpha = 1.0f;
+''' + alpha + r'''
+    blended = ground_alpha;
     return !clipped;
 }
 int main() {
@@ -49,7 +58,10 @@ int main() {
     auto expect = [&](bool value, const char* what) { if (!value) { std::printf("FAIL %s\n", what); ++failures; } };
     expect(!kept(21.0f, 0.0f), "transparent texel of a resource body is discarded");
     expect(kept(21.0f, 1.0f), "opaque resource body texel is kept");
-    expect(!kept(28.0f, 0.05f), "every resource slot clips below the body cutoff");
+    expect(!kept(27.0f, 0.05f), "every cut-out resource slot clips below the body cutoff");
+    expect(kept(28.0f, 0.05f) && std::fabs(blended - 0.05f) < 1e-6f, "a veil's faint texel blends at its alpha");
+    expect(!kept(28.0f, 0.001f), "a veil texel below the soft cutoff is discarded");
+    expect(kept(27.0f, 0.5f) && blended == 1.0f, "a cut-out body texel stays opaque");
     expect(kept(24.0f, 0.5f), "half-opaque card texel is kept");
     expect(kept(21.35f, 0.01f), "soft decal texel above the decal cutoff is kept");
     expect(!kept(21.35f, 0.001f), "decal texel below the decal cutoff is discarded");

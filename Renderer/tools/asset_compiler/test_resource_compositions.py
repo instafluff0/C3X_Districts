@@ -164,21 +164,66 @@ class ResourceCompositionTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from("<HH", block, 8), (0xF800, 0xF800))
 
 
-    def test_bright_strands_key_into_a_cutout_over_their_own_colour_blocks(self):
-        import tempfile
-        white, grey = struct.pack("<HHI", 0xFFFF, 0xFFFF, 0), struct.pack("<HHI", 0x8410, 0x8410, 0)
-        with tempfile.TemporaryDirectory() as folder:
-            source = compositions.write_dds(Path(folder) / "strands.dds", 8, 2, 72, 8,
-                                            [white + grey + grey + white, white])
-            _, _, mips, dxgi, payload = compositions.dds(compositions.luma_keyed(source, Path(folder)))
-            self.assertEqual((mips, dxgi), (2, 78))
-            top = [payload[i * 16:(i + 1) * 16] for i in range(4)]
-            self.assertEqual([block[:2] for block in top], [bytes((255, 255)), bytes((0, 0)),
-                                                            bytes((0, 0)), bytes((255, 255))])
-            self.assertEqual([block[8:] for block in top], [white, grey, grey, white])   # colour untouched
-            # The next mip keeps the keyed coverage (opaque and clear quadrants) instead of
-            # re-keying its own colour block, which here is all white.
-            self.assertEqual(payload[64:66], bytes((255, 0)))
+    def test_silk_webbing_is_a_veil_drawn_last_from_the_last_slot(self):
+        # Civ VI blends the webbing through its opacity map. A cut-out (first a
+        # brightness key, then the map at the 0.08 body cutoff) drew opaque white
+        # skirts on the silk pines. Veils ("veil/" ids) sit alone in slot 7, which
+        # the shader blends, and draw after the bodies they stand among.
+        pack = Path(__file__).resolve().parents[3] / "Renderer/packs/ResourceCompositions"
+        if not (pack / "resource_runtime.bin").is_file():
+            self.skipTest("production resource pack not built")
+        data = (pack / "resource_runtime.bin").read_bytes()
+        at = len(compositions.MAGIC)
+        def take(form):
+            nonlocal at
+            values = struct.unpack_from(form, data, at)
+            at += struct.calcsize(form)
+            return values
+        def text():
+            (length,) = take("<I")
+            nonlocal at
+            at += length
+            return data[at - length:at].decode()
+        _, slots, count, _ = take("<IIII")
+        textures = [text() for _ in range(slots)]
+        assets = []
+        for _ in range(count):
+            name = text()
+            texture, vertices, indices = take("<III")
+            at += vertices * 32 + indices * 4
+            assets.append((name, texture))
+        veil_slot = compositions.VEIL_SLOT
+        self.assertEqual(textures[veil_slot], f"textures/atlas_{veil_slot}.dds")
+        for name, texture in assets:
+            with self.subTest(asset=name):
+                self.assertEqual(name.startswith("veil/"), texture == veil_slot)
+        veils = {name for name, _ in assets if name.startswith("veil/")}
+        self.assertTrue(veils and all("resource/silk/" in name for name in veils))
+        (groups,) = take("<I")
+        for _ in range(groups):
+            group = text()
+            (variants,) = take("<I")
+            for _ in range(variants):
+                _, instances = take("<II")
+                order = [assets[take("<I6f")[0]][0].startswith("veil/") for _ in range(instances)]
+                with self.subTest(composition=group):
+                    self.assertEqual(order, sorted(order))   # no body after a veil
+                    self.assertEqual(any(order), group.split("~")[0] == "silks" and "~bare" not in group)
+
+    def test_silk_webbing_is_drawn_through_its_source_opacity(self):
+        # Not keyed by brightness: keying the webbing's bright strands made opaque
+        # white skirts on Civ VI's silk pine cones (user report, 2026-10-23).
+        import json
+        root = Path(__file__).resolve().parents[3]
+        profiles = json.loads((root / "Renderer/inventory/resource_composition_profiles.json").read_text())
+        silks = [profiles["resources"]["silks"]] + list(profiles["alternates"]["silks"].values())
+        for profile in silks:
+            for piece in profile["compound_pieces"]:
+                self.assertNotIn("keyed_parts", piece)
+        sets = json.loads((root / "Renderer/tools/asset_compiler/compound_landmark_sets.json").read_text())
+        assets = [asset for package in sets["packages"] for asset in package["assets"]]
+        self.assertEqual({asset["asset_id"] for asset in assets if asset.get("opacity")},
+                         {asset["asset_id"] for asset in assets if asset["asset_id"].startswith("resource/silk/")})
 
 
     def test_tiling_triangles_are_clipped_into_one_texture_not_clamped(self):
