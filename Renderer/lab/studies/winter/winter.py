@@ -914,6 +914,120 @@ LOOKS["v24-laden"] = edits({**V21_LADEN, **V23_EXTRA, **V24_EXTRA}, trees="class
                water="classes", roofs="textured")
 
 
+# Flurry v2 (user, 2026-10-22: "needs far more randomness ... clearly the same
+# rectangle shape of interweaving parallel snowflakes"). v1 moved every flake
+# of a layer as one rigid grid and swayed whole columns together, and filled
+# the quad to its edges. Now every column falls at its own speed and offset,
+# every flake has its own spot, size, brightness and sway (phase, amplitude,
+# period), the wind slants each mountain's flurry differently, and the flakes
+# fill a soft rounded plume (width, height, density per mountain) whose edge
+# and density drift with slow gusts. Integer hash and a bounded clock keep it
+# exact late in a game. Production: seasons.py WINTER_FLURRY.
+FLURRY2 = r"""// Seasons D4: a gentle flurry of small snowflakes over a mountain tile (96).
+// Three parallax layers of tall cells, one flake per cell at most. Each column
+// falls at its own speed with its own offset; each flake has its own spot,
+// size, brightness and sway; each mountain its own plume (width, height,
+// density, wind slant) whose rounded edge and density drift with slow gusts.
+// Units are pixels at tile width 128; the layers thin with the zoom.
+float q8_flurry_hash(float2 p,float s){
+  uint3 v=uint3(int3(int2(floor(p)),int(s*97.)));
+  uint h=v.x*1597334677u^v.y*3812015801u^v.z*2654435761u;
+  h^=h>>16;h*=2246822519u;h^=h>>13;h*=3266489917u;h^=h>>16;
+  return float(h&0xffffffu)*(1./16777216.);
+}
+float q8_flurry_noise(float2 p,float s){
+  float2 i=floor(p),f=frac(p);f=f*f*(3-2*f);
+  return lerp(lerp(q8_flurry_hash(i,s),q8_flurry_hash(i+float2(1,0),s),f.x),
+              lerp(q8_flurry_hash(i+float2(0,1),s),q8_flurry_hash(i+float2(1,1),s),f.x),f.y);
+}
+float4 q8_effect_flurry(float2 q,float2 pixel,float t,float seed,float strength,float night){
+  float zoom=(2/pixel.x)/(1.05*128);
+  int layers=zoom>=1?3:zoom>=.75?2:1;
+  t=fmod(t,1800.);
+  float2 u=float2(q.x/pixel.x,q.y/pixel.y)/zoom;
+  // This mountain's plume.
+  float wind=(q8_flurry_hash(float2(seed,1),7.)-.5)*.7;
+  float density=.8+.5*q8_flurry_hash(float2(seed,2),7.);
+  float half_width=.62+.3*q8_flurry_hash(float2(seed,3),7.);
+  float top=.62+.3*q8_flurry_hash(float2(seed,4),7.);
+  // Straight noisy sides down to the foot, a rounded top: a plume over the peak.
+  float2 e=float2(q.x/half_width,max(0.,q.y-.35*top)/(.65*top));
+  float edge=length(e)+(q8_flurry_noise(float2(q.x*4.5,q.y*6.-t*.09),seed+21.)-.5)*.6
+                     +(q8_flurry_noise(float2(q.x*1.6,q.y*2.2+t*.05),seed+23.)-.5)*.5;
+  // A ragged foot: the flakes thin out at uneven heights, not on one line.
+  float foot=.06+.3*q8_flurry_noise(float2(q.x*3.5,t*.05),seed+25.);
+  float envelope=smoothstep(1.,.45,edge)*smoothstep(foot-.06,foot+.08,q.y);
+  float gust=q8_flurry_noise(float2(u.x/70.,u.y/55.+t*.11),seed+31.);
+  float alpha=0;
+  [unroll]for(int layer=0;layer<3;layer++)if(layer<layers){
+   float w=layer==0?24.:layer==1?17.:12.,h=w*1.3,fall=layer==0?20.:layer==1?14.:9.;
+   // Each layer slants at its own angle around the mountain's wind.
+   float drift=(wind+(q8_flurry_hash(float2(layer,5),seed+9.)-.5)*.5)*fall*t;
+   float column=floor((u.x-drift)/w);
+   float speed=fall*(.7+.6*q8_flurry_hash(float2(column,layer),seed+11.));
+   float offset=q8_flurry_hash(float2(column,layer+7),seed+13.)*h;
+   float2 g=float2(u.x-drift,u.y+speed*t+offset);
+   float2 id=floor(g/float2(w,h)),f=frac(g/float2(w,h))*float2(w,h);
+   float a=q8_flurry_hash(id,seed+layer),b=q8_flurry_hash(id.yx+3,seed+layer),
+         c=q8_flurry_hash(id+17,seed+layer*5),d=q8_flurry_hash(id+29,seed+layer*3);
+   float share=(layer==2?.6:.75)*density*(.45+gust);
+   if(q8_flurry_hash(id+41,seed+layer*7)<share){
+    float scale=layer==0?1.:layer==1?.75:.5;
+    // Wide, slow flutter: up to a fifth of the cell each way, inside the cell.
+    float sway=(.3+.7*d)*.2*w*sin(6.2832*(t/(1.6+2.6*c)+a*3.));
+    float2 spot=float2((.3+.4*a)*w+sway,(.1+.8*b)*h);
+    float radius=(layer==0?1.25:layer==1?.95:.7)*(.75+.5*d);
+    float opacity=(layer==0?.9:layer==1?.7:.5)*(.7+.3*b);
+    alpha=max(alpha,opacity*saturate((radius-length(f-spot))*zoom+.6));
+   }
+  }
+  alpha*=envelope*strength;
+  clip(alpha-.004);
+  // Bright as the other effects (scene white near 1.3 after grading); moonlit at night.
+  return float4(lerp(float3(1.26,1.28,1.32),float3(.50,.58,.82),night),alpha);
+}
+"""
+from Renderer.lab.studies.winter.flurry_tree import FLURRY_SHADER as LAB_FLURRY
+LOOKS["v24-flurry2"] = LOOKS["v24-laden"] + [(FIELD_SHADERS, LAB_FLURRY, FLURRY2)]
+# v3 is FLURRY2 as it now stands (wider sway, per-layer slant, ragged plume and foot).
+LOOKS["v24-flurry3"] = LOOKS["v24-flurry2"]
+LOOKS["v24-flurry4"] = LOOKS["v24-flurry2"]  # v3 with a higher density floor
+
+
+# Desert relief (user, 2026-10-23: desert has "a really odd, swirly look").
+# winter_ripple bent its direction with fbm (+-1.2 rad) and warped its phase by
+# up to 8 radians, drawing contour-line whorls that alias at map zoom.
+OLD_RIPPLE = """float winter_ripple(float2 world) {
+    float turn = (winter_fbm(world * 0.6) - 0.5) * 2.4;
+    float2 wind = float2(cos(turn), sin(turn));
+    return 0.5 + 0.5 * sin(dot(world, wind) * WINTER_RIPPLE_FREQ + winter_fbm(world * 2.3) * 8.0);
+}"""
+# Snow-covered transverse dunes instead: crests across one regional wind that
+# turns only slowly over many tiles, gently meandering, each with a long
+# windward rise and a short lee face, crest height varying along the dune.
+# The relief fades out where a dune spans too few pixels to resolve.
+DUNES = """float winter_ripple(float2 world) {
+    float turn = (winter_noise(world * 0.12) - 0.5) * 0.8;
+    float2 wind = float2(cos(0.6 + turn), sin(0.6 + turn));
+    float along = dot(world, wind) * WINTER_DUNE_FREQ + (winter_noise(world * 0.9) - 0.5) * 1.6;
+    float phase = frac(along);
+    float profile = smoothstep(0.0, 0.78, phase) * (1 - smoothstep(0.78, 1.0, phase));
+    float resolved = 1 - smoothstep(0.08, 0.25, fwidth(along));
+    return 0.5 + (profile * (0.6 + 0.4 * winter_noise(world * 0.7 + 4.1)) - 0.35) * resolved;
+}"""
+def _desert(look, ripple, relief):
+    return [(paths, a, r.replace(OLD_RIPPLE, ripple).replace("#define WINTER_DESERT_RELIEF 0.25",
+            f"#define WINTER_DESERT_RELIEF {relief}\n#define WINTER_DUNE_FREQ 3.0")) for paths, a, r in LOOKS[look]]
+LOOKS["v24-dunes"] = _desert("v24-flurry4", DUNES, 0.25)
+LOOKS["v24-smooth"] = _desert("v24-flurry4", OLD_RIPPLE, 0)
+# A few broad, low dunes: gentle undulation rather than crest lines.
+LOOKS["v24-dunes-soft"] = [(paths, a, r.replace("#define WINTER_DUNE_FREQ 3.0", "#define WINTER_DUNE_FREQ 1.2"))
+                           for paths, a, r in _desert("v24-flurry4", DUNES, 0.12)]
+# The current look (user, 2026-10-23: broad low dunes; flurry v2). Production:
+# Renderer/lab/shared/seasons (winter_natural.hlsl winter_ripple, WINTER_FLURRY).
+LOOKS["v25-laden"] = LOOKS["v24-dunes-soft"]
+
+
 def apply(look: str, relative: str, text: str) -> str:
     for paths, anchor, replacement in LOOKS[look]:
         if relative not in paths:

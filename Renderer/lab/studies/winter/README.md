@@ -56,7 +56,7 @@ through the **current production renderer** on the Windows VM.
   "Winter selects the snowy variety". The older `snow-pines` views marked the
   tiles tundra instead, which leaked tundra into the neighbouring ground.
 
-## Current look (v24-laden) and what each layer does
+## Current look (v25-laden) and what each layer does
 
 Colour targets measured on the concept (OKLab): lit snow L .92 C .025 h 261,
 deep water L .47 C .096 h 249, forests dark navy-green under white boughs.
@@ -178,3 +178,16 @@ with a mountain then redraws continuously, like a smoking city.
   and a few bare windows edge the shelf; open reaches meet the snow with a
   broken, faintly wet rim. Waterline stones were tried and did not read at
   gameplay zoom, so they were dropped.
+- 2026-10-22, flurry v2 (user: "needs far more randomness ... the same
+  rectangle shape of interweaving parallel snowflakes"): per-column speed and
+  offset, per-flake spot, size, brightness and wide slow sway, per-layer wind
+  slant, a ragged plume per mountain (noisy sides, rounded top, uneven foot)
+  with slow gusts, integer hash and a bounded clock. FLURRY2 here; production
+  is seasons.py WINTER_FLURRY. Before/after: out/winter/review/flurry-before-after.mp4.
+- 2026-10-23, desert (user: "a really odd, swirly look"): winter_ripple bent its
+  direction with fbm and warped its phase by up to 8 rad, drawing contour-line
+  whorls that aliased. Of crest dunes, broad low dunes and smooth, the user
+  picked broad low dunes (v25): crests across one slowly turning regional wind,
+  gentle meander, long rise and short lee face, WINTER_DUNE_FREQ 1.2,
+  WINTER_DESERT_RELIEF .12, faded where unresolvable. Options:
+  out/winter/review/desert-options.png.
