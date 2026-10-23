@@ -36,6 +36,16 @@ struct RasterScratchIdentity {
     bool operator!=(RasterScratchIdentity const& other)const{return !(*this==other);}
 };
 
+// A day/night lighting change refines behind its displayed preview in this
+// many slices: its CPU cost is small, so the CPU-steered budget would redraw
+// a whole view at once, but under Parallels that costs ~105 ms of GPU (a
+// visible hitch). The preview keeps the previous lighting until promotion.
+constexpr double lighting_refine_slices=16;
+inline double lighting_refine_budget(double budget,double region_pixels,bool lighting_refining){
+    return budget>0 && lighting_refining && budget*lighting_refine_slices>region_pixels?
+        region_pixels/lighting_refine_slices:budget;
+}
+
 // Content identity of retained static pixels: everything except the camera
 // anchor and projection, which are tracked separately so a slot can be shifted
 // or resampled for display.

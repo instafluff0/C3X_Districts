@@ -15,7 +15,7 @@ inline bool valid_loading_world(c3x_renderer_camera_request_v1 const* request){
         f.world_topology && f.world_topology_count==unsigned(f.world_width_tiles*f.world_height_tiles/2) &&
         f.world_topology_revision>0 && request->identity.map_epoch>0 && request->identity.viewer_epoch>0 &&
         request->identity.visibility_epoch>0 && request->identity.scene_epoch==f.world_topology_revision &&
-        f.hour>=0 && f.hour<24 && f.season>=0 && f.season<4;
+        f.hour>=0 && f.hour<24 && f.minute>=0 && f.minute<60 && f.clock_rate>=0 && f.season>=0 && f.season<4;
 }
 // Caller-thread paging state, not another world. Accepted records enter the
 // existing publication journal and CapturedScene; a rejected page is retried.

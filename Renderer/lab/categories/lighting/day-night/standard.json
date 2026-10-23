@@ -6,6 +6,7 @@
     "Renderer/lab/shared/shaders/lighting/local_facade_lights.hlsl",
     "Renderer/lab/shared/shaders/common/hdr_glow_tiled.hlsl",
     "Renderer/native/environment_runtime.cpp",
+    "Renderer/native/environment_runtime.h",
     "Renderer/native/source_fidelity/light_frame.h",
     "Renderer/native/render_core/source_shadow.h",
     "Renderer/native/city_fidelity/source_caster.hlsl"
@@ -31,7 +32,8 @@
   "tests": [
     "Renderer.native.source_fidelity.test_contract",
     "Renderer.native.test_render_core",
-    "Renderer.tools.test_season_shading"
+    "Renderer.tools.test_season_shading",
+    "Renderer.native.test_day_night_clock"
   ],
   "references": {
     "d3d11": [

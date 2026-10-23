@@ -160,15 +160,16 @@ int main(){
 #include <cassert>
 #include <cstring>
 using HMODULE=void*;
-constexpr int DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_INIT_FAILED=9;
+constexpr int DNCM_OFF=0,DNCM_USER_TIME=2,DNCM_CONTINUOUS=5,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_INIT_FAILED=9;
 struct Counter {long long QuadPart=0;};
 struct State {
- struct {bool enable_custom_rendering=true;int day_night_cycle_mode=0,seasonal_cycle_mode=0;}current_config;
+ struct {bool enable_custom_rendering=true;int day_night_cycle_mode=0,seasonal_cycle_mode=0,day_night_game_minutes_per_real_minute=20;}current_config;
+ struct {long long QuadPart=0;} last_day_night_cycle_update_time;
  bool custom_renderer_capture_world_topology=true,custom_renderer_draw_in_progress=false,
   custom_renderer_frame_active=false,custom_renderer_loading_world_capture=false,
   custom_renderer_capture_only=false,custom_renderer_world_audit_needed=false,
   day_night_cycle_unstarted=true,seasonal_cycle_unstarted=true;
- int custom_renderer_viewer_civ_id=-1,current_day_night_cycle=18,current_seasonal_cycle=2,custom_renderer_init_state=0;
+ int custom_renderer_viewer_civ_id=-1,current_day_night_cycle=18,day_night_minute=0,current_seasonal_cycle=2,custom_renderer_init_state=0;
  c3x_renderer_i64 custom_renderer_seeded_viewer_epoch=0,custom_renderer_viewer_epoch=0,
   custom_renderer_map_epoch=0,custom_renderer_visibility_revision=1,custom_renderer_world_topology_revision=3;
  Counter custom_renderer_qpc_frequency;HMODULE custom_renderer_module=(void*)1;
@@ -185,7 +186,9 @@ bool ensure_custom_renderer_loaded(){++loads;return available;}
 bool custom_renderer_native_probe_on(){return owner;}
 bool is_online_game(){return false;}
 int clamp(int a,int b,int v){return v<a?a:v>b?b:v;}
+int not_below(int lo,int v){return v<lo?lo:v;}
 bool QueryPerformanceFrequency(Counter* f){f->QuadPart=1000;return true;}
+using LARGE_INTEGER=Counter;
 bool capture_custom_renderer_world_topology(){++captures;state.custom_renderer_world_topology=topology;return topology_ok;}
 void log_custom_renderer_event(char const*,int){}
 int prepare(c3x_renderer_camera_request_v1 const* r){

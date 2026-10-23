@@ -7040,6 +7040,13 @@ public:
         return c3x_renderer::render_core::cached_environment("C3X_RENDERER_SEASON_OVERRIDE",pinned,sizeof(pinned)) &&
             pinned[0]>='0' && pinned[0]<='3' && !pinned[1]?pinned[0]-'0':frame.season;
     }
+    // The lighting hour: the fresh pipeline's adopted clock time once it has
+    // drawn (a new minute waits for its refinement and a still camera), else
+    // the frame's own hour plus minutes past it.
+    float lighting_hour=-1.f;
+    float frame_hour(c3x_renderer_frame_v1 const& frame) const {
+        return lighting_hour>=0.f?lighting_hour:float(frame.hour)+float(frame.minute)/60.f;
+    }
     // Seasons D4: whether a chunk draws in the current season.
     bool season_shown(CachedVertexChunk const& chunk) const {
         return !chunk.season_stand || (chunk.season_stand==2)==winter_season;
@@ -10068,7 +10075,7 @@ public:
         // frame_season: C3X_RENDERER_SEASON_OVERRIDE must reach these constants too,
         // or this per-frame upload replaces the fresh pipeline's pinned season.
         c3x_renderer::EnvironmentState environment = c3x_renderer::evaluate_environment(
-            static_cast<float>(frame.hour), frame_season(frame));
+            frame_hour(frame), frame_season(frame));
         winter_season=frame_season(frame)==2;
         TerrainShaderSettings frame_settings = {};
         frame_settings.height_texel[0] = 1.0f / 2048.0f;
@@ -10109,7 +10116,7 @@ public:
             if(GetEnvironmentVariableA("C3X_RENDERER_CITY_LIGHT_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0)cities.night=0;
             city_glow.gain=GetEnvironmentVariableA("C3X_RENDERER_CITY_GLOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0?0.f:6.f;
         }
-        frame_settings.hour = static_cast<float>(frame.hour);
+        frame_settings.hour = frame_hour(frame);
         std::copy(std::begin(resource_look), std::end(resource_look), std::begin(frame_settings.resource_look));
         // The pack look uses .xy; seasonal shading reads the season from .zw.
         frame_settings.resource_look[2] = environment.season;
@@ -13976,7 +13983,7 @@ struct CameraTerrainPreview {
         target.frame.tiles=target.occurrences.empty()?nullptr:target.occurrences.data();
         target.frame.world_topology=nullptr;target.frame.world_topology_count=0;
         if(target.bytes()>32u*1024u*1024u)return false;
-        auto environment=c3x_renderer::evaluate_environment(float(frame.hour),frame.season);
+        auto environment=c3x_renderer::evaluate_environment(float(frame.hour)+float(frame.minute)/60.f,frame.season);
         // A base water texture is the bed, not the water surface. Use a coarse
         // optical-depth estimate per captured water family with the existing
         // absorption/tint response from render_core's scene_material_v1.hlsl.
@@ -18578,6 +18585,8 @@ bool valid_frame(c3x_renderer_frame_v1 const * frame, c3x_renderer_output_v1 con
     if (frame->tile_width <= 0 || frame->tile_height <= 0 || frame->tile_count > 8192u)
         return false;
     if (frame->presentation_time_ticks < 0 || frame->presentation_frequency <= 0)
+        return false;
+    if (frame->minute < 0 || frame->minute > 59 || frame->clock_rate < 0)
         return false;
     if (frame->world_width_tiles < 0 || frame->world_height_tiles < 0 ||
         frame->world_width_tiles > 100000 || frame->world_height_tiles > 100000 ||

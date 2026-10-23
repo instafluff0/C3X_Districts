@@ -89,7 +89,8 @@ struct Options{bool legacy=false,zoom_direct=false,zoom_early=false;float bootst
 struct Pipeline {
  Context context;
  struct{Context* context;int device=1,content_view_width=4,content_view_height=4;std::int64_t scene_depth_origin=0;
-  bool borrowed_scene_frame=false;Revisions raster_dependency_revisions;}renderer{&context};
+  bool borrowed_scene_frame=false;Revisions raster_dependency_revisions;
+  struct{void write(char const*,char const*,bool=false){}}trace;}renderer{&context};
  StaticRasters static_rasters;std::array<StaticState,2> bootstrap;std::array<StaticState const*,2> bootstrap_ring{};std::array<std::uint64_t,2> bootstrap_ring_revision{};
  struct RasterInputs{using Revisions=::Revisions;int version=0;bool complete=true;void clear(){version=0;complete=true;}std::size_t bytes()const{return 0;}
   void carry(Revisions const&,int,Revisions::Checkpoint){}};
@@ -117,6 +118,7 @@ struct Pipeline {
  Target static_cache;std::array<std::uint64_t,12> restore_key{};
  struct OverlayFrame{bool valid=false;unsigned slot=0;int move_x=0,move_y=0;float depth_shift=0;} overlay_frame;
  double last_static_ms=0;bool static_preview=false;
+ unsigned lighting_draws=0; // no day/night lighting change refining
  struct {unsigned lane=0;int reusable=-1,recenter=0,shifted=0,refine=0,sync=0,preview=0,front_cover=0,home_cover=0,boot_cover=0;
   long long missing=0;int camera_x=0,camera_y=0,slot_x=0,slot_y=0;unsigned entry=0,home_entry=0,repair=0,key_diff=0;std::size_t input_bytes=0;double boot_draw_ms=0,boot_deps_ms=0;long long boot_area=0;
   double proof_ms=0,repair_ms=0,recenter_ms=0,refine_ms=0,strip_ms=0,restore_ms=0;} static_decision;

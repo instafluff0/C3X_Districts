@@ -207,7 +207,8 @@ enum day_night_cycle_mode {
 	DNCM_TIMER,
 	DNCM_USER_TIME,
 	DNCM_EVERY_TURN,
-	DNCM_SPECIFIED
+	DNCM_SPECIFIED,
+	DNCM_CONTINUOUS
 };
 
 enum seasonal_cycle_mode {
@@ -549,6 +550,7 @@ struct c3x_config {
 	int elapsed_minutes_per_day_night_hour_transition;
 	int fixed_hours_per_turn_for_day_night_cycle;
 	int pinned_hour_for_day_night_cycle;
+	int day_night_game_minutes_per_real_minute;
 	int seasonal_cycle_mode;
 	int enabled_seasons_mask;
 	int pinned_season_for_seasonal_cycle;
@@ -2364,6 +2366,7 @@ struct injected_state {
 
 	// Day-Night cycle data
 	int current_day_night_cycle;
+	int day_night_minute; // Minutes past current_day_night_cycle (continuous and user-time modes, custom renderer only), begun at last_day_night_cycle_update_time; not saved
 	bool day_night_cycle_unstarted; // If current_day_night_cycle has not been set, f.e. because it's the first turn of a new game.
 	int current_seasonal_cycle;
 	bool seasonal_cycle_unstarted;

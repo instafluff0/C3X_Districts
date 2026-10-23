@@ -315,7 +315,7 @@ std::size_t c3x_renderer64_unit_source_mesh_bytes(){
 }
 bool c3x_renderer64_static_refinement_pending(float zoom){
     c3x_renderer64_frame_device();
-    return sandbox_fresh.static_refinement_pending(zoom);
+    return sandbox_fresh.static_refinement_pending(zoom) || sandbox_fresh.lighting_pending();
 }
 float c3x_renderer64_ground_lift(float x,float y){
     c3x_renderer64_frame_device();auto& units=sandbox_direct_units;

@@ -10,7 +10,7 @@
 
 namespace c3x_inputs {
 using Bytes=std::vector<unsigned char>;
-constexpr std::uint32_t protocol_version=12;
+constexpr std::uint32_t protocol_version=13;
 constexpr std::size_t payload_limit=16u*1024u*1024u;
 inline void require(bool condition,char const* message){if(!condition)throw std::runtime_error(message);}
 struct Writer {
@@ -196,6 +196,7 @@ template<class IO,class Value>void frame_fields(IO& io,Value& v){
     io(v.tile_width);io(v.tile_height);io(v.hour);io(v.season);
     io(v.presentation_time_ticks);io(v.presentation_frequency);io(v.dirty_flags);io(v.visible_animation_count);
     io(v.world_width_tiles);io(v.world_height_tiles);io(v.world_wrap_x);io(v.world_wrap_y);io(v.world_topology_revision);
+    io(v.minute);io(v.clock_rate);io(v.clock_qpc);
 }
 inline void frame(Writer& out,c3x_renderer_frame_v1 const& v){
     require(v.api_version==C3X_RENDERER_API_VERSION&&v.struct_size==sizeof(v),"input frame ABI mismatch");

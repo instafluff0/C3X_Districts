@@ -119,6 +119,30 @@ repl call, 0x4F0AF0, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
 - **Not added:** no patch-table entry and no injected-state field.
 - **Config-off:** both paths are unchanged (the native load, swap and reload).
 
+## Continuous and user-time day/night clock (minutes)
+
+`required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.
+
+- **Existing symbols relied on:** the `on_timer_0x9F6500` inlead (Civ III's
+  66 ms timer) advances the clock between turns. `perform_interturn_in_main_loop`
+  and `Map_Renderer_load_images` keep their hour role and do not step a
+  continuous clock. Signatures and supported-build addresses are unchanged.
+- **What changes:** `day_night_cycle_mode = continuous` (custom rendering only;
+  otherwise the config sets it to `off`) passes in-game minutes at
+  `day_night_game_minutes_per_real_minute`. With custom rendering on,
+  `user-time` follows the system clock's minute. Frame API 22 carries `minute`,
+  when it began (`clock_qpc`) and `clock_rate`; Renderer64 advances the minutes
+  between captures, so the timer requests a map capture
+  (`C3X_RENDERER_DIRTY_SCENE`) only for a new anchor, hour or season. Frames
+  anchor at the hour's start, so all frames within an hour are identical.
+  With `seasonal_cycle_mode = on-day-night-hour`, the season changes when the
+  clock reaches the hour, mid-turn. Minutes are not saved; a loaded game starts
+  at the top of its saved hour.
+- **Added:** injected-state `day_night_minute`; config
+  `day_night_game_minutes_per_real_minute`. No patch-table entry.
+- **Config-off:** the timer hook returns before the clock when custom rendering
+  is off; the other cycle modes are unchanged.
+
 ## City animations (fireworks, disorder, plague) under custom rendering
 
 `required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.

@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 21u
+#define C3X_RENDERER_API_VERSION 22u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -300,6 +300,15 @@ struct c3x_renderer_frame_v1 {
     c3x_renderer_u32 world_topology_count;
     c3x_renderer_u32 const * world_topology;
     c3x_renderer_i64 world_topology_revision;
+    // API 22: C3X's continuous and user-time day/night clocks; zero for every
+    // other mode. `minute` (0..59) past `hour` began at QPC `clock_qpc`, and
+    // `clock_rate` game minutes pass per real minute after it, so Renderer64
+    // lights the minutes between captures itself (C3X captures only for a new
+    // hour or season, anchoring at the hour's start so frames within an hour
+    // are identical). Rules and native-art fallbacks match the whole hour.
+    c3x_renderer_i32 minute;
+    c3x_renderer_i32 clock_rate;
+    c3x_renderer_i64 clock_qpc;
 };
 
 // Pointer fields borrow renderer-owned storage until the next render,

@@ -22,14 +22,15 @@ class RequiredInterturnPreparationTests(unittest.TestCase):
 #include <vector>
 using HMODULE=void*;
 constexpr int IS_OK=1,IS_INIT_FAILED=2,IS_LOADING=3;
-constexpr int DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3;
+constexpr int DNCM_OFF=0,DNCM_USER_TIME=2,DNCM_CONTINUOUS=5,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3;
 struct Counter {long long QuadPart=1000;};
 struct Map {int Width=16,Height=16,Flags=1;void* Tiles=reinterpret_cast<void*>(5);
  struct {void* spotlight_on_city=nullptr;}Renderer;};
 struct Bic {struct Map Map;}bic,replacement_bic;Bic* p_bic_data=&bic;
 struct Main_Screen_Form {int Player_CivID=2;}screen,other_screen;Main_Screen_Form* p_main_screen_form=&screen;
 struct State {
- struct {bool enable_custom_rendering=true;int day_night_cycle_mode=0,seasonal_cycle_mode=0;}current_config;
+ struct {bool enable_custom_rendering=true;int day_night_cycle_mode=0,seasonal_cycle_mode=0,day_night_game_minutes_per_real_minute=20;}current_config;
+ struct {long long QuadPart=0;} last_day_night_cycle_update_time;
  int custom_renderer_init_state=IS_OK,custom_renderer_viewer_civ_id=2;
  bool custom_renderer_display_valid=false,custom_renderer_capture_world_topology=true;
  void* custom_renderer_native_map=reinterpret_cast<void*>(1);void* custom_renderer_seed_world=reinterpret_cast<void*>(2);
@@ -40,7 +41,7 @@ struct State {
  bool custom_renderer_draw_in_progress=false,custom_renderer_frame_active=false,custom_renderer_capture_only=false,
   custom_renderer_loading_world_capture=false,custom_renderer_world_audit_needed=false,
   day_night_cycle_unstarted=true,seasonal_cycle_unstarted=true;
- int current_day_night_cycle=18,current_seasonal_cycle=2;
+ int current_day_night_cycle=18,day_night_minute=0,current_seasonal_cycle=2;
  Counter custom_renderer_qpc_frequency;
  unsigned const* custom_renderer_world_topology=nullptr;unsigned custom_renderer_world_topology_count=128;
 }state;State* is=&state;
@@ -52,7 +53,9 @@ bool ensure_custom_renderer_loaded(){++loads;if(mutation==20)state.custom_render
 bool custom_renderer_native_probe_on(){return owner;}
 bool is_online_game(){return false;}
 int clamp(int a,int b,int v){return v<a?a:v>b?b:v;}
+int not_below(int lo,int v){return v<lo?lo:v;}
 bool QueryPerformanceFrequency(Counter* f){f->QuadPart=1000;return true;}
+using LARGE_INTEGER=Counter;
 bool capture_custom_renderer_world_topology(){
  ++captures;assert(state.custom_renderer_world_audit_needed);
  state.custom_renderer_world_topology=topology;

@@ -2376,6 +2376,7 @@ read_day_night_cycle_mode (struct string_slice const * s, int * out_val)
 	else if (slice_matches_str (&trimmed, "user-time" )) { *out_val = DNCM_USER_TIME;  return true; }
 	else if (slice_matches_str (&trimmed, "every-turn")) { *out_val = DNCM_EVERY_TURN; return true; }
 	else if (slice_matches_str (&trimmed, "specified" )) { *out_val = DNCM_SPECIFIED;  return true; }
+	else if (slice_matches_str (&trimmed, "continuous")) { *out_val = DNCM_CONTINUOUS; return true; }
 	else
 		return false;
 }
@@ -3379,6 +3380,18 @@ load_config (char const * file_path, int path_is_relative_to_mod_dir)
 
 			}
 		free (list->items);
+	}
+
+	// The continuous day/night cycle is computed by the custom renderer only; without it the cycle is off
+	if (cfg->day_night_cycle_mode == DNCM_CONTINUOUS && ! cfg->enable_custom_rendering) {
+		cfg->day_night_cycle_mode = DNCM_OFF;
+		PopupForm * popup = get_popup_form ();
+		popup->vtable->set_text_key_and_flags (popup, __, is->mod_script_path, "C3X_WARNING", -1, 0, 0, 0);
+		char s[200];
+		snprintf (s, sizeof s, "\"day_night_cycle_mode\" set to \"continuous\", but \"enable_custom_rendering\" is off. Disabling day/night cycle mode.");
+		s[(sizeof s) - 1] = '\0';
+		PopupForm_add_text (popup, __, s, false);
+		patch_show_popup (popup, __, 0, 0);
 	}
 
 	// If seasonal cycle mode is on "day_night_hour" but day/night cycle mode is off, disable seasonal cycle mode and show a warning
@@ -19783,6 +19796,16 @@ calculate_current_day_night_cycle_hour ()
 			LPSYSTEMTIME lpSystemTime = (LPSYSTEMTIME)malloc(sizeof(SYSTEMTIME));
 			GetLocalTime (lpSystemTime);
 			output = lpSystemTime->wHour;
+			// The custom renderer also shows the minute; sample both together, with when that minute began
+			// (advance_day_night_clock keeps them current)
+			if (is->current_config.enable_custom_rendering) {
+				LARGE_INTEGER now, frequency;
+				QueryPerformanceCounter (&now);
+				QueryPerformanceFrequency (&frequency);
+				is->day_night_minute = clamp (0, 59, lpSystemTime->wMinute);
+				is->last_day_night_cycle_update_time.QuadPart = now.QuadPart -
+					((long long)lpSystemTime->wSecond * 1000 + lpSystemTime->wMilliseconds) * frequency.QuadPart / 1000;
+			}
 			free (lpSystemTime);
 			break;
 		}
@@ -19800,6 +19823,13 @@ calculate_current_day_night_cycle_hour ()
 		// Pin the hour to a specific value
 		case DNCM_SPECIFIED: {
 			output = is->current_config.pinned_hour_for_day_night_cycle;
+			break;
+		}
+
+		// Advanced by real time on Civ III's timer (advance_day_night_clock), not by turns
+		case DNCM_CONTINUOUS: {
+			if (! is->day_night_cycle_unstarted)
+				output = is->current_day_night_cycle;
 			break;
 		}
 	}
@@ -21017,6 +21047,7 @@ patch_init_floating_point ()
 		{"elapsed_minutes_per_day_night_hour_transition"     ,     3,  offsetof (struct c3x_config, elapsed_minutes_per_day_night_hour_transition)},
 		{"fixed_hours_per_turn_for_day_night_cycle"          ,     1,  offsetof (struct c3x_config, fixed_hours_per_turn_for_day_night_cycle)},
 		{"pinned_hour_for_day_night_cycle"                   ,     0,  offsetof (struct c3x_config, pinned_hour_for_day_night_cycle)},
+		{"day_night_game_minutes_per_real_minute"            ,    20,  offsetof (struct c3x_config, day_night_game_minutes_per_real_minute)},
 		{"elapsed_minutes_per_season_transition"             ,     3,  offsetof (struct c3x_config, elapsed_minutes_per_season_transition)},
 		{"fixed_turns_per_season"                            ,     3,  offsetof (struct c3x_config, fixed_turns_per_season)},
 		{"transition_season_on_day_night_hour"               ,     0,  offsetof (struct c3x_config, transition_season_on_day_night_hour)},
@@ -21336,6 +21367,8 @@ patch_init_floating_point ()
 
 	is->drawn_strat_resource_count = 0;
 	is->current_day_night_cycle = 12;
+	is->day_night_minute = 0;
+	is->last_day_night_cycle_update_time.QuadPart = 0;
 	is->day_night_cycle_unstarted = true;
 	is->current_seasonal_cycle = CS_SUMMER;
 	is->seasonal_cycle_unstarted = true;
@@ -25817,6 +25850,8 @@ patch_load_scenario (BIC * this, int edx, char * param_1, unsigned * param_2)
 	// Reset cycle vars and clear any indexed sprite proxies.
 	is->day_night_cycle_unstarted = true;
 	is->current_day_night_cycle = 12;
+	is->day_night_minute = 0;
+	is->last_day_night_cycle_update_time.QuadPart = 0;
 	is->seasonal_cycle_unstarted = true;
 	is->current_seasonal_cycle = CS_SUMMER;
 	is->turns_in_current_season = 0;
@@ -29829,6 +29864,17 @@ prepare_custom_renderer_frame (struct c3x_renderer_frame_v1 * prepared)
 	frame.tile_height = frame.tile_width / 2;
 	frame.hour = (is->current_config.day_night_cycle_mode != DNCM_OFF && ! is->day_night_cycle_unstarted) ?
 		clamp (0, 23, is->current_day_night_cycle) : 12;
+	if (((is->current_config.day_night_cycle_mode == DNCM_CONTINUOUS) || (is->current_config.day_night_cycle_mode == DNCM_USER_TIME)) &&
+	    ! is->day_night_cycle_unstarted) {
+		// Renderer64 advances the minutes between captures from when this hour began and the clock's rate. Anchoring to the
+		// hour keeps every frame within it identical, so a retried capture converges even when minutes pass every few ticks.
+		LARGE_INTEGER frequency;
+		QueryPerformanceFrequency (&frequency);
+		frame.clock_rate = (is->current_config.day_night_cycle_mode == DNCM_USER_TIME) ? 1 :
+			not_below (1, is->current_config.day_night_game_minutes_per_real_minute);
+		frame.clock_qpc = (is->last_day_night_cycle_update_time.QuadPart == 0) ? 0 :
+			is->last_day_night_cycle_update_time.QuadPart - clamp (0, 59, is->day_night_minute) * (frequency.QuadPart * 60 / frame.clock_rate);
+	}
 	frame.season = (is->current_config.seasonal_cycle_mode != SCM_OFF && ! is->seasonal_cycle_unstarted) ?
 		clamp (CS_SUMMER, CS_SPRING, is->current_seasonal_cycle) : CS_SUMMER;
 	frame.tile_count = is->custom_renderer_tile_count;
@@ -30098,6 +30144,17 @@ prepare_custom_renderer_loading_world ()
 	frame.world_topology_revision = is->custom_renderer_world_topology_revision;
 	frame.hour = (is->current_config.day_night_cycle_mode != DNCM_OFF && ! is->day_night_cycle_unstarted) ?
 		clamp (0, 23, is->current_day_night_cycle) : 12;
+	if (((is->current_config.day_night_cycle_mode == DNCM_CONTINUOUS) || (is->current_config.day_night_cycle_mode == DNCM_USER_TIME)) &&
+	    ! is->day_night_cycle_unstarted) {
+		// Renderer64 advances the minutes between captures from when this hour began and the clock's rate. Anchoring to the
+		// hour keeps every frame within it identical, so a retried capture converges even when minutes pass every few ticks.
+		LARGE_INTEGER frequency;
+		QueryPerformanceFrequency (&frequency);
+		frame.clock_rate = (is->current_config.day_night_cycle_mode == DNCM_USER_TIME) ? 1 :
+			not_below (1, is->current_config.day_night_game_minutes_per_real_minute);
+		frame.clock_qpc = (is->last_day_night_cycle_update_time.QuadPart == 0) ? 0 :
+			is->last_day_night_cycle_update_time.QuadPart - clamp (0, 59, is->day_night_minute) * (frequency.QuadPart * 60 / frame.clock_rate);
+	}
 	frame.season = (is->current_config.seasonal_cycle_mode != SCM_OFF && ! is->seasonal_cycle_unstarted) ?
 		clamp (CS_SUMMER, CS_SPRING, is->current_seasonal_cycle) : CS_SUMMER;
 	struct c3x_renderer_camera_request_v1 request = {C3X_RENDERER_CAMERA_VIEW_VERSION, sizeof request, &frame};
@@ -40512,8 +40569,10 @@ patch_move_game_data (byte * buffer, bool save_else_load)
 				is->current_day_night_cycle = *((int *)cursor)++;
 
 				// Because we've restored current_day_night_cycle from the save, set that it is not the first turn so the cycle
-				// doesn't get restarted.
+				// doesn't get restarted. Minutes are not saved: a continuous cycle resumes at the top of the hour.
 				is->day_night_cycle_unstarted = false;
+				is->day_night_minute = 0;
+				is->last_day_night_cycle_update_time.QuadPart = 0;
 
 			} else if (match_save_chunk_name (&cursor, "current_seasonal_cycle")) {
 				is->current_seasonal_cycle = clamp (CS_SUMMER, CS_SPRING, *((int *)cursor)++);
@@ -49090,11 +49149,64 @@ patch_Units_Image_Data_advance_animations (Units_Image_Data * this, int edx, flo
 }
 #endif
 
+// Day/night clock between turns (custom renderer only). Continuous: in-game minutes pass with real time at the configured rate,
+// including while the player idles. User-time: the hour and minute follow the system clock. Renderer64 advances the minutes
+// between captures from each frame's clock (when the current minute began and the rate), so only a new anchor, hour or season
+// requests a map capture. With seasonal_cycle_mode = on-day-night-hour the season changes the moment the clock reaches the hour.
+void
+advance_day_night_clock ()
+{
+	int mode = is->current_config.day_night_cycle_mode;
+	if (((mode != DNCM_CONTINUOUS) && (mode != DNCM_USER_TIME)) || is->day_night_cycle_unstarted ||
+	    (*p_player_bits == 0) || p_main_screen_form->is_now_loading_game)
+		return;
+	LARGE_INTEGER now, frequency;
+	QueryPerformanceCounter (&now);
+	QueryPerformanceFrequency (&frequency);
+	bool anchored = is->last_day_night_cycle_update_time.QuadPart != 0;
+	int before = clamp (0, 23, is->current_day_night_cycle) * 60 + clamp (0, 59, is->day_night_minute);
+	int after = before;
+	if (mode == DNCM_USER_TIME) {
+		SYSTEMTIME local;
+		GetLocalTime (&local);
+		after = clamp (0, 23, local.wHour) * 60 + clamp (0, 59, local.wMinute);
+		if ((after != before) || ! anchored) // when the system clock's minute began
+			is->last_day_night_cycle_update_time.QuadPart = now.QuadPart -
+				((long long)local.wSecond * 1000 + local.wMilliseconds) * frequency.QuadPart / 1000;
+	} else if (! anchored)
+		is->last_day_night_cycle_update_time = now;
+	else {
+		long long ticks_per_minute = frequency.QuadPart * 60 / not_below (1, is->current_config.day_night_game_minutes_per_real_minute);
+		long long elapsed = now.QuadPart - is->last_day_night_cycle_update_time.QuadPart;
+		if ((ticks_per_minute > 0) && (elapsed >= ticks_per_minute)) {
+			long long passed = elapsed / ticks_per_minute;
+			is->last_day_night_cycle_update_time.QuadPart += passed * ticks_per_minute; // keep the remainder
+			after = (before + ((passed > 1439) ? 1439 : (int)passed)) % 1440;
+		}
+	}
+	int hour = is->current_day_night_cycle, season = is->current_seasonal_cycle;
+	is->current_day_night_cycle = after / 60;
+	is->day_night_minute = after % 60;
+	if ((after != before) && (is->current_config.seasonal_cycle_mode == SCM_ON_DAY_NIGHT_HOUR)) {
+		// A system clock jump (sleep, daylight saving, a load) resynchronizes without passing the transition hour
+		int passed = (after - before + 1440) % 1440;
+		int until_transition = (clamp (0, 23, is->current_config.transition_season_on_day_night_hour) * 60 - before + 1439) % 1440 + 1;
+		is->current_seasonal_cycle = calculate_current_seasonal_cycle ((until_transition <= passed) &&
+			((mode != DNCM_USER_TIME) || (passed <= 60)));
+	}
+	if (! anchored || (is->current_day_night_cycle != hour) || (is->current_seasonal_cycle != season)) {
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+	}
+}
+
 void __stdcall
 patch_on_timer_0x9F6500 (void)
 {
     if (is->custom_renderer_timer_running) return;
     is->custom_renderer_timer_running = true;
+    if (is->current_config.enable_custom_rendering)
+        advance_day_night_clock ();
     if (is->current_config.enable_custom_rendering &&
         is->custom_renderer_backend_healthy != NULL && ! is->custom_renderer_backend_healthy ()) {
         is->custom_renderer_redraw_pending = true;

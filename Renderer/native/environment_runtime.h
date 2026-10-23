@@ -101,6 +101,33 @@ struct AttachmentState {
 };
 
 EnvironmentState evaluate_environment(float hour, int season);
+// C3X's continuous and user-time clocks: the frame's hour plus whole game
+// minutes, advanced from when its minute began (QPC) at its rate, at most an
+// hour past it (C3X captures every new hour).
+inline float clock_hour(int hour, int minute, int rate, std::int64_t since_qpc,
+                        std::int64_t now_qpc, std::int64_t frequency) {
+    double minutes = minute;
+    if (rate > 0 && since_qpc > 0 && frequency > 0 && now_qpc > since_qpc) {
+        double passed = double(now_qpc - since_qpc) * rate / (double(frequency) * 60.0);
+        minutes += double(static_cast<std::int64_t>(passed < 60.0 ? passed : 60.0));
+    }
+    float result = float(hour) + float(minutes / 60.0);
+    return result >= 24.0f ? result - 24.0f : result;
+}
+// A running C3X clock (continuous or user-time) relights at most this often,
+// in real seconds, adopting the latest minute: under Parallels each change
+// costs about 6 of 60 presented frames (static re-raster, mirror, shadows).
+constexpr double clock_step_seconds = 10.0;
+// C3X's continuous day/night clock: whether a new clock time (same season)
+// replaces the adopted lighting now. Each change re-rasterises the static
+// layers and rebuilds shadow pages, so it waits until the previous change has
+// fully refined, the camera is still and a step is due. The first frame and a
+// season change apply at once.
+inline bool adopt_clock_time(float adopted_hour, int adopted_season, float hour, int season,
+                             bool refinement_pending, bool camera_still, bool step_due) {
+    if (adopted_hour < 0.0f || season != adopted_season) return true;
+    return hour != adopted_hour && !refinement_pending && camera_still && step_due;
+}
 float evaluate_activation(ActivationPolicy policy, float hour, float range_start, float range_end,
                           EnvironmentState const & environment);
 float evaluate_emissive(EmissiveChannel const & channel, EnvironmentState const & environment, float hour);

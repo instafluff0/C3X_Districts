@@ -28,7 +28,13 @@ calibrated against the supplied Civ VI comparison, not decoded engine settings.
 
 Each immutable render frame derives these source-independent values from the captured C3X environment:
 
-- Hour, optional transition fraction, season, and stable presentation timestamp.
+- Hour, minutes past it (frame API 22; nonzero only for C3X's Renderer64-only
+  `continuous` and `user-time` clocks, which Renderer64 advances between
+  captures from `clock_qpc` and `clock_rate`), season, and stable presentation
+  timestamp. A new minute is adopted only after the previous lighting change
+  has fully refined, the camera is still and, for a running clock, at least
+  10 real seconds have passed (`adopt_clock_time`); see the `day-night`
+  category notes.
 - Sun direction, color, intensity, and shadow contribution.
 - Moon direction, color, intensity, and shadow contribution when enabled.
 - A shared stylized shadow projection: direction rotates with hour, but the

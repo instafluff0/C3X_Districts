@@ -2175,6 +2175,12 @@ struct SandboxFreshPipeline {
     unsigned reflection_reuses=0,reflection_draws=0;
     float visual_hour=12.f,visual_sun_intensity=0.f,previous_hour=-1.f;
     int previous_season=INT_MIN;
+    // Day/night clock: the latest frame's clock (C3X's continuous and user-time
+    // minutes advance from it), its time when it first differed from the adopted
+    // one, and the adopted change's refinement receipt (lighting-settled).
+    int clock_frame_hour=0,clock_frame_minute=0,clock_frame_rate=0;long long clock_frame_qpc=0;
+    float requested_hour=-1.f;LARGE_INTEGER lighting_requested_at{},lighting_adopted_at{};
+    unsigned lighting_draws=0;double lighting_static_ms=0;
     std::uint64_t lighting_revision=0;
     std::vector<c3x_renderer::city_fidelity::Lighting const*> selected_lighting;
     bool resident_water_scene=false;
@@ -2835,7 +2841,7 @@ struct SandboxFreshPipeline {
         // The static mirror of terrain, cities and features is unchanged.
         if(projection_zoom<.8f)receivers.clear();
         char cycle[8]{};bool day_night=c3x_renderer::render_core::cached_environment("C3X_SANDBOX_DAY_NIGHT",cycle,sizeof(cycle)) && cycle[0]=='1';
-        float hour=day_night?12.f+24.f*float(frame.presentation_time_ticks)/float(std::max<c3x_renderer_i64>(1,frame.presentation_frequency))/30.f:float(frame.hour);
+        float hour=day_night?12.f+24.f*float(frame.presentation_time_ticks)/float(std::max<c3x_renderer_i64>(1,frame.presentation_frequency))/30.f:visual_hour;
         SandboxDirectUnits::ContributionPlan next;
         if(!sandbox_direct_units.select_real(frame,candidates,hour,projection_zoom,receivers,next))return false;
         bool same=next.entries.size()==unit_contribution_plan.entries.size() &&
@@ -3660,17 +3666,40 @@ struct SandboxFreshPipeline {
         }
         return true;
     }
-    void update_environment(c3x_renderer_frame_v1 const& frame) {
+    // A running clock relights at most every clock_step_seconds; other modes at once.
+    bool clock_step_due(LARGE_INTEGER now,LARGE_INTEGER frequency)const{
+        return clock_frame_rate<=0 || double(now.QuadPart-lighting_adopted_at.QuadPart)>=
+            c3x_renderer::clock_step_seconds*double(frequency.QuadPart);
+    }
+    // A newer clock time than the adopted lighting (a game minute has passed
+    // since the latest frame's) keeps idle frames coming, once a step is due,
+    // until it is adopted.
+    bool lighting_pending()const{
+        if(previous_hour<0.f)return false;
+        LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+        return clock_step_due(now,frequency) && c3x_renderer::clock_hour(clock_frame_hour,clock_frame_minute,
+            clock_frame_rate,clock_frame_qpc,now.QuadPart,frequency.QuadPart)!=previous_hour;
+    }
+    void update_environment(c3x_renderer_frame_v1 const& frame,bool camera_still) {
         char cycle[8]{};
         bool day_night=c3x_renderer::render_core::cached_environment("C3X_SANDBOX_DAY_NIGHT",cycle,
             sizeof(cycle)) && std::strcmp(cycle,"1")==0;
+        LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+        clock_frame_hour=frame.hour;clock_frame_minute=frame.minute;clock_frame_rate=frame.clock_rate;clock_frame_qpc=frame.clock_qpc;
         float hour=day_night?12.f+24.f*float(frame.presentation_time_ticks)/
             float(std::max<c3x_renderer_i64>(1,frame.presentation_frequency))/30.f:
-            float(frame.hour);
-        visual_hour=hour;
+            c3x_renderer::clock_hour(frame.hour,frame.minute,frame.clock_rate,frame.clock_qpc,now.QuadPart,frequency.QuadPart);
         // C3X_RENDERER_SEASON_OVERRIDE (0-3) pins the season for captures; the game clock is unchanged.
         int season=renderer.frame_season(frame);
+        if(hour!=requested_hour){requested_hour=hour;QueryPerformanceCounter(&lighting_requested_at);}
         if(previous_hour==hour && previous_season==season)return;
+        if(!day_night && !c3x_renderer::adopt_clock_time(previous_hour,previous_season,hour,season,
+                static_refinement_pending(projection_zoom),camera_still,clock_step_due(now,frequency)))return;
+        if(previous_hour>=0.f){char detail[160];sprintf_s(detail,"hour=%.4f season=%d previous=%.4f waited_ms=%.1f",
+            hour,season,previous_hour,double(now.QuadPart-lighting_requested_at.QuadPart)*1000/frequency.QuadPart);
+            renderer.trace.write("lighting-adopt",detail,true);}
+        lighting_adopted_at=now;lighting_draws=previous_hour>=0.f?1:0;lighting_static_ms=0;
+        visual_hour=hour;renderer.lighting_hour=hour;
         // Seasons D4: entering or leaving Winter swaps the forest stands. The
         // selection, body placements and casters (and the per-block caster
         // cache, which survives a retirement) follow; shadow pages refresh
@@ -4653,7 +4682,8 @@ struct SandboxFreshPipeline {
         // Lane 1 refines toward the zoom destination while the zoom animates;
         // 0 means "do not refine this lane" (it is animating back to 1x).
         float goal=lane==0?1.f:(!previewable || settled)?zoom:(hint!=1.f?hint:0.f);
-        double budget=previewable?refinement_budget(lane):-1.;
+        double budget=previewable?c3x_renderer::render_core::lighting_refine_budget(refinement_budget(lane),
+            double(region_width_px)*double(region_height_px),lighting_draws!=0):-1.;
         // Its budget follows CPU time, while under Parallels a strip's GPU
         // cost is 8-15 times that: no refinement while the zoom visibly moves.
         bool moving=previewable && zoom_moving();
@@ -5147,7 +5177,11 @@ struct SandboxFreshPipeline {
             double(setup[1].QuadPart-setup[0].QuadPart)*1000/frequency.QuadPart,
             double(setup[2].QuadPart-setup[1].QuadPart)*1000/frequency.QuadPart,
             double(setup[3].QuadPart-setup[2].QuadPart)*1000/frequency.QuadPart);std::fflush(stdout);}
-        update_environment(frame);
+        {   // Day/night: a new clock time waits 0.4 s after the last scroll step or zoom frame.
+            LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+            update_environment(frame,next_camera_x==moved_camera_x && next_camera_y==moved_camera_y &&
+                lane_still[StaticRasters::lane_of(zoom)]>=3 && now.QuadPart-camera_moved_at.QuadPart>=frequency.QuadPart*2/5);
+        }
         char reflection_diagnostic[8]{};
         if(c3x_renderer::render_core::cached_environment("C3X_SANDBOX_SKIP_REFLECTION",
                 reflection_diagnostic,sizeof(reflection_diagnostic)) &&
@@ -5382,6 +5416,14 @@ struct SandboxFreshPipeline {
         // budgeted refinement (never a synchronous full redraw while a usable
         // preview exists). May move `settings` by a sub-pixel snap.
         if(!compose_static(settings,int(w),int(h)))return fail("static_layer");
+        if(lighting_draws){ // cost receipt of one day/night lighting change
+            lighting_static_ms+=last_static_ms;
+            if(!static_refinement_pending(projection_zoom)){LARGE_INTEGER now{};QueryPerformanceCounter(&now);char detail[160];
+                sprintf_s(detail,"hour=%.4f draws=%u static_ms=%.2f elapsed_ms=%.1f",visual_hour,lighting_draws,lighting_static_ms,
+                    double(now.QuadPart-lighting_adopted_at.QuadPart)*1000/frequency.QuadPart);
+                renderer.trace.write("lighting-settled",detail,true);lighting_draws=0;}
+            else ++lighting_draws;
+        }
         if(renderer.trace.level>=2){auto const& d=static_decision;char detail[1536];
             sprintf_s(detail,"zoom=%.4f lane=%u camera=%d,%d slot=%d,%d reusable=%d recenter=%d shifted=%d refine=%d sync=%d preview=%d covers=%d,%d,%d missing=%lld static_ms=%.2f entry=%u home_entry=%u input_kb=%zu repair=%u changed=%u reordered=%u rects=%u percent=%u boot_draw_ms=%.1f boot_deps_ms=%.1f boot_kpx=%lld borrowed=%u proof_ms=%.2f repair_ms=%.2f recenter_ms=%.2f refine_ms=%.2f strip_ms=%.2f restore_ms=%.2f key_diff=%u span_refits=%llu repair_new=%u repair_revised=%u repair_removed=%u repair_shadow=%u repair_ring=%u refine_restarts=%llu",
                 projection_zoom,d.lane,d.camera_x,d.camera_y,d.slot_x,d.slot_y,d.reusable,d.recenter,d.shifted,d.refine,d.sync,d.preview,

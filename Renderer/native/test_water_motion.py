@@ -111,16 +111,22 @@ int main(){
 
     def test_explored_scene_consumes_current_shared_environment(self):
         source=Path('Renderer/sandbox/fresh_pipeline.h').read_text()
-        prefix='void update_environment(c3x_renderer_frame_v1 const& frame) {'+source.split(
-            'void update_environment(c3x_renderer_frame_v1 const& frame) {',1)[1].split(
+        prefix='bool clock_step_due('+source.split(
+            'bool clock_step_due(',1)[1].split(
             'visual_sun_intensity=',1)[0]
         run_cpp(r'''
 #include <algorithm>
 #include <cassert>
 #include <climits>
+#include <cmath>
 #include <cstring>
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/environment_runtime.h"
+#include <cstdio>
+template<unsigned long N,class... A>int sprintf_s(char (&b)[N],char const* f,A... a){return std::snprintf(b,N,f,a...);}
+struct LARGE_INTEGER {long long QuadPart;};
+long long qpc=0;void QueryPerformanceCounter(LARGE_INTEGER* v){v->QuadPart=++qpc;}
+void QueryPerformanceFrequency(LARGE_INTEGER* v){v->QuadPart=1000;}
 bool cycle_enabled=false;
 unsigned GetEnvironmentVariableA(char const*,char* output,unsigned){if(cycle_enabled){output[0]='1';output[1]=0;return 1;}return 0;}
 namespace c3x_renderer {namespace render_core {
@@ -136,8 +142,13 @@ struct Pipeline {
  c3x_renderer::EnvironmentState copied{};
  // Seasons: the renderer's (possibly pinned) frame season and the Winter forest
  // stands, which a Winter flip swaps by retiring the geometry selection.
- struct Renderer {bool winter_season=false;int frame_season(c3x_renderer_frame_v1 const& f)const{return f.season;}} renderer;
+ struct Renderer {bool winter_season=false;float lighting_hour=-1.f;struct {unsigned adopts=0;void write(char const*,char const*,bool){++adopts;}} trace;
+  int frame_season(c3x_renderer_frame_v1 const& f)const{return f.season;}} renderer;
  unsigned retirements=0;void retire_geometry_selection(){++retirements;}
+ // Day/night clock gate inputs: the static layers' refinement state and the adoption receipt.
+ float projection_zoom=1,requested_hour=-1.f;bool refining=false;bool static_refinement_pending(float)const{return refining;}
+ int clock_frame_hour=0,clock_frame_minute=0,clock_frame_rate=0;long long clock_frame_qpc=0;
+ LARGE_INTEGER lighting_requested_at{},lighting_adopted_at{};unsigned lighting_draws=0;double lighting_static_ms=0;
 ''' + prefix + r'''
  copied=environment;
  }
@@ -146,31 +157,58 @@ int main(){
  c3x_renderer_tile_v1 tile{};tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;
  c3x_renderer_frame_v1 frame{};frame.tiles=&tile;frame.tile_count=1;frame.hour=12;frame.season=0;
  frame.presentation_frequency=1000;frame.presentation_time_ticks=1000;
- Pipeline pipeline;pipeline.update_environment(frame);auto noon=pipeline.copied;
+ Pipeline pipeline;pipeline.update_environment(frame,true);auto noon=pipeline.copied;
  assert(noon.sun_intensity>0 && pipeline.lighting_revision==1);
- frame.hour=0;pipeline.update_environment(frame);auto night=pipeline.copied;
+ frame.hour=0;pipeline.update_environment(frame,true);auto night=pipeline.copied;
  assert(night.moon_intensity>0 && night.sun_intensity<noon.sun_intensity);
  assert(pipeline.static_rasters.invalidations==2 && pipeline.lighting_revision==2);
  assert(!pipeline.reflection_valid && !pipeline.reflected_terrain_material_valid);
  // Revealing the same permitted scene does not change or duplicate lighting.
- tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;pipeline.update_environment(frame);
+ tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;pipeline.update_environment(frame,true);
  assert(pipeline.lighting_revision==2 && !std::memcmp(&night,&pipeline.copied,sizeof(night)));
  tile.tile_flags&=~C3X_RENDERER_TILE_VISIBLE;
- frame.season=3;pipeline.update_environment(frame);assert(pipeline.lighting_revision==3);
+ frame.season=3;pipeline.update_environment(frame,true);assert(pipeline.lighting_revision==3);
  // The existing diagnostic environment cycle also uses current presentation
  // time under explored fog; it never promotes gameplay visibility or hour.
- cycle_enabled=true;pipeline.update_environment(frame);auto first=pipeline.copied;
- frame.presentation_time_ticks=15000;pipeline.update_environment(frame);
+ cycle_enabled=true;pipeline.update_environment(frame,true);auto first=pipeline.copied;
+ frame.presentation_time_ticks=15000;pipeline.update_environment(frame,true);
  assert(pipeline.visual_hour==24 && pipeline.lighting_revision==5);
  assert(std::memcmp(&first,&pipeline.copied,sizeof(first)) && frame.hour==0);
  assert(!(tile.tile_flags&C3X_RENDERER_TILE_VISIBLE));
  // Entering and leaving Winter each retire the selection once (forest stands);
  // other season changes only relight.
  assert(pipeline.retirements==0 && !pipeline.renderer.winter_season);
- cycle_enabled=false;frame.season=2;pipeline.update_environment(frame);
+ cycle_enabled=false;frame.season=2;pipeline.update_environment(frame,true);
  assert(pipeline.renderer.winter_season && pipeline.retirements==1 && pipeline.copied.season==2);
- frame.season=1;pipeline.update_environment(frame);
+ frame.season=1;pipeline.update_environment(frame,true);
  assert(!pipeline.renderer.winter_season && pipeline.retirements==2);
+ // C3X's continuous clock (API 22): a new minute waits while the previous
+ // change refines or the camera moves, then applies; the frame keeps asking.
+ frame.hour=17;frame.minute=0;pipeline.update_environment(frame,true);
+ auto revision=pipeline.lighting_revision;assert(pipeline.visual_hour==17.f && pipeline.renderer.lighting_hour==17.f);
+ frame.minute=30;pipeline.refining=true;pipeline.update_environment(frame,true);
+ assert(pipeline.lighting_revision==revision && pipeline.visual_hour==17.f && pipeline.lighting_pending());
+ pipeline.refining=false;pipeline.update_environment(frame,false);
+ assert(pipeline.lighting_revision==revision && pipeline.renderer.lighting_hour==17.f && pipeline.lighting_pending());
+ pipeline.update_environment(frame,true);
+ assert(pipeline.lighting_revision==revision+1 && pipeline.visual_hour==17.5f && pipeline.renderer.lighting_hour==17.5f);
+ assert(!pipeline.lighting_pending() && pipeline.lighting_draws==1);
+ // A season change does not wait for refinement or a still camera.
+ pipeline.refining=true;frame.season=0;pipeline.update_environment(frame,false);
+ assert(pipeline.lighting_revision==revision+2 && pipeline.copied.season==0);
+ // Continuous (20x, QPC 1000/s): with no new frame, Renderer64 advances whole
+ // game minutes from the frame's clock. A running clock relights at most every
+ // 10 s, adopting the latest minute; idle frames resume only when a step is due.
+ auto near=[](float a,float b){return std::fabs(a-b)<1e-5f;};
+ pipeline.refining=false;frame.minute=31;frame.clock_rate=20;frame.clock_qpc=qpc=100000;
+ pipeline.update_environment(frame,true);revision=pipeline.lighting_revision;
+ assert(near(pipeline.visual_hour,17.f+31.f/60.f) && !pipeline.lighting_pending());
+ auto adopted=pipeline.lighting_adopted_at.QuadPart;
+ qpc=adopted+6010;assert(!pipeline.lighting_pending()); // two minutes passed, no step due yet
+ pipeline.update_environment(frame,true);assert(pipeline.lighting_revision==revision && near(pipeline.visual_hour,17.f+31.f/60.f));
+ qpc=adopted+10010;assert(pipeline.lighting_pending());
+ pipeline.update_environment(frame,true);
+ assert(pipeline.lighting_revision==revision+1 && near(pipeline.visual_hour,17.f+34.f/60.f) && !pipeline.lighting_pending());
 }
 ''',sources=('Renderer/native/environment_runtime.cpp',))
 
