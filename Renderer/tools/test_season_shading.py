@@ -112,6 +112,15 @@ class SeasonShading(unittest.TestCase):
         self.assertIn("c3x_open_sea", winter[:winter.index("c3x-season-end")])
         self.assertNotIn("WINTER_ICE_BED", winter[:winter.index("c3x-season-end")])
 
+    def test_spring_flower_ground_keeps_the_turf(self):
+        # User, 2026-10-23: the leaf shade made ground under the flower drifts
+        # look gritty. Only the blooms themselves change the ground's colour.
+        relief = seasons.apply(seasons.TERRAIN, (ROOT / seasons.TERRAIN).read_text())
+        spring = relief[relief.index("c3x-season:spring/ground"):]
+        spring = spring[:spring.index("c3x-season-end")]
+        self.assertNotIn("SPRING_LEAF_SHADE", spring)
+        self.assertIn("albedo = albedo * (1 - spring_bloom.a) + spring_bloom.rgb;", spring)
+
     def test_game_water_recolour_is_relative(self):
         # Coast, Sea and Ocean keep their family tint: a hue offset, never a pull to one hue.
         text = seasons.apply(seasons.WATER_SURFACE, (ROOT / seasons.WATER_SURFACE).read_text())

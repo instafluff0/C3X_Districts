@@ -501,7 +501,8 @@ SPRING_EDITS = [
             spring_hill_lch *= float3(lerp(1, SPRING_HILL_LIGHT, spring_turf), lerp(1, SPRING_HILL_CHROMA, spring_turf), 1);
             spring_hill_lch.z = lerp(spring_hill_lch.z, SPRING_HILL_HUE, spring_turf * SPRING_HILL_PULL);
             albedo = spring_from_lch(spring_hill_lch);
-            albedo *= lerp(1, SPRING_LEAF_SHADE, spring_leaf);
+            // No leaf shade under the drifts (user, 2026-10-23: flower ground
+            // looked gritty); the turf there matches the turf without flowers.
             albedo = albedo * (1 - spring_bloom.a) + spring_bloom.rgb;
             geometric = normalize(lerp(geometric, normalize(lerp(normalize(input.normal), float3(0, 0, 1), SPRING_BLOOM_UP)),
                                        spring_bloom.a * SPRING_BLOOM_NORMAL));
