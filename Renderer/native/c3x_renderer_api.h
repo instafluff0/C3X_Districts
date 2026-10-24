@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 22u
+#define C3X_RENDERER_API_VERSION 23u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -58,6 +58,10 @@ enum c3x_renderer_tile_flags {
     C3X_RENDERER_TILE_CITY_BODY_KNOWN = 524288u,
     C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN = 1048576u,
     C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED = 2097152u
+};
+
+enum c3x_renderer_natural_wonder_flags {
+    C3X_RENDERER_NATURAL_WONDER_NAME = 1u
 };
 
 enum c3x_renderer_invalidation_flags {
@@ -282,6 +286,11 @@ struct c3x_renderer_tile_v1 {
     c3x_renderer_i32 barbarian_tribe_id;
     /* 0 means no city-site overlay; 1..11 are C3X's existing grade + 1. */
     c3x_renderer_u32 city_site_grade;
+    /* API 23: the C3X natural wonder on this tile by its effective config name
+       (empty when none; withheld with every object on unexplored tiles), and its
+       flags (C3X_RENDERER_NATURAL_WONDER_NAME: C3X shows the name on the map). */
+    char natural_wonder[32];
+    c3x_renderer_u32 natural_wonder_flags;
 };
 
 struct c3x_renderer_frame_v1 {

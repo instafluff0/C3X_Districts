@@ -83,9 +83,12 @@
                     out.material_plains=2+.5f*sample.snow*flat_blend;
                     // Volcano material: texture offset from the stamp centre,
                     // coverage, and 2 x activity + authored lava channel.
-                    out.relief_owner_u=sample.volcano_u-.5f;out.relief_owner_v=sample.volcano_v-.5f;
+                    // Without a volcano the owner channel carries a wonder stamp's region weights
+                    // (and its state the region kind; beauty_mountain.hlsl).
+                    out.relief_owner_u=sample.volcano>0?sample.volcano_u-.5f:sample.wonder_ground*flat_blend;
+                    out.relief_owner_v=sample.volcano>0?sample.volcano_v-.5f:sample.wonder_special*flat_blend;
                     out.relief_owner_coverage=sample.volcano;
-                    out.relief_owner_state=2.f*float(sample.activity)+sample.channel;
+                    out.relief_owner_state=sample.volcano>0?2.f*float(sample.activity)+sample.channel:float(sample.wonder_kind);
                     // Mountain stone follows mountain rise in the shader;
                     // this channel exclusively marks hill-owned ground.
                     out.material_desert=surface_hill_support[at]*hill_material(world_x-float(nc),
@@ -103,7 +106,18 @@
                     out.material_marsh=weights[4];
                     out.authored_relief_height=weights[1];
                     out.authored_relief_blend=weights[2];
-                    out.base_terrain=42+coverage*source_weight;
+                    // A natural wonder's relief opens where it falls below the kit's still
+                    // water (drawn by the production water layers), as land does at a shore.
+                    // Height above the water is linear across each triangle, so the shader's
+                    // coverage clip follows the exact waterline rather than the vertex grid.
+                    float wonder_shore=1e9f;
+                    for(unsigned piece=0;piece<mountain_shape.count;++piece)if(mountain_shape.pieces[piece].wonder){
+                        auto const& wonder_piece=mountain_shape.pieces[piece];float rise=0;
+                        if(natural.wonder_water(*wonder_piece.wonder,world_x,world_y,wonder_piece.center_x,
+                                wonder_piece.center_y,&rise)<0)
+                            wonder_shore=std::min(wonder_shore,(elevation-height_natural(wonder_piece.center_x,wonder_piece.center_y,nullptr)-rise)/6.f);
+                    }
+                    out.base_terrain=42+std::max(-.5f,std::min(coverage*source_weight,wonder_shore));
                     grid[y*count+x]=out;
                 }
             }

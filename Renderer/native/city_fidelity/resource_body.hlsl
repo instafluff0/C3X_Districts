@@ -3224,7 +3224,7 @@ float4 q8_effect_over(float4 top,float4 under){
 // zoom, and the upper-left of each puff is sunlit. At night the smoke darkens
 // and its source lights the base. shape: puff period (s), rise, radius at the
 // mouth and its growth; look: tone, sunlit tone and tone gained with height.
-float4 q8_effect_plume(float2 q,float2 pixel,float t,float seed,float strength,float night,float4 shape,float3 look){
+float4 q8_effect_plume(float2 q,float2 pixel,float t,float seed,float strength,float night,float4 shape,float3 look,bool keep=false){
   float H=pixel.x/pixel.y,Y=q.y*H;
   float wind=.45+.3*q8_effect_noise(float2(seed*3,t*.1));
   float alpha=0,tone=0,weight=0;
@@ -3241,10 +3241,81 @@ float4 q8_effect_plume(float2 q,float2 pixel,float t,float seed,float strength,f
   }
   float stem=smoothstep(1,.35,abs(q.x-wind*pow(q.y,1.4))/(.18+.5*q.y))*smoothstep(.22,0,q.y)*smoothstep(0,.015,q.y)*.75;
   alpha=saturate((1-(1-alpha)*(1-stem))*strength)*lerp(1,.75,night);
-  clip(alpha-.004);
+  if(!keep)clip(alpha-.004);
   float grey=saturate((tone+.22*stem)/max(weight+stem,1e-4))*lerp(1,.18,night);
   float glow=exp(-q.y*14)*night*.7*strength;
   return float4(grey+glow,grey*.98+glow*.42,grey*.96+glow*.12,alpha);
+}
+// Natural wonders (docs/natural_wonder_rendering.md): a geyser (94). Each cycle a white water jet climbs
+// from the vent, holds and collapses into a spray crown; steam billows up with it and
+// lingers after; between eruptions the vent only steams. Strength under ~.6 only steams.
+// Water and steam run brighter than smoke (scene white is near 1.3 after grading).
+float4 q8_effect_geyser(float2 q,float2 pixel,float t,float seed,float strength,float night){
+  float H=pixel.x/pixel.y,Y=q.y*H;
+  float phase=frac(t/11.0);
+  float erupt=smoothstep(0,.05,phase)*(1-smoothstep(.30,.46,phase));
+  float steam=smoothstep(.02,.16,phase)*(1-smoothstep(.42,.95,phase));
+  float top=erupt*(.56+.05*sin(t*6.1+seed))*H*saturate((strength-.6)*3);
+  float rise=saturate(Y/max(top,1e-3));
+  float streak=.6*q8_effect_noise(float2(q.x*11+seed,(Y-t*3.5)*1.1))+.4*q8_effect_noise(float2(q.x*23+seed,(Y-t*4.5)*2.6));
+  float wobble=.04*sin(Y*2.7+t*5.3)*rise;
+  float body=abs(q.x-wobble)/(.09+.17*pow(rise,1.5));
+  float jet=smoothstep(1,.35,body+(streak-.5)*.5*rise)*(1-smoothstep(top*.6,top,Y))*step(1e-3,top)*lerp(.95,.55,rise);
+  float2 crown=float2(q.x-wobble,(Y-top*.9)/(.35+.2*top));
+  float spray=exp(-dot(crown,crown)*2.6)*smoothstep(.3,.8,q8_effect_noise(float2(q.x*7+t*1.7,Y*7-t*2.5)))*
+              erupt*step(1e-3,top)*.8;
+  float4 water=float4(float3(1.24,1.28,1.32)*lerp(.9,1.03,streak)*lerp(1,.3,night),saturate((jet*.7+spray*.6)*min(strength,1)));
+  // Steam-only vents (fumaroles) steam steadily; the geyser's steam follows its eruption.
+  float vapour_strength=strength<.6?min(strength*1.35,.7):strength*lerp(.4,.82,steam);
+  float4 vapour=q8_effect_plume(q,pixel,t*.55,seed,vapour_strength,night,
+                                float4(3.6,.66,.2,.5),float3(.86,.14,.03),true);
+  vapour.rgb*=1.3;
+  float4 result=q8_effect_over(water,vapour);
+  clip(result.a-.004);
+  return result;
+}
+// Natural wonders: a waterfall sheet (95) draped down the face from its
+// lip (v=1) to its foot (v=0): streaked water falls fast, widens and frays toward the foot,
+// where the spray (99) takes over.
+float4 q8_effect_waterfall(float2 q,float2 pixel,float t,float seed,float strength,float night){
+  float H=pixel.x/pixel.y,Y=q.y*H,drop=1-q.y;
+  float spread=lerp(.62,.92,pow(drop,1.2));
+  float sway=(q8_effect_noise(float2(Y*.5+seed,t*.6))-.5)*.05*drop;
+  float x=(q.x-sway)/spread;
+  float fall=Y+t*3.4;
+  // Streaks run along the fall (stretched noise), so no cell of the noise lattice shows.
+  float streak=.55*q8_effect_noise(float2(x*4.3+seed,fall*.32))+.3*q8_effect_noise(float2(x*9.7+seed*3,(Y+t*4.6)*.55))
+              +.15*q8_effect_noise(float2(x*21+seed*5,(Y+t*5.2)*1.1));
+  // A steady, full sheet: its edge frays a little, never pinching the fall narrow.
+  float fray=(q8_effect_noise(float2(x*1.3+seed,fall*.45))-.5)*(.1+.3*drop);
+  float body=smoothstep(1,.5,abs(x)+fray);
+  float sheet=body*lerp(.55,1,smoothstep(.2,.8,streak))*lerp(1.0,.65,drop*drop)*smoothstep(0,.1,q.y);
+  float lip=smoothstep(.04,0,drop)*smoothstep(1.3,.6,abs(x));
+  float3 tone=float3(1.30,1.34,1.38)*lerp(.72,1.06,streak)*lerp(1.04,.86,saturate(x*.5+.5));
+  float4 result=float4((tone+lip*.1)*lerp(1,.28,night),saturate((sheet+lip*.5)*strength));
+  clip(result.a-.004);
+  return result;
+}
+// Natural wonders: spray (99) billowing up from a waterfall's plunge
+// pool, fading in above the quad's foot and out below its top.
+float4 q8_effect_spray(float2 q,float2 pixel,float t,float seed,float strength,float night){
+  float H=pixel.x/pixel.y,Y=q.y*H;
+  float mist=0,shade=0;
+  [unroll]for(int k=0;k<8;k++){
+   float cycle=t/3.2+k/8.0,phase=frac(cycle);
+   float r=.22+.3*phase;
+   float2 c=float2((q8_effect_noise(float2(seed*5+k,floor(cycle)))-.5)*.5,r*1.1+.08+phase*max(H-1.1,.2)*.65);
+   float2 d=(float2(q.x,Y)-c)/r;
+   float erode=(q8_effect_noise(float2(q.x*3.4+k*1.7,Y*3.4-t*.5))-.5)*.75;
+   float a=smoothstep(1,.3,length(d)+erode)*smoothstep(0,.12,phase)*pow(1-phase,1.1)*.65;
+   mist=1-(1-mist)*(1-a);shade+=a*saturate(.6-.4*d.x+.4*d.y);
+  }
+  float haze=exp(-pow((Y-.32)/.26,2))*smoothstep(.85,.15,abs(q.x))*.14
+             *(.5+q8_effect_noise(float2(q.x*2.6+t*.25+seed,Y*2.2-t*.4)));
+  mist=(1-(1-mist)*(1-haze))*smoothstep(0,.3,Y)*smoothstep(H,H*.65,Y)*smoothstep(1,.7,abs(q.x));
+  float4 result=float4(float3(1.18,1.21,1.25)*lerp(.9,1.05,saturate(shade))*lerp(1,.28,night),saturate(mist*strength));
+  clip(result.a-.004);
+  return result;
 }
 float4 q8_city_effect(FeaturePixelInput p){
  float kind=round(p.material_index-90),seed=clamp(p.city_ao_uv.x,0,64),strength=clamp(p.city_ao_uv.y,0,2);
@@ -3253,7 +3324,8 @@ float4 q8_city_effect(FeaturePixelInput p){
  // it inside so no pow() sees a negative base (NaN feeds bloom as stars).
  float2 q=float2(clamp(p.uv.x,-1,1),saturate(p.uv.y));
  // Quad units per pixel along each screen axis keep shapes round at any zoom.
- float2 pixel=float2(max(abs(ddx(p.uv.x)),1e-5),max(abs(ddy(p.uv.y)),1e-5));
+ float2 pixel=float2(max(length(float2(ddx(p.uv.x),ddy(p.uv.x))),1e-5),
+                     max(length(float2(ddx(p.uv.y),ddy(p.uv.y))),1e-5));
  if(kind<.5){
   float v=(q.y-.3)/.7,flicker=.85+.15*sin(t*11+seed*6.3)+.12*(q8_effect_noise(float2(t*6,seed*9))-.5);
   float tip=.78*flicker,sway=(q8_effect_noise(float2(t*2.7+v*1.5,seed*5))-.5)*.4*saturate(v);
@@ -3274,6 +3346,9 @@ float4 q8_city_effect(FeaturePixelInput p){
  }
  // Chimney smoke drifts at 0.6 of the clock: a slow, subtle plume.
  if(kind<1.5)return q8_effect_plume(q,pixel,t*.6,seed,strength,night,float4(2.6,.82,.3,.55),float3(.13,.36,.08));
+ if(kind>3.5 && kind<4.5)return q8_effect_geyser(q,pixel,t,seed,strength,night);
+ if(kind>4.5 && kind<5.5)return q8_effect_waterfall(q,pixel,t,seed,strength,night);
+ if(kind>8.5 && kind<9.5)return q8_effect_spray(q,pixel,t,seed,strength,night);
  if(kind>2.5){
   // A volcano's plume (93): a darker, slower ash column; strength 1.6
   // (erupting) thickens it, quickens it and lights its base from the crater.

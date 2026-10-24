@@ -308,7 +308,9 @@ void append_effects(Library const& library,std::vector<EffectAnchor> const& anch
     for(auto const& a:anchors){
         auto const& e=a.effect;
         // Smoke rises from its anchor; flames and lights centre on theirs.
-        bool rises=e.kind==float(effect_smoke) || e.kind==float(effect_volcano_plume);
+        // Natural-wonder geysers and spray rise from their foot too.
+        bool rises=e.kind==float(effect_smoke) || e.kind==float(effect_volcano_plume) ||
+            e.kind==float(effect_geyser) || e.kind==float(effect_spray);
         float half=e.width*.5f,low=rises?0.f:-.5f*e.height,high=low+e.height;
         float uv[4][2]={{-1,0},{1,0},{1,1},{-1,1}};
         unsigned base=unsigned(corners.size());
@@ -342,6 +344,73 @@ bool volcano_plume(Library const& library,int nc,int nr,float crater,bool erupti
             float((unsigned(nc)*73u^unsigned(nr)*151u)%64u),erupting?1.6f:1.f}};
     auto before=output.chunks.size();
     append_effects(library,{plume},std::make_shared<Lighting>(),project_natural,indexed,output);
+    return output.chunks.size()>before;
+}
+// A natural wonder's attached effects (docs/natural_wonder_rendering.md). A record is
+// kind, foot and top offsets from the tile centre, lift (mountain units), width, height
+// (tile units; 0 reaches the lifted top on screen), strength and seed. Waterfalls (5)
+// are a ribbon draped from the top point down the face to the foot, standing off it by
+// the lift; the rest are camera-facing quads rising from the foot.
+template<class Surface,class Project>
+bool wonder_effects(Library const& library,int nc,int nr,std::vector<float> const& records,
+        Surface surface,Project project_natural,bool indexed,Surfaces& output){
+    std::vector<EffectAnchor> anchors;
+    Chunk ribbon;ribbon.material=library.effect_material;ribbon.lighting=std::make_shared<Lighting>();
+    ribbon.terrain_conforming=true;ribbon.effect=true;
+    std::vector<fidelity::MapVertex> strip;
+    for(std::size_t i=0;i+10<=records.size();i+=10){
+        float const* e=records.data()+i;
+        float fx=float(nc)+.5f+e[1],fy=float(nr)+.5f+e[2],tx=float(nc)+.5f+e[3],ty=float(nr)+.5f+e[4];
+        if(e[0]>float(effect_lake)-.5f && e[0]<float(effect_channel)+.5f)continue;  // water layers (c3x_renderer.cpp)
+        if(e[0]==float(effect_waterfall)){
+            float dx=tx-fx,dy=ty-fy,length=std::max(std::sqrt(dx*dx+dy*dy),1e-4f);
+            float ax=-dy/length*e[6]*.5f,ay=dx/length*e[6]*.5f;
+            unsigned base=unsigned(strip.size());constexpr int steps=32;
+            // Free fall: from the lip the water drops on a smooth arc to its foot instead of
+            // following each ledge of the face; it stays clear of the rock, smoothed so a
+            // ledge bends it gently rather than in a step.
+            float top=surface(tx,ty)+e[5],bottom=surface(fx,fy)+e[5]*.5f;
+            std::array<float,steps+1> clear{},fall{};
+            for(int s=0;s<=steps;++s){
+                float v=float(s)/steps,x=fx+dx*v,y=fy+dy*v,p=1-v;
+                clear[s]=std::max({surface(x,y),surface(x+ax,y+ay),surface(x-ax,y-ay)})+e[5]*.6f;
+                fall[s]=std::max(top-(top-bottom)*p*p,clear[s]);
+            }
+            for(int pass=0;pass<4;++pass)for(int s=1;s<steps;++s)
+                fall[s]=std::max(clear[s],(fall[s-1]+2*fall[s]+fall[s+1])*.25f);
+            for(int s=0;s<=steps;++s){
+                float v=float(s)/steps,x=fx+dx*v,y=fy+dy*v,z=fall[s];
+                for(int side=-1;side<=1;side+=2){
+                    auto out=project_natural(x+ax*side,y+ay*side,z);
+                    out.u=float(side);out.v=v;out.normal_x=out.normal_y=0;out.normal_z=1;
+                    out.macro_u=e[9];out.macro_v=e[8];
+                    out.material_grass=1;out.material_plains=out.material_desert=out.material_marsh=0;
+                    out.authored_relief_height=out.authored_relief_blend=0;
+                    out.relief_owner_u=e[6];out.relief_owner_v=length;
+                    out.base_terrain=90.f+e[0];strip.push_back(out);
+                }
+            }
+            for(unsigned s=0;s<unsigned(steps);++s){
+                unsigned a=base+2*s,quad[]={a,a+1,a+3,a,a+3,a+2};
+                ribbon.indices.insert(ribbon.indices.end(),std::begin(quad),std::end(quad));
+            }
+            continue;
+        }
+        float foot=surface(fx,fy),height=e[7];
+        if(!(height>0)){
+            auto a=project_natural(fx,fy,foot),b=project_natural(tx,ty,surface(tx,ty)+e[5]),
+                 c=project_natural(fx,fy,foot+112.f);
+            height=(a.y-b.y)/std::max(1e-3f,a.y-c.y);
+        }
+        anchors.push_back({{fx,fy,foot/112},Effect{{0,0,0},e[0],e[6],std::max(height,.05f),e[9],e[8]}});
+    }
+    auto before=output.chunks.size();
+    append_effects(library,anchors,std::make_shared<Lighting>(),project_natural,indexed,output);
+    if(!strip.empty() && library.effect_material<library.materials.size()){
+        if(indexed)ribbon.vertices=std::move(strip);
+        else {for(unsigned index:ribbon.indices)ribbon.vertices.push_back(strip[index]);ribbon.indices.clear();}
+        output.chunks.push_back(std::move(ribbon));
+    }
     return output.chunks.size()>before;
 }
 template<class Height,class Project,class Stop=ContinueCompilation,class Site=EverySite>

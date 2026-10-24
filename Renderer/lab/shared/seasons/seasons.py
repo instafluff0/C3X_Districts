@@ -314,6 +314,9 @@ float4 q8_effect_flurry(float2 q,float2 pixel,float t,float seed,float strength,
 WINTER_EDITS = [
     before("winter/library", NATURAL, SHADE, library("winter_natural.hlsl")),
     before("winter/library", INTEGRATED, RAW_FEATURE, library("winter_integrated.hlsl")),
+    # Natural-wonder bodies: the renderer binds this only while a wonder body draws (x 1, y its
+    # kit's snow floor in relief units); unbound it reads zero (docs/natural_wonder_rendering.md).
+    before("winter/library", FIELD_SET, RAW_FEATURE, "cbuffer C3XWonderBody : register(b13) { float4 c3x_wonder_body; };\n"),
     before("winter/ground", [TERRAIN], RELIEF_LIGHT, "    float winter_snow = 0;\n" + guard(WINTER, """        float kind = input.material.y;
         float3 mesh_normal = normalize(input.normal);
         float slope = 1 - saturate(mesh_normal.z);
@@ -348,6 +351,9 @@ WINTER_EDITS = [
     before("winter/mountain", [MOUNTAIN], MOUNTAIN_ALBEDO_END, "    float winter_snow = 0;\n" + guard(WINTER, """        float ground_cover = winter_cover(1, height_detail, 1 - saturate(normalize(input.normal).z), input.world.xy);
         float rock_cover = smoothstep(WINTER_MTN_UP_LOW, WINTER_MTN_UP_HIGH, normal.z) * 0.85;
         winter_snow = lerp(ground_cover, rock_cover, rock_albedo_coverage);
+        // A natural wonder's geothermal basin (region kind 2; docs/natural_wonder_rendering.md) stays bare.
+        if (input.volcano_owner.z < 0.001 && abs(input.volcano_owner.w - 2) < 0.5)
+            winter_snow *= 1 - saturate(input.volcano_owner.y * 1.6);
         float3 rock_lch = winter_lch(albedo) * float3(WINTER_ROCK_LIGHT, WINTER_ROCK_CHROMA, 1);
         float3 bare = lerp(winter_dormant(albedo), winter_from_lch(rock_lch), rock_albedo_coverage);
         albedo = lerp(bare, winter_snow_albedo(height_detail, input.world.xy), winter_snow);
@@ -460,7 +466,14 @@ WINTER_EDITS = [
             float cover = lerp(smoothstep(WINTER_OBJ_UP_LOW, WINTER_OBJ_UP_HIGH, winter_up.z) * WINTER_OBJ_COVER,
                                WINTER_DECAL_COVER, flat_decal);
             cover *= 0.7 + 0.6 * winter_noise(winter_world * 23.0);
-            albedo = lerp(lerp(albedo, winter_dormant(albedo), WINTER_OBJ_DORMANT), winter_white, saturate(cover));
+            // Natural-wonder bodies (C3XWonderBody; docs/natural_wonder_rendering.md): bare at and
+            // below the water plus their kit's snow floor, and lighter on foliage.
+            float wonder_dry = 1;
+            if (c3x_wonder_body.x > 0.5) {
+                wonder_dry = smoothstep((2.6 + c3x_wonder_body.y) / 112.0, (6.0 + c3x_wonder_body.y) / 112.0, input.q6_world.z);
+                cover *= wonder_dry * lerp(1.0, 0.45, saturate((albedo.g - albedo.r) * 25 + 0.75));
+            }
+            albedo = lerp(lerp(albedo, winter_dormant(albedo), WINTER_OBJ_DORMANT * wonder_dry), winter_white, saturate(cover));
         }""")),
     between("winter/roads", [HYDROLOGY], ROAD_HEAD, ROAD_TAIL, guard(WINTER, """            track_albedo = lerp(winter_dormant(track_albedo) * WINTER_ROAD_DARK,
                 winter_snow_tex(input.macro_uv * 2.0) * 0.85, WINTER_ROAD_SNOW * (1 - coverage));""")),

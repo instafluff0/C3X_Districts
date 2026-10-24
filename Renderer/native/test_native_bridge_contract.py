@@ -379,7 +379,7 @@ int main() {
             "has_effect", "river_code", "road_mask", "railroad_mask", "route_style",
             "resource_id", "resource_class", "resource_name", "city_id",
             "city_owner_id", "city_size", "city_culture_group",
-            "city_era", "city_flags",
+            "city_era", "city_flags", "natural_wonder", "natural_wonder_flags",
         ):
             self.assertIn(required, signature)
         for retained_only in (

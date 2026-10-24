@@ -10,7 +10,7 @@
 
 namespace c3x_inputs {
 using Bytes=std::vector<unsigned char>;
-constexpr std::uint32_t protocol_version=13;
+constexpr std::uint32_t protocol_version=14;
 constexpr std::size_t payload_limit=16u*1024u*1024u;
 inline void require(bool condition,char const* message){if(!condition)throw std::runtime_error(message);}
 struct Writer {
@@ -134,6 +134,8 @@ template<class IO,class Value>void c3x_renderer_tile_v1_fields(IO& io,Value& v){
     io(v.unit_type_name);
     io(v.barbarian_tribe_id);
     io(v.city_site_grade);
+    io(v.natural_wonder);
+    io(v.natural_wonder_flags);
 }
 // Explicit protocol fields; test coverage fails when the ABI adds a field.
 template<class IO,class Value>void c3x_renderer_unit_v1_fields(IO& io,Value& v){

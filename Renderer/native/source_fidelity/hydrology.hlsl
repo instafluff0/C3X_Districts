@@ -1254,6 +1254,10 @@ float q6_receiver_visibility(PixelInput input,float3 normal,float legacy_shadow)
   water=water || (input.surface_kind>8.5 && input.surface_kind<9.5);
   // Main t25 aliases a feature-only source binding; Q0 binds one common field.
   float visibility=q6_world_visibility(pickup_shadow_terrain,input.q6_world,normal,water);
+  // Natural wonders (docs/natural_wonder_rendering.md): a wonder's lake or fjord channel
+  // (shape_visibility.x 2, which no other water writes) keeps a third of the cast shadow,
+  // so water between its walls still reads as water, as in the approved Lab look.
+  if(water && input.shape_visibility.x>1.5)visibility=lerp(1.0,visibility,.35);
   return visibility;
  }
 #endif

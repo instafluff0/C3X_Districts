@@ -101,6 +101,13 @@ seated on the drawn mountain foot.
 resource look. The first run after a shader change recompiles during load and
 may not reach the last target; run it again.
 
+`-Route 'x,y,width;...'` (up to 32 points: native camera pixels and a zoom
+width of 64-384) turns each F24 step of a scenario into the next camera stop
+(`parse_custom_renderer_test_route`). With `-Scenario debug-scroll -Seconds 190`
+it surveys the whole revealed map, e.g. every natural wonder at 2x and 1x. The
+steps posted while the reveal builds arrive together, so start the route with
+about eight copies of the first stop.
+
 `-Scenario reveal-scroll -Seconds 240 -SampleHz 10 -MeasureCadence -ProfileRenderer`
 extends the fresh 4000 BC `research-turn` witness: found a city, zoom to 1.75×,
 move the worker and Scout through three reveals, finish the first turn, then

@@ -20,6 +20,7 @@
 #include <sstream>
 #include "../native/gpu_territory_borders.h"
 #include "../native/gpu_city_site_overlay.h"
+#include "../native/gpu_wonder_labels.h"
 
 inline auto& sandbox_active_reflection() {
 #ifdef C3X_RENDERER64_FRESH
@@ -1499,6 +1500,16 @@ struct SandboxSceneShadow {
     }
     bool bind_cutout(unsigned layer) {
         auto* context=renderer.context;
+        if (layer>=20000) {
+            // Natural-wonder bodies: the wonder bundle's textures where the resource bundle's sit.
+            std::array<ID3D11ShaderResourceView*,33> views{};
+            std::copy(renderer.feature_texture_views.begin(),renderer.feature_texture_views.end(),views.begin());
+            std::copy(renderer.river_rock_texture_views.begin(),renderer.river_rock_texture_views.end(),views.begin()+8);
+            std::copy(renderer.bridge_texture_views.begin(),renderer.bridge_texture_views.end(),views.begin()+13);
+            auto wonder=renderer.wonder_views();std::copy(wonder.begin(),wonder.end(),views.begin()+21);
+            std::copy(renderer.city_base_views.begin(),renderer.city_base_views.end(),views.begin()+29);
+            context->PSSetShaderResources(0,33,views.data());return true;
+        }
         if (layer>=10000) {
             auto mask=renderer.cities.materials[layer-10000][6];
             context->PSSetShaderResources(34,1,&mask);return mask!=nullptr;
@@ -1959,6 +1970,7 @@ struct SandboxFreshPipeline {
     SandboxSceneShadow shadow;
     c3x_renderer::city_fidelity::Glow glow;
     c3x_renderer::GpuCitySiteOverlay city_site_overlay;
+    c3x_renderer::GpuWonderLabels wonder_labels;
     SandboxBloom bloom;
     c3x_renderer::render_core::LinearTarget static_cache;
     using StaticRasters=c3x_renderer::render_core::StaticRasterStates<c3x_renderer::render_core::LinearTarget>;
@@ -2983,7 +2995,8 @@ struct SandboxFreshPipeline {
             layer==geometry_water || layer==geometry_river || layer==geometry_shadow || layer==geometry_route));
         unsigned const pulled_stride=pulled_feature_layer?48u:168u;
         auto pulled_eligible=[pulled_stride,pulled_feature_layer](GeometryDrawReference const& record){auto const& m=record.content();
-            return !m.rigid_source && !m.animation_texture && !m.resource_instance && m.city_material==0xffffffffu &&
+            return !m.rigid_source && !m.animation_texture && !m.resource_instance && !m.wonder_body &&
+                m.city_material==0xffffffffu &&
                 (m.vertex_stride==pulled_stride || (!pulled_feature_layer && m.elided)) && m.vertex_count && m.buffer && m.indices &&
                 (m.index_format==DXGI_FORMAT_R16_UINT || m.index_format==DXGI_FORMAT_R32_UINT);};
         char emission_control[8]={};
@@ -3218,6 +3231,8 @@ struct SandboxFreshPipeline {
                     context->PSSetSamplers(0,2,samplers);
                 }
                 if(mesh.animation_texture)context->PSSetShaderResources(116,1,&mesh.animation_texture);
+                if(mesh.wonder_body){context->PSSetShaderResources(116,8,renderer.wonder_views().data());
+                    renderer.bind_wonder_body(context,mesh.wonder_snow_floor);}
                 if(mesh.resource_instance){
                     context->IASetInputLayout(renderer.resource_input_layout);
                     context->VSSetConstantBuffers(8,1,&mesh.resource_instance);
@@ -3261,6 +3276,8 @@ struct SandboxFreshPipeline {
                 }
                 if(mesh.animation_texture)context->PSSetShaderResources(116,1,
                     renderer.resource_texture_views.data());
+                if(mesh.wonder_body){context->PSSetShaderResources(116,8,renderer.resource_texture_views.data());
+                    renderer.unbind_wonder_body(context);}
                 i=end;
             }
             selected.clear();return true;
@@ -3700,12 +3717,14 @@ struct SandboxFreshPipeline {
             renderer.trace.write("lighting-adopt",detail,true);}
         lighting_adopted_at=now;lighting_draws=previous_hour>=0.f?1:0;lighting_static_ms=0;
         visual_hour=hour;renderer.lighting_hour=hour;
-        // Seasons D4: entering or leaving Winter swaps the forest stands. The
+        // Seasons: a change that shows or hides any season stand (forest and
+        // natural-wonder pines at Winter's edges) swaps the stands. The
         // selection, body placements and casters (and the per-block caster
         // cache, which survives a retirement) follow; shadow pages refresh
         // where the casters changed.
-        renderer.winter_season=season==2;
-        if(previous_season!=INT_MIN && (previous_season==2)!=(season==2)){
+        renderer.season_index=season&3;
+        if(previous_season!=INT_MIN &&
+           c3x_renderer::render_core::season_stands_differ(renderer.season_stands_used,previous_season,season)){
             retire_geometry_selection();
 #ifdef C3X_RENDERER64_FRESH
             shadow.block_casters.clear();

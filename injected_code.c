@@ -29199,6 +29199,15 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 				strncpy (record->resource_name, resource->Name, sizeof record->resource_name);
 				record->resource_name[(sizeof record->resource_name) - 1] = '\0';
 			}
+			// API 23: the natural wonder here, by its config name (Renderer64 draws its kit and name).
+			struct district_instance * wonder = is->current_config.enable_natural_wonders ? get_district_instance (tile) : NULL;
+			struct natural_wonder_district_config const * nw = ((wonder != NULL) && (wonder->district_id == NATURAL_WONDER_DISTRICT_ID)) ?
+				get_natural_wonder_config_by_id (wonder->natural_wonder_info.natural_wonder_id) : NULL;
+			if ((nw != NULL) && (nw->name != NULL)) {
+				strncpy (record->natural_wonder, nw->name, sizeof record->natural_wonder);
+				record->natural_wonder[(sizeof record->natural_wonder) - 1] = '\0';
+				record->natural_wonder_flags = is->current_config.show_natural_wonder_name_on_map ? C3X_RENDERER_NATURAL_WONDER_NAME : 0;
+			}
 
 			capture_custom_renderer_city_body (record, get_city_ptr (tile->vtable->m45_Get_City_ID (tile)));
 			if (record->tile_flags & C3X_RENDERER_TILE_EXPLORED)
@@ -33668,8 +33677,10 @@ patch_Main_Screen_Form_draw_city_hud (Main_Screen_Form * this, int edx, PCX_Imag
 	if (is->custom_renderer_hud_canvas != NULL) custom_renderer_hud_scope (NULL, 0, 0, 0, -1);
 	is->custom_renderer_hud_canvas = previous_hud;
 
+	// Renderer64 draws natural-wonder names itself, under its fog.
 	bool draw_natural_wonders = is->current_config.enable_natural_wonders &&
-	                            is->current_config.show_natural_wonder_name_on_map;
+	                            is->current_config.show_natural_wonder_name_on_map &&
+	                            ! (is->current_config.enable_custom_rendering && (is->custom_renderer_module != NULL));
 	bool draw_named_tiles = is->current_config.enable_named_tiles;
 
 	if (canvas == NULL)

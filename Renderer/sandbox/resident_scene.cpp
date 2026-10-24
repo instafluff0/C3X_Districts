@@ -595,6 +595,16 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
                 texture.Get(),frame,sandbox_fresh.glow.linear.depth_texture,4,zoom);
     }
     if(!presented && !failed_step)failed_step="site_overlay";
+    // Natural-wonder names: map text under the fog, as Civ III draws its fog last.
+    // A failed label pass leaves the frame without names rather than unpublished.
+    if(presented){
+        Microsoft::WRL::ComPtr<ID3D11Resource> resource;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        target->GetResource(&resource);
+        if(FAILED(resource.As(&texture)) ||
+           !sandbox_fresh.wonder_labels.draw(renderer.device,renderer.context,texture.Get(),frame,zoom))
+            renderer.trace.write("wonder-labels","label pass failed",true);
+    }
     // The sandbox draws a fully visible scene. Game frames finish with the
     // existing GPU fog pass, including independent animation frames. Apply it
     // to this publication target, preserving the reusable HDR scene underneath.

@@ -36,6 +36,9 @@ constexpr unsigned instance_site_optional=1u,instance_accent=2u,instance_tree=4u
 // model-space point. Width is in tile widths, height in world height units.
 // Volcano plumes come from the terrain, not the pack (city_fidelity::volcano_plume).
 enum EffectKind:unsigned {effect_flame=0,effect_smoke=1,effect_night_light=2,effect_volcano_plume=3,effect_kind_count};
+// Natural-wonder effect records (NaturalWonderRuntime): kinds outside the city packs'
+// range; 6 is Winter's flurry. Lake and channel records are water, not quads.
+enum WonderEffectKind:unsigned {effect_geyser=4,effect_waterfall=5,effect_lake=7,effect_channel=8,effect_spray=9};
 struct Effect {float position[3],kind,width,height,seed,intensity;};
 static_assert(sizeof(Effect)==32,"city effect wire contract");
 struct Instance {

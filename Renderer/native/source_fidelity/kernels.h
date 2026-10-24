@@ -1,7 +1,8 @@
 // Generated selected r13 numerical kernels; see prepare.py and provenance.json.
 #pragma once
 namespace c3x_renderer { namespace fidelity {
-struct Tile { int source_x,source_y,column,row,real; };
+// wonder: a natural wonder's topology relief slot (render_core::Tile::wonder).
+struct Tile { int source_x,source_y,column,row,real; unsigned wonder=0; };
 using BiqWindowTile=Tile;
 struct Hill {
     float x, y, radius_x, radius_y, height, angle, source_u, source_v;

@@ -149,6 +149,7 @@ bool c3x_renderer64_select_units(c3x_renderer_frame_v1 const& frame,
 #endif
 #include "rigid_object_gpu.h"
 #include "render_core/compressed_world_store.h"
+#include "render_core/season_stand.h"
 #include "render_core/prepared_world_validity.h"
 #include "render_core/residency_candidates.h"
 #include "render_core/world_input_capture.h"
@@ -324,9 +325,12 @@ struct CachedVertexChunk {
     unsigned city_material=0xffffffffu;
     bool city_environment=false;
     bool city_effect=false; // attached effect quads: per-frame layer, visual clock
-    // Seasons D4: 0 every season; 1 a summer forest stand hidden in Winter;
-    // 2 its precomputed Winter stand, drawn only in Winter.
+    // Seasons: the seasons this chunk draws in (render_core/season_stand.h);
+    // 0 every season. Forest stands and natural-wonder pines.
     unsigned char season_stand=0;
+    // A natural-wonder body: drawn with the wonder bundle's textures for the frame
+    // season (RendererState::wonder_views) in slots 116-123.
+    bool wonder_body=false;float wonder_snow_floor=0;
     float city_atlas[4]={};
     std::shared_ptr<c3x_renderer::city_fidelity::Lighting> city_lighting;
     float natural_projection[4] = {};
@@ -1178,8 +1182,9 @@ public:
     c3x_renderer::fidelity::PatchDetail patch_detail;
     unsigned patch_pixels=0;
     bool tree_instances_enabled=false;
-    // Frame season 2: forest tiles draw their Winter stands (seasons D4).
-    bool winter_season=false;
+    // The frame's season (0..3) and the season stands its chunks carry (bit m:
+    // a chunk with stand m exists).
+    int season_index=0;std::uint16_t season_stands_used=0;
     std::map<unsigned,ID3D11Buffer*> terrain_patch_indices;
     std::size_t terrain_patch_index_bytes=0;
     unsigned frame_patch_index_reuses=0;
@@ -1313,6 +1318,11 @@ public:
     c3x_renderer::FeatureBundle resource_bundle;
     std::array<std::vector<std::uint8_t>, 8> resource_texture_dds;
     std::array<ID3D11ShaderResourceView *, 8> resource_texture_views = {};
+    // Natural-wonder bodies (NaturalWonderRuntime): their own composition bundle and up
+    // to eight season atlases that wonders.bin's season slot table swaps in.
+    c3x_renderer::FeatureBundle wonder_bundle;
+    std::array<std::vector<std::uint8_t>, 8> wonder_texture_dds, wonder_season_dds;
+    std::array<ID3D11ShaderResourceView *, 8> wonder_texture_views = {}, wonder_season_views = {};
     c3x_renderer::FeatureBundle city_bundle;
     std::array<std::vector<std::uint8_t>, 4> city_base_dds;
     std::array<ID3D11ShaderResourceView *, 4> city_base_views = {};
@@ -1372,6 +1382,7 @@ public:
     bool water_motion=true,water_scene_active=false;
     unsigned visible_water_animations=0;
     ID3D11Buffer* water_frame=nullptr;
+    ID3D11Buffer* wonder_body_buffer=nullptr;
     bool wave_attempted=false,wave_ready=false;
     ID3D11PixelShader* wave_shader=nullptr;
     ID3D11Buffer* wave_frame=nullptr;
@@ -1519,6 +1530,7 @@ public:
     bool river_assets_ready = false;
     bool route_assets_ready = false;
     bool resource_assets_ready = false;
+    bool wonder_assets_ready = false;
     float resource_look[4] = {};   // gain, saturation of resource bodies, as the units' look
     bool city_assets_ready = false;
     bool mine_assets_ready = false;
@@ -1819,6 +1831,10 @@ public:
             release(view);
         for (ID3D11ShaderResourceView *& view : resource_texture_views)
             release(view);
+        for (ID3D11ShaderResourceView *& view : wonder_texture_views)
+            release(view);
+        for (ID3D11ShaderResourceView *& view : wonder_season_views)
+            release(view);
         for (ID3D11ShaderResourceView *& view : city_base_views)
             release(view);
         for (ID3D11ShaderResourceView *& view : city_emissive_views)
@@ -1856,7 +1872,7 @@ public:
         release(resource_shadow_shader);
         release(feature_vertex_shader);
         release(pixel_shader);
-        reset_waves();release(wave_shader);release(wave_frame);release(water_frame);
+        reset_waves();release(wave_shader);release(wave_frame);release(water_frame);release(wonder_body_buffer);
         for(auto&view:wave_views)release(view);
         wave_attempted=wave_ready=false;
         release(vertex_shader);
@@ -2421,6 +2437,11 @@ public:
             resource_texture_dds[index].clear();
         }
         resource_bundle = {};
+        for (std::size_t index = 0; index < wonder_texture_views.size(); ++index) {
+            release(wonder_texture_views[index]);release(wonder_season_views[index]);
+            wonder_texture_dds[index].clear();wonder_season_dds[index].clear();
+        }
+        wonder_bundle = {};wonder_assets_ready = false;
         for (std::size_t index = 0; index < city_base_views.size(); ++index) {
             release(city_base_views[index]);
             release(city_emissive_views[index]);
@@ -2964,6 +2985,17 @@ public:
         std::string resource_root = packs_root + "\\" + resource_pack;
         resource_assets_ready = load_runtime_bundle(
             resource_root, "resource_runtime.bin", resource_bundle, resource_texture_dds, true);
+        // Natural-wonder bodies: optional; without the pack wonder tiles keep their terrain.
+        std::string wonder_root = packs_root + "\\NaturalWonderRuntime";
+        wonder_assets_ready = load_runtime_bundle(
+            wonder_root, "resource_runtime.bin", wonder_bundle, wonder_texture_dds, true);
+        for (std::size_t index = 0; wonder_assets_ready && index < wonder_season_dds.size(); ++index) {
+            std::string name = "textures\\season_" + std::to_string(index) + ".dds";
+            if (!load_dds_bytes(wonder_root.c_str(), name.c_str(), wonder_season_dds[index],
+                                DXGI_FORMAT_BC1_UNORM_SRGB, DXGI_FORMAT_BC1_UNORM) &&
+                !load_dds_bytes(wonder_root.c_str(), name.c_str(), wonder_season_dds[index], DXGI_FORMAT_BC3_UNORM_SRGB))
+                wonder_season_dds[index].clear();
+        }
         // Resource bodies take a readability look like the units' (the pack's look.json:
         // look_gain, look_saturation; zeros keep the authored response).
         // C3X_RENDERER_RESOURCE_LOOK=gain,saturation overrides it for review.
@@ -3822,6 +3854,15 @@ public:
             for (std::size_t index = 0; index < resource_texture_views.size(); ++index)
                 resource_assets_ready = resource_assets_ready && ensure_dds_texture(
                     resource_texture_dds[index], resource_texture_views[index], true);
+        }
+        if (wonder_assets_ready) {
+            for (std::size_t index = 0; index < wonder_texture_views.size(); ++index)
+                wonder_assets_ready = wonder_assets_ready && ensure_dds_texture(
+                    wonder_texture_dds[index], wonder_texture_views[index], true);
+            for (std::size_t index = 0; index < wonder_season_views.size(); ++index)
+                if (!wonder_season_dds[index].empty() &&
+                    !ensure_dds_texture(wonder_season_dds[index], wonder_season_views[index], true))
+                    wonder_season_dds[index].clear();
         }
         if (mine_assets_ready) {
             for (std::size_t index = 0; index < mine_base_views.size(); ++index)
@@ -4974,7 +5015,7 @@ public:
                 if(identity!=std::size_t(-1)) {
                     auto hash=c3x_renderer::stable_hash(unsigned(identity)*193u+71u);
                     float seed=c3x_renderer::stable_random(hash),seed2=c3x_renderer::stable_random(hash+23u);
-                    auto ribbon=indexed_wave_ribbon(coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed));
+                    auto ribbon=indexed_wave_ribbon(coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed,&natural.wonder_pack));
                     cell.bytes=ribbon.vertices.size()*sizeof(Vertex)+ribbon.indices.size()*sizeof(unsigned);
                     if(!make_wave_cell_room(cell.bytes)){trace.write("coastal-wave-budget","active cells exceed 32 MiB/16384 entries; no truncation",true);return false;}
                     if(!ribbon.empty()) {
@@ -4986,7 +5027,7 @@ public:
                             Vertex out={};out.x=hw+(u-v)*hw;out.y=(u+v)*hh;out.z=out.y+.08f;
                             out.u=point.distance;out.v=point.along;out.panel=1;out.normal_z=1;
                             out.shadow_visibility=1;out.ambient_visibility=point.coverage;
-                            out.base_terrain=seed;out.real_terrain=seed2;out.surface_kind=7;
+                            out.base_terrain=std::abs(point.coverage)>1.5f?std::abs(point.coverage):seed;out.real_terrain=std::abs(point.coverage)>1.5f?std::fmod((std::abs(point.coverage)-2.f)*7.13f+.37f,1.f):seed2;out.surface_kind=7;
                             out.world_x=float(point.position.x);out.world_y=float(point.position.y);out.world_z=2.5f/112;out.world_valid=1;
                             out.macro_u=out.world_x*.5f;out.macro_v=out.world_y*.5f;vertices.push_back(out);
                             chunk.bounds.left=std::min(chunk.bounds.left,LONG(std::floor(out.x))-2);chunk.bounds.right=std::max(chunk.bounds.right,LONG(std::ceil(out.x))+2);
@@ -5052,7 +5093,7 @@ public:
             auto identity=world_coast.world().index(c,r);if(identity==std::size_t(-1))continue;
             auto hash=c3x_renderer::stable_hash(unsigned(identity)*193u+71u);
             float seed=c3x_renderer::stable_random(hash),seed2=c3x_renderer::stable_random(hash+23u);
-            auto ribbon=indexed_wave_ribbon(coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed));if(ribbon.empty())continue;
+            auto ribbon=indexed_wave_ribbon(coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed,&natural.wonder_pack));if(ribbon.empty())continue;
             std::vector<Vertex> vertices;vertices.reserve(ribbon.vertices.size());
             CachedVertexChunk chunk;chunk.visual_time=-1.f;chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
             for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=1e9f;chunk.world_bounds.high[a]=-1e9f;}
@@ -5062,7 +5103,7 @@ public:
                 out.y=first.anchor_y+(u+v)*hh-dy;out.z=out.y+.08f;
                 out.u=point.distance;out.v=point.along;out.panel=1;out.normal_z=1;
                 out.shadow_visibility=1;out.ambient_visibility=point.coverage;
-                out.base_terrain=seed;out.real_terrain=seed2;out.surface_kind=7;
+                out.base_terrain=std::abs(point.coverage)>1.5f?std::abs(point.coverage):seed;out.real_terrain=std::abs(point.coverage)>1.5f?std::fmod((std::abs(point.coverage)-2.f)*7.13f+.37f,1.f):seed2;out.surface_kind=7;
                 out.world_x=float(point.position.x);out.world_y=float(point.position.y);out.world_z=2.5f/112;out.world_valid=1;
                 out.macro_u=out.world_x*.5f;out.macro_v=out.world_y*.5f;
                 vertices.push_back(out);
@@ -7075,9 +7116,34 @@ public:
     float frame_hour(c3x_renderer_frame_v1 const& frame) const {
         return lighting_hour>=0.f?lighting_hour:float(frame.hour)+float(frame.minute)/60.f;
     }
-    // Seasons D4: whether a chunk draws in the current season.
+    // A tile record's natural-wonder relief slot in the pack (topology bits 28-31); 0 none.
+    unsigned wonder_slot(char const* name) const {
+        auto const* kit=name[0]?natural.wonder_pack.find(name):nullptr;return kit?kit->relief_slot:0u;
+    }
+    // Natural-wonder bodies: the C3XWonderBody constants (PS b13) Winter shading reads,
+    // bound only for their draws (x 1, y the kit's snow floor in relief units).
+    void bind_wonder_body(ID3D11DeviceContext* c,float snow_floor){
+        if(!wonder_body_buffer){D3D11_BUFFER_DESC d={};d.ByteWidth=16;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+            if(FAILED(device->CreateBuffer(&d,nullptr,&wonder_body_buffer)))return;}
+        float values[4]={1.f,snow_floor,0.f,0.f};c->UpdateSubresource(wonder_body_buffer,0,nullptr,values,0,0);
+        c->PSSetConstantBuffers(13,1,&wonder_body_buffer);
+    }
+    static void unbind_wonder_body(ID3D11DeviceContext* c){ID3D11Buffer* none=nullptr;c->PSSetConstantBuffers(13,1,&none);}
+    // Seasons: whether a chunk draws in the current season.
     bool season_shown(CachedVertexChunk const& chunk) const {
-        return !chunk.season_stand || (chunk.season_stand==2)==winter_season;
+        return c3x_renderer::render_core::season_stand_shown(chunk.season_stand,season_index);
+    }
+    // The wonder bundle's eight textures for the current season (season slot 8 + n is
+    // its season atlas n; a missing one keeps the summer slot).
+    std::array<ID3D11ShaderResourceView*,8> wonder_views() const {
+        auto views=wonder_texture_views;
+        if(natural.wonder_pack.kits.empty())return views;
+        for(unsigned i=0;i<8;++i){
+            unsigned slot=natural.wonder_pack.season_slots[unsigned(season_index)&3u][i];
+            auto* view=slot<8?wonder_texture_views[slot]:slot-8<8?wonder_season_views[slot-8]:nullptr;
+            if(view)views[i]=view;
+        }
+        return views;
     }
 
     // window=false enters the tile into the resident world only (preparation
@@ -8134,6 +8200,8 @@ public:
                     ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);
                 }
                 if (chunk.content().animation_texture) context->PSSetShaderResources(116,1,&chunk.content().animation_texture);
+                if (chunk.content().wonder_body){context->PSSetShaderResources(116,8,wonder_views().data());
+                    bind_wonder_body(context,chunk.content().wonder_snow_floor);}
                 if(chunk.content().resource_instance){
                     context->IASetInputLayout(resource_input_layout);
                     context->VSSetConstantBuffers(8,1,&chunk.content().resource_instance);
@@ -8157,6 +8225,8 @@ public:
                     context->VSSetShader(layer==geometry_shadow?vertex_shader:feature_vertex_shader,nullptr,0);
                 }
                 if (chunk.content().animation_texture) context->PSSetShaderResources(116,1,resource_texture_views.data());
+                if (chunk.content().wonder_body){context->PSSetShaderResources(116,8,resource_texture_views.data());
+                    unbind_wonder_body(context);}
             };
             for(unsigned i=0;i<selected.size();){
                 if(packets[i]){
@@ -8248,6 +8318,7 @@ public:
                     c.stride=chunk.content().vertex_stride;c.layer=layer;c.version=chunk.content().version;c.bounds=chunk.content().world_bounds;
                     if(chunk.occurrence)c.content_generation=chunk.occurrence->owner.generation;
                     if(chunk.content().city_material!=0xffffffffu)c.binding=10000+chunk.content().city_material;
+                    if(chunk.content().wonder_body)c.binding=20000;
                     c.offset[0]=float(wx*dims.width+wy*dims.height)*.5f;
                     c.offset[1]=float(wx*dims.width-wy*dims.height)*.5f;
                     auto const& b=chunk.bounds();
@@ -8300,6 +8371,11 @@ public:
         std::copy(resource_texture_views.begin(),resource_texture_views.end(),alpha.begin()+21);
         std::copy(city_base_views.begin(),city_base_views.end(),alpha.begin()+29);
         auto bind=[&](unsigned layer) {
+            if(layer>=20000){
+                // Natural-wonder bodies: the wonder bundle's textures where the resource bundle's sit.
+                auto views=alpha;auto wonder=wonder_views();std::copy(wonder.begin(),wonder.end(),views.begin()+21);
+                context->PSSetShaderResources(0,33,views.data());return true;
+            }
             if(layer>=10000){
                 auto material=layer-10000;auto mask=cities.materials[material][6];
                 context->PSSetShaderResources(34,1,&mask);return mask!=nullptr;
@@ -9133,6 +9209,8 @@ public:
                            static_cast<c3x_renderer_i32>(tile.territory_color_rgb)})
             mix(&value, sizeof(value));
         mix(tile.resource_name, sizeof(tile.resource_name));
+        mix(tile.natural_wonder, sizeof(tile.natural_wonder));
+        mix(&tile.natural_wonder_flags, sizeof(tile.natural_wonder_flags));
         return hash;
     }
 
@@ -9199,6 +9277,7 @@ public:
         field(tile.feature_flags);field(tile.improvement_flags);field(tile.barbarian_tribe_id);field(tile.irrigation_mask);
         field(tile.has_effect);field(tile.river_code);field(tile.road_mask);field(tile.railroad_mask);field(tile.route_style);
         field(tile.resource_id);field(tile.resource_class);mix(tile.resource_name,sizeof(tile.resource_name));
+        mix(tile.natural_wonder,sizeof(tile.natural_wonder));field(tile.natural_wonder_flags);
         field(tile.city_id);field(tile.city_owner_id);field(tile.city_size);field(tile.city_culture_group);field(tile.city_era);
         field(tile.city_flags);field(tile.territory_edge_mask);field(tile.territory_color_rgb);
         return value;
@@ -9264,6 +9343,8 @@ public:
             left.resource_class == right.resource_class &&
             std::memcmp(left.resource_name, right.resource_name,
                         sizeof(left.resource_name)) == 0 &&
+            std::memcmp(left.natural_wonder, right.natural_wonder, sizeof(left.natural_wonder)) == 0 &&
+            left.natural_wonder_flags == right.natural_wonder_flags &&
             left.city_id == right.city_id &&
             left.city_owner_id == right.city_owner_id &&
             left.city_size == right.city_size &&
@@ -9339,7 +9420,8 @@ public:
                     // Native exploration: the hidden ring is drawn as explored only.
                     auto flags=input.occurrence.tile_flags;
                     if(flags&topology_cache.hidden_ring)flags&=~unsigned(C3X_RENDERER_TILE_EXPLORED);
-                    mark(input.occurrence.tile_x,input.occurrence.tile_y,flags);});},&masked_change);
+                    mark(input.occurrence.tile_x,input.occurrence.tile_y,flags,
+                        wonder_slot(input.occurrence.natural_wonder));});},&masked_change);
             revision=viewer_topology.revision;
         }catch(std::length_error const&){topology=frame.world_topology;revision=frame.world_topology_revision;}
         auto updated = world_coast.update({frame.world_width_tiles, frame.world_height_tiles,
@@ -10081,6 +10163,8 @@ public:
         std::vector<Vertex> route_vertices;
         std::vector<Vertex> shadow_vertices;
         std::vector<Vertex> feature_vertices;
+        std::array<std::vector<Vertex>,16> wonder_vertices;  // natural-wonder bodies by season mask
+        float wonder_snow_floor=0;                          // their kit's Winter snow floor
         std::vector<Vertex> city_vertices;
         std::vector<PendingCityChunk> city_chunks;
         std::vector<Vertex> wall_vertices;
@@ -10109,7 +10193,7 @@ public:
         // or this per-frame upload replaces the fresh pipeline's pinned season.
         c3x_renderer::EnvironmentState environment = c3x_renderer::evaluate_environment(
             frame_hour(frame), frame_season(frame));
-        winter_season=frame_season(frame)==2;
+        season_index=frame_season(frame)&3;
         TerrainShaderSettings frame_settings = {};
         frame_settings.height_texel[0] = 1.0f / 2048.0f;
         frame_settings.height_texel[1] = 1.0f / 2048.0f;
@@ -12408,6 +12492,24 @@ public:
                         item.lift, item.ground_fit);
                 }
             }
+            // A natural wonder's bodies (docs/natural_wonder_rendering.md): its record names the
+            // kit, whose compositions place from the wonder bundle as resource bodies are, one
+            // vertex list per season mask (emitted below as wonder_body chunks).
+            if (auto const * kit = wonder_assets_ready && tile.natural_wonder[0] ?
+                    natural.wonder_pack.find(tile.natural_wonder) : nullptr) {
+                wonder_snow_floor = kit->snow_floor;
+                for (auto const & body : kit->bodies) {
+                    auto const * composition = c3x_renderer::find_feature_composition(wonder_bundle, body.first.c_str());
+                    if (!composition || composition->variants.empty() || !body.second) continue;
+                    for (auto const & item : composition->variants.front().instances) {
+                        c3x_renderer::FeaturePlacement placement; placement.asset_index = item.asset;
+                        c3x_renderer::objects::append_instance(object_projection, wonder_bundle, placement,
+                            item.u, item.v, item.rotation, item.scale, 21.0f, 0.0f, true, tile.terrain_type < 11,
+                            relief_at_world, resource_height_at, wonder_vertices[body.second & 15u], shadow_vertices, nullptr,
+                            item.lift, item.ground_fit);
+                    }
+                }
+            }
             if(!prepared_objects){
                 c3x_renderer::objects::Plan plan;
                 if(fidelity_profile && city_profile && cities.ready)
@@ -12724,6 +12826,8 @@ public:
             // Compute before cache_geometry_layer moves the flat grid into its
             // immutable buffer. Retained tiles carry the resulting absent
             // layers with the same coast/semantic dependencies as that grid.
+            // A natural wonder's fjord channel, drawn as river water.
+            std::vector<Vertex> wonder_river;
             bool water_coverage=(world_ground && shared_hit) || !cull_empty_water || !environment_profile ||
                 prepared_ground->water_coverage;
             for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
@@ -12819,12 +12923,86 @@ public:
                     city_chunks.clear();continue;
                 }
                 if(pickup_profile && (layer==geometry_bed || layer==geometry_water)) {
-                    if(!water_coverage)continue;
+                    // A natural wonder's lake (7) or fjord channel (8) is a
+                    // flat production bed and water surface at its own level. Its hydrology fields give a
+                    // rocky shore, negative distance inside and depth toward the middle, so the
+                    // water material shades it as every other water (Fresnel, sky, mirrored
+                    // objects, glints, shadows).
+                    std::vector<Vertex> wonder_water;
+                    int const wonder_c=(tile.tile_x+tile.tile_y)/2,wonder_r=(tile.tile_x-tile.tile_y)/2;
+                    auto const* wonder_kit=natural.wonder_pack.relief(queries.tile(wonder_c,wonder_r).wonder);
+                    if(wonder_kit && !wonder_kit->effects.empty()){
+                        auto const& records=wonder_kit->effects;
+                        for(std::size_t at=0;at+10<=records.size();at+=10){
+                            float const* e=records.data()+at;
+                            bool const channel=e[0]==float(::c3x_renderer::render_core::NaturalWonderPack::effect_channel);
+                            if((e[0]!=float(::c3x_renderer::render_core::NaturalWonderPack::effect_lake) && !channel) || (channel && layer!=geometry_water))continue;
+                            float fx=float(wonder_c)+.5f+e[1],fy=float(wonder_r)+.5f+e[2];
+                            float tx=float(wonder_c)+.5f+e[3],ty=float(wonder_r)+.5f+e[4];
+                            float dx=tx-fx,dy=ty-fy,length=std::max(std::sqrt(dx*dx+dy*dy),1e-4f);
+                            float half=e[6]*.5f,ax=-dy/length,ay=dx/length;
+                            constexpr int along=36,across=18;
+                            float const water_ground=natural_height_at(float(wonder_c)+.5f,float(wonder_r)+.5f);
+                            std::vector<Vertex> grid;
+                            for(int s=0;s<=along;++s)for(int k=0;k<=across;++k){
+                                float v=channel?float(s)/along*1.65f-.55f:float(s)/along*1.2f-.1f;
+                                float u=(float(k)/across*2-1)*(channel?1.7f:1.2f);
+                                // Past the mouth (v<0) a channel's strip itself fans out toward the sea
+                                // with a wandering edge: the river material fills its full width once it
+                                // reaches the sea, so the strip's outline is the plume's outline.
+                                float flare=std::clamp((.15f-v)/.6f,0.f,1.f);
+                                flare=channel?1+1.1f*flare*flare*(3-2*flare)+.12f*flare*std::sin(v*length*19.f+(u>0?1.3f:4.1f)):1.f;
+                                float x=fx+dx*v+ax*u*half*flare,y=fy+dy*v+ay*u*half*flare;
+                                float rise=0;
+                                float distance=natural.wonder_water(*wonder_kit,x,y,float(wonder_c)+.5f,float(wonder_r)+.5f,&rise);
+                                float terrain=resource_height_at(x,y),level=water_ground+rise,above=level-terrain;
+                                // A channel is a river decal on the ground (under the walls, on the floor).
+                                Vertex out=natural_projection(x,y,channel?std::min(level,terrain+1.f):level);
+                                // Water stands where the terrain is below its surface inside the shape.
+                                distance=std::max(distance,-above/112.f);
+                                out.macro_u=x*.5f;out.macro_v=y*.5f;out.panel=1;
+                                // Marks wonder water for the shared receiver query (keeps a third of the cast shadow).
+                                out.shadow_visibility=2;out.ambient_visibility=1;
+                                out.base_terrain=out.real_terrain=11;out.shore_distance=distance;
+                                out.shore_true_distance=distance;out.shore_beach_width=0;out.shore_rockiness=1;
+                                out.shore_depth=std::clamp(above/30.f,0.f,.8f);
+                                if(channel){
+                                    // A channel is river water (the river layer's material): its
+                                    // distance band from the centreline, flow toward the mouth, and
+                                    // the real coast distance so it opens into the sea.
+                                    // Wandering banks; above the water level the walls close the channel.
+                                    float wander=std::sin(v*length*23.f+u*2.f)*.6f+std::sin(v*length*47.f+1.7f)*.4f;
+                                    out.surface_kind=9;
+                                    out.river_distance=std::max(5.f*std::abs(u)+wander,above<0?6.f-above*.5f:0.f);
+                                    out.river_branch_count=out.river_mouth_distance=1000.f;out.river_padding=0;
+                                    out.relief_owner_u=-dx/length;out.relief_owner_v=-dy/length;
+                                    out.relief_owner_coverage=out.relief_owner_state=0;
+                                    out.shore_true_distance=out.shore_distance=float(queries.shore(x,y).distance);
+                                    out.shore_depth=0;
+                                }
+                                grid.push_back(out);
+                            }
+                            for(int s=0;s<along;++s)for(int k=0;k<across;++k){
+                                unsigned a=unsigned(s*(across+1)+k),b=a+1,c=a+unsigned(across+1),d=c+1;
+                                for(unsigned corner:{a,c,b,b,c,d})(channel?wonder_river:wonder_water).push_back(grid[corner]);
+                            }
+                        }
+                    }
+                    if(!water_coverage && wonder_water.empty())continue;
+                    if(water_coverage){
                     // All flat layers share exact vertex/index data. Surface
                     // kind is the per-draw b1 value; no duplicate allocation.
                     compiled.mesh->layers[layer]=compiled.mesh->layers[geometry_underlay];
                     for(auto& chunk:compiled.mesh->layers[layer]){
                         if(chunk.buffer)chunk.buffer->AddRef();if(chunk.indices)chunk.indices->AddRef();chunk.byte_count=0;
+                    }
+                    }
+                    if(!wonder_water.empty()){
+                        if(!cache_geometry_layer(mesh_upload,wonder_water,compiled.mesh->layers[layer],prewarming,compiled.byte_count,foreground_pending,
+                                false,false,nullptr,nullptr,nullptr,nullptr,world_ground?3u:0u)){
+                            tile_geometry_cache_bytes-=compiled.byte_count;return false;
+                        }
+                        compiled.byte_count+=compiled.mesh->layers[layer].back().byte_count;
                     }
                     continue;
                 }
@@ -12847,7 +13025,9 @@ public:
                     chunk.buffer->AddRef();chunk.indices->AddRef();chunk.index_count=mesh.count;chunk.vertex_stride=32;
                     // Its own version: shadow pages key casters by version, layer and count.
                     chunk.version=stand?++tile_geometry_version:compiled.version;
-                    chunk.season_stand=stand?2:winter_stand?1:0;
+                    chunk.season_stand=stand?c3x_renderer::render_core::season_stand_winter:
+                        winter_stand?c3x_renderer::render_core::season_stand_outside_winter:0;
+                    season_stands_used|=std::uint16_t(1u<<chunk.season_stand);
                     chunk.world_bounds=(stand?winter_bounds:forest_bounds)[body];chunk.projected_bounds=(stand?winter_projected:forest_projected)[body];
                     chunk.instance_material=natural.materials[natural.bodies[body].material].repeat?41.f:40.f;
                     auto b=chunk.projected_bounds.project((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,frame.tile_width);
@@ -12868,6 +13048,13 @@ public:
                     if(layer>=geometry_natural_terrain){world_vertex_offset=prepared_world->terrain_vertices[layer-geometry_natural_terrain];
                         world_index_offset=prepared_world->terrain_indices[layer-geometry_natural_terrain];}
                     else {unsigned i=layer==geometry_shadow?5u:unsigned(layer);world_vertex_offset=prepared_world->ground_vertices[i];world_index_offset=prepared_world->ground_indices[i];}
+                }
+                if(layer==geometry_river && !wonder_river.empty()){
+                    if(!cache_geometry_layer(mesh_upload,wonder_river,compiled.mesh->layers[layer],prewarming,compiled.byte_count,foreground_pending,
+                                false,false,nullptr,nullptr,nullptr,nullptr,world_ground?3u:0u)){
+                        tile_geometry_cache_bytes-=compiled.byte_count;return false;
+                    }
+                    compiled.byte_count+=compiled.mesh->layers[layer].back().byte_count;
                 }
                 auto prior_chunks=compiled.mesh->layers[layer].size();
                 if (!cache_geometry_layer(mesh_upload,*tile_layers[layer], compiled.mesh->layers[layer], prewarming, compiled.byte_count, foreground_pending, layer>=geometry_feature && layer<geometry_natural_terrain, natural_layer,
@@ -12896,6 +13083,25 @@ public:
                     return false;
                 }
                 for(auto i=prior_chunks;i<compiled.mesh->layers[layer].size();++i)compiled.byte_count+=compiled.mesh->layers[layer][i].byte_count;
+            }
+            // Natural-wonder bodies: their own feature chunks per season mask, drawn with the
+            // wonder bundle's textures (wonder_body) and shown in their seasons (season_stand).
+            // Placed like resource bodies, they take the feature layer's projection.
+            if(!(shared_hit && !component_preparation && world_objects))for(unsigned mask=1;mask<16;++mask){
+                auto& vertices=wonder_vertices[mask];if(vertices.empty())continue;
+                auto prior=compiled.mesh->layers[geometry_feature].size();
+                if(!cache_geometry_layer(mesh_uploads[shared_layer(geometry_feature)?1:0],vertices,
+                        compiled.mesh->layers[geometry_feature],prewarming,
+                        compiled.byte_count,foreground_pending,true,false,nullptr,nullptr,nullptr,nullptr,world_objects?2u:0u)){
+                    tile_geometry_cache_bytes-=compiled.byte_count;release_geometry_vertex_buffers(compiled.mesh->layers);return false;
+                }
+                for(auto i=prior;i<compiled.mesh->layers[geometry_feature].size();++i){
+                    auto& chunk=compiled.mesh->layers[geometry_feature][i];
+                    chunk.wonder_body=true;chunk.wonder_snow_floor=wonder_snow_floor;chunk.season_stand=static_cast<unsigned char>(mask==15?0:mask);
+                    season_stands_used|=std::uint16_t(1u<<chunk.season_stand);
+                    // Its own version: shadow pages key casters by version, layer and count.
+                    chunk.version=++tile_geometry_version;compiled.byte_count+=chunk.byte_count;
+                }
             }
             // Keep allocation boundaries equal to residency/eviction owners:
             // camera-specific layers and shared world content can retire alone.

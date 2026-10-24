@@ -10,6 +10,7 @@
 #include "../../../native/environment_runtime.h"
 #include "../../../native/scene_lighting.h"
 #include "../../../native/source_fidelity/kernels.h"
+#include "../../../native/render_core/natural_wonder_pack.h"
 #include "low_relief.h"
 namespace c3x_renderer { namespace fidelity {
 struct HeightField {
@@ -58,6 +59,11 @@ struct NaturalData {
     HeightField volcano_height,volcano_blend,volcano_channel;
     std::array<float,64> volcano_trend{};
     bool volcano_ready=false;
+    // Natural-wonder kits (docs/natural_wonder_rendering.md) from NaturalWonderRuntime:
+    // terrain stamps, attached effects and foam collars, found by topology relief slot.
+    // Optional: without the pack a wonder tile keeps its host terrain.
+    ::c3x_renderer::render_core::NaturalWonderPack wonder_pack;
+    std::vector<std::array<HeightField,3>> wonder_fields; // per kit: height, vegetated ground, special
     // The broadleaf contract: the pack's first 25 recipes, weighing 180.
     std::array<RecipeSet,forest_variety_count> forest_sets{{{0,25,180},{},{}}};
     std::string failure;
@@ -188,6 +194,7 @@ struct NaturalData {
         if(read(std::string(natural_pack)+"forest-varieties.bin",d))
             load_forest_varieties(d,textures,read,upload,natural_pack);
         volcano_ready=load_volcano_element(read);
+        load_wonder_pack(read);
         return true;
     }
     template<class Read> bool load_volcano_element(Read read){
@@ -209,6 +216,40 @@ struct NaturalData {
         volcano_channel.minimum=0;volcano_channel.maximum=1;
         measure_volcano_trend();
         return true;
+    }
+    template<class Read> void load_wonder_pack(Read read){
+        std::vector<std::uint8_t> bytes;wonder_pack={};wonder_fields.clear();
+        if(!read(std::string("Renderer/packs/NaturalWonderRuntime/wonders.bin"),bytes) ||
+           !wonder_pack.parse(bytes.data(),bytes.size()))return;
+        wonder_fields.resize(wonder_pack.kits.size());
+        for(std::size_t k=0;k<wonder_pack.kits.size();++k){
+            auto& kit=wonder_pack.kits[k];
+            std::vector<std::uint8_t>* sources[]={&kit.height,&kit.ground,&kit.special};
+            for(unsigned i=0;i<3;++i){auto& f=wonder_fields[k][i];
+                f.width=f.height=kit.field_size;f.pixels=std::move(*sources[i]);f.minimum=0;f.maximum=1;}
+        }
+    }
+    // Signed distance (tiles, negative inside) to a kit's still water (lake and channel
+    // records) when its stamp is centred at (cx, cy). rise, when given, receives the
+    // water's level there in relief units above the natural ground.
+    static float wonder_water(::c3x_renderer::render_core::NaturalWonderPack::Kit const& kit,float x,float y,float cx,float cy,float* rise=nullptr){
+        float best=1e9f;
+        for(std::size_t i=0;i+10<=kit.effects.size();i+=10){
+            float const* e=kit.effects.data()+i;
+            if(e[0]!=float(::c3x_renderer::render_core::NaturalWonderPack::effect_lake) && e[0]!=float(::c3x_renderer::render_core::NaturalWonderPack::effect_channel))continue;
+            float fx=cx+e[1],fy=cy+e[2],dx=e[3]-e[1],dy=e[4]-e[2];
+            float length=std::max(std::sqrt(dx*dx+dy*dy),1e-4f),half=e[6]*.5f;
+            float px=x-fx,py=y-fy,along=(px*dx+py*dy)/(length*length),across=(-px*dy+py*dx)/length/half;
+            float wobble=.05f*std::sin(x*23.f+y*7.f)+.04f*std::sin(y*31.f-x*11.f);
+            float distance;
+            if(e[0]==float(::c3x_renderer::render_core::NaturalWonderPack::effect_channel)){
+                float beyond=std::max(-along,along-1)*length,side=(std::abs(across)-1)*half;
+                distance=std::hypot(std::max(beyond,0.f),std::max(side,0.f))+std::min(std::max(beyond,side),0.f)+wobble*half;
+            }else distance=(std::sqrt(across*across+(2*along-1)*(2*along-1))-1+wobble)*std::min(half,length*.5f);
+            if(distance<best && rise)*rise=e[7]+(e[5]-e[7])*std::clamp(along,0.f,1.f);
+            best=std::min(best,distance);
+        }
+        return best;
     }
     void measure_volcano_trend(){
         std::array<float,64> count{};volcano_trend.fill(0);

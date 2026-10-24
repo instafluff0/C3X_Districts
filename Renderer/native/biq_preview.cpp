@@ -325,6 +325,10 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         return 1;
 
     QueryPerformanceCounter(&definitions_done);
+    // Lab natural wonder (studies/natural_wonders): BIQ bonus 0x40000000 marks its tile and
+    // C3X_LAB_NATURAL_WONDER names it in the tile record, as C3X reports it; Renderer64
+    // resolves the kit and its relief slot itself.
+    char lab_wonder[32]={};GetEnvironmentVariableA("C3X_LAB_NATURAL_WONDER",lab_wonder,sizeof(lab_wonder));
     char object_option[8]={};bool objects=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_OBJECTS",object_option,sizeof(object_option))!=0;
     char animation_option[8]={};bool animate=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ANIMATION",animation_option,sizeof(animation_option))!=0;
     char dense_option[8]={};bool dense_scene=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DENSE_SCENE",dense_option,sizeof(dense_option))!=0;
@@ -368,7 +372,11 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         tile.anchor_y = anchor_y;
         tile.terrain_type = source.base;
         tile.real_terrain_type = source.real;
-        tile.square_parts = source.bonus;
+        tile.square_parts = source.bonus & ~0x40000000u;
+        if((source.bonus&0x40000000u) && lab_wonder[0]){
+            std::memcpy(tile.natural_wonder,lab_wonder,sizeof(tile.natural_wonder));
+            tile.natural_wonder_flags=C3X_RENDERER_NATURAL_WONDER_NAME;
+        }
         tile.terrain_overlays = source.overlays;
         tile.river_code = source.river;
         tile.visibility_mask = 1;

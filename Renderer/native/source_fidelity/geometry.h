@@ -61,6 +61,21 @@ if(fidelity_profile) {
                 project_natural,false,plume))
             for(auto& chunk:plume.chunks)city_chunks.push_back(std::move(chunk));
     }
+    // A natural wonder's attached effects on its rendered relief.
+    auto const* wonder_kit=natural.wonder_pack.relief(queries.tile(nc,nr).wonder);
+    if(!prepared_objects && city_profile && cities.ready && wonder_kit && !wonder_kit->effects.empty()){
+        MountainShape const shape(natural,nc,nr,lookup_natural,mountain_flags);
+        auto relief_at=[&](float x,float y){
+            auto shore=shore_sample_at(x,y);
+            float river_scale=river_terrain_near?smooth01((float(river_at(x,y))-6.f)/16.f):1.f;
+            return height_natural(x,y)+shape.sample(natural,x,y).displacement*
+                coast_relief(float(shore.distance),float(shore.beach_width))*river_scale*hidden_taper_at(x,y);
+        };
+        c3x_renderer::city_fidelity::Surfaces effects;
+        if(c3x_renderer::city_fidelity::wonder_effects(cities.library,nc,nr,wonder_kit->effects,relief_at,
+                project_natural,false,effects))
+            for(auto& chunk:effects.chunks)city_chunks.push_back(std::move(chunk));
+    }
     record_natural_phase(4);
     if(tile.real_terrain_type==7 || tile.real_terrain_type==8 ||
        hill_vegetation==7 || hill_vegetation==8 ||

@@ -222,6 +222,7 @@ template<class Draw,class Parameters> bool compatible_ordered_index_range(
         first.vertex_offset==next.vertex_offset && first.index_format==next.index_format &&
         std::uint64_t(first.index_offset)+std::uint64_t(first.index_count)*index_stride==next.index_offset &&
         first.animation_texture==next.animation_texture && first.resource_instance==next.resource_instance &&
+        first.wonder_body==next.wonder_body &&
         first.city_material==next.city_material && first.city_environment==next.city_environment &&
         !std::memcmp(first.city_atlas,next.city_atlas,sizeof(first.city_atlas)) &&
         !std::memcmp(&first.visual_time,&next.visual_time,sizeof(first.visual_time)) &&

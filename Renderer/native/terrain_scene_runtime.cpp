@@ -331,6 +331,11 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
             hash_value(result.geometry, value);
         hash_bytes(result.scene, tile.resource_name, sizeof(tile.resource_name));
         hash_bytes(result.geometry, tile.resource_name, sizeof(tile.resource_name));
+        // A natural wonder's bodies and name label.
+        hash_bytes(result.scene, tile.natural_wonder, sizeof(tile.natural_wonder));
+        hash_bytes(result.geometry, tile.natural_wonder, sizeof(tile.natural_wonder));
+        hash_value(result.scene, tile.natural_wonder_flags);
+        hash_value(result.geometry, tile.natural_wonder_flags);
         hash_value(result.ownership, tile.tile_flags & ~C3X_RENDERER_TILE_VISIBILITY_BITS);
         hash_value(result.ownership, tile.feature_flags);
     }

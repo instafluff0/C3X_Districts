@@ -718,6 +718,39 @@ Output shade(P input) {
         float3 graded = lerp(albedo, rock_luma.xxx, 0.28) * float3(0.96, 1.0, 1.07);
         albedo = lerp(albedo, graded, rock_albedo_coverage);
     }
+    // Natural wonders (docs/natural_wonder_rendering.md): where no volcano owns the
+    // relief, the owner channel carries a wonder stamp's region weights (x eases to
+    // the tile's own ground on vegetated slopes, y to the wonder's special material)
+    // and w its region kind: 1 snow, 2 travertine, 3 banded sandstone, 4 a
+    // stratovolcano's brown flanks under snow.
+    if (input.material.y > 1.5 && input.volcano_owner.z < 0.001 && input.volcano_owner.w > 0.5) {
+        float wonder_kind = round(input.volcano_owner.w);
+        float wonder_ground = saturate(input.volcano_owner.x);
+        float wonder_special = saturate(input.volcano_owner.y);
+        // Civ VI's vegetated host ground: the skin's grass, since a stamped tile's own
+        // biome channels describe the mountain.
+        float3 vegetated = ground_surface_sample(GrassColor, input, 0.43, float2(.31, .17), false).rgb;
+        float vegetated_height = ground_surface_sample(GrassHeight, input, 0.43, float2(.31, .17), false).r;
+        albedo = lerp(albedo, vegetated, wonder_ground);
+        height_detail = lerp(height_detail, vegetated_height, wonder_ground);
+        float grain = saturate(height_detail * 1.6);
+        float3 snow_rock = triplanar(SnowColor, input.world * MTN_ROCK_SCALE, geometric);
+        float3 special;
+        [branch] if (wonder_kind < 1.5) {
+            special = snow_rock;
+        } else if (wonder_kind < 2.5) {
+            special = lerp(ground_albedo, float3(0.80, 0.77, 0.69), 0.75) * lerp(0.80, 1.06, grain);
+        } else if (wonder_kind < 3.5) {
+            float band = frac(input.world.z * 7.0 + height_detail * 0.4);
+            special = lerp(float3(0.42, 0.16, 0.08), float3(0.58, 0.26, 0.14), smoothstep(0.25, 0.75, band)) *
+                lerp(0.86, 1.04, grain);
+        } else {
+            // The special weight ramps volcanic brown (0.5) to snow (1).
+            special = lerp(float3(0.40, 0.26, 0.17) * lerp(0.72, 1.06, grain), snow_rock, saturate(wonder_special * 2 - 1));
+            wonder_special = saturate(wonder_special * 2);
+        }
+        albedo = lerp(albedo, special, wonder_special);
+    }
     // Apply the retained normal gain to separately calibrated broad/fine
     // gradients. This changes shading only, never the geometric surface.
     float rock_normal_strength = Quality.z * lerp(1.0, 1.60, rock_detail_coverage);

@@ -100,7 +100,9 @@ struct WorldKeyDiagnostic {
             {"effect",offsetof(c3x_renderer_tile_v1,has_effect),4},
             {"territory_edges",offsetof(c3x_renderer_tile_v1,territory_edge_mask),4},
             {"territory_rgb",offsetof(c3x_renderer_tile_v1,territory_color_rgb),4},
-            {"barbarian",offsetof(c3x_renderer_tile_v1,barbarian_tribe_id),4}};
+            {"barbarian",offsetof(c3x_renderer_tile_v1,barbarian_tribe_id),4},
+            {"natural_wonder_digest",offsetof(c3x_renderer_tile_v1,natural_wonder),sizeof(before.natural_wonder)},
+            {"natural_wonder_flags",offsetof(c3x_renderer_tile_v1,natural_wonder_flags),4}};
         std::array<bool,sizeof(before)> covered{};
         std::string out;out.reserve(1400);
         auto a=reinterpret_cast<unsigned char const*>(&before),b=reinterpret_cast<unsigned char const*>(&after);

@@ -28,19 +28,26 @@
 namespace c3x_renderer { namespace fidelity {
 // Topology flags a MountainShape reads besides the terrain category.
 enum MountainFlag : unsigned { mountain_snow_cap=1u, volcano_active=2u, volcano_erupting=4u };
-struct MountainCell { bool mountain=false,volcano=false,snow=false; unsigned activity=0; std::uint32_t seed=0; };
+// wonder: a stamped natural-wonder kit's index + 1 (its topology relief slot resolved).
+struct MountainCell { bool mountain=false,volcano=false,snow=false; unsigned activity=0; std::uint32_t seed=0; unsigned wonder=0; };
 struct MountainPiece {
     HeightField const* height_field=nullptr;HeightField const* blend_field=nullptr;HeightField const* channel_field=nullptr;
     float center_x=0,center_y=0,range_cos=1,range_sin=0,turn_cos=1,turn_sin=0,inv_long=1,inv_cross=1,
         height=0,reach=0,snow=0;
     unsigned activity=0;
     bool mirror=false;
+    // A natural wonder's stamp: its kit and region weight fields.
+    HeightField const* wonder_ground=nullptr;HeightField const* wonder_special=nullptr;::c3x_renderer::render_core::NaturalWonderPack::Kit const* wonder=nullptr;
 };
 struct MountainSample {
     float displacement=0,dominant=0,height=0,u=0,v=0,snow=0;
     // The highest volcano stamp here: its coverage over other pieces, its
     // texture position, authored lava channel and Civ III activity.
     float volcano=0,volcano_u=.5f,volcano_v=.5f,channel=0;unsigned activity=0;
+    // A natural-wonder stamp's region weights (vegetated ground, special material),
+    // easing out where another piece takes over, and its region kind wherever its
+    // reach covers, so the kind cannot blend across a triangle.
+    float wonder_ground=0,wonder_special=0;unsigned wonder_kind=0;
 };
 struct MountainShape {
     // Main stamp span and its stretch along a straight range. Height is the
@@ -90,6 +97,16 @@ struct MountainShape {
         p.height=volcano_height*(1-volcano_jitter+2*volcano_jitter*unit(seed,3));
         p.reach=reach_scale*volcano_span;p.activity=activity;
     }
+    // A natural wonder's baked stamp (NaturalWonderRuntime kit index): its own span,
+    // height and fixed turn, with the kit's region weights for the mountain shader.
+    void add_wonder(NaturalData const& natural,unsigned kit,float x,float y,bool snow){
+        auto const& k=natural.wonder_pack.kits[kit];auto const& f=natural.wonder_fields[kit];
+        auto& p=pieces[count++];
+        p.height_field=p.blend_field=&f[0];p.wonder_ground=&f[1];p.wonder_special=&f[2];p.wonder=&k;
+        p.center_x=x;p.center_y=y;p.turn_cos=std::cos(k.turn);p.turn_sin=std::sin(k.turn);
+        p.inv_long=p.inv_cross=1/k.span;
+        p.height=k.units;p.reach=std::min(1.06f,reach_scale*k.span);p.snow=snow?1.f:0.f;
+    }
     MountainShape()=default;
     // lookup(c,r) returns the natural Tile at any coordinate; flags(c,r) its
     // MountainFlag bits (read only for mountains and volcanoes).
@@ -98,10 +115,15 @@ struct MountainShape {
         auto cell=[&](int dc,int dr)->MountainCell const&{
             unsigned i=unsigned((dr+2)*5+dc+2);
             if(!ready[i]){
-                auto t=lookup(nc+dc,nr+dr);bool volcano=t.real==10,mountain=t.real==6 || volcano;
+                auto t=lookup(nc+dc,nr+dr);
+                // A natural wonder's stamp raises its tile on any host terrain.
+                auto const* kit=natural.wonder_pack.relief(t.wonder);
+                unsigned wonder=kit && kit->stamp()?unsigned(kit-natural.wonder_pack.kits.data())+1:0u;
+                bool volcano=t.real==10 && !wonder,mountain=t.real==6 || volcano || wonder;
                 unsigned bits=mountain?unsigned(flags(nc+dc,nr+dr)):0u;
-                cells[i]=MountainCell{mountain,volcano,!volcano && (bits&mountain_snow_cap),
-                    volcano?((bits&volcano_erupting)?2u:(bits&volcano_active)?1u:0u):0u,mountain_seed(t)};
+                bool snow=wonder?(kit->flags&::c3x_renderer::render_core::NaturalWonderPack::flag_snow)!=0:!volcano && (bits&mountain_snow_cap);
+                cells[i]=MountainCell{mountain,volcano,snow,
+                    volcano?((bits&volcano_erupting)?2u:(bits&volcano_active)?1u:0u):0u,mountain_seed(t),wonder};
                 ready[i]=true;
             }
             return cells[i];
@@ -118,6 +140,10 @@ struct MountainShape {
                 float a=2*std::atan2(float(n[1]),float(n[0]));sx+=std::cos(a);sy+=std::sin(a);joined=true;
             }
             std::uint32_t seed=mix(owner.seed);
+            if(owner.wonder){
+                add_wonder(natural,owner.wonder-1,float(nc+dc)+.5f,float(nr+dr)+.5f,owner.snow);
+                continue;
+            }
             if(owner.volcano && natural.volcano_ready){
                 add_volcano(natural,float(nc+dc)+.5f,float(nr+dr)+.5f,owner.activity,seed);
                 continue;
@@ -148,13 +174,14 @@ struct MountainShape {
     }
     // Pieces point into the NaturalData they were built from.
     MountainSample sample(NaturalData const& natural,float x,float y) const {
-        MountainSample result;float second=0,volcano=0,other=0;
+        MountainSample result;float second=0,volcano=0,other=0,norm=height,wonder_g=0,wonder_s=0;
         for(unsigned i=0;i<count;++i){
             auto const& p=pieces[i];
             float dx=x-p.center_x,dy=y-p.center_y;
             if(std::abs(dx)>=p.reach || std::abs(dy)>=p.reach)continue;
             float distance=std::sqrt(dx*dx+dy*dy);
             if(distance>=p.reach)continue;
+            if(p.wonder)result.wonder_kind=p.wonder->region_kind;
             // Range frame (stretched), then the stamp's own turn.
             float a=(dx*p.range_cos+dy*p.range_sin)*p.inv_long;
             float b=(-dx*p.range_sin+dy*p.range_cos)*p.inv_cross;
@@ -164,6 +191,7 @@ struct MountainShape {
             float h=p.height_field->sample(u,v);
             float blend=p.blend_field->sample(u,v);
             float shape=std::max(0.f,h)*smooth01((blend-.28f)/.34f);
+            if(p.wonder)shape=std::max(0.f,h);
             if(p.channel_field){
                 // The authored element alone reads as a lumpy, flat-topped
                 // mound at Civ III scale; keep its detail on a clean cone
@@ -187,7 +215,9 @@ struct MountainShape {
             }else other=std::max(other,displacement);
             if(displacement>result.dominant){
                 second=result.dominant;result.dominant=displacement;
-                result.u=u;result.v=v;result.snow=p.snow;
+                result.u=u;result.v=v;result.snow=p.snow;norm=p.wonder?p.height:height;
+                wonder_g=p.wonder?p.wonder_ground->sample(u,v):0.f;
+                wonder_s=p.wonder?p.wonder_special->sample(u,v):0.f;
             }else second=std::max(second,displacement);
         }
         if(result.dominant<=0)return result;
@@ -197,7 +227,10 @@ struct MountainShape {
         // second stamp so its footprint edge cannot step.
         float t=std::max(0.f,blend_k-(result.dominant-second))/blend_k;
         result.displacement=result.dominant+blend_k*t*t*.25f*smooth01(second/blend_k);
-        result.height=std::min(1.f,result.displacement/height);
+        // Snow and top-rock bands follow a wonder's own peak, not the standard mountain.
+        result.height=std::min(1.f,result.displacement/norm);
+        float owned=smooth01((result.dominant-second)/blend_k+.5f);
+        result.wonder_ground=wonder_g*owned;result.wonder_special=wonder_s*owned;
         // The volcano owns its material where it stands above the mountain
         // stamps and saddles around it, easing across their meeting line.
         if(volcano>0)result.volcano=smooth01((volcano-other)/14.f+.5f)*smooth01(volcano/6.f);

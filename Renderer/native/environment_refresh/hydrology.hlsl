@@ -1255,6 +1255,10 @@ float q6_receiver_visibility(PixelInput input,float3 normal,float legacy_shadow)
   water=water || (input.surface_kind>8.5 && input.surface_kind<9.5);
   // Main t25 aliases a feature-only source binding; Q0 binds one common field.
   float visibility=q6_world_visibility(pickup_shadow_terrain,input.q6_world,normal,water);
+  // Natural wonders (docs/natural_wonder_rendering.md): a wonder's lake or fjord channel
+  // (shape_visibility.x 2, which no other water writes) keeps a third of the cast shadow,
+  // so water between its walls still reads as water, as in the approved Lab look.
+  if(water && input.shape_visibility.x>1.5)visibility=lerp(1.0,visibility,.35);
   return visibility;
  }
 #endif
@@ -3879,6 +3883,25 @@ Texture2D<float> coastal_delay : register(t2);
 cbuffer CoastalWaveFrame : register(b7) { float4 coastal_time; };
 float4 PSCoastalWave(PixelInput input):SV_Target {
     clip(input.shape_visibility.y-.999);
+    // Natural wonders: a water wonder's ribbon (base terrain 2 + seed) is a
+    // foam collar hugging its rock, as Civ VI rings Ha Long Bay's pillars: the connected fine
+    // foam in world space, densest at the waterline, its reach slowly breathing.
+    if(input.base_terrain>1.5){
+        float collar_seed=input.base_terrain-2,d=input.uv.x,t=coastal_time.x;
+        float2 world=input.macro_uv*2;
+        float broad=coastal_foam.Sample(material_sampler,world*float2(.12,.24)+collar_seed*.37).r;
+        float reach=.18+.16*broad+.04*sin(t*.7+collar_seed*6.283);
+        float2 drift=float2(t*.004,-t*.003);
+        float lace=coastal_foam.Sample(material_sampler,world*float2(.9,1.8)+drift+collar_seed).r;
+        float fine=coastal_foam.Sample(material_sampler,world*float2(1.7,3.4)-drift*1.4+collar_seed*3).r;
+        float pattern=saturate((max(lace,fine*.85)-.1)*2.6);
+        float falloff=1-smoothstep(reach*.2,reach,d);
+        float rim=1-smoothstep(0,.05,d);
+        float coverage=saturate(pattern*falloff*.75+rim*(.15+.45*pattern))*.85;
+        clip(coverage-.01);
+        float3 lit=float3(.84,.88,.90)*q6_receiver_illumination(input,float3(0,0,1),1,1);
+        return float4(lit*coverage,coverage);
+    }
     float seed=input.base_terrain,seed2=input.real_terrain;
     float scale=lerp(.30,1.,seed);
     float duration=lerp(15.,30.,seed2),restart=4.*seed;

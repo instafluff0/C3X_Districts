@@ -6,7 +6,9 @@ param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1,
       # Renderer diagnostics for the game child only, e.g. C3X_SANDBOX_PASS_COUNTS=1;C3X_RENDERER_PROFILE=1
-      [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='')
+      [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='',
+      # Camera route for F24 steps (x,y,zoom width in native pixels; see parse_custom_renderer_test_route)
+      [ValidatePattern('^$|^[0-9]+,[0-9]+,[0-9]+(;[0-9]+,[0-9]+,[0-9]+)*$')][string]$Route='')
 $ErrorActionPreference = 'Stop'
 # 'volcanoes' is the units camera script aimed at the 1498 AD save's volcano groups;
 # 'resources' aims it at that save's ivory near rivers, fish and whales, and coastal gems.
@@ -68,7 +70,7 @@ public static class RendererGameCommand {
 // the IPC header read-only; it never requests pixels or submits renderer work.
 public sealed class RendererCadenceReader : IDisposable {
     // Mirrored from helper_trial/scene_wire.h; executable test checks this ABI.
-    public const int WireVersion = 17, FrameOffset = 228, ZoomOffset = 232;
+    public const int WireVersion = 18, FrameOffset = 228, ZoomOffset = 232;
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] static extern IntPtr OpenFileMapping(uint access, bool inherit, string name);
     [DllImport("kernel32.dll")] static extern IntPtr MapViewOfFile(IntPtr mapping, uint access, uint high, uint low, UIntPtr bytes);
     [DllImport("kernel32.dll")] static extern bool UnmapViewOfFile(IntPtr view);
@@ -131,6 +133,10 @@ try {
     if ($Scenario -eq 'navigation') {
         $env:C3X_RENDERER_GAME_TEST_MODE='matched-route'
         $env:C3X_RENDERER_GAME_TEST_ROUTE='2464,0,128;2464,692,128;3760,692,384;2464,692,384'
+    }
+    if ($Route) {
+        $env:C3X_RENDERER_GAME_TEST_MODE='matched-route'
+        $env:C3X_RENDERER_GAME_TEST_ROUTE=$Route
     }
     $env:C3X_RENDERER_GAME_TEST_COMBAT=$CombatCase
     $env:C3X_RENDERER_UNIT_PACK=$UnitPack

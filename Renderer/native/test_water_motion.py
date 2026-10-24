@@ -122,6 +122,7 @@ int main(){
 #include <cstring>
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/environment_runtime.h"
+#include "Renderer/native/render_core/season_stand.h"
 #include <cstdio>
 template<unsigned long N,class... A>int sprintf_s(char (&b)[N],char const* f,A... a){return std::snprintf(b,N,f,a...);}
 struct LARGE_INTEGER {long long QuadPart;};
@@ -142,7 +143,9 @@ struct Pipeline {
  c3x_renderer::EnvironmentState copied{};
  // Seasons: the renderer's (possibly pinned) frame season and the Winter forest
  // stands, which a Winter flip swaps by retiring the geometry selection.
- struct Renderer {bool winter_season=false;float lighting_hour=-1.f;struct {unsigned adopts=0;void write(char const*,char const*,bool){++adopts;}} trace;
+ struct Renderer {int season_index=0;std::uint16_t season_stands_used=std::uint16_t(
+   (1u<<c3x_renderer::render_core::season_stand_outside_winter)|(1u<<c3x_renderer::render_core::season_stand_winter));
+  float lighting_hour=-1.f;struct {unsigned adopts=0;void write(char const*,char const*,bool){++adopts;}} trace;
   int frame_season(c3x_renderer_frame_v1 const& f)const{return f.season;}} renderer;
  unsigned retirements=0;void retire_geometry_selection(){++retirements;}
  // Day/night clock gate inputs: the static layers' refinement state and the adoption receipt.
@@ -177,11 +180,11 @@ int main(){
  assert(!(tile.tile_flags&C3X_RENDERER_TILE_VISIBLE));
  // Entering and leaving Winter each retire the selection once (forest stands);
  // other season changes only relight.
- assert(pipeline.retirements==0 && !pipeline.renderer.winter_season);
+ assert(pipeline.retirements==0 && pipeline.renderer.season_index!=2);
  cycle_enabled=false;frame.season=2;pipeline.update_environment(frame,true);
- assert(pipeline.renderer.winter_season && pipeline.retirements==1 && pipeline.copied.season==2);
+ assert(pipeline.renderer.season_index==2 && pipeline.retirements==1 && pipeline.copied.season==2);
  frame.season=1;pipeline.update_environment(frame,true);
- assert(!pipeline.renderer.winter_season && pipeline.retirements==2);
+ assert(pipeline.renderer.season_index==1 && pipeline.retirements==2);
  // C3X's continuous clock (API 22): a new minute waits while the previous
  // change refines or the camera moves, then applies; the frame keeps asking.
  frame.hour=17;frame.minute=0;pipeline.update_environment(frame,true);

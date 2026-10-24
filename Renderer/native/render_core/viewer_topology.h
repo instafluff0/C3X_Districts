@@ -27,6 +27,11 @@ namespace c3x_renderer { namespace render_core {
 // Every unexplored tile also carries hidden_bit (and loses its effect bit), so
 // a revealed neighbour can tell where no terrain will be drawn.
 //
+// Natural wonders: an explored record that names a wonder kit with a stamp or
+// foam collars sets that kit's relief slot in bits 28-31 (render_core::Tile::wonder;
+// docs/natural_wonder_rendering.md). C3X reports only the name, so the kit appears with
+// exploration and its neighbours' relief recompiles through this revision.
+//
 // The revision equals the captured one while nothing is hidden; otherwise it
 // gains a serial above bit 40, so every masked state has its own revision.
 struct ViewerTopology {
@@ -35,15 +40,15 @@ struct ViewerTopology {
     std::vector<std::uint32_t> values;
     std::int64_t source=-1,revision=-1;
     std::uint64_t inputs=~std::uint64_t(0),serial=0;
-    std::size_t hidden_tiles=0;
+    std::size_t hidden_tiles=0,wonder_tiles=0;
     bool masked=false;
     bool real_relief=true;
-    static constexpr std::uint32_t live_bits=(1u<<24)|(1u<<27);
+    static constexpr std::uint32_t live_bits=(1u<<24)|(1u<<27),wonder_bits=0xf0000000u;
     static std::uint32_t hide(std::uint32_t value){
         auto biome=value&255u;
         return (biome>=11 && biome<=13?value&~(1u<<24):(value&0x00ff00ffu)|(biome<<8))|hidden_bit;
     }
-    // visit(mark) calls mark(tile_x,tile_y,tile_flags) for every world input.
+    // visit(mark) calls mark(tile_x,tile_y,tile_flags[,wonder_relief_slot]) for every world input.
     // Returns the values to use; `changed` reports a new revision.
     template<class Visit>
     std::uint32_t const* update(std::uint32_t const* raw,std::size_t count,int width,int height,
@@ -52,15 +57,17 @@ struct ViewerTopology {
         bool current=raw_revision==source && values.size()==count;
         if(current && input_sequence==inputs)return masked?values.data():raw;
         std::vector<std::uint32_t> next(raw,raw+count);
-        std::size_t hidden=0;
+        std::size_t hidden=0,wonders=0;
         try{
-            visit([&](int x,int y,unsigned flags){
-                if((flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))!=C3X_RENDERER_TILE_VISIBILITY_KNOWN)return;
+            visit([&](int x,int y,unsigned flags,unsigned wonder=0){
+                bool unexplored=(flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==C3X_RENDERER_TILE_VISIBILITY_KNOWN;
+                if(!unexplored && !wonder)return;
                 if(x<0 || y<0 || x>=width || y>=height || ((x+y)&1))return;
                 auto index=(std::size_t(y)*std::size_t(width)+std::size_t(x))/2;
                 if(index>=count)return;
-                auto value=real_relief?next[index]&~live_bits:hide(next[index]);
-                if(value!=next[index]){next[index]=value;++hidden;}
+                auto value=!unexplored?(next[index]&~wonder_bits)|((wonder&15u)<<28):
+                    real_relief?next[index]&~live_bits:hide(next[index]);
+                if(value!=next[index]){next[index]=value;++(unexplored?hidden:wonders);}
             });
         }catch(std::exception const&){
             // Keep the last mask for this capture rather than briefly
@@ -68,13 +75,13 @@ struct ViewerTopology {
             if(current)return masked?values.data():raw;
             throw;
         }
-        bool next_masked=hidden!=0;
+        bool next_masked=hidden+wonders!=0;
         if(!current || next_masked!=masked || (next_masked && next!=values)){
             if(changed)*changed=true;
             if(next_masked)++serial;
             revision=next_masked?raw_revision+std::int64_t(serial<<40):raw_revision;
         }
-        values.swap(next);source=raw_revision;inputs=input_sequence;masked=next_masked;hidden_tiles=hidden;
+        values.swap(next);source=raw_revision;inputs=input_sequence;masked=next_masked;hidden_tiles=hidden;wonder_tiles=wonders;
         return masked?values.data():raw;
     }
 };

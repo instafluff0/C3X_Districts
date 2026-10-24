@@ -1,10 +1,23 @@
 #pragma once
 #include "world_coast.h"
+#include "natural_wonder_pack.h"
 
 namespace c3x_renderer { namespace render_core {
 // Generic coastal ribbon. Placement follows the authoritative contour; atlas
 // coordinates remain continuous along a ribbon, independently of camera/zoom.
 struct WavePoint { Point position; float distance,along,coverage; };
+// A water natural wonder's foam collars round its islets: its kit's ribbon points (five
+// floats each: x, y offsets from the tile centre, distance, along, coverage) as a
+// triangle list, found by the tile's topology relief slot.
+inline std::vector<WavePoint> wonder_waves(WorldCoast const& coast,int c,int r,::c3x_renderer::render_core::NaturalWonderPack const* wonders){
+    std::vector<WavePoint> out;
+    auto const* kit=wonders?wonders->relief(coast.world().tile(c,r).wonder):nullptr;
+    if(!kit)return out;
+    auto const& points=kit->waves;
+    for(std::size_t i=0;i+5<=points.size();i+=5)
+        out.push_back({Point{c+.5+points[i],r+.5+points[i+1]},points[i+2],points[i+3],points[i+4]});
+    return out;
+}
 inline double beach_wave_coverage(WorldTopology const& world,Point foot,double rocky) {
     if(rocky>.01)return 0;
     bool beach=false;
@@ -51,9 +64,11 @@ inline bool coastal_wave_spaced(WorldCoast const& coast,int c,int r,CoastSegment
     return true;
 }
 
-inline std::vector<WavePoint> coastal_wave_ribbon(WorldCoast const& coast,int c,int r,float scale) {
+inline std::vector<WavePoint> coastal_wave_ribbon(WorldCoast const& coast,int c,int r,float scale,
+        ::c3x_renderer::render_core::NaturalWonderPack const* wonders=nullptr) {
     CoastSegment chosen;
-    if(!coastal_wave_site(coast,c,r,chosen) || !coastal_wave_spaced(coast,c,r,chosen))return {};
+    auto wonder=wonder_waves(coast,c,r,wonders);
+    if(!coastal_wave_site(coast,c,r,chosen) || !coastal_wave_spaced(coast,c,r,chosen))return wonder;
     auto observe=[](auto...){ };
     std::vector<CoastSegment> edges;
     for(int y=r-2;y<=r+2;++y)for(int x=c-2;x<=c+2;++x){
@@ -106,12 +121,13 @@ inline std::vector<WavePoint> coastal_wave_ribbon(WorldCoast const& coast,int c,
             grid.push_back({p,d,float(along),mask});
         }
     }
-    if(!active)return {};
+    if(!active)return wonder;
     std::vector<WavePoint> result;result.reserve(rows*columns*6);
     for(unsigned y=0;y<rows;++y)for(unsigned x=0;x<columns;++x){
         unsigned a=y*(columns+1)+x,b=a+1,d=a+columns+1,e=d+1;
         for(auto i:{a,b,e,a,e,d})result.push_back(grid[i]);
     }
+    result.insert(result.end(),wonder.begin(),wonder.end());
     return result;
 }
 } }

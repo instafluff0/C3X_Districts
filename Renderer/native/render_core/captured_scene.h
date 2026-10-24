@@ -211,6 +211,8 @@ private:
             copy_city_facts(next.occurrence,absent);
             next.occurrence.resource_id=next.occurrence.resource_class=-1;
             std::memset(next.occurrence.resource_name,0,sizeof(next.occurrence.resource_name));
+            std::memset(next.occurrence.natural_wonder,0,sizeof(next.occurrence.natural_wonder));
+            next.occurrence.natural_wonder_flags=0;
             next.occurrence.barbarian_tribe_id=-1;next.occurrence.improvement_flags=0;
             next.occurrence.irrigation_mask=next.occurrence.has_effect=0;
             // The minimal native producer supplies real terrain and the map

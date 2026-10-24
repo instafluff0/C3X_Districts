@@ -66,7 +66,10 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     auto const& capture=input.projection.tile;
     // Volcanoes pass too: an active one carries a plume.
     bool const volcano=capture.real_terrain_type==10 && input.city_ready;
-    if(!capture.road_mask && !capture.railroad_mask && capture.city_id<0 && !volcano &&
+    // A natural wonder's attached effects (its record names the kit: explored tiles only).
+    auto const* wonder_kit=input.city_ready?natural.wonder_pack.find(capture.natural_wonder):nullptr;
+    bool const wonder=wonder_kit && !wonder_kit->effects.empty();
+    if(!capture.road_mask && !capture.railroad_mask && capture.city_id<0 && !volcano && !wonder &&
         !(capture.improvement_flags&(C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_IRRIGATION|
             C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP|
             C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS|
@@ -118,7 +121,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     // built only for route, volcano, mine and tile-building tiles, so routes,
     // a mine and tile buildings lie on its rock and a plume leaves its crater.
     MountainShape mountain_shape;
-    if(input.projection.tile.road_mask || input.projection.tile.railroad_mask || volcano ||
+    if(input.projection.tile.road_mask || input.projection.tile.railroad_mask || volcano || wonder ||
        (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS) ||
        (input.mine_ready && (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE)))
         mountain_shape=MountainShape(natural,nc,nr,lookup_natural,[](int,int){return false;});
@@ -356,6 +359,13 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             if(city_fidelity::volcano_plume(library,nc,nr,route_height(x,y),self.erupting,projection,true,plume) &&
                !adopt_city(plume))return {};
         }
+    }
+    if(wonder && library.effect_material<library.materials.size()){
+        city_fidelity::Surfaces effects;
+        GroundProjection projection{nc,nr,input.projection.half_w,input.projection.half_h,
+            input.projection.relief_projection_scale,float(input.projection.content_view_height)};
+        if(city_fidelity::wonder_effects(library,nc,nr,wonder_kit->effects,route_height,projection,true,effects) &&
+           !adopt_city(effects))return {};
     }
     if(stop())return {};
     result->rivers.assign(river_inputs.begin(),river_inputs.end());

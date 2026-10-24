@@ -72,6 +72,7 @@ struct RendererState {
   Stats statistics(){return {};}void invalidate(std::uint64_t key){released.insert(key);}}world_backing;
  struct {void write(char const*,char const*,bool){}double milliseconds(long long v){return double(v);}}trace;
  std::size_t tile_geometry_cache_bytes=0;unsigned calls=0;int fail_call=0;
+ unsigned wonder_slot(char const*)const{return 0;}
 ''' + sources + r'''
  bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1&,int,
   std::atomic<bool> const*,std::uint64_t,unsigned const* selected,unsigned count,c3x_renderer_frame_v1 const* basis){

@@ -171,7 +171,9 @@ inline WorldPreparationKey object_world_preparation_key(std::array<std::uint64_t
     static_assert(std::has_unique_object_representations<c3x_renderer_tile_v1>::value,"object input padding");
     constexpr auto text_begin=offsetof(c3x_renderer_tile_v1,resource_name);
     constexpr auto text_end=offsetof(c3x_renderer_tile_v1,barbarian_tribe_id);
-    static_assert(text_begin%4==0 && sizeof(facts)==text_end+8,"object input layout");
+    constexpr auto wonder_begin=offsetof(c3x_renderer_tile_v1,natural_wonder);
+    static_assert(text_begin%4==0 && wonder_begin==text_end+8 &&
+        sizeof(facts)==wonder_begin+sizeof(facts.natural_wonder)+4,"object input layout");
     key.recipe.words.reserve((sizeof(facts)+7)/8);
     unsigned shift=0;
     auto byte=[&](unsigned char value){
@@ -183,6 +185,8 @@ inline WorldPreparationKey object_world_preparation_key(std::array<std::uint64_t
     for(std::size_t at=0;at<text_begin;at+=4){std::uint32_t value=0;std::memcpy(&value,input+at,4);scalar(value);}
     for(std::size_t at=text_begin;at<text_end;++at)byte(input[at]);
     scalar(std::uint32_t(facts.barbarian_tribe_id));scalar(facts.city_site_grade);
+    for(std::size_t at=wonder_begin;at<wonder_begin+sizeof(facts.natural_wonder);++at)byte(input[at]);
+    scalar(facts.natural_wonder_flags);
     // Hash selects the map bucket; full normalized words resolve collisions.
     key.identity[17]=key.recipe.lookup_hash();return key;
 }
