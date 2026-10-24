@@ -53,8 +53,8 @@ Civ III's tile buildings share the site pack too (user picks 2026-10-23; see
   the keep in a ring of the era's walls, towers at its corners. The runtime
   lays the ring round the dry ground holding the keep: along the tile's edge,
   and along a river's or the coast's bank where water cuts through. A road,
-  railroad or bridge crosses it through the era's gate, or an opening between
-  two towers in eras without one.
+  railroad or bridge crosses it through the era's gate, or a plain opening in eras
+  without one; towers stand at its corners only.
 - Airfields are the early airstrip and the modern Aerodrome.
 - Outposts are era watchtowers (Medieval: the Great Wall tower).
 - The radar is Amundsen's mast; the victory point is a white obelisk.

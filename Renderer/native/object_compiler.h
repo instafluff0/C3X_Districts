@@ -2150,8 +2150,8 @@ auto site_wet(c3x_renderer_tile_v1 const& tile,Shore shore,River river){
 //   (wall_, tower_ and gate_<era>) round the dry ground that holds the keep:
 //   along the tile's edge, and along a river's or the coast's bank where water
 //   cuts through. Towers stand at its corners. A road or railroad of `routes`
-//   (the tile's route plan) crosses it through the era's gate, or an opening
-//   between two towers; a ring no route crosses has its gate (if the era has
+//   (the tile's route plan) crosses it through the era's gate, or a plain
+//   opening; a ring no route crosses has its gate (if the era has
 //   one) in the middle of its front side.
 // - A colony (the era's "A" kit, colony_<owner era>_<anchor|building|prop>_<k>)
 //   stands around the resource it was built on, never on it: anchors (the
@@ -2406,7 +2406,7 @@ bool place_tile_buildings(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 c
         if(gate){gate_items=items_of(*gate);gb=footprint(gate_items);gate_axis=axis(gate_items,gate_length,gate_x);}
         // Where a road or railroad crosses the ring (its routes' tile-local
         // lines), it passes through the era's gate, or through an opening
-        // between two towers where the era has none. A ring no route crosses
+        // where the era has none. A ring no route crosses
         // keeps its gate in the middle of the longest run along the front
         // sides (v, then u, at the tile's far edge), as it was drafted.
         std::vector<std::array<float,4>> paths;
@@ -2477,9 +2477,9 @@ bool place_tile_buildings(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 c
             for(auto const& g:gaps){
                 lay(from,g[0]);from=g[1];
                 float width=g[1]-g[0];
+                // Eras without a gate leave a plain opening: towers stand at corners only.
                 if(gate && width>=opening*.9f && width<=opening*1.5f){
                     auto mid=at((g[0]+g[1])*.5f);emit(gate_items,gb[0],gb[1],mid[0],mid[1],1.f,heading-gate_axis,0.f);}
-                else {tower_at(at(g[0]));tower_at(at(g[1]));}
             }
             lay(from,length);
         }
@@ -2488,7 +2488,7 @@ bool place_tile_buildings(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 c
             auto const& p=corners[(k+corners.size()-1)%corners.size()];auto const& c=corners[k];
             auto const& n=corners[(k+1)%corners.size()];
             float turn=std::atan2(n[1]-c[1],n[0]-c[0])-std::atan2(c[1]-p[1],c[0]-p[0]);
-            if(std::abs(std::atan2(std::sin(turn),std::cos(turn)))>=.52f)tower_at(c);
+            if(std::abs(std::atan2(std::sin(turn),std::cos(turn)))>=1.f)tower_at(c);
         }
         // The ring keeps later buildings off: its cells, inside and out.
         for(int i=0;i<grid;++i)for(int j=0;j<grid;++j)if(region[i*grid+j] &&

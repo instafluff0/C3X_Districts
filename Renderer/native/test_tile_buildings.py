@@ -207,13 +207,13 @@ int main(){
  assert(gates.size()==2);
  for(auto const& g:gates)assert(std::abs(g.u-.5f)<.01f && (std::abs(g.v-.03f)<.01f || std::abs(g.v-.97f)<.01f));
  assert(!blocks(gated,.5f,.03f) && !blocks(gated,.5f,.97f));
- // Industrial: an opening between two towers where the road crosses.
+ // Industrial: a plain opening where the road crosses; towers stay at the corners only.
  objects::Plan open;
  assert(objects::place_tile_buildings(open,pack.assets,site(C3X_RENDERER_IMPROVEMENT_BARRICADE,2,0),road,{},dry,flat));
  unsigned towers=0,flanking=0;
  for(auto const& i:open.instances)if(pack.id(i)=="tower_2"){++towers;
   if(std::abs(std::abs(i.u-.5f)-.07f)<.01f && (std::abs(i.v-.03f)<.01f || std::abs(i.v-.97f)<.01f))++flanking;}
- assert(towers==8 && flanking==4);
+ assert(towers==4 && flanking==0);
  assert(!blocks(open,.5f,.03f) && !blocks(open,.5f,.97f));
  // A bridge landing on a river's bank: the bank's wall opens where the road comes ashore.
  auto river=[](float,float v){return v<.3f;};
