@@ -173,13 +173,6 @@ struct Projection {
     bool pickup_profile=false,world_objects=false;
     std::array<float,3> key_light{};
 };
-// A baked resource ground decal follows gentle relief but does not climb a steep
-// face: no point rises more than half its distance from the decal's centre
-// (heights in relief units, 150/.82 per tile), and the face hides the rest
-// instead of the decal stretching up it.
-inline float decal_ground(float ground,float centre,float distance_tiles){
-    return std::min(ground,centre+distance_tiles*(150.f/.82f)*.5f);
-}
 // Wall sections take the terrain under every vertex, so they bend over slopes
 // and banks and never share one rigid transform: the city walls and a
 // barricade's ring (the site pack's "walls/" pieces).
@@ -190,6 +183,13 @@ inline bool terrain_wall_asset(FeatureAsset const& asset){
 // ground, a mountain's rock included, as mines do.
 inline bool tile_building_asset(FeatureAsset const& asset){
     return asset.id.rfind("district/",0)==0 || asset.id.rfind("walls/",0)==0;
+}
+// A baked resource ground decal follows gentle relief but does not climb a steep
+// face: no point rises more than half its distance from the decal's centre
+// (heights in relief units, 150/.82 per tile), and the face hides the rest
+// instead of the decal stretching up it.
+inline float decal_ground(float ground,float centre,float distance_tiles){
+    return std::min(ground,centre+distance_tiles*(150.f/.82f)*.5f);
 }
 inline bool steep_decal(float rise,float distance_tiles){
     return rise>distance_tiles*(150.f/.82f)*.5f;
