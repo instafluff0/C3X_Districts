@@ -31,6 +31,7 @@ enum WonderState:unsigned {wonder_none=0,wonder_unused=1,wonder_building=2,wonde
 struct WonderFact {
     std::string alias;   // the C3X wonder config name, lowercased
     unsigned state=wonder_none,progress=0,alternate=0,era=0;  // progress 0-255
+    bool on_river=false;  // its C3X config requires a river: it stands across the tile's river
 };
 struct WonderSlots;
 // One uploaded wonder texture, shared by every group that names it; released, with its
@@ -260,6 +261,7 @@ inline bool wonder_fact(c3x_renderer_tile_v1 const& tile,WonderFact& out){
     for(auto& c:out.alias)c=char(std::tolower(static_cast<unsigned char>(c)));
     out.state=tile.wonder_state;out.progress=std::min(tile.wonder_progress,255u);
     out.alternate=(tile.wonder_flags&C3X_RENDERER_WONDER_ALTERNATE)?1u:0u;
+    out.on_river=(tile.wonder_flags&C3X_RENDERER_WONDER_ON_RIVER)!=0;
     out.era=tile.wonder_era<0?0u:unsigned(tile.wonder_era);
     return true;
 }
@@ -271,11 +273,7 @@ inline unsigned wonder_season_mask(std::string const& authority){
 }
 }}
 namespace c3x_renderer { namespace city_fidelity {
-// Whether a composition stands across its tile's river (authority flags, field 5: "r").
-inline bool wonder_spans_river(std::string const& authority){
-    auto at=authority.rfind('|');return at!=std::string::npos && authority.find('r',at)!=std::string::npos;
-}
-// A river-spanning composition placed as C3X places a river wonder: centred on the
+// A river wonder's composition (WonderFact::on_river) placed as C3X places one: centred on the
 // tile's river edge (render_core::NaturalWonderPack::river_frame) with the long side of
 // its bodies across the river. A tile without river bits keeps it at the centre.
 inline Composition across_river(Composition placed,unsigned river){

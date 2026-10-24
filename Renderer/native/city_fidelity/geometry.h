@@ -36,11 +36,11 @@ if(auto composition=selected_city(tile,nc,nr)){
     if(!prepared_objects && city_profile && cities.ready && c3x_renderer::city_fidelity::wonder_fact(tile,wonder_fact)){
         auto& store=c3x_renderer::city_fidelity::wonder_store();
         auto group=store.resident(store.key(wonder_fact));
+        bool const across=group && wonder_fact.on_river;   // a district fallback keeps its centre
         if(!group)group=store.resident(store.district(wonder_fact));
         if(group)for(auto const& template_:group->library.compositions){
             c3x_renderer::city_fidelity::Surfaces bodies;
-            auto const placed=c3x_renderer::city_fidelity::wonder_spans_river(template_.authority)?
-                c3x_renderer::city_fidelity::across_river(template_,tile.river_code):template_;
+            auto const placed=across?c3x_renderer::city_fidelity::across_river(template_,tile.river_code):template_;
             c3x_renderer::city_fidelity::compile(group->library,placed,nc,nr,height_natural,project_natural,bodies);
             auto const stand=static_cast<unsigned char>(c3x_renderer::city_fidelity::wonder_season_mask(template_.authority));
             for(auto& chunk:bodies.chunks){

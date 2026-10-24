@@ -70,9 +70,9 @@ PICKS: dict[str, list[dict]] = {
     ],
     "great_lighthouse": [choice("Great Lighthouse", part("great_lighthouse"))],
     "colossus": [choice("Colossus", part("colossus"))],
-    # The dam stands across its tile's river, in a gorge the pack's stamp carves
-    # (river_span: build_wonder_pack's gorge, turned to the river by the renderer).
-    "hoover_dam": [choice("Three Gorges Dam (Workshop)", part("three_gorges", river_span=True)),
+    # The dam stands across its tile's river because C3X's config needs one
+    # (buildable_on_rivers); the renderer places it and cuts the river valley.
+    "hoover_dam": [choice("Three Gorges Dam (Workshop)", part("three_gorges")),
                    choice("Dam + Hydroelectric Dam", part("dam_hydro"))],
     "apollo_program": [
         # The movie also parks a second rocket below ground (for its launch): cut it.

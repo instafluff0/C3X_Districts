@@ -127,6 +127,33 @@ int main(){
         self.assertEqual(int(height[np.sqrt(u * u + v * v) >= reach - 1.0 / size].max()), 0)
         self.assertGreater(int(height.max()), 200)
 
+    def test_river_wonders_follow_c3x_facts(self):
+        """A river wonder is C3X's buildable_on_rivers fact (wonder_flags bit 2), never pack
+        or name data: the fact reads it, and only a mountain tile with it takes the one
+        generic river valley the pack builds."""
+        from Renderer.native.native_cpp_test import run_cpp
+        from Renderer.tools.asset_compiler import build_wonder_pack as wp
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text(encoding="latin-1")
+        slot = source[source.index("unsigned wonder_tile_slot(c3x_renderer_tile_v1 const& tile) const {"):][:700]
+        self.assertIn(f'wonder_slot("{wp.RIVER_VALLEY}")', slot)
+        self.assertIn("tile.real_terrain_type!=6", slot)
+        self.assertIn("!fact.on_river", slot)
+        run_cpp(r'''
+#include <cassert>
+#include <cstring>
+#include "Renderer/native/city_fidelity/wonders.h"
+using namespace c3x_renderer::city_fidelity;
+int main(){
+    c3x_renderer_tile_v1 tile{};WonderFact fact;
+    assert(!wonder_fact(tile,fact));
+    std::strcpy(tile.wonder,"Hoover Dam");tile.wonder_state=C3X_RENDERER_WONDER_COMPLETE;
+    assert(wonder_fact(tile,fact) && fact.alias=="hoover dam" && !fact.on_river && !fact.alternate);
+    tile.wonder_flags=C3X_RENDERER_WONDER_ON_RIVER;assert(wonder_fact(tile,fact) && fact.on_river && !fact.alternate);
+    tile.wonder_flags|=C3X_RENDERER_WONDER_ALTERNATE;assert(wonder_fact(tile,fact) && fact.on_river && fact.alternate);
+    return 0;
+}
+''')
+
     def test_combined_relief_slots_fit(self):
         """The packs' relief kits (natural stamps and wave kits, then constructed stamps) fit
         the 15 slots of topology bits 28-31, with none dropped."""

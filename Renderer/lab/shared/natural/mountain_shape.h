@@ -127,7 +127,9 @@ struct MountainShape {
                 unsigned wonder=kit && kit->stamp()?unsigned(kit-natural.wonder_pack.kits.data())+1:0u;
                 bool volcano=t.real==10 && !wonder,mountain=t.real==6 || volcano || wonder;
                 unsigned bits=mountain?unsigned(flags(nc+dc,nr+dr)):0u;
-                bool snow=wonder?(kit->flags&::c3x_renderer::render_core::NaturalWonderPack::flag_snow)!=0:!volcano && (bits&mountain_snow_cap);
+                // A river wonder's valley (follow-river) keeps its host mountain's snow cap.
+                bool snow=wonder && !(kit->flags&::c3x_renderer::render_core::NaturalWonderPack::flag_follow_river)?
+                    (kit->flags&::c3x_renderer::render_core::NaturalWonderPack::flag_snow)!=0:!volcano && (bits&mountain_snow_cap);
                 cells[i]=MountainCell{mountain,volcano,snow,
                     volcano?((bits&volcano_erupting)?2u:(bits&volcano_active)?1u:0u):0u,mountain_seed(t),wonder,t.river};
                 ready[i]=true;

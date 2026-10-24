@@ -72,7 +72,8 @@ enum c3x_renderer_wonder_state {
     C3X_RENDERER_WONDER_COMPLETE = 3u
 };
 enum c3x_renderer_wonder_flags {
-    C3X_RENDERER_WONDER_ALTERNATE = 1u  /* C3X draws its alternate-direction art */
+    C3X_RENDERER_WONDER_ALTERNATE = 1u, /* C3X draws its alternate-direction art */
+    C3X_RENDERER_WONDER_ON_RIVER = 2u   /* its C3X config requires a river tile (buildable_on_rivers) */
 };
 
 enum c3x_renderer_invalidation_flags {

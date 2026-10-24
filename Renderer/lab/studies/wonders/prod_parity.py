@@ -26,22 +26,37 @@ from Renderer.lab.studies.wonders import kits, plan, prod_tree
 PARITY = kits.OUT / "parity"
 FACTS = kits.CATALOG / "wonder_facts.txt"
 BUILDING, COMPLETE, UNUSED = 2, 3, 1
+ALTERNATE_FLAG, ON_RIVER_FLAG = 1, 2   # c3x_renderer_wonder_flags
 ALTERNATE = [0]   # --alternate sets C3X's alternate-direction fact on every cell
 
 
+def river_wonders() -> set[str]:
+    """Plan keys of wonders whose C3X config needs a river (buildable_on_rivers), as
+    injected_code.c reports them (C3X_RENDERER_WONDER_ON_RIVER)."""
+    from Renderer.tools.asset_compiler import build_wonder_pack as wp
+    configs = wp.config_wonders()
+    return {entry["c3x_key"] for entry in json.loads(plan.LEDGER.read_text())["mappings"]
+            if configs.get(entry["c3x_name"], {}).get("buildable_on_rivers") == "1"}
+
+
 def facts(catalog: dict) -> list[str]:
-    """One fact line per cell: its resource name, state, progress, facing and era, wonder name."""
+    """One fact line per cell: its resource name, state, progress, flags and era, wonder name."""
     ledger = {entry["c3x_key"]: entry["c3x_name"]
               for entry in json.loads(plan.LEDGER.read_text())["mappings"]}
+    rivers = river_wonders()
     lines = []
     for cell in catalog["cells"]:
+        if cell.get("ghost"):
+            continue
         if cell.get("wonder") == "wonder_district":
             era = plan.WD_ERAS.index(cell["label"].split(" · ")[-1])
             lines.append(f"{cell['name']}\t{UNUSED} 0 0 {era}\t-")
             continue
         built = min((part.get("built", 1.0) for part in cell["parts"]), default=1.0)
         state, progress = (COMPLETE, 255) if built >= 1.0 else (BUILDING, int(round(built * 255)))
-        lines.append(f"{cell['name']}\t{state} {progress} {ALTERNATE[0]} 0\t{ledger[cell['wonder']]}")
+        flags = (ALTERNATE_FLAG if cell.get("alternate", ALTERNATE[0]) else 0) | \
+            (ON_RIVER_FLAG if cell["wonder"] in rivers else 0)
+        lines.append(f"{cell['name']}\t{state} {progress} {flags} 0\t{ledger[cell['wonder']]}")
     return lines
 
 
@@ -53,7 +68,7 @@ def bake(catalog: dict, _compiler=None, _scale: float = 1.0, _ground: bool = Tru
     compositions = [(cell["name"], [(kits.dk.ALL_TERRAINS, [marker])]) for cell in catalog["cells"]]
     kits.write_pack(catalog["id"], meshes, compositions)
     FACTS.write_text("\n".join(facts(catalog)) + "\n")
-    report = {cell["name"]: {"label": cell["label"], "parts": [], "instances": 1, "missing": [], "sources": []}
+    report = {cell["name"]: {"label": cell.get("label", ""), "parts": [], "instances": 1, "missing": [], "sources": []}
               for cell in catalog["cells"]}
     summary = {"catalog": catalog["id"], "meshes": 1, "cells": report}
     (kits.CATALOG / "composition_report.json").write_text(json.dumps(summary, indent=1) + "\n")
@@ -61,18 +76,24 @@ def bake(catalog: dict, _compiler=None, _scale: float = 1.0, _ground: bool = Tru
 
 
 def rivers(catalogs: dict) -> None:
-    """A short river along the south-west edge of every river-spanning wonder's Lab tile
-    (Civ III edge bit 32; its neighbour across holds bit 2), as roster.mountain-water lays one."""
+    """Civ III river edge bits for the Lab tiles: a catalog's own "rivers" ({(dx, dy):
+    bits} at raw offsets), else a short river along the south-west edge (bit 32; its
+    neighbour across holds bit 2) of every river wonder's tile, as roster.mountain-water
+    lays one."""
     from Renderer.lab.studies.resources import roster
-    spans = {key for key, choices in plan.PICKS.items() if any(p.get("river_span") for p in choices[0]["parts"])}
+    spans = river_wonders()
     marked = {}
     for key, spec in catalogs.items():
+        case = f"native-district-{key}"
+        if "rivers" in spec:
+            marked[case] = {((dx + dy + 32) // 2, (dx - dy) // 2): bits for (dx, dy), bits in spec["rivers"].items()}
+            continue
         for x, y, cell in kits.dk.layout(spec):
             if cell.get("wonder") in spans:
                 c, r = (x + y + 32) // 2, (x - y) // 2
                 for dc in range(-3, 4):
-                    marked.setdefault(f"native-district-{key}", {})[(c + dc, r)] = 32
-                    marked[f"native-district-{key}"][(c + dc, r - 1)] = 2
+                    marked.setdefault(case, {})[(c + dc, r)] = 32
+                    marked[case][(c + dc, r - 1)] = 2
     original = roster.river
 
     def river(case, dx, dy, bits):

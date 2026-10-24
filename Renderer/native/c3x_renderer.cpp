@@ -7131,15 +7131,16 @@ public:
     unsigned wonder_slot(char const* name) const {
         auto const* kit=name[0]?natural.wonder_pack.find(name):nullptr;return kit?kit->relief_slot:0u;
     }
-    // A tile record's relief slot: its natural wonder's, else its constructed wonder's
-    // stamp (city_fidelity/wonders.h facts) once the district holds a wonder.
+    // A tile record's relief slot: its natural wonder's, else, for a river wonder
+    // (city_fidelity/wonders.h facts: C3X's buildable_on_rivers) built or building on a
+    // mountain, the WonderRuntime river valley, which follows the tile's river.
     unsigned wonder_tile_slot(c3x_renderer_tile_v1 const& tile) const {
         if(unsigned slot=wonder_slot(tile.natural_wonder))return slot;
         c3x_renderer::city_fidelity::WonderFact fact;
-        if(!c3x_renderer::city_fidelity::wonder_fact(tile,fact) ||
+        if(tile.real_terrain_type!=6 || !c3x_renderer::city_fidelity::wonder_fact(tile,fact) || !fact.on_river ||
            (fact.state!=c3x_renderer::city_fidelity::wonder_building && fact.state!=c3x_renderer::city_fidelity::wonder_complete))
             return 0u;
-        return wonder_slot(("wonder|"+fact.alias).c_str());
+        return wonder_slot("wonder|river valley");
     }
     // Natural-wonder bodies: the C3XWonderBody constants (PS b13) Winter shading reads,
     // bound only for their draws (x 1, y the kit's snow floor in relief units).

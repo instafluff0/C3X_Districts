@@ -29240,6 +29240,8 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 					if (wcfg->enable_img_alt_dir && wonder_should_use_alternative_direction_image (tile_x, tile_y, owner_id, wcfg))
 						record->wonder_flags |= C3X_RENDERER_WONDER_ALTERNATE;
 					is->current_render_tile = drawing;
+					if (wcfg->buildable_on_rivers)
+						record->wonder_flags |= C3X_RENDERER_WONDER_ON_RIVER;
 				}
 				// The district's era as C3X picks its art: the territory owner's, else its builder's.
 				if (owner_id > 0)

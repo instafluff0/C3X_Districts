@@ -12,7 +12,8 @@ production one, plus its own textures:
   composition per season mask, named by its
   authority: "wonder|<alias>|<variant>|<season mask>|<flags>". Variants are
   "complete" and "build:<progress>"; a "+alt" suffix is the turned composition
-  for C3X's alternate direction. Flags: "r" = the kit stands across a river.
+  for C3X's alternate direction. Flags: none yet (placement follows C3X's facts:
+  a wonder whose C3X config needs a river stands across the tile's river).
 - the unused Wonder District per era: "district|<era>|complete|<season mask>|".
 - season masks: foliage parts only are emitted per season (Summer and Winter,
   Autumn, Spring); every other part has mask 0, all seasons. Slender foliage
@@ -288,13 +289,12 @@ def cells() -> list[dict]:
         facings = [("", facing)]
         if configs.get(entry["c3x_name"], {}).get("enable_img_alt_dir") == "1":
             facings.append(("+alt", plan.FACE_SE if facing == plan.FACE_SW else plan.FACE_SW))
-        flags = "r" if any(item.get("river_span") for item in pick["parts"]) else ""
         for suffix, turn in facings:
             out.append({"kind": "wonder", "alias": alias, "variant": "complete" + suffix, "facing": turn,
-                        "parts": pick["parts"], "flags": flags})
+                        "parts": pick["parts"], "flags": ""})
             for built in BUILDS:
                 out.append({"kind": "wonder", "alias": alias, "variant": f"build:{built}{suffix}", "facing": turn,
-                            "parts": plan.staging(pick["parts"], built), "flags": flags})
+                            "parts": plan.staging(pick["parts"], built), "flags": ""})
     for era, name in enumerate(plan.WD_ERAS):
         out.append({"kind": "district", "alias": str(era), "variant": "complete", "facing": plan.FACE_SW,
                     "parts": plan.wonder_district(name), "flags": "", "era": era})
@@ -302,12 +302,15 @@ def cells() -> list[dict]:
 
 
 MAGIC = b"C3XWND1\0"
-# Terrain stamps for kits that stand across a river (river_span), in the natural-wonder
-# kit format (render_core/natural_wonder_pack.h) so one relief-slot registry serves both:
-# a gorge whose channel follows the stamp's long axis, walls rising beyond it.
+# The river valley: one terrain stamp for every river wonder (C3X's buildable_on_rivers,
+# reported per tile) built on a mountain, in the natural-wonder kit format
+# (render_core/natural_wonder_pack.h) so one relief-slot registry serves both. The
+# renderer turns its channel along the tile's river and cuts it from the mountain.
 STAMP_FLAG, SNOW_FLAG, FOLLOW_RIVER_FLAG = 1, 2, 4
 # Field half-widths across the axis: the channel holds the dam (fitted about .95 tile
 # long: half a tile each side, .37 of the 2.6-tile span's half-width), crested walls beyond.
+# A stamp needs a region kind (1-4), but its special field is all zero, so no region
+# material shows: the valley keeps the plain look of its host mountain.
 GORGE = {"span": 2.6, "units": 96.0, "region": 3, "size": 256,
          "channel": .34, "crest": .5, "outer": .76,
          "reach": .76}   # 1.0 tile over the 1.3-tile field half, less a texel
@@ -338,29 +341,29 @@ def gorge_fields(size: int, channel: float, crest: float, outer: float) -> tuple
     ridge = rise * wave * (1 - smooth(.28, GORGE["reach"], radius)) ** 1.4 * 2.1
     texture = .04 * np.sin(u * 37 + v * 11) * np.sin(v * 29 - u * 7)
     height = np.clip(ridge + texture * smooth(.1, .4, ridge), 0, 1)
-    special = smooth(.05, .3, height)
+    special = np.zeros_like(height)   # the host mountain's own material, no region rock
     ground = 1 - smooth(.0, .25, height)
     to_bytes = lambda field: (np.clip(field, 0, 1) * 255 + .5).astype(np.uint8).tobytes()
     return to_bytes(height), to_bytes(ground), to_bytes(special)
 
 
-def stamps_bytes(river_aliases: list[str]) -> bytes:
-    """stamps.bin: one gorge kit per river-span wonder, aliased "wonder|<alias>"."""
+RIVER_VALLEY = "wonder|river valley"   # the alias c3x_renderer.cpp wonder_tile_slot looks up
+
+
+def stamps_bytes() -> bytes:
+    """stamps.bin: the one river-valley kit, aliased RIVER_VALLEY."""
     out = bytearray(b"C3XNWK1\0")
-    out += struct.pack("<IIII", 1, len(river_aliases), len(river_aliases), 8)
+    out += struct.pack("<IIII", 1, 1, 1, 8)
     out += bytes(4 * 8 * 4)                       # no bodies, so no season texture slots
-    fields = gorge_fields(GORGE["size"], GORGE["channel"], GORGE["crest"], GORGE["outer"])
-    for alias in river_aliases:
-        key = ("gorge-" + alias).encode()
-        out += struct.pack("<I", len(key)) + key
-        out += struct.pack("<II4fI", STAMP_FLAG | FOLLOW_RIVER_FLAG, GORGE["region"],
-                           GORGE["span"], GORGE["units"], 0.0, 0.0, GORGE["size"])
-        for field in fields:
-            out += field
-        out += struct.pack("<III", 0, 0, 0)       # effects, waves, bodies
-    for number, alias in enumerate(river_aliases):
-        name = f"wonder|{alias}".encode()
-        out += struct.pack("<I", len(name)) + name + struct.pack("<I", number)
+    key = b"river-valley"
+    out += struct.pack("<I", len(key)) + key
+    out += struct.pack("<II4fI", STAMP_FLAG | FOLLOW_RIVER_FLAG, GORGE["region"],
+                       GORGE["span"], GORGE["units"], 0.0, 0.0, GORGE["size"])
+    for field in gorge_fields(GORGE["size"], GORGE["channel"], GORGE["crest"], GORGE["outer"]):
+        out += field
+    out += struct.pack("<III", 0, 0, 0)           # effects, waves, bodies
+    name = RIVER_VALLEY.encode()
+    out += struct.pack("<I", len(name)) + name + struct.pack("<I", 0)
     return bytes(out)
 
 
@@ -427,9 +430,8 @@ def build(output: Path = OUTPUT, only: set | None = None) -> dict:
     for number, (_key, data, _textures) in enumerate(groups):
         (output / "groups" / f"{number}.bin").write_bytes(data)
     (output / "index.bin").write_bytes(index_bytes(groups))
-    rivers = sorted({cell["alias"] for cell in cells() if "r" in cell["flags"] and (not only or cell["alias"] in only)})
-    (output / "stamps.bin").write_bytes(stamps_bytes(rivers))
-    report["stamps"] = rivers
+    (output / "stamps.bin").write_bytes(stamps_bytes())
+    report["stamps"] = [RIVER_VALLEY]
     report["group_bytes"] = sum(len(data) for _k, data, _t in groups)
     report["largest_group_bytes"] = max(len(data) for _k, data, _t in groups)
     report["budget_bytes"] = BUDGET
@@ -444,9 +446,8 @@ def main() -> int:
     parser.add_argument("--stamps", action="store_true", help="write stamps.bin only (the groups are unchanged)")
     args = parser.parse_args()
     if args.stamps:
-        rivers = sorted({cell["alias"] for cell in cells() if "r" in cell["flags"]})
-        (args.output / "stamps.bin").write_bytes(stamps_bytes(rivers))
-        print("stamps:", rivers)
+        (args.output / "stamps.bin").write_bytes(stamps_bytes())
+        print("stamps:", [RIVER_VALLEY])
         return 0
     report = build(args.output, set(args.only) if args.only else None)
     print(json.dumps({k: v for k, v in report.items() if k != "groups"}, indent=1))

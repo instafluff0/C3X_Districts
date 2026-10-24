@@ -366,6 +366,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         auto& store=city_fidelity::wonder_store();
         auto take=[&](std::string const& key){return input.foreground?store.resident(key):store.acquire(key);};
         auto group=take(store.key(wonder_fact));
+        bool const across=group && wonder_fact.on_river;   // a district fallback keeps its centre
         if(!group)group=take(store.district(wonder_fact));
         // The next build stage loads ahead while progress nears it. This tile's chunks hold
         // it, so it lives exactly as long as the tile's prepared wonder.
@@ -380,8 +381,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             city_fidelity::Surfaces bodies;
             GroundProjection projection{nc,nr,input.projection.half_w,input.projection.half_h,
                 input.projection.relief_projection_scale,float(input.projection.content_view_height)};
-            auto const placed=city_fidelity::wonder_spans_river(template_.authority)?
-                city_fidelity::across_river(template_,capture.river_code):template_;
+            auto const placed=across?city_fidelity::across_river(template_,capture.river_code):template_;
             if(!city_fidelity::compile(group->library,placed,nc,nr,height_natural,projection,bodies,stop,true))return {};
             auto const stand=static_cast<unsigned char>(city_fidelity::wonder_season_mask(template_.authority));
             for(auto& chunk:bodies.chunks){chunk.material+=group->material_base;chunk.season_stand=stand;chunk.lease=lease;}

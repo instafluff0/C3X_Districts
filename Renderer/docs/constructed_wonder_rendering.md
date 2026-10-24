@@ -23,9 +23,9 @@ wonder tile shows only its terrain today. Nothing needs suppressing. No
 ## Rules
 
 - **No names in runtime code.** Scenarios define arbitrary wonders. C3X config
-  names reach kits only through the pack's aliases. Seating, river spans and the
-  fallback for a wonder without a kit are pack metadata, applied by generic rules
-  (the user, 2026-10-24).
+  names reach kits only through the pack's aliases. Seating and the fallback for
+  a wonder without a kit are pack metadata, applied by generic rules (the user,
+  2026-10-24). Placement rules C3X already holds come from C3X itself.
 - **Facts only in C3X.** C3X reports the state; Renderer64 draws. C3X keeps no
   renderer logic.
 - **Recompile on change only.** State, stage and facing are selected by facts, so
@@ -90,8 +90,13 @@ study. It holds no Civ VI identifiers.
     Lab. A kit whose metadata asks for a foundation gets the city terrace (its
     skirt and top plates); parity showed the terrace laying plates even on gentle
     grassland relief, so it is never automatic.
-  - **River:** a span flag and axis for kits that stand across a river (Hoover
-    Dam). The renderer turns them along the tile's river from its own world data.
+  - **River:** not pack metadata. A wonder whose C3X config needs a river
+    (`buildable_on_rivers`) is reported as `C3X_RENDERER_WONDER_ON_RIVER`; the
+    renderer places it across the tile's primary river (C3X's direction rule) and,
+    on a mountain, cuts the one generic river valley (`stamps.bin`, alias
+    `wonder|river valley`) whose walls keep the host mountain's look and snow.
+    `lab/studies/wonders/river_gallery.py` renders twelve sites (every river edge,
+    bends, a fork, a source, ranges, hills and forest, facing, stages, snow).
   - **Fallback:** the era Wonder District for a wonder name with no kit.
 - **Memory:** wonder textures are capped (1024, 512 for small props). The pack
   holds at most 64 MB of resident textures (BC-compressed, full mip chains),
@@ -126,7 +131,7 @@ never grow it in place:
   the alias is the C3X config name, lowercased. The Lab preview fills those
   fields from `C3X_LAB_TILE_WONDERS` (a Lab tile's resource name selects its
   line), so `lab/studies/wonders/prod_parity.py` renders the production path.
-- **River gorge reach:** a follow-river stamp moves to its river edge, so its
+- **River valley reach:** a follow-river stamp moves to its river edge, so its
   reach is capped at 1.5 − max(|ox|, |oy|) (1 tile) to stay inside the owner's
   3x3, and its field slopes to zero within that reach. Overflowing constructed
   stamps are dropped (never natural ones) and traced as `wonder-stamps-dropped`.
@@ -138,7 +143,7 @@ The tile record gains:
 - the wonder's C3X config name;
 - the state: none, unused, under construction or completed;
 - build progress 0–255 (the reserving city's shields over the wonder's cost);
-- the alternate-direction bit;
+- the alternate-direction bit and the river bit (`buildable_on_rivers`);
 - the unused district's era.
 
 All come from existing C3X state. Config-off delegation tests apply.

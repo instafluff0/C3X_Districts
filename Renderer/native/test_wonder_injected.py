@@ -1,7 +1,7 @@
 """Execute C3X's constructed-wonder facts (tile record, frame API 24) with fake state.
 
 Injected code only reports a completed Wonder District's state, wonder, build progress,
-facing and art era; Renderer64 draws it. A district still being built, a disabled feature
+facing, river requirement and art era; Renderer64 draws it. A district still being built, a disabled feature
 and any other tile report nothing.
 """
 from pathlib import Path
@@ -30,10 +30,10 @@ struct Tile {int district=-1;bool complete=true;int Territory_OwnerID=0;};
 struct Leader {int Era;};
 struct wonder_district_info {wonder_district_state state;City* city;int city_id;int wonder_index;};
 struct district_instance {int district_id;int built_by_civ_id;wonder_district_info wonder_info;};
-struct wonder_district_config {char const* wonder_name;bool enable_img_alt_dir;};
+struct wonder_district_config {char const* wonder_name;bool enable_img_alt_dir;bool buildable_on_rivers;};
 struct Config {bool enable_districts=true,enable_wonder_districts=true;};
 struct State {Config current_config;wonder_district_config* wonder_district_configs;int wonder_district_count;Tile* current_render_tile=nullptr;}state,*is=&state;
-wonder_district_config configs[2]={{"The Pyramids",false},{"The Colossus",true}};
+wonder_district_config configs[3]={{"The Pyramids",false,false},{"The Colossus",true,false},{"Hoover Dam",true,true}};
 Leader leaders[4]={{0},{2},{3},{1}};
 district_instance instance{};City city{400,300};int building=-1;bool alternate=false;
 district_instance* get_district_instance(Tile* tile){return tile->district<0?nullptr:&instance;}
@@ -53,7 +53,7 @@ c3x_renderer_tile_v1 capture(Tile* tile,int tile_x=3,int tile_y=5){
  return storage;
 }
 int main(){
- is->wonder_district_configs=configs;is->wonder_district_count=2;
+ is->wonder_district_configs=configs;is->wonder_district_count=3;
  Tile plain{},district{WONDER_DISTRICT_ID,true,2};
  // Not a Wonder District, or one still being built: nothing.
  assert(capture(&plain).wonder_state==C3X_RENDERER_WONDER_NONE);
@@ -79,6 +79,10 @@ int main(){
         r.wonder_flags==C3X_RENDERER_WONDER_ALTERNATE && r.wonder_progress==0 && is->current_render_tile==nullptr);
  instance.wonder_info.wonder_index=0;assert(capture(&district).wonder_flags==0);
  instance.wonder_info.wonder_index=5;assert(capture(&district).wonder_state==C3X_RENDERER_WONDER_UNUSED);
+ // A wonder whose config needs a river reports it (buildable_on_rivers), beside its facing.
+ instance.wonder_info.wonder_index=2;r=capture(&district);
+ assert(r.wonder_flags==(C3X_RENDERER_WONDER_ALTERNATE|C3X_RENDERER_WONDER_ON_RIVER) && !std::strcmp(r.wonder,"Hoover Dam"));
+ alternate=false;assert(capture(&district).wonder_flags==C3X_RENDERER_WONDER_ON_RIVER);alternate=true;
  // Wonder Districts off: nothing.
  instance.wonder_info.wonder_index=1;is->current_config.enable_wonder_districts=false;
  assert(capture(&district).wonder_state==C3X_RENDERER_WONDER_NONE);

@@ -22,7 +22,7 @@ from Renderer.tools.asset_compiler import build_resource_compositions as rc
 from Renderer.tools.asset_compiler import build_wonder_pack as wp
 
 PACK = wp.OUTPUT
-AUTHORITY = re.compile(r"^(wonder|district)\|[^|]+\|(complete|build:0\.\d+)(\+alt)?\|(0|2|5|8)\|r?$")
+AUTHORITY = re.compile(r"^(wonder|district)\|[^|]+\|(complete|build:0\.\d+)(\+alt)?\|(0|2|5|8)\|$")
 SOURCE_WORDS = re.compile(r"civ6|civ ?vi|firaxis|blp|artdef|won_|building_", re.IGNORECASE)
 
 
@@ -159,12 +159,36 @@ class Pack(unittest.TestCase):
         # A follow-river stamp moves and turns with its river: effects or waves authored
         # in the kit's own frame would not follow, so the pack carries none.
         from Renderer.tools.asset_compiler import build_natural_wonder_pack as natural
-        kits = natural.read_wonders((PACK / "stamps.bin").read_bytes())["kits"]
-        self.assertTrue(kits)
+        stamps = natural.read_wonders((PACK / "stamps.bin").read_bytes())
+        kits = stamps["kits"]
+        # One generic river valley, never a kit per wonder (scenarios name their own).
+        self.assertEqual([kit["key"] for kit in kits], ["river-valley"])
+        self.assertEqual([alias[0] for alias in stamps["aliases"]], [wp.RIVER_VALLEY])
         for kit in kits:
             self.assertTrue(kit["flags"] & wp.FOLLOW_RIVER_FLAG and kit["flags"] & wp.STAMP_FLAG)
             self.assertFalse(kit["effects"], kit["key"])
             self.assertFalse(kit["waves"], kit["key"])
+
+    def test_renderer_accepts_stamps(self):
+        # The renderer's own parser takes stamps.bin (a rejected pack drops the valley
+        # silently), and the valley keeps its host mountain's material (no special rock).
+        from Renderer.native.native_cpp_test import run_cpp
+        run_cpp(r'''
+#include <cassert>
+#include <fstream>
+#include <iterator>
+#include <vector>
+#include "Renderer/native/render_core/natural_wonder_pack.h"
+int main(){
+    std::ifstream file("Renderer/packs/WonderRuntime/stamps.bin",std::ios::binary);
+    std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(file)),{});
+    c3x_renderer::render_core::NaturalWonderPack pack;
+    assert(pack.parse(bytes.data(),bytes.size()) && pack.kits.size()==1 && pack.find("''' + wp.RIVER_VALLEY + r'''"));
+    return 0;
+}
+''')
+        special = wp.gorge_fields(wp.GORGE["size"], wp.GORGE["channel"], wp.GORGE["crest"], wp.GORGE["outer"])[2]
+        self.assertEqual(max(special), 0)
 
     def test_foundations_only_where_asked(self):
         # The city terrace lays a skirt and top plates even on gentle relief, so only
