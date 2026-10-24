@@ -18,7 +18,7 @@ class NaturalWonderInjectedTests(unittest.TestCase):
     def test_record_facts_and_config_off_label_delegation(self):
         source = (ROOT / 'injected_code.c').read_text(encoding='latin-1')
         label = between(source, '\t// Renderer64 draws natural-wonder names itself', '\tbool draw_named_tiles')
-        record = between(source, '\t\t\t// API 23: the natural wonder here', '\n\t\t\tcapture_custom_renderer_city_body')
+        record = between(source, '\t\t\t// API 23: the natural wonder here', '\n\t\t\t// API 24:')
         run_cpp(r'''
 #include <cassert>
 #include <cstring>

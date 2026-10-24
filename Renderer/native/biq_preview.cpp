@@ -552,6 +552,23 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         if(boundary_mine && tile.tile_x==boundary_x && tile.tile_y==boundary_y-2)
             tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
     }
+    if(char facts_path[4*MAX_PATH]={};GetEnvironmentVariableA("C3X_LAB_TILE_WONDERS",facts_path,sizeof(facts_path))){
+        FILE* facts=nullptr;char line[512];
+        if(!fopen_s(&facts,facts_path,"r") && facts){
+            while(std::fgets(line,sizeof(line),facts)){
+                char* tab=std::strchr(line,'\t');if(!tab)continue;*tab=0;
+                char* name=std::strchr(tab+1,'\t');if(!name)continue;*name++=0;
+                name[std::strcspn(name,"\r\n")]=0;if(!std::strcmp(name,"-"))name[0]=0;
+                unsigned state=0,progress=0,alternate=0;int era=0;
+                if(sscanf_s(tab+1,"%u %u %u %d",&state,&progress,&alternate,&era)!=4)continue;
+                for(auto& tile:tiles)if(tile.resource_id>=0 && !std::strcmp(tile.resource_name,line)){
+                    strncpy_s(tile.wonder,name,_TRUNCATE);tile.wonder_state=state;tile.wonder_progress=progress;
+                    tile.wonder_flags=alternate?C3X_RENDERER_WONDER_ALTERNATE:0u;tile.wonder_era=era;
+                }
+            }
+            std::fclose(facts);
+        }
+    }
     city_border_fixture(tiles,map_width);
     if(timing_enabled){QueryPerformanceCounter(&capture_end);fresh_capture=true;}
     return tiles;

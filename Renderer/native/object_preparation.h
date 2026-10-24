@@ -12,6 +12,8 @@ struct PreparationInput {
     bool river_ready=false,skip_flat_shore=true,separate_relief=true,retain_height=true;
     bool route_ready=false,routes_enabled=true,mine_ready=false,farm_ready=false,city_ready=false,composition_ready=false;
     bool shared_rigid=false;
+    // A recovery compile on the frame: it never loads (constructed wonders take only resident groups).
+    bool foreground=false;
     bool compact_vertices=false; // route meshes elide constant integrated elements
     bool quantized=false; // and store half vector elements
     // A farm's resource parts as tile-local (u0,v0,u1,v1) boxes it keeps open.
@@ -23,6 +25,10 @@ struct PreparedPart {
     render_core::PreparedMesh mesh;
     unsigned vertex_offset=0,index_offset=0,material=0;
     bool environment=false,terrain_conforming=false,effect=false;
+    // Seasons it draws in (render_core/season_stand.h); 0 for every season.
+    unsigned char season_stand=0;
+    // Keeps a constructed wonder's group (city_fidelity/wonders.h) resident.
+    std::shared_ptr<void const> lease;
     std::array<float,4> atlas{};
     std::shared_ptr<city_fidelity::Lighting> lighting;
 };
@@ -69,7 +75,10 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     // A natural wonder's attached effects (its record names the kit: explored tiles only).
     auto const* wonder_kit=input.city_ready?natural.wonder_pack.find(capture.natural_wonder):nullptr;
     bool const wonder=wonder_kit && !wonder_kit->effects.empty();
-    if(!capture.road_mask && !capture.railroad_mask && capture.city_id<0 && !volcano && !wonder &&
+    // A constructed wonder's facts (city_fidelity/wonders.h) prepare its tile.
+    city_fidelity::WonderFact wonder_fact;
+    bool const wonder_tile=input.composition_ready && city_fidelity::wonder_fact(capture,wonder_fact);
+    if(!capture.road_mask && !capture.railroad_mask && capture.city_id<0 && !volcano && !wonder && !wonder_tile &&
         !(capture.improvement_flags&(C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_IRRIGATION|
             C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP|
             C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS|
@@ -326,6 +335,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     auto adopt_city=[&](city_fidelity::Surfaces& city){
         for(auto& chunk:city.chunks){
             PreparedPart part;part.material=chunk.material;part.environment=chunk.environment;
+            part.season_stand=chunk.season_stand;part.lease=chunk.lease;
             part.terrain_conforming=chunk.terrain_conforming;part.lighting=chunk.lighting;part.effect=chunk.effect;
             std::copy(chunk.atlas,chunk.atlas+4,part.atlas.begin());
             render_core::MeshFormat format;format.projection_kind=4;format.city=true;
@@ -346,6 +356,37 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
                     [&](float x,float y){return scratch.rivers.river_sample({x,y}).distance;},
                     [&](float x,float y){return height_natural(x,y);})))return {};
         if(!adopt_city(city))return {};
+    }
+    // Constructed wonders (city_fidelity/wonders.h): the tile's WonderRuntime group as
+    // city bodies, each composition in its seasons; its material indices shift into the
+    // shared range. Jobs load the groups they need; a recovery compile on the frame
+    // (input.foreground) takes only resident ones. A group refused or not resident yet
+    // shows its era's Wonder District.
+    if(wonder_tile){
+        auto& store=city_fidelity::wonder_store();
+        auto take=[&](std::string const& key){return input.foreground?store.resident(key):store.acquire(key);};
+        auto group=take(store.key(wonder_fact));
+        if(!group)group=take(store.district(wonder_fact));
+        // The next build stage loads ahead while progress nears it. This tile's chunks hold
+        // it, so it lives exactly as long as the tile's prepared wonder.
+        std::shared_ptr<void const> lease=group;
+        if(group && !input.foreground){
+            auto const next=store.next(wonder_fact);
+            if(auto ahead=next.empty()?nullptr:store.acquire(next))
+                lease=std::make_shared<std::pair<std::shared_ptr<city_fidelity::WonderGroup const>,
+                    std::shared_ptr<city_fidelity::WonderGroup const>> const>(group,ahead);
+        }
+        if(group)for(auto const& template_:group->library.compositions){
+            city_fidelity::Surfaces bodies;
+            GroundProjection projection{nc,nr,input.projection.half_w,input.projection.half_h,
+                input.projection.relief_projection_scale,float(input.projection.content_view_height)};
+            auto const placed=city_fidelity::wonder_spans_river(template_.authority)?
+                city_fidelity::across_river(template_,capture.river_code):template_;
+            if(!city_fidelity::compile(group->library,placed,nc,nr,height_natural,projection,bodies,stop,true))return {};
+            auto const stand=static_cast<unsigned char>(city_fidelity::wonder_season_mask(template_.authority));
+            for(auto& chunk:bodies.chunks){chunk.material+=group->material_base;chunk.season_stand=stand;chunk.lease=lease;}
+            if(!adopt_city(bodies))return {};
+        }
     }
     // An active volcano's plume (world bits 24/27, observed through the
     // queries) in the city effect layer, rising from the rendered crater.

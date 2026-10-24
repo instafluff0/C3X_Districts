@@ -1,6 +1,7 @@
 #pragma once
 #include "runtime.h"
 #include "scene_lights.h"
+#include "wonders.h"
 #include <memory>
 namespace c3x_renderer { namespace city_fidelity {
 struct Gpu {
@@ -17,7 +18,8 @@ struct Gpu {
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
     void reset(){for(auto&p:vs)drop(p);for(auto&p:ps)drop(p);drop(layout);drop(compact_layout);drop(material_frame);scene_lights={};
         drop(emission);drop(readonly_depth);for(auto&p:textures)drop(p.second);textures.clear();materials.clear();
-        library={};texture_bytes=0;ready=false;}
+        library={};texture_bytes=0;ready=false;
+        {auto& store=wonder_store();store.read=nullptr;store.upload=nullptr;}}
     ~Gpu(){reset();}
     template<class Read,class Upload>bool load(ID3D11Device*device,std::string const&root,Read read,Upload upload,
             std::string const&pack="Renderer/packs/CityCompositionRuntime"){
@@ -28,6 +30,18 @@ struct Gpu {
         };
         std::vector<std::uint8_t>bytes;if(!packed_read("Renderer/packs/CityCompositionRuntime/city.bin",bytes) ||
             !library.decode(bytes) || !library.complete_city_set())return false;
+        // Constructed wonders (wonders.h): the WonderRuntime index, and a reserved tail
+        // of the material table that groups fill on demand (it never moves after load).
+        {
+            auto& store=wonder_store();store.clear();
+            std::vector<std::uint8_t> index;
+            if(read("Renderer/packs/WonderRuntime/index.bin",index) && store.parse(index)){
+                std::lock_guard<std::mutex> lock(store.slots.mutex);
+                store.slots.first=unsigned(library.materials.size());
+                store.slots.used.assign(wonder_material_slots,false);
+                library.materials.resize(library.materials.size()+wonder_material_slots);
+            }
+        }
         std::wstring path(root.begin(),root.end());path+=L"/Renderer/native/city_fidelity/city.hlsl";
         char const*entries[]={"VSNativeCity","VSNativeCityReflection","PSNativeCity","PSNativeCityEmission","PSNativeCityReflection","PSNativeCityReflectionEmission"};
         for(unsigned i=0;i<6;i++){
@@ -74,7 +88,10 @@ struct Gpu {
         if(SUCCEEDED(hr))hr=device->CreateBlendState(&b,&emission);
         D3D11_DEPTH_STENCIL_DESC z={};z.DepthEnable=TRUE;z.DepthFunc=D3D11_COMPARISON_LESS_EQUAL;z.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ZERO;
         if(SUCCEEDED(hr))hr=device->CreateDepthStencilState(&z,&readonly_depth);
-        if(FAILED(hr)){reset();return false;}ready=true;return true;
+        if(FAILED(hr)){reset();return false;}
+        {auto& store=wonder_store();std::lock_guard<std::mutex> lock(store.slots.mutex);
+         store.slots.materials=&library.materials;store.slots.views=&materials;}
+        ready=true;return true;
     }
     void bind(ID3D11DeviceContext*context,unsigned material,bool environment,float const*atlas,bool reflect,bool emit,bool compact=false){
         auto const&m=materials[material];scene_lights.bind(context);

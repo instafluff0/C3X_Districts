@@ -20,7 +20,7 @@ constexpr double volcano_footprint = .62 / volcano_scale;
 // erupting: that effect is a volcano eruption (bit 27).
 // wonder: a natural wonder's topology relief slot (bits 28-31; docs/natural_wonder_rendering.md).
 struct Tile { int base = 2, real = 2; bool present = false, hidden = false, snow = false, active = false, erupting = false;
-    unsigned wonder = 0; };
+    unsigned wonder = 0, river = 0; };
 // Revealed ground meets an unexplored tile at the 2.5 datum. No terrain is
 // drawn there and its fog is a flat diamond, so ground raised up to that edge
 // would expose the flat underlay below it (or a cut silhouette). Returns 1

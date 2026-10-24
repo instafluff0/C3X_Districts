@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 23u
+#define C3X_RENDERER_API_VERSION 24u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -62,6 +62,17 @@ enum c3x_renderer_tile_flags {
 
 enum c3x_renderer_natural_wonder_flags {
     C3X_RENDERER_NATURAL_WONDER_NAME = 1u
+};
+
+/* API 24: a Wonder District's state (C3X wonder_info), and its flags. */
+enum c3x_renderer_wonder_state {
+    C3X_RENDERER_WONDER_NONE = 0u,      /* no Wonder District, or one still being built */
+    C3X_RENDERER_WONDER_UNUSED = 1u,    /* a district no city has started a wonder on */
+    C3X_RENDERER_WONDER_BUILDING = 2u,  /* a city is building the named wonder on it */
+    C3X_RENDERER_WONDER_COMPLETE = 3u
+};
+enum c3x_renderer_wonder_flags {
+    C3X_RENDERER_WONDER_ALTERNATE = 1u  /* C3X draws its alternate-direction art */
 };
 
 enum c3x_renderer_invalidation_flags {
@@ -291,6 +302,15 @@ struct c3x_renderer_tile_v1 {
        flags (C3X_RENDERER_NATURAL_WONDER_NAME: C3X shows the name on the map). */
     char natural_wonder[32];
     c3x_renderer_u32 natural_wonder_flags;
+    /* API 24: the tile's Wonder District (withheld with every object on unexplored
+       tiles): its state, the wonder by its C3X config name (empty when unused), build
+       progress 0-255 while building (the city's progress over the wonder's cost),
+       flags and the era C3X draws the district's art in (0-3). */
+    char wonder[32];
+    c3x_renderer_u32 wonder_state;
+    c3x_renderer_u32 wonder_progress;
+    c3x_renderer_u32 wonder_flags;
+    c3x_renderer_i32 wonder_era;
 };
 
 struct c3x_renderer_frame_v1 {

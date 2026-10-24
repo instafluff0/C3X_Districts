@@ -63,6 +63,7 @@ struct NaturalData {
     // terrain stamps, attached effects and foam collars, found by topology relief slot.
     // Optional: without the pack a wonder tile keeps its host terrain.
     ::c3x_renderer::render_core::NaturalWonderPack wonder_pack;
+    unsigned wonder_stamps_dropped=0;  // constructed stamps past the last relief slot
     std::vector<std::array<HeightField,3>> wonder_fields; // per kit: height, vegetated ground, special
     // The broadleaf contract: the pack's first 25 recipes, weighing 180.
     std::array<RecipeSet,forest_variety_count> forest_sets{{{0,25,180},{},{}}};
@@ -219,8 +220,12 @@ struct NaturalData {
     }
     template<class Read> void load_wonder_pack(Read read){
         std::vector<std::uint8_t> bytes;wonder_pack={};wonder_fields.clear();
-        if(!read(std::string("Renderer/packs/NaturalWonderRuntime/wonders.bin"),bytes) ||
-           !wonder_pack.parse(bytes.data(),bytes.size()))return;
+        if(read(std::string("Renderer/packs/NaturalWonderRuntime/wonders.bin"),bytes))
+            wonder_pack.parse(bytes.data(),bytes.size());
+        // Constructed wonders' stamps (WonderRuntime) follow the natural kits in one registry.
+        ::c3x_renderer::render_core::NaturalWonderPack constructed;std::vector<std::uint8_t> stamps;
+        if(read(std::string("Renderer/packs/WonderRuntime/stamps.bin"),stamps) &&
+           constructed.parse(stamps.data(),stamps.size()))wonder_stamps_dropped=wonder_pack.append(std::move(constructed));
         wonder_fields.resize(wonder_pack.kits.size());
         for(std::size_t k=0;k<wonder_pack.kits.size();++k){
             auto& kit=wonder_pack.kits[k];

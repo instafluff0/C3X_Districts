@@ -380,6 +380,7 @@ int main() {
             "resource_id", "resource_class", "resource_name", "city_id",
             "city_owner_id", "city_size", "city_culture_group",
             "city_era", "city_flags", "natural_wonder", "natural_wonder_flags",
+            "wonder", "wonder_state", "wonder_progress", "wonder_flags", "wonder_era",
         ):
             self.assertIn(required, signature)
         for retained_only in (

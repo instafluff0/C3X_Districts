@@ -37,6 +37,8 @@ int main(int argc,char** argv){try{
     c3x_renderer_tile_v1 tile={};tile.tile_x=-8;tile.tile_y=3;tile.tile_flags=458752;tile.anchor_x=-71;tile.resource_id=29;tile.territory_edge_mask=13;tile.territory_color_rgb=0x31c4b8;
     std::memcpy(tile.resource_name,"cattle",7);std::memcpy(tile.city_owner,"test-owner",11);tile.barbarian_tribe_id=18;tile.city_site_grade=11;
     std::memcpy(tile.natural_wonder,"Old Faithful",13);tile.natural_wonder_flags=C3X_RENDERER_NATURAL_WONDER_NAME;
+    std::memcpy(tile.wonder,"The Pyramids",13);tile.wonder_state=C3X_RENDERER_WONDER_BUILDING;tile.wonder_progress=191;
+    tile.wonder_flags=C3X_RENDERER_WONDER_ALTERNATE;tile.wonder_era=2;
     c3x_renderer_u32 topology[]={0x12345678,0xffffffff};c3x_renderer_frame_v1 frame={};frame.api_version=C3X_RENDERER_API_VERSION;frame.struct_size=sizeof(frame);
     frame.target_width=2240;frame.target_height=1260;frame.clip_right=2240;frame.clip_bottom=1260;frame.tile_count=1;frame.tiles=&tile;
     frame.presentation_time_ticks=1234567890123;frame.presentation_frequency=24000000;frame.world_topology_count=2;frame.world_topology=topology;
@@ -48,6 +50,9 @@ int main(int argc,char** argv){try{
     require(restored.tiles[0].city_site_grade==11,"city-site presentation grade lost");
     require(!std::strcmp(restored.tiles[0].natural_wonder,"Old Faithful") &&
             restored.tiles[0].natural_wonder_flags==C3X_RENDERER_NATURAL_WONDER_NAME,"natural wonder facts lost");
+    require(!std::strcmp(restored.tiles[0].wonder,"The Pyramids") && restored.tiles[0].wonder_state==C3X_RENDERER_WONDER_BUILDING &&
+            restored.tiles[0].wonder_progress==191 && restored.tiles[0].wonder_flags==C3X_RENDERER_WONDER_ALTERNATE &&
+            restored.tiles[0].wonder_era==2,"constructed wonder facts lost");
     Writer roundtrip;c3x_inputs::frame(roundtrip,restored.value);require(roundtrip.bytes==encoded,"canonical scene roundtrip differs");
     auto bad=encoded;bad.pop_back();try{Reader r{bad};c3x_inputs::frame(r,restored);throw 1;}catch(std::runtime_error const&){}
     c3x_renderer_unit_v1 actor={};actor.struct_size=sizeof(actor);actor.unit_id=41;actor.action=8;actor.queued_action=3;

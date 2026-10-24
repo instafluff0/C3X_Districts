@@ -336,6 +336,12 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
         hash_bytes(result.geometry, tile.natural_wonder, sizeof(tile.natural_wonder));
         hash_value(result.scene, tile.natural_wonder_flags);
         hash_value(result.geometry, tile.natural_wonder_flags);
+        hash_bytes(result.scene, tile.wonder, sizeof(tile.wonder));
+        hash_bytes(result.geometry, tile.wonder, sizeof(tile.wonder));
+        for (auto value : {tile.wonder_state, tile.wonder_progress, tile.wonder_flags, c3x_renderer_u32(tile.wonder_era)}) {
+            hash_value(result.scene, value);
+            hash_value(result.geometry, value);
+        }
         hash_value(result.ownership, tile.tile_flags & ~C3X_RENDERER_TILE_VISIBILITY_BITS);
         hash_value(result.ownership, tile.feature_flags);
     }

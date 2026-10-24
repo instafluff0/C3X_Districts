@@ -29090,6 +29090,9 @@ capture_custom_renderer_overlay_body (struct c3x_renderer_tile_v1 * record,
 	}
 }
 
+// Defined with the district drawing below; API 24 capture reports its facing choice.
+bool wonder_should_use_alternative_direction_image (int tile_x, int tile_y, int owner_id, struct wonder_district_config const * cfg);
+
 bool
 read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_civ_id,
 	int pixel_x, int pixel_y, int visibility_mask, int tile_x, int tile_y, Tile * tile, bool topology_only, bool capture_units)
@@ -29207,6 +29210,42 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 				strncpy (record->natural_wonder, nw->name, sizeof record->natural_wonder);
 				record->natural_wonder[(sizeof record->natural_wonder) - 1] = '\0';
 				record->natural_wonder_flags = is->current_config.show_natural_wonder_name_on_map ? C3X_RENDERER_NATURAL_WONDER_NAME : 0;
+			}
+			// API 24: a completed Wonder District's state, wonder, build progress, facing and art era (Renderer64 draws it).
+			struct district_instance * district = (is->current_config.enable_districts && is->current_config.enable_wonder_districts) ?
+				get_district_instance (tile) : NULL;
+			if ((district != NULL) && (district->district_id == WONDER_DISTRICT_ID) && district_is_complete (tile, WONDER_DISTRICT_ID)) {
+				struct wonder_district_info * info = get_wonder_district_info (tile);
+				int windex = -1;
+				record->wonder_state = C3X_RENDERER_WONDER_UNUSED;
+				if ((info != NULL) && (info->state == WDS_COMPLETED) && (info->wonder_index >= 0) && (info->wonder_index < is->wonder_district_count)) {
+					record->wonder_state = C3X_RENDERER_WONDER_COMPLETE;
+					windex = info->wonder_index;
+				} else if (wonder_district_tile_under_construction (tile, tile_x, tile_y, &windex) && (windex >= 0) && (windex < is->wonder_district_count)) {
+					int cost = City_get_order_cost (info->city), progress = City_get_order_progress (info->city);
+					record->wonder_state = C3X_RENDERER_WONDER_BUILDING;
+					record->wonder_progress = (cost > 0) ? (unsigned)not_above (255, not_below (0, progress * 255 / cost)) : 0;
+				} else
+					windex = -1;
+				int owner_id = tile->Territory_OwnerID;
+				if (windex >= 0) {
+					struct wonder_district_config * wcfg = &is->wonder_district_configs[windex];
+					if (wcfg->wonder_name != NULL) {
+						strncpy (record->wonder, wcfg->wonder_name, sizeof record->wonder);
+						record->wonder[(sizeof record->wonder) - 1] = '\0';
+					}
+					// C3X's own facing choice reads the tile being drawn.
+					Tile * drawing = is->current_render_tile;
+					is->current_render_tile = tile;
+					if (wcfg->enable_img_alt_dir && wonder_should_use_alternative_direction_image (tile_x, tile_y, owner_id, wcfg))
+						record->wonder_flags |= C3X_RENDERER_WONDER_ALTERNATE;
+					is->current_render_tile = drawing;
+				}
+				// The district's era as C3X picks its art: the territory owner's, else its builder's.
+				if (owner_id > 0)
+					record->wonder_era = leaders[owner_id].Era;
+				else if (district->built_by_civ_id >= 0)
+					record->wonder_era = leaders[district->built_by_civ_id].Era;
 			}
 
 			capture_custom_renderer_city_body (record, get_city_ptr (tile->vtable->m45_Get_City_ID (tile)));

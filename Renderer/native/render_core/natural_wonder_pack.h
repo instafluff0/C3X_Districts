@@ -13,6 +13,8 @@ namespace c3x_renderer { namespace render_core {
 // them only through the aliases, and topology bits 28-31 name a relief kit by its slot.
 struct NaturalWonderPack {
     static constexpr unsigned flag_stamp=1,flag_snow=2,relief_slot_count=15,texture_slots=8,seasons=4;
+    // A constructed wonder's stamp that follows its tile's river (WonderRuntime/stamps.bin).
+    static constexpr unsigned flag_follow_river=4;
     // Effect record kinds (ten floats: kind, foot x/y, top x/y, lift, width, height,
     // strength, seed). Lake and channel records are water; the rest are effect quads.
     static constexpr unsigned effect_geyser=4,effect_waterfall=5,effect_lake=7,effect_channel=8,effect_spray=9;
@@ -53,7 +55,7 @@ struct NaturalWonderPack {
             auto& kit=kits[k];unsigned count=0;
             float params[4]={};
             if(!text(kit.key) || !u32(kit.flags) || !u32(kit.region_kind) || !take(params,16) ||
-               (kit.flags&~3u) || kit.region_kind>4 || !u32(kit.field_size))return fail();
+               (kit.flags&~7u) || kit.region_kind>4 || !u32(kit.field_size))return fail();
             kit.span=params[0];kit.units=params[1];kit.turn=params[2];kit.snow_floor=params[3];
             for(float v:params)if(!std::isfinite(v))return fail();
             if(kit.stamp()!=(kit.field_size!=0) || kit.field_size>1024 ||
@@ -90,6 +92,39 @@ struct NaturalWonderPack {
             if(i==a.size() && !name[i])return &kits[alias.second];
         }
         return nullptr;
+    }
+    // Appends another pack's kits and aliases (constructed wonders' stamps after the
+    // natural kits): relief slots continue the numbering; a kit that would need a slot
+    // past the last is dropped with its aliases. Returns the number dropped.
+    unsigned append(NaturalWonderPack other){
+        unsigned relief=0,dropped=0;
+        for(auto const& kit:kits)relief=kit.relief_slot>relief?kit.relief_slot:relief;
+        std::vector<unsigned> placed(other.kits.size(),~0u);
+        for(std::size_t k=0;k<other.kits.size();++k){
+            Kit kit=std::move(other.kits[k]);kit.relief_slot=0;
+            if(kit.stamp() || !kit.waves.empty()){
+                if(relief==relief_slot_count){++dropped;continue;}
+                kit.relief_slot=++relief;relief_kits[relief-1]=unsigned(kits.size())+1;
+            }
+            placed[k]=unsigned(kits.size());kits.push_back(std::move(kit));
+        }
+        for(auto const& alias:other.aliases)
+            if(placed[alias.second]!=~0u)aliases.emplace_back(alias.first,placed[alias.second]);
+        return dropped;
+    }
+    // A follow-river kit's frame on its tile, as C3X places a river wonder
+    // (get_primary_river_direction): the first river bit in C3X's priority E, W, SE, NE,
+    // SW, NW, S, N (direction_to_neighbor_bit). (ox, oy) runs from the tile centre to that
+    // edge's middle or corner in world tiles; (ax, ay) is the river line there.
+    static bool river_frame(unsigned river,float& ox,float& oy,float& ax,float& ay){
+        struct Direction {unsigned bit;int column,row;};
+        static constexpr Direction order[8]={{2,1,1},{6,-1,-1},{3,1,0},{1,0,1},{5,0,-1},{7,-1,0},{4,1,-1},{0,-1,1}};
+        for(auto const& d:order)if(river&(1u<<d.bit)){
+            float const length=std::sqrt(float(d.column*d.column+d.row*d.row));
+            ox=.5f*float(d.column);oy=.5f*float(d.row);ax=-float(d.row)/length;ay=float(d.column)/length;
+            return true;
+        }
+        return false;
     }
     // The kit a topology relief slot (bits 28-31) names, or nullptr.
     Kit const* relief(unsigned slot)const{

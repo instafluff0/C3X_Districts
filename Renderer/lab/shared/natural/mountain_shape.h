@@ -29,7 +29,7 @@ namespace c3x_renderer { namespace fidelity {
 // Topology flags a MountainShape reads besides the terrain category.
 enum MountainFlag : unsigned { mountain_snow_cap=1u, volcano_active=2u, volcano_erupting=4u };
 // wonder: a stamped natural-wonder kit's index + 1 (its topology relief slot resolved).
-struct MountainCell { bool mountain=false,volcano=false,snow=false; unsigned activity=0; std::uint32_t seed=0; unsigned wonder=0; };
+struct MountainCell { bool mountain=false,volcano=false,snow=false; unsigned activity=0; std::uint32_t seed=0; unsigned wonder=0,river=0; };
 struct MountainPiece {
     HeightField const* height_field=nullptr;HeightField const* blend_field=nullptr;HeightField const* channel_field=nullptr;
     float center_x=0,center_y=0,range_cos=1,range_sin=0,turn_cos=1,turn_sin=0,inv_long=1,inv_cross=1,
@@ -99,13 +99,19 @@ struct MountainShape {
     }
     // A natural wonder's baked stamp (NaturalWonderRuntime kit index): its own span,
     // height and fixed turn, with the kit's region weights for the mountain shader.
-    void add_wonder(NaturalData const& natural,unsigned kit,float x,float y,bool snow){
+    // A kit that follows its tile's river (a constructed wonder's gorge) centres on the
+    // river edge C3X places it at and turns its long axis along the river line.
+    void add_wonder(NaturalData const& natural,unsigned kit,float x,float y,bool snow,unsigned river=0){
         auto const& k=natural.wonder_pack.kits[kit];auto const& f=natural.wonder_fields[kit];
         auto& p=pieces[count++];
         p.height_field=p.blend_field=&f[0];p.wonder_ground=&f[1];p.wonder_special=&f[2];p.wonder=&k;
-        p.center_x=x;p.center_y=y;p.turn_cos=std::cos(k.turn);p.turn_sin=std::sin(k.turn);
+        float turn=k.turn,ox=0,oy=0,ax=1,ay=0;
+        using Pack=::c3x_renderer::render_core::NaturalWonderPack;
+        if((k.flags&Pack::flag_follow_river) && Pack::river_frame(river,ox,oy,ax,ay))turn=std::atan2(-ay,ax);
+        p.center_x=x+ox;p.center_y=y+oy;p.turn_cos=std::cos(turn);p.turn_sin=std::sin(turn);
         p.inv_long=p.inv_cross=1/k.span;
         p.height=k.units;p.reach=std::min(1.06f,reach_scale*k.span);p.snow=snow?1.f:0.f;
+        if(k.flags&Pack::flag_follow_river)p.reach=std::min(p.reach,1.5f-std::max(std::abs(ox),std::abs(oy)));
     }
     MountainShape()=default;
     // lookup(c,r) returns the natural Tile at any coordinate; flags(c,r) its
@@ -123,7 +129,7 @@ struct MountainShape {
                 unsigned bits=mountain?unsigned(flags(nc+dc,nr+dr)):0u;
                 bool snow=wonder?(kit->flags&::c3x_renderer::render_core::NaturalWonderPack::flag_snow)!=0:!volcano && (bits&mountain_snow_cap);
                 cells[i]=MountainCell{mountain,volcano,snow,
-                    volcano?((bits&volcano_erupting)?2u:(bits&volcano_active)?1u:0u):0u,mountain_seed(t),wonder};
+                    volcano?((bits&volcano_erupting)?2u:(bits&volcano_active)?1u:0u):0u,mountain_seed(t),wonder,t.river};
                 ready[i]=true;
             }
             return cells[i];
@@ -141,7 +147,7 @@ struct MountainShape {
             }
             std::uint32_t seed=mix(owner.seed);
             if(owner.wonder){
-                add_wonder(natural,owner.wonder-1,float(nc+dc)+.5f,float(nr+dr)+.5f,owner.snow);
+                add_wonder(natural,owner.wonder-1,float(nc+dc)+.5f,float(nr+dr)+.5f,owner.snow,owner.river);
                 continue;
             }
             if(owner.volcano && natural.volcano_ready){

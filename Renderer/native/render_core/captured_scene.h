@@ -213,6 +213,9 @@ private:
             std::memset(next.occurrence.resource_name,0,sizeof(next.occurrence.resource_name));
             std::memset(next.occurrence.natural_wonder,0,sizeof(next.occurrence.natural_wonder));
             next.occurrence.natural_wonder_flags=0;
+            std::memset(next.occurrence.wonder,0,sizeof(next.occurrence.wonder));
+            next.occurrence.wonder_state=next.occurrence.wonder_progress=next.occurrence.wonder_flags=0;
+            next.occurrence.wonder_era=0;
             next.occurrence.barbarian_tribe_id=-1;next.occurrence.improvement_flags=0;
             next.occurrence.irrigation_mask=next.occurrence.has_effect=0;
             // The minimal native producer supplies real terrain and the map

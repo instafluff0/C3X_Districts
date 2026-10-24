@@ -102,7 +102,12 @@ struct WorldKeyDiagnostic {
             {"territory_rgb",offsetof(c3x_renderer_tile_v1,territory_color_rgb),4},
             {"barbarian",offsetof(c3x_renderer_tile_v1,barbarian_tribe_id),4},
             {"natural_wonder_digest",offsetof(c3x_renderer_tile_v1,natural_wonder),sizeof(before.natural_wonder)},
-            {"natural_wonder_flags",offsetof(c3x_renderer_tile_v1,natural_wonder_flags),4}};
+            {"natural_wonder_flags",offsetof(c3x_renderer_tile_v1,natural_wonder_flags),4},
+            {"wonder_digest",offsetof(c3x_renderer_tile_v1,wonder),sizeof(before.wonder)},
+            {"wonder_state",offsetof(c3x_renderer_tile_v1,wonder_state),4},
+            {"wonder_progress",offsetof(c3x_renderer_tile_v1,wonder_progress),4},
+            {"wonder_flags",offsetof(c3x_renderer_tile_v1,wonder_flags),4},
+            {"wonder_era",offsetof(c3x_renderer_tile_v1,wonder_era),4}};
         std::array<bool,sizeof(before)> covered{};
         std::string out;out.reserve(1400);
         auto a=reinterpret_cast<unsigned char const*>(&before),b=reinterpret_cast<unsigned char const*>(&after);

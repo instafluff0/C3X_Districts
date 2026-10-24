@@ -3646,6 +3646,8 @@ public:
             trace.write("source-fidelity-failed",natural.failure.c_str(),true);return false;
         }
         load_phase("load-natural");
+        if(natural.wonder_stamps_dropped)trace.write("wonder-stamps-dropped",
+            (std::to_string(natural.wonder_stamps_dropped)+" constructed stamps past the last relief slot; flat ground").c_str(),true);
         if(environment_profile && !reflection.ensure(device,shader_root,city_profile?"city_fidelity":"environment_refresh",city_profile?144:136)){
             trace.write("reflection-failed","shader initialization",true);return false;
         }
@@ -3656,6 +3658,15 @@ public:
         if(city_profile && !cities.load(device,shader_root,read_fidelity,upload_fidelity,
                 city_pack_length?city_pack:"Renderer/packs/CityCompositionRuntime")){
             trace.write("city-composition-failed","required city pack/material initialization failed",true);return false;
+        }
+        // Constructed wonders load on the preparation jobs that need them (city_fidelity/wonders.h).
+        if(city_profile){
+            auto& store=c3x_renderer::city_fidelity::wonder_store();
+            store.read=[this](std::string const& relative,std::vector<std::uint8_t>& bytes){char path[4*MAX_PATH];
+                return pack_path(fidelity_root.c_str(),relative.c_str(),path,std::size(path)) && read_file(path,bytes);};
+            store.upload=[this](std::vector<std::uint8_t> const& bytes,ID3D11ShaderResourceView*& view){
+                return ensure_dds_texture(bytes,view,true,true);};
+            store.ready=!store.index.empty();
         }
         load_phase("load-city");
         if(asset_bytes){char detail[192];sprintf_s(detail,"bytes=%zu read_ms=%.3f hash_ms=%.3f texture_ms=%.3f",asset_bytes,
@@ -7120,6 +7131,16 @@ public:
     unsigned wonder_slot(char const* name) const {
         auto const* kit=name[0]?natural.wonder_pack.find(name):nullptr;return kit?kit->relief_slot:0u;
     }
+    // A tile record's relief slot: its natural wonder's, else its constructed wonder's
+    // stamp (city_fidelity/wonders.h facts) once the district holds a wonder.
+    unsigned wonder_tile_slot(c3x_renderer_tile_v1 const& tile) const {
+        if(unsigned slot=wonder_slot(tile.natural_wonder))return slot;
+        c3x_renderer::city_fidelity::WonderFact fact;
+        if(!c3x_renderer::city_fidelity::wonder_fact(tile,fact) ||
+           (fact.state!=c3x_renderer::city_fidelity::wonder_building && fact.state!=c3x_renderer::city_fidelity::wonder_complete))
+            return 0u;
+        return wonder_slot(("wonder|"+fact.alias).c_str());
+    }
     // Natural-wonder bodies: the C3XWonderBody constants (PS b13) Winter shading reads,
     // bound only for their draws (x 1, y the kit's snow floor in relief units).
     void bind_wonder_body(ID3D11DeviceContext* c,float snow_floor){
@@ -9421,7 +9442,7 @@ public:
                     auto flags=input.occurrence.tile_flags;
                     if(flags&topology_cache.hidden_ring)flags&=~unsigned(C3X_RENDERER_TILE_EXPLORED);
                     mark(input.occurrence.tile_x,input.occurrence.tile_y,flags,
-                        wonder_slot(input.occurrence.natural_wonder));});},&masked_change);
+                        wonder_tile_slot(input.occurrence));});},&masked_change);
             revision=viewer_topology.revision;
         }catch(std::length_error const&){topology=frame.world_topology;revision=frame.world_topology_revision;}
         auto updated = world_coast.update({frame.world_width_tiles, frame.world_height_tiles,
@@ -12083,7 +12104,8 @@ public:
                 if(!prepared_objects){
                     if(object_worker && !world_batch_enabled)++object_recovery;
                     if(component_preparation)++world_component_compiles[1];
-                    prepared_objects=compile_objects(make_object_job(tile),foreground_object_scratch,cancelled);
+                    {auto job=make_object_job(tile);job.foreground=true;
+                     prepared_objects=compile_objects(job,foreground_object_scratch,cancelled);}
                     if(component_preparation && prepared_objects && prepared_objects->buffer)++world_component_uploads[1];
                 }
                 object_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
@@ -12848,6 +12870,9 @@ public:
                             if(!adopt(part,4)){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
                             auto& chunk=compiled.mesh->layers[layer].back();chunk.city_material=part.material;chunk.city_environment=part.environment;
                             std::copy(part.atlas.begin(),part.atlas.end(),chunk.city_atlas);chunk.city_lighting=part.lighting;chunk.city_effect=part.effect;
+                            chunk.season_stand=part.season_stand;season_stands_used|=std::uint16_t(1u<<chunk.season_stand);
+                            // City chunks never carry a rigid or natural lease, so the slot is free for a wonder group's.
+                            if(part.lease && !chunk.shared_source_lease)chunk.shared_source_lease=part.lease;
                         }
                         continue;
                     }
@@ -12918,6 +12943,9 @@ public:
                             tile_geometry_cache_bytes-=compiled.byte_count;return false;
                         }
                         auto&chunk=compiled.mesh->layers[layer].back();chunk.city_material=part.material;chunk.city_environment=part.environment;
+                        chunk.season_stand=part.season_stand;season_stands_used|=std::uint16_t(1u<<chunk.season_stand);
+                        // City chunks never carry a rigid or natural lease, so the slot is free for a wonder group's.
+                        if(part.lease && !chunk.shared_source_lease)chunk.shared_source_lease=part.lease;
                         std::copy(part.atlas,part.atlas+4,chunk.city_atlas);chunk.city_lighting=part.lighting;chunk.city_effect=part.effect;compiled.byte_count+=chunk.byte_count;
                     }
                     city_chunks.clear();continue;

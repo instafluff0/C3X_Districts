@@ -1,5 +1,6 @@
 #pragma once
 #include "runtime.h"
+#include "wonders.h"
 #include "../c3x_renderer_api.h"
 #include "../../lab/shared/natural/vertex.h"
 #include <array>
@@ -19,6 +20,10 @@ struct Chunk {
     bool terrain_conforming=false;
     // Attached effect quads follow the visual clock and redraw per frame.
     bool effect=false;
+    // Seasons it draws in (render_core/season_stand.h), 0 for every season, and what
+    // keeps its source resident (a constructed wonder's group, city_fidelity/wonders.h).
+    unsigned char season_stand=0;
+    std::shared_ptr<void const> lease;
 };
 struct Surfaces {std::vector<Chunk> chunks;};
 template<class World,class Shore,class River,class Height>

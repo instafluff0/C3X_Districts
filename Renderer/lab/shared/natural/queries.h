@@ -101,7 +101,7 @@ public:
         int x=c+r,y=c-r;
         if(world.wrap_x && world.width>0)x=render_core::mod(x,world.width);
         if(world.wrap_y && world.height>0)y=render_core::mod(y,world.height);
-        return Tile{x,y,c,r,value.real,value.wonder};
+        return Tile{x,y,c,r,value.real,value.wonder,value.river};
     }
     float low_height(NaturalData const& natural,float x,float y){
         if(natural.low_relief.fields[0].pixels.empty())return 0;

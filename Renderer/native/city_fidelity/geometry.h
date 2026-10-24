@@ -28,3 +28,25 @@ if(auto composition=selected_city(tile,nc,nr)){
     char detail[160];sprintf_s(detail,"city=%d culture=%d era=%d size=%d reason=no-legal-immutable-composition",
         tile.city_id,tile.city_culture_group,tile.city_era,tile.city_size);trace.write("city-composition-fallback",detail,true);
 }
+// Constructed wonders (city_fidelity/wonders.h) on the direct path, which runs on the
+// frame (object preparation off; production always prepares objects): it takes only
+// resident groups, else the era's Wonder District, and never loads.
+{
+    c3x_renderer::city_fidelity::WonderFact wonder_fact;
+    if(!prepared_objects && city_profile && cities.ready && c3x_renderer::city_fidelity::wonder_fact(tile,wonder_fact)){
+        auto& store=c3x_renderer::city_fidelity::wonder_store();
+        auto group=store.resident(store.key(wonder_fact));
+        if(!group)group=store.resident(store.district(wonder_fact));
+        if(group)for(auto const& template_:group->library.compositions){
+            c3x_renderer::city_fidelity::Surfaces bodies;
+            auto const placed=c3x_renderer::city_fidelity::wonder_spans_river(template_.authority)?
+                c3x_renderer::city_fidelity::across_river(template_,tile.river_code):template_;
+            c3x_renderer::city_fidelity::compile(group->library,placed,nc,nr,height_natural,project_natural,bodies);
+            auto const stand=static_cast<unsigned char>(c3x_renderer::city_fidelity::wonder_season_mask(template_.authority));
+            for(auto& chunk:bodies.chunks){
+                chunk.material+=group->material_base;chunk.season_stand=stand;chunk.lease=group;
+                city_chunks.push_back(std::move(chunk));
+            }
+        }
+    }
+}

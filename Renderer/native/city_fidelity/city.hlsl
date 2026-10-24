@@ -3318,7 +3318,10 @@ float4 q8_effect_spray(float2 q,float2 pixel,float t,float seed,float strength,f
   return result;
 }
 float4 q8_city_effect(FeaturePixelInput p){
- float kind=round(p.material_index-90),seed=clamp(p.city_ao_uv.x,0,64),strength=clamp(p.city_ao_uv.y,0,2);
+ // A night light (2) carries a lamp mode in its seed: seed + 64 * mode. Mode 0, every city
+ // light (seeds below 64), is the warm glow unchanged; the flicker phase is fmod(seed, 64).
+ float kind=round(p.material_index-90),lamp_mode=kind>1.5 && kind<2.5?floor(max(p.city_ao_uv.x,0)/64):0,
+  seed=lamp_mode>.5?fmod(p.city_ao_uv.x,64):clamp(p.city_ao_uv.x,0,64),strength=clamp(p.city_ao_uv.y,0,2);
  float t=Q8_CITY_TIME+seed*17.31,night=saturate(environment_night_activation);
  // Multisampled edges extrapolate the quad coordinate beyond the quad; keep
  // it inside so no pow() sees a negative base (NaN feeds bloom as stars).
@@ -3357,6 +3360,16 @@ float4 q8_city_effect(FeaturePixelInput p){
                              float3(lerp(.10,.07,erupt),lerp(.28,.20,erupt),.06));
   float lit=exp(-q.y*5)*erupt*(.55+.45*q8_effect_noise(float2(seed*3,t*2.3)));
   return float4(ash.rgb+float3(1,.36,.08)*lit*1.6,ash.a);
+ }
+ if(lamp_mode>.5){
+  // Constructed wonders' lamps: modes 1-4 steady warm, white, red, green; 5-8 blink.
+  float band=fmod(lamp_mode-1,4);
+  float3 tint=band<.5?float3(1,.68,.32):band<1.5?float3(1,.93,.8):band<2.5?float3(1,.16,.08):float3(.4,1,.45);
+  float on=lamp_mode>4.5?step(.45,frac(Q8_CITY_TIME*.6+seed*.137)):1;
+  float2 l=float2(q.x,(q.y-.5)*2);float r2=dot(l,l);
+  float lamp=(exp(-r2*40)*1.4+exp(-r2*5)*.35*night)*strength*on*(.25+.75*night);
+  clip(lamp-.004);
+  return float4(tint*(1.2+2.5*lamp),saturate(lamp));
  }
  float2 g=float2(q.x,(q.y-.5)*2);
  float glow=exp(-dot(g,g)*3)*night*strength;
