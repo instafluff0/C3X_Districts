@@ -231,6 +231,7 @@ struct State {
   route_assets_ready=true,city_assets_ready=true,site_assets_ready=true,mine_assets_ready=true,farm_assets_ready=true;
  struct ResidentWorldRecords {using Tile=World::Tile;};
  World resident_world;std::vector<Owner> owners;
+ struct {std::vector<int> compositions;} site_bundle;
  struct Content {std::vector<Owner>* owners;Owner* resolve(ContentHandle h)const{return h.slot<owners->size()?&(*owners)[h.slot]:nullptr;}} resident_content{&owners};
 """ + methods + r"""
 };
@@ -258,6 +259,14 @@ int main(){
  window.tiles.pop_back();window.window_count=3;window.native_index.pop_back();
  window.tiles[0].improvement_flags=C3X_RENDERER_IMPROVEMENT_GOODY_HUT;store(window.tiles[0],0);state.site_assets_ready=false;
  missing=differ=0;assert(!state.resident_world_ownership(window,3,out,missing,differ) && differ==1);
+ // Tile buildings: a site pack without compositions leaves them undrawn and
+ // unclaimed (the bridge then requires none); one with them claims them.
+ state.site_assets_ready=true;window.tiles[0]=plain;window.tiles[0].improvement_flags=C3X_RENDERER_IMPROVEMENT_FORTRESS;
+ store(window.tiles[0],0);
+ missing=differ=0;assert(state.resident_world_ownership(window,3,out,missing,differ) && out[2]==C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED);
+ state.site_bundle.compositions.push_back(0);
+ assert(state.resident_world_ownership(window,3,out,missing,differ) &&
+  out[2]==(C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED|C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED));
  std::puts("PASS resident world ownership");
 }
 """)

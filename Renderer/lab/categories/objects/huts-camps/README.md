@@ -46,3 +46,31 @@ state exactly; nothing native is hidden for them:
 Craters and rubble carry baked sunlit relief, so they never turn.
 `Renderer/lab/studies/ground_states/study.py` renders the 1498 AD save with a
 candidate pack (`C3X_RENDERER_SITE_PACK`). Tests: `Renderer.native.test_ground_states`.
+
+Civ III's tile buildings share the site pack too (user picks 2026-10-23; see
+`Renderer/lab/studies/tile_buildings/README.md`):
+- Fortresses are the Civ VI Fort's keep. A barricade replaces its fortress with
+  the keep in a ring of the era's walls, towers at its corners. The runtime
+  lays the ring round the dry ground holding the keep: along the tile's edge,
+  and along a river's or the coast's bank where water cuts through. A road,
+  railroad or bridge crosses it through the era's gate, or an opening between
+  two towers in eras without one.
+- Airfields are the early airstrip and the modern Aerodrome.
+- Outposts are era watchtowers (Medieval: the Great Wall tower).
+- The radar is Amundsen's mast; the victory point is a white obelisk.
+- Colonies are kit A, placed at run time around the tile's resource, never on it.
+Fortress, barricade and airfield follow the viewer's era, as Civ III draws
+them; outposts, radar and colonies follow their owner's. They meet their
+ground as cities, farms and mines do (`objects::place_tile_buildings`):
+nothing stands in water or on its bank (the city sites' test: shore .05 tile,
+river 10 px); a building moves to the nearest dry spot, shrinking if it must,
+and on a mountain takes the rock's foot toward the camera. They stand on the
+drawn rock, rigid pieces settled on the lowest ground of their footprint and
+wall sections draped per vertex, as the city walls are. The forest keeps off
+their exact footprints in the tile compile (`geometry.h`), keyed by the
+canopy clearing's `buildings`. `sitepack.py` freezes
+the baked picks into `TileBuildingsFrozen`; `build_site_runtime.py` merges them
+(`tile_buildings_runtime.py`), and the hut and camp textures share their first
+atlas. A site pack without compositions, or a renderer from before them,
+leaves tile buildings undrawn, and the bridge then requires none. Tests:
+`Renderer.native.test_tile_buildings`.

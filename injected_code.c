@@ -29043,7 +29043,8 @@ capture_custom_renderer_overlay_body (struct c3x_renderer_tile_v1 * record,
 	record->improvement_flags &= ~(C3X_RENDERER_IMPROVEMENT_IRRIGATION |
 		C3X_RENDERER_IMPROVEMENT_MINE | C3X_RENDERER_IMPROVEMENT_POLLUTION |
 		C3X_RENDERER_IMPROVEMENT_CRATER | C3X_RENDERER_IMPROVEMENT_GOODY_HUT |
-		C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
+		C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP | C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS |
+		C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_MASK);
 	record->irrigation_mask = 0;
 	if (tile->vtable->m17_Check_Irrigation (tile, __, visible_to_civ_id)) {
 		record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_IRRIGATION;
@@ -29069,6 +29070,24 @@ capture_custom_renderer_overlay_body (struct c3x_renderer_tile_v1 * record,
 	if (tile->vtable->m18_Check_Mines (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_MINE;
 	if (tile->vtable->m20_Check_Pollution (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_POLLUTION;
 	if (tile->vtable->m21_Check_Crates (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_CRATER;
+	// Tile buildings, queried as native m12 draws them: a barricade instead of
+	// its fortress; radar and outpost by their live state; the colony and the
+	// scenario victory point (not under a city) from the tile itself. Native
+	// tests only the low byte of each answer (m13 and m34 keep other bits above).
+	if (tile->vtable->m14_Check_Barricade (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_BARRICADE;
+	else if ((char)tile->vtable->m13_Check_Fortress (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_FORTRESS;
+	if (tile->vtable->m06_Check_Airfield (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_AIRFIELD;
+	if (tile->vtable->m33_Check_Radar (tile, __, 0)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_RADAR;
+	if (tile->vtable->m19_Check_Outpost (tile, __, 0)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_OUTPOST;
+	if (Tile_has_colony (tile)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_COLONY;
+	if ((char)tile->vtable->m34_Check_field_20_hiword (tile) && ! Tile_has_city (tile))
+		record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_VICTORY_POINT;
+	// Owned tile buildings draw in their owner's era.
+	if (record->improvement_flags & (C3X_RENDERER_IMPROVEMENT_RADAR | C3X_RENDERER_IMPROVEMENT_OUTPOST | C3X_RENDERER_IMPROVEMENT_COLONY)) {
+		int owner = tile->vtable->m70_Get_Tile_Building_OwnerID (tile);
+		if ((owner >= 0) && (owner < 32))
+			record->improvement_flags |= (unsigned)clamp (0, 3, leaders[owner].Era) << C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_SHIFT;
+	}
 }
 
 bool
@@ -29568,7 +29587,13 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED | C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED |
 		C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED | C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED |
 		C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED |
-		C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED | C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED;
+		C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED | C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED |
+		C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED;
+	// A renderer or site pack from before tile buildings draws none, as before;
+	// one that draws any must draw every captured one.
+	unsigned int drawn = 0;
+	for (unsigned int n = 0; n < output->replacement_tile_count; n++)
+		drawn |= output->replacement_tile_flags[n];
 	for (unsigned int n = 0; n < output->replacement_tile_count; n++) {
 		unsigned int flags = output->replacement_tile_flags[n];
 		struct c3x_renderer_tile_v1 const * captured = &is->custom_renderer_tiles[n];
@@ -29605,7 +29630,13 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		    ((((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_GOODY_HUT) != 0) &&
 		      ((flags & C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED) == 0)) ||
 		     (((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP) != 0) &&
-		      ((flags & C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED) == 0))))
+		      ((flags & C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED) == 0)) ||
+		     (((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS) != 0) &&
+		      ((drawn & C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED) != 0) &&
+		      ((flags & C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED) == 0))))
+			return false;
+		if (((flags & C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED) != 0) &&
+		    ((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS) == 0))
 			return false;
 		if (((flags & C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED) != 0) &&
 		    ((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) == 0))
@@ -29623,7 +29654,8 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		               C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED |
-		               C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED)) != 0) &&
+		               C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED |
+		               C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED)) != 0) &&
 		    ((flags & C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED) == 0))
 			return false;
 	}

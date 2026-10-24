@@ -4677,7 +4677,10 @@ public:
             marker->ground_fit);
     }
 
-    template<class Part> void resource_footprint(c3x_renderer_tile_v1 const & tile, int c, int r, Part part) const {
+    // triangles: a body as the footprint of each triangle standing above the
+    // ground, not its whole bounds (a colony stands in a rock cluster's gaps).
+    template<class Part> void resource_footprint(c3x_renderer_tile_v1 const & tile, int c, int r, Part part,
+            bool triangles = false) const {
         if (tile.city_id >= 0 || tile.resource_id < 0) return;
         float base_x = float(c), base_y = float(r) + 1;
         auto subject = [&](ResourceAnimation const & animation, float u, float v, float scale) {
@@ -4685,10 +4688,23 @@ public:
             for (auto const & box : animation.source_bounds.bones) if (box.valid)
                 for (unsigned a = 0; a < 2; ++a) extent = std::max({extent, std::abs(box.low[a]), std::abs(box.high[a])});
             extent *= animation.scale * scale;
-            part(base_x + u - extent, base_y - v - extent, base_x + u + extent, base_y - v + extent, true);
+            part(base_x + u - extent, base_y - v - extent, base_x + u + extent, base_y - v + extent, true, false);
         };
         auto body = [&](c3x_renderer::FeatureAsset const & asset, float u, float v, float rotation, float scale, float core) {
             float co = std::cos(rotation), si = std::sin(rotation), x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+            if (triangles && core >= 1.f) {
+                for (std::size_t k = 0; k + 2 < asset.indices.size(); k += 3) {
+                    float tx0 = 1e9f, ty0 = 1e9f, tx1 = -1e9f, ty1 = -1e9f, top = 0;
+                    for (std::size_t n = k; n < k + 3; ++n) {
+                        auto const & p = asset.vertices[asset.indices[n]].position;
+                        float x = base_x + u + (p[0]*co - p[1]*si)*scale, y = base_y - v - (p[0]*si + p[1]*co)*scale;
+                        tx0 = std::min(tx0, x); tx1 = std::max(tx1, x); ty0 = std::min(ty0, y); ty1 = std::max(ty1, y);
+                        top = std::max(top, p[2]*scale);
+                    }
+                    if (top >= .002f) part(tx0, ty0, tx1, ty1, false, false);
+                }
+                return;
+            }
             for (auto const & p : asset.vertices) {
                 float x = base_x + u + (p.position[0]*co - p.position[1]*si)*scale;
                 float y = base_y - v - (p.position[0]*si + p.position[1]*co)*scale;
@@ -4696,7 +4712,7 @@ public:
             }
             if (x0 > x1) return;
             float cx = (x0 + x1)*.5f, cy = (y0 + y1)*.5f, hx = (x1 - x0)*.5f*core, hy = (y1 - y0)*.5f*core;
-            part(cx - hx, cy - hy, cx + hx, cy + hy, false);
+            part(cx - hx, cy - hy, cx + hx, cy + hy, false, core < 1.f);
         };
         int animated = resource_animation_for(tile);
         if (animated >= 0) {
@@ -4732,14 +4748,19 @@ public:
     // that ground open, and its mine stands beside the animals (`animals`: only
     // those). Animated animals turn and shift as they graze, so their boxes
     // keep a wider yard.
-    std::vector<std::array<float,4>> resource_boxes(c3x_renderer_tile_v1 const & tile, bool animals = false) const {
-        std::vector<std::array<float,4>> boxes;
+    // bodies: a colony stands around the resource's bodies; its ground decals
+    // (under rocks and plants they may span the tile) count only for a
+    // resource drawn as decals alone (an oil slick).
+    std::vector<std::array<float,4>> resource_boxes(c3x_renderer_tile_v1 const & tile, bool animals = false,
+            bool bodies = false) const {
+        std::vector<std::array<float,4>> boxes,decals;
         int c=(tile.tile_x+tile.tile_y)/2,r=(tile.tile_x-tile.tile_y)/2;
-        resource_footprint(tile,c,r,[&](float x0,float y0,float x1,float y1,bool animated){
+        resource_footprint(tile,c,r,[&](float x0,float y0,float x1,float y1,bool animated,bool decal){
             if(animals && !animated)return;
             float grow=animated?.04f:0.f;
-            boxes.push_back({x0-float(c)-grow,float(r)+1-y1-grow,x1-float(c)+grow,float(r)+1-y0+grow});});
-        return boxes;
+            (bodies && decal?decals:boxes).push_back({x0-float(c)-grow,float(r)+1-y1-grow,x1-float(c)+grow,float(r)+1-y0+grow});},
+            bodies);
+        return boxes.empty()?decals:boxes;
     }
 
     // The ground a vegetation tile keeps clear (fidelity::CanopyClearing):
@@ -4804,6 +4825,13 @@ public:
                 }
                 for(auto const&route:plan.routes)path(route.u0,route.v0,route.u1,route.v1,route.railroad);
             }
+            // Tile buildings stand where their ground lets them (river banks, a
+            // mountain's foot): the tile compile, which has those queries, keeps
+            // the forest off them (geometry.h); this keys it to them.
+            if(site_assets_ready && (near_tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS))
+                clearing.buildings=(clearing.buildings^(near_tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS|
+                    C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_MASK)))*16777619u+unsigned((dr+1)*3+dc+2)*2654435761u+
+                    unsigned(std::clamp(near_tile.route_style,0,3));
             unsigned sites=site_assets_ready?near_tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP):0u;
             if(sites || (mine_assets_ready && (near_tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE))){
                 c3x_renderer::objects::Plan plan;
@@ -4856,7 +4884,7 @@ public:
                     }
                 }
             }
-            resource_footprint(near_tile,c,r,[&](float x0,float y0,float x1,float y1,bool animated){
+            resource_footprint(near_tile,c,r,[&](float x0,float y0,float x1,float y1,bool animated,bool){
                 keep(x0,y0,x1,y1,!animated);
                 if(!dc && !dr){own.x0=std::min(own.x0,x0);own.y0=std::min(own.y0,y0);own.x1=std::max(own.x1,x1);own.y1=std::max(own.y1,y1);
                     own_animated=own_animated || animated;own_resource=true;}
@@ -9197,11 +9225,16 @@ public:
             flags |= C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED;
         if (city_assets_ready && tile.city_id >= 0)
             flags |= C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED;
-        unsigned site_flags=tile.improvement_flags & (C3X_RENDERER_IMPROVEMENT_GOODY_HUT | C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
+        // Tile buildings are the site pack's compositions; an older pack has
+        // none and leaves them undrawn (the bridge then requires none).
+        unsigned site_flags=tile.improvement_flags & (C3X_RENDERER_IMPROVEMENT_GOODY_HUT | C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP |
+            (site_bundle.compositions.empty()?0u:unsigned(C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS)));
         if(site_flags) {
-            if(!site_assets_ready)return ~0u;
+            if(!site_assets_ready)
+                return ~0u;
             if(site_flags&C3X_RENDERER_IMPROVEMENT_GOODY_HUT)flags|=C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED;
             if(site_flags&C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP)flags|=C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED;
+            if(site_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS)flags|=C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED;
         }
         if (mine_assets_ready &&
             (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) != 0)
@@ -10493,6 +10526,8 @@ public:
                 input.resource_boxes=resource_boxes(tile);
             if(mine_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE))
                 input.animal_boxes=resource_boxes(tile,true);
+            if(site_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_COLONY))
+                input.colony_boxes=resource_boxes(tile,false,true);
             return input;
         };
         auto compile_objects=[&](auto const& input,auto& scratch,auto stop,bool bounded=false){
@@ -10789,7 +10824,8 @@ public:
             ++textured_tile_count;
             build_replacement[index] = content_replacement_flags(tile);
             if(build_replacement[index]==~0u)return false; // site art not ready
-            unsigned site_flags=tile.improvement_flags & (C3X_RENDERER_IMPROVEMENT_GOODY_HUT | C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
+            unsigned site_flags=tile.improvement_flags & (C3X_RENDERER_IMPROVEMENT_GOODY_HUT | C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP |
+                C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS);
             auto local_river_nodes=select_river_nodes(tile);
             auto river_context=river_context_for(local_river_nodes);
             auto persistent_instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
@@ -11492,6 +11528,21 @@ public:
                 return height+displacement*c3x_renderer::fidelity::coast_relief(float(shore.distance),
                     float(shore.beach_width))*river_scale*queries.hidden_taper(u,v);
             };
+            // A tile building's ground (objects::place_tile_buildings), for this
+            // tile or a neighbor: the city sites' water test and the mountain's
+            // rock, queried as the object jobs query them, so the forest's
+            // exclusions (geometry.h) match the drawn buildings.
+            auto tile_building_wet=[&](c3x_renderer_tile_v1 const& site){
+                return c3x_renderer::objects::site_wet(site,[&](float x,float y){return float(shore_sample_at(x,y).distance);},
+                    [&](float x,float y){return river_assets_ready?float(natural.river_sample({x,y}).distance):1000.f;});
+            };
+            auto tile_building_rock=[&](c3x_renderer_tile_v1 const& site){
+                c3x_renderer::fidelity::MountainShape shape(natural,(site.tile_x+site.tile_y)/2,(site.tile_x-site.tile_y)/2,
+                    [&](int mc,int mr){return queries.natural_tile(mc,mr);},[](int,int){return false;});
+                float x0=float(site.tile_x+site.tile_y)*.5f,y0=float(site.tile_x-site.tile_y)*.5f;
+                return [this,shape,x0,y0](float u,float v){
+                    return shape.count?float(shape.sample(natural,x0+u,y0+1.f-v).displacement)*(.82f/150.f):0.f;};
+            };
             auto relief_at_world = [&](float world_u, float world_v) {
                 if (pickup_profile) {
                     auto sample = pickup_ground_at(world_u,world_v);
@@ -11753,7 +11804,8 @@ public:
                 int c=(tile.tile_x+tile.tile_y)/2+dc,r=(tile.tile_x-tile.tile_y)/2+dr;
                 auto neighbor=ground_observations.current(coordinate_key(c+r,c-r));
                 auto cleared=[](c3x_renderer_tile_v1 const& n){return n.city_id>=0 || n.resource_id>=0 || n.road_mask || n.railroad_mask ||
-                    (n.improvement_flags&(C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP));};
+                    (n.improvement_flags&(C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP|
+                        C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS));};
                 auto value=neighbor!=nullptr && cleared(neighbor->occurrence)?
                     tile_content_signature(neighbor->occurrence):0;
                 natural_key=(natural_key^value)*1099511628211ull;
@@ -12365,11 +12417,11 @@ public:
                 if(tile_city_composition && city_assets_ready && ground<11)++city_fallbacks_omitted;
                 bool farmed=farm_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION);
                 c3x_renderer::objects::Plan routes;
-                if(farmed){
+                // A farm keeps its routes open, and a barricade's ring opens for them.
+                if(farmed || (site_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_BARRICADE)))
                     c3x_renderer::objects::select_routes(tile,object_assets,route_assets_ready,true,
                         [&](int x,int y){return ground_observations.current(observed_coordinate_key(x,y));},routes);
-                    plan.farm_route_lines=unsigned(routes.patterns.size()+routes.routes.size());
-                }
+                if(farmed)plan.farm_route_lines=unsigned(routes.patterns.size()+routes.routes.size());
                 // Ground states draw from the site pack but own no native replacement.
                 unsigned ground_states=site_assets_ready?tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_POLLUTION|
                     C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS):0u;
@@ -12377,6 +12429,8 @@ public:
                         mine_assets_ready,farm_assets_ready,plan))return false;
                 if(mine_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE))
                     c3x_renderer::objects::settle_mine(plan,object_assets,tile,resource_boxes(tile,true));
+                if(site_assets_ready && !c3x_renderer::objects::place_tile_buildings(plan,object_assets,tile,routes,
+                        resource_boxes(tile,false,true),tile_building_wet(tile),tile_building_rock(tile)))return false;
                 if(farmed){
                     c3x_renderer::objects::clear_farm(plan,routes,object_assets,resource_boxes(tile));
                     c3x_renderer::objects::settle_farm_fields(plan,tile,object_assets,relief_at_world,
@@ -12387,9 +12441,11 @@ public:
                 }
                 object_instances+=unsigned(plan.instances.size());object_routes+=unsigned(plan.routes.size());
                 // A mine on a mountain stands on the drawn rock at its foot, as the
-                // resources around it do; on the natural ground the rock covered it.
-                bool mined_peak=(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE) &&
-                    (tile.real_terrain_type==6 || tile.real_terrain_type==10);
+                // resources around it do, and so do tile buildings; on the natural
+                // ground the rock covered them.
+                bool mined_peak=((tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE) &&
+                    (tile.real_terrain_type==6 || tile.real_terrain_type==10)) ||
+                    (site_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS));
                 if(mined_peak)c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,
                     resource_height_at,object_output);
                 else c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,natural_height_at,object_output);

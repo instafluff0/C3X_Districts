@@ -63,6 +63,21 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
             if(bits&0x80u){tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;tile.barbarian_tribe_id=7;}
             if(bits&0x40u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_POLLUTION;
             if(bits&0x100u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_CRATER;
+            // Tile buildings: Civ III's fortress, barricade (drawn instead of the
+            // fortress), airfield, radar and outpost bits; Lab-only bits mark a
+            // colony (0x800), a victory point (0x1000) and the era (0x03000000),
+            // which stands for both the viewer's and the owner's.
+            if(bits&0x10000000u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_BARRICADE;
+            else if(bits&0x10u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_FORTRESS;
+            if(bits&0x20000000u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_AIRFIELD;
+            if(bits&0x40000000u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_RADAR;
+            if(bits&0x80000000u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_OUTPOST;
+            if(bits&0x800u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_COLONY;
+            if(bits&0x1000u)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_VICTORY_POINT;
+            if(bits&0x03000000u){
+                tile.route_style=int(bits>>24&3u);
+                tile.improvement_flags|=(bits>>24&3u)<<C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_SHIFT;
+            }
             if((tile.square_parts&0x20u) && tile.real_terrain_type==7)tile.feature_flags|=C3X_RENDERER_FEATURE_PINE;
             int x=((tile.tile_x%map_width)+map_width)%map_width-center_x, y=tile.tile_y-center_y, index=0;
             for(char const* entry=listed;entry && *entry;++index) {

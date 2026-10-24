@@ -100,7 +100,8 @@ int main(){
             return value
         paths = [string() for _ in range(textures)]
         self.assertEqual(8, len(paths))
-        self.assertEqual(7, len(set(paths)), "site art and three ground textures")
+        # The site art (with tile buildings, in their atlases) and three ground textures.
+        self.assertEqual(3, len({p for p in paths if p.startswith("textures/ground_")}), "three ground textures")
         ids = []
         for _ in range(assets):
             ids.append(string())

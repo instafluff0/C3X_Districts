@@ -101,15 +101,20 @@ int main(){
  for(auto& vertex:flat.vertices)vertex.position[2]=.002f;
  assert(!objects::shared_rigid_mesh(flat));flat.vertices[2].position[2]=.003f;
  assert(objects::shared_rigid_mesh(flat));flat.indices.clear();assert(!objects::shared_rigid_mesh(flat));
- auto relief=[](float,float){return std::array<float,3>{9,0,0};};auto height=[](float,float){return 17.f;};
+ auto relief=[](float,float){return std::array<float,3>{9,0,0};};
+ // A slope: a body with a ground fit settles on its lowest ground, alike in both paths.
+ auto height=[](float x,float y){return 17.f+3.f*x-2.f*y;};
  for(int tile:{-17,1,139})for(float rotation:{-.24f,0.f,1.57079632679f})for(float scale:{.85f,1.f,2.32f})
- for(auto family:{objects::mine_family,objects::site_family}){
+ for(float fit:{0.f,.2f})for(auto family:{objects::mine_family,objects::site_family}){
   objects::Projection projection;projection.tile.tile_x=tile;projection.tile.tile_y=3;
   projection.tile_width=128;projection.content_view_height=1192;projection.half_w=64;projection.half_h=32;
   projection.relief_projection_scale=128.f/224.f*.82f;projection.feature_projection_scale=128.f/224.f;
   projection.pickup_profile=projection.world_objects=true;
-  objects::Instance source{family,0,objects::mine_layer,.3f,.7f,rotation,scale,21,.18f,false};
+  objects::Instance source{family,0,objects::mine_layer,.3f,.7f,rotation,scale,21,.18f,false};source.ground_fit=fit;
   auto rigid=objects::prepare_rigid(source,projection,assets,relief,height);
+  float tu=float(tile+3)*.5f+.3f,tv=float(tile-3)*.5f+1-.7f;
+  assert(rigid.instance.place[7]==(fit>0?std::min({height(tu,tv),height(tu-fit,tv-fit),height(tu+fit,tv-fit),
+      height(tu-fit,tv+fit),height(tu+fit,tv+fit)}):height(tu,tv))-2.5f);
   assert(rigid.material==float(asset.texture_index)+source.material+source.owner);
   objects::Plan plan;plan.instances.push_back(source);objects::Surfaces expanded;
   objects::compile(plan,projection,assets,relief,height,expanded,true);

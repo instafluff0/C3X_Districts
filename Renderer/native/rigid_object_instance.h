@@ -10,7 +10,7 @@ inline bool shared_rigid_mesh(FeatureAsset const& asset){
     // This is a geometry property, independent of pack origin or asset naming.
     // Wall sections need per-vertex terrain height, so they cannot use one
     // rigid transform shared by the whole source mesh.
-    if(asset.id.rfind("city/walls/",0)==0)return false;
+    if(terrain_wall_asset(asset))return false;
     if(asset.vertices.empty() || asset.indices.empty())return false;
     auto z=asset.vertices.front().position[2];
     float tolerance=asset.id.rfind("farm_",0)==0?1e-5f:0.0f;
@@ -37,6 +37,10 @@ PreparedRigid prepare_rigid(Instance const& source,Projection const& input,Asset
         asset.id.rfind("route/tunnel/",0)==0;
     if(seated)ground=height(u+source.u,v+1-source.v)-2.5f+
         (asset.id.rfind("route/tunnel/",0)==0?tunnel_rail_lift:0.f);
+    // Settled on the lowest ground within its fit, as append_instance seats it.
+    if(seated && source.ground_fit>0.f)for(int corner=0;corner<4;++corner)ground=std::min(ground,
+        height(u+source.u+(corner&1?source.ground_fit:-source.ground_fit),
+               v+1-source.v+(corner&2?source.ground_fit:-source.ground_fit))-2.5f);
     // A farm kit's props stand on the rendered ground its fields drape on.
     if(drape)ground=std::max(ground,height(u+source.u,v+1-source.v)-2.5f);
     seat_route_bridge(input,asset,source.scale,source.rotation,u+source.u,v+1-source.v,relief,height,ground);
@@ -49,7 +53,7 @@ PreparedRigid prepare_rigid(Instance const& source,Projection const& input,Asset
     std::vector<Vertex> vertices,shadows;std::vector<unsigned> indices;
     append_instance(input,assets[source.family],placement,source.u,source.v,source.rotation,source.scale,
         source.material,source.owner,false,seated,relief,height,vertices,shadows,&indices,
-        0.f,0.f,drape);
+        0.f,source.ground_fit,drape);
     result.bounds={std::numeric_limits<int>::max(),std::numeric_limits<int>::max(),
         std::numeric_limits<int>::min(),std::numeric_limits<int>::min()};
     result.low.fill(1e9f);result.high.fill(-1e9f);

@@ -13,6 +13,7 @@ import struct
 
 from Renderer.preview.render_improvement_sheet import IDENTITY, _matrix_multiply, _skeleton_worlds, _point
 from Renderer.tools.asset_compiler.build_mine_runtime import MAGIC, bundle_string, merged_asset, group_payload
+from Renderer.tools.asset_compiler import tile_buildings_runtime as tile_buildings
 
 ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "Renderer/packs/TileObjectsNormalized"
@@ -100,9 +101,11 @@ def plan():
     for texture in textures:
         read(SOURCE / texture)
     for name in ("Renderer/preview/render_improvement_sheet.py", "Renderer/tools/asset_compiler/build_mine_runtime.py",
-                 "Renderer/tools/asset_compiler/build_site_runtime.py", "Renderer/tools/asset_compiler/ground_state_composer.py"):
+                 "Renderer/tools/asset_compiler/build_site_runtime.py", "Renderer/tools/asset_compiler/ground_state_composer.py",
+                 "Renderer/tools/asset_compiler/tile_buildings_runtime.py"):
         read(ROOT / name)
     ground_sources(read)
+    tile_buildings.load(read)
     return groups, textures, consumed
 
 
@@ -164,19 +167,32 @@ def ground_groups(first_texture):
     return textures, groups
 
 
-def build(output):
+def build(output, frozen=tile_buildings.FROZEN):
     groups, textures, consumed = plan()
     output.mkdir(parents=True, exist_ok=True)
+    (output / "textures").mkdir(exist_ok=True)
     paths = []
-    for i, texture in enumerate(textures):
-        target = output / f"textures/base_{i}.dds"; target.parent.mkdir(exist_ok=True)
-        shutil.copyfile(SOURCE / texture, target); paths.append(target.relative_to(output).as_posix())
+    # With Civ III's tile buildings, their atlases take the first slots and
+    # hold the hut and camp textures (tile_buildings_runtime).
+    buildings = tile_buildings.load(lambda path: path.read_bytes(), frozen)
+    if buildings:
+        for k, atlas in enumerate(buildings["manifest"]["atlases"]):
+            target = output / f"textures/atlas_{k}.dds"
+            shutil.copyfile(frozen / atlas, target); paths.append(target.relative_to(output).as_posix())
+        cells = {texture: tile_buildings.cell(buildings, (SOURCE / texture).read_bytes()) for texture in textures}
+    else:
+        for i, texture in enumerate(textures):
+            target = output / f"textures/base_{i}.dds"
+            shutil.copyfile(SOURCE / texture, target); paths.append(target.relative_to(output).as_posix())
     assets, payloads = [], []
     counts = {}
     for role, parts in groups.items():
         merged = defaultdict(list)
         for mesh, texture in parts:
-            merged[textures.index(texture)].append(mesh)
+            if buildings:
+                merged[cells[texture][0]].append(tile_buildings.atlas_mesh(mesh, cells[texture]))
+            else:
+                merged[textures.index(texture)].append(mesh)
         placements = []
         for texture, meshes in sorted(merged.items()):
             placements.append((len(assets), .5))
@@ -196,13 +212,25 @@ def build(output):
                 placements.append((len(assets), .5))
                 assets.append(merged_asset(asset_id, slot, 0, meshes))
             payloads.append(group_payload(role, placements, 1.0)); counts[role] = len(parts)
-    paths += [paths[0]] * (8-len(paths))
-    bundle = bytearray(MAGIC) + struct.pack("<IIII", 1, 8, len(assets), len(payloads))
+    if buildings:
+        # Unused slots share one 4x4 placeholder: each slot is its own GPU
+        # texture, so repeating an atlas would load it again for nothing.
+        from Renderer.tools.asset_compiler.build_resource_compositions import dds_header
+        (output / "textures/unused.dds").write_bytes(dds_header(4, 4, 1, 72, 8) + bytes(8))
+        paths += ["textures/unused.dds"] * (8-len(paths))
+        offset = len(assets)
+        assets += buildings["assets"]
+    else:
+        paths += [paths[0]] * (8-len(paths))
+    bundle = bytearray(MAGIC) + struct.pack("<IIII", 2 if buildings else 1, 8, len(assets), len(payloads))
     for path in paths: bundle.extend(bundle_string(path))
     for part in assets + payloads: bundle.extend(part)
+    if buildings:
+        bundle.extend(tile_buildings.tail(buildings, offset))
     (output / "sites.bin").write_bytes(bundle)
-    (output / "manifest.json").write_text(json.dumps({"schema": "c3x.static_sites.v1", "groups": counts,
-        "height_scale": HEIGHT_SCALE, "sizes": json.loads(LOOKS.read_text())["sizes"],
+    (output / "manifest.json").write_text(json.dumps({"schema": "c3x.static_sites.v2" if buildings else "c3x.static_sites.v1",
+        "groups": counts, "height_scale": HEIGHT_SCALE, "sizes": json.loads(LOOKS.read_text())["sizes"],
         "ground_states": ground is not None, "normals": "inverse_transpose", "neutral": True,
+        "tile_buildings": [name for name, _ in buildings["compositions"]] if buildings else [],
         "source_sha256": consumed}, indent=2)+"\n")
     return consumed

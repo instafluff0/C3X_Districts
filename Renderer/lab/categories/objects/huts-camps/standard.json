@@ -14,7 +14,9 @@
     "Renderer/native/object_compiler.h",
     "Renderer/tools/asset_compiler/ground_state_composer.py",
     "Renderer/tools/asset_compiler/tile_site_looks.json",
-    "Renderer/tools/asset_compiler/ground_state_asset_importer.py"
+    "Renderer/tools/asset_compiler/ground_state_asset_importer.py",
+    "Renderer/tools/asset_compiler/tile_buildings_runtime.py",
+    "Renderer/native/object_preparation.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -41,7 +43,8 @@
     "Renderer.native.test_native_bridge_contract",
     "Renderer.native.test_render_core",
     "Renderer.native.test_ground_states",
-    "Renderer.native.test_canopy_world_inputs"
+    "Renderer.native.test_canopy_world_inputs",
+    "Renderer.native.test_tile_buildings"
   ],
   "references": {
     "d3d11": []

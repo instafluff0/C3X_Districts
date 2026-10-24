@@ -17,6 +17,7 @@ struct PreparationInput {
     // A farm's resource parts as tile-local (u0,v0,u1,v1) boxes it keeps open.
     std::vector<std::array<float,4>> resource_boxes;   // its resource's parts, kept open by a farm
     std::vector<std::array<float,4>> animal_boxes;     // its resource's animals, which a mine stands beside
+    std::vector<std::array<float,4>> colony_boxes;     // its resource's bodies, which a colony stands around
 };
 struct PreparedPart {
     render_core::PreparedMesh mesh;
@@ -68,7 +69,8 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     if(!capture.road_mask && !capture.railroad_mask && capture.city_id<0 && !volcano &&
         !(capture.improvement_flags&(C3X_RENDERER_IMPROVEMENT_MINE|C3X_RENDERER_IMPROVEMENT_IRRIGATION|
             C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP|
-            C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS)))return result;
+            C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS|
+            C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS)))return result;
     scratch.bind(natural,world_coast.world(),input.world_revision);
     NaturalWorld::CellInputs river_inputs;
     NaturalWorld::DependencyScope scope(scratch.rivers,&river_inputs);
@@ -113,10 +115,11 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     // neighboring tiles agree.
     constexpr float tunnel_foot=4.f,tunnel_reach=.2f;
     // The rendered mesh's own shape (lab/shared/natural/mountain_shape.h),
-    // built only for route, volcano and mine tiles, so routes and a mine lie on
-    // its rock and a plume leaves its crater.
+    // built only for route, volcano, mine and tile-building tiles, so routes,
+    // a mine and tile buildings lie on its rock and a plume leaves its crater.
     MountainShape mountain_shape;
     if(input.projection.tile.road_mask || input.projection.tile.railroad_mask || volcano ||
+       (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS) ||
        (input.mine_ready && (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE)))
         mountain_shape=MountainShape(natural,nc,nr,lookup_natural,[](int,int){return false;});
     unsigned const mountain_count=mountain_shape.count;
@@ -212,9 +215,18 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         if(any || tunnelled)route.fade=std::move(fade);
     }
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP|
-        C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS);
+        C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|C3X_RENDERER_IMPROVEMENT_RUINS|
+        C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS);
     if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,plan))return {};
     settle_mine(plan,assets,tile,input.animal_boxes);
+    // Tile buildings keep off water and its bank and, on a mountain, take the
+    // rock's foot (the same queries the forest's exclusions use).
+    float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
+    if(!place_tile_buildings(plan,assets,tile,plan,input.colony_boxes,
+        site_wet(tile,[&](float x,float y){return float(queries.shore(x,y).distance);},
+            [&](float x,float y){return input.river_ready?float(scratch.rivers.river_sample({x,y}).distance):1000.f;}),
+        [&](float u,float v){return mountain_count?float(mountain_shape.sample(natural,tile_u+u,tile_v+1.f-v).displacement)*
+            (.82f/150.f):0.f;}))return {};
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
         clear_farm(plan,plan,assets,input.resource_boxes);
         // A plot kit lays out the areas it shares with neighbouring farms:
@@ -267,9 +279,10 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             }
             if(shared_rigid_mesh(asset)){
                 result->draws.push_back({unsigned(instance.layer),0,0,unsigned(result->rigid.size())});
-                // A tunnel entrance stands on its rail, and a mine on the drawn rock
-                // at a mountain's foot (on the natural ground the rock covered it).
-                bool on_rock=asset.id.rfind("route/tunnel/",0)==0 || instance.family==mine_family;
+                // A tunnel entrance stands on its rail, and a mine or a tile building
+                // on the drawn rock (on the natural ground the rock covered it).
+                bool on_rock=asset.id.rfind("route/tunnel/",0)==0 || instance.family==mine_family ||
+                    (instance.family==site_family && tile_building_asset(asset));
                 result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,
                     [&](float x,float y){return on_rock?route_height(x,y):height_natural(x,y);},
                     plan.farm_kit && instance.family==farm_family));

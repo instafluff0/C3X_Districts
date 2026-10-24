@@ -411,7 +411,8 @@ public:
     static void copy_native_overlays(c3x_renderer_tile_v1& to,c3x_renderer_tile_v1 const& from){
         constexpr unsigned mask=C3X_RENDERER_IMPROVEMENT_IRRIGATION|C3X_RENDERER_IMPROVEMENT_MINE|
             C3X_RENDERER_IMPROVEMENT_POLLUTION|C3X_RENDERER_IMPROVEMENT_CRATER|
-            C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;
+            C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP|
+            C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS|C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_MASK;
         to.road_mask=from.road_mask;to.railroad_mask=from.railroad_mask;to.route_style=from.route_style;
         to.irrigation_mask=from.irrigation_mask;to.barbarian_tribe_id=from.barbarian_tribe_id;
         to.improvement_flags=(to.improvement_flags&~mask)|(from.improvement_flags&mask);

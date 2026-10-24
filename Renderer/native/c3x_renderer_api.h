@@ -56,7 +56,8 @@ enum c3x_renderer_tile_flags {
     // Per-field native authority on explored tiles, including explicit absence.
     // Neither flag authorizes unrelated art, full prefetch or draw eligibility.
     C3X_RENDERER_TILE_CITY_BODY_KNOWN = 524288u,
-    C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN = 1048576u
+    C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN = 1048576u,
+    C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED = 2097152u
 };
 
 enum c3x_renderer_invalidation_flags {
@@ -89,7 +90,20 @@ enum c3x_renderer_improvement_flags {
     C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP = 64u,
     /* Civ III city ruins (Tile::m36_Get_Ruins). Native ruins carry no viewer
        memory; the native fog pass alone masks unexplored tiles. */
-    C3X_RENDERER_IMPROVEMENT_RUINS = 128u
+    C3X_RENDERER_IMPROVEMENT_RUINS = 128u,
+    /* Civ III's tile buildings (Map_Renderer m12). A barricade is drawn
+       instead of its fortress. */
+    C3X_RENDERER_IMPROVEMENT_FORTRESS = 256u,
+    C3X_RENDERER_IMPROVEMENT_BARRICADE = 512u,
+    C3X_RENDERER_IMPROVEMENT_AIRFIELD = 1024u,
+    C3X_RENDERER_IMPROVEMENT_RADAR = 2048u,
+    C3X_RENDERER_IMPROVEMENT_OUTPOST = 4096u,
+    C3X_RENDERER_IMPROVEMENT_COLONY = 8192u,
+    C3X_RENDERER_IMPROVEMENT_VICTORY_POINT = 16384u,
+    C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS = 32512u,
+    /* Era (0..3) of the owner of a radar tower, outpost or colony. */
+    C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_SHIFT = 16u,
+    C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_MASK = 196608u
 };
 
 enum c3x_renderer_city_flags {

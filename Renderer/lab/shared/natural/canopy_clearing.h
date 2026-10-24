@@ -21,6 +21,10 @@ struct CanopyClearing {
     // A hut or camp without a resource keeps the full stand, spread outside
     // its opening, so the tile still reads as forest around the village.
     bool thin_stand=true;
+    // Civ III's tile buildings on this tile and its neighbors (their flags,
+    // eras and places): the tile compile keeps the trees off their exact
+    // footprints, which their ground decides; this keys the compiled ground.
+    unsigned buildings=0;
     unsigned variety=broadleaf_forest;
     // The variety in Winter, when every pine forest takes the snow-pine set
     // (seasons D4); a stand whose Winter variety differs keeps both stands.
@@ -66,7 +70,8 @@ struct CanopyClearing {
         }
         mix(open_x);mix(open_y);mix(open_radius);mix(open_scale);
         if(!thin_stand)mix(-2.f);
-        return boxes.empty() && near_boxes.empty() && open_radius<=0?0:value;
+        if(buildings)value=(value^buildings)*1099511628211ull;
+        return boxes.empty() && near_boxes.empty() && open_radius<=0 && !buildings?0:value;
     }
 };
 } }

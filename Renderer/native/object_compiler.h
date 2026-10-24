@@ -77,6 +77,9 @@ struct Instance {
     // of routes and yard (water and tile edges only), +0x400 under the plots
     // (the farm ground: a wider, irregular feather into the land around it).
     unsigned region=0;
+    // A seated body settles on the lowest ground within this reach (tiles) of
+    // its anchor, so on a slope it sinks uphill rather than floating downhill.
+    float ground_fit=0.f;
 };
 struct Route {float u0,v0,u1,v1;unsigned style;bool railroad,bridge,reverse,bypass=false;float bridge_t=1.0f;bool bridge_structural=true;bool isolated=false;};
 // One centerline of the tile's road pattern. Bridge bit 0/1 marks a start/end
@@ -176,6 +179,17 @@ struct Projection {
 // instead of the decal stretching up it.
 inline float decal_ground(float ground,float centre,float distance_tiles){
     return std::min(ground,centre+distance_tiles*(150.f/.82f)*.5f);
+}
+// Wall sections take the terrain under every vertex, so they bend over slopes
+// and banks and never share one rigid transform: the city walls and a
+// barricade's ring (the site pack's "walls/" pieces).
+inline bool terrain_wall_asset(FeatureAsset const& asset){
+    return asset.id.rfind("city/walls/",0)==0 || asset.id.rfind("walls/",0)==0;
+}
+// Civ III's tile buildings (the site pack's compositions) stand on the drawn
+// ground, a mountain's rock included, as mines do.
+inline bool tile_building_asset(FeatureAsset const& asset){
+    return asset.id.rfind("district/",0)==0 || asset.id.rfind("walls/",0)==0;
 }
 inline bool steep_decal(float rise,float distance_tiles){
     return rise>distance_tiles*(150.f/.82f)*.5f;
@@ -316,7 +330,7 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
     bool ground_decal=asset.id.rfind("decal/",0)==0;
     // Ground states (pollution, craters, ruins) cover their whole tile.
     bool ground_state=asset.id.rfind("decal/ground/",0)==0;
-    bool terrain_wall=pickup_profile && asset.id.rfind("city/walls/",0)==0;
+    bool terrain_wall=pickup_profile && terrain_wall_asset(asset);
     float wall_source_floor=0.f;
     if(terrain_wall){
         for(auto const& source:asset.vertices)
@@ -1855,6 +1869,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                     placement.scale,21.f,decal?0.f:.18f,false,site_vertices);
             }
         }
+        // Civ III's tile buildings: place_tile_buildings, on their ground.
     }
     if (mine_assets_ready && ground < 11 &&
         (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) != 0) {
@@ -2104,6 +2119,433 @@ inline std::array<float,4> settle_mine(Plan& plan,Assets const& assets,c3x_rende
     }
     for(auto& instance:plan.instances)if(instance.family==mine_family){instance.u=best_u;instance.v=best_v;}
     return {best_u,best_v,radius,height};
+}
+// The city sites' water test at tile-local (u,v): the shore nearer than .05
+// tile or a river nearer than 10 pixels to its centreline (its water and
+// bank). shore(x,y) and river(x,y) take world (column, row) points and give
+// tiles and pixels; a tile far from either skips its queries.
+template<class Shore,class River>
+auto site_wet(c3x_renderer_tile_v1 const& tile,Shore shore,River river){
+    float x0=float(tile.tile_x+tile.tile_y)*.5f,y0=float(tile.tile_x-tile.tile_y)*.5f;
+    bool coast=shore(x0+.5f,y0+.5f)<1.2f,banks=river(x0+.5f,y0+.5f)<80.f;
+    return [=](float u,float v){float x=x0+u,y=y0+1.f-v;
+        return (coast && shore(x,y)<.05f) || (banks && river(x,y)<10.f);};
+}
+// Civ III's tile buildings (Map_Renderer m12; user picks 2026-10-23): the site
+// pack's compositions, laid on the ground they stand on as city bodies, farms
+// and mines meet theirs. Fortresses, barricades and airfields follow the
+// viewer's era, as Civ III draws them (airfields: one early and one modern
+// sprite); outposts, radar and colonies their owner's.
+// - wet(u,v) (site_wet) marks water and its bank, rock(u,v) the mountain rock
+//   drawn over the natural ground (tiles), at tile-local (u,v), sampled on a
+//   grid of 48 cells a side.
+// - A building whose ground is dry, free and off rock stays where its
+//   composition put it. Otherwise it goes whole to the nearest such spot
+//   inside the tile (the city site layout's rule), shrinking to 85% and 70%;
+//   one that fits nowhere whole goes by its pieces (those that touch move
+//   together), and only its largest piece stays put rather than vanish. On a
+//   mountain it takes the rock's lowest ground, toward the camera (a mine's
+//   foot); the callers seat it on the drawn rock.
+// - A barricade is its keep (keep_<era>) inside a ring of the era's walls
+//   (wall_, tower_ and gate_<era>) round the dry ground that holds the keep:
+//   along the tile's edge, and along a river's or the coast's bank where water
+//   cuts through. Towers stand at its corners. A road or railroad of `routes`
+//   (the tile's route plan) crosses it through the era's gate, or an opening
+//   between two towers; a ring no route crosses has its gate (if the era has
+//   one) in the middle of its front side.
+// - A colony (the era's "A" kit, colony_<owner era>_<anchor|building|prop>_<k>)
+//   stands around the resource it was built on, never on it: anchors (the
+//   pieces naming it), then other buildings, largest first, as far toward the
+//   back of the tile (small u+v) as fits, props beside them. An anchor
+//   shrinks down to half before it is left out.
+// Deterministic per tile. False when the site pack lacks a building's art; a
+// pack from before tile buildings (no compositions) draws none, as before.
+template<class Wet,class Rock>
+bool place_tile_buildings(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 const& tile,Plan const& routes,
+        std::vector<std::array<float,4>> const& resource,Wet wet,Rock rock){
+    unsigned flags=tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS;
+    auto const& bundle=assets[site_family];
+    if(!flags || bundle.compositions.empty())return true;
+    int viewer_era=std::clamp(tile.route_style,0,3);
+    std::string const era=std::to_string(viewer_era),owner_era=std::to_string(
+        (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_MASK)>>C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_SHIFT);
+    auto find=[&](std::string const& name){return find_feature_composition(bundle,name.c_str());};
+    using Item=FeatureComposition::Instance;
+    using Items=std::vector<Item const*>;
+    auto items_of=[](FeatureComposition const& composition){
+        Items items;
+        if(!composition.variants.empty())for(auto const& item:composition.variants.front().instances)items.push_back(&item);
+        return items;
+    };
+    // The box of the pieces' lower part (sails overhang, they do not stand):
+    // centre u, centre v, half u, half v.
+    auto footprint=[&](Items const& items){
+        float top=0;std::vector<std::array<float,3>> points;
+        for(auto const* item:items){
+            if(item->asset>=bundle.assets.size())continue;
+            float co=std::cos(item->rotation),si=std::sin(item->rotation);
+            for(auto const& p:bundle.assets[item->asset].vertices){
+                points.push_back({item->u+(p.position[0]*co-p.position[1]*si)*item->scale,
+                                  item->v+(p.position[0]*si+p.position[1]*co)*item->scale,p.position[2]*item->scale});
+                top=std::max(top,points.back()[2]);
+            }
+        }
+        float u0=1e9f,v0=1e9f,u1=-1e9f,v1=-1e9f;
+        for(auto const& p:points)if(p[2]<=std::max(.0025f,top*.4f)){
+            u0=std::min(u0,p[0]);u1=std::max(u1,p[0]);v0=std::min(v0,p[1]);v1=std::max(v1,p[1]);}
+        return u0>u1?std::array<float,4>{.5f,.5f,0.f,0.f}:
+            std::array<float,4>{(u0+u1)*.5f,(v0+v1)*.5f,(u1-u0)*.5f,(v1-v0)*.5f};
+    };
+    // The ground: water and its bank (taken), and summed rock for footprints.
+    constexpr int grid=48;
+    std::vector<unsigned char> taken(grid*grid);
+    std::vector<float> rocks((grid+1)*(grid+1));
+    std::vector<int> table((grid+1)*(grid+1));
+    float rocky=0;
+    for(int i=0;i<grid;++i)for(int j=0;j<grid;++j){
+        float u=(float(i)+.5f)/float(grid),v=(float(j)+.5f)/float(grid),r=std::max(0.f,float(rock(u,v)));
+        taken[i*grid+j]=wet(u,v)?1:0;rocky=std::max(rocky,r);
+        rocks[(i+1)*(grid+1)+j+1]=r+rocks[i*(grid+1)+j+1]+rocks[(i+1)*(grid+1)+j]-rocks[i*(grid+1)+j];
+    }
+    std::vector<unsigned char> const water=taken;
+    auto sum=[&](auto const& t,int a,int b,int c,int d){return t[b*(grid+1)+d]-t[a*(grid+1)+d]-t[b*(grid+1)+c]+t[a*(grid+1)+c];};
+    auto cells=[&](float lo,float hi){return std::array<int,2>{std::max(0,int(std::floor(lo*grid))),
+        std::min(grid-1,int(std::floor(hi*grid)))};};
+    auto mark=[&](float u0,float v0,float u1,float v1){
+        auto a=cells(u0,u1),b=cells(v0,v1);
+        for(int i=a[0];i<=a[1];++i)for(int j=b[0];j<=b[1];++j)taken[i*grid+j]=1;
+    };
+    // Water, another building or mountain rock under a box at its own spot.
+    auto blocked=[&](std::array<float,4> const& b){
+        auto a=cells(b[0]-b[2],b[0]+b[2]),c=cells(b[1]-b[3],b[1]+b[3]);
+        for(int i=a[0];i<=a[1];++i)for(int j=c[0];j<=c[1];++j)if(taken[i*grid+j])return true;
+        return a[0]<=a[1] && c[0]<=c[1] && sum(rocks,a[0],a[1]+1,c[0],c[1]+1)>
+            .01f*float((a[1]-a[0]+1)*(c[1]-c[0]+1));
+    };
+    // The cheapest spot whose box of half size (hu,hv) at `factor` lies
+    // `margin` inside the tile on free ground: cost(u,v,mean rock).
+    struct Spot {bool found;float u,v,factor;};
+    auto settle=[&](float hu,float hv,std::vector<float> const& factors,float margin,auto cost){
+        for(int i=0;i<grid;++i)for(int j=0;j<grid;++j)table[(i+1)*(grid+1)+j+1]=taken[i*grid+j]+
+            table[i*(grid+1)+j+1]+table[(i+1)*(grid+1)+j]-table[i*(grid+1)+j];
+        int lo=int(std::ceil(margin*float(grid)-1e-3f));
+        for(float factor:factors){
+            int ru=std::max(1,int(std::ceil(hu*factor*float(grid)))),rv=std::max(1,int(std::ceil(hv*factor*float(grid))));
+            float best=1e9f;int bi=-1,bj=-1;
+            for(int i=lo+ru;i<=grid-lo-ru;++i)for(int j=lo+rv;j<=grid-lo-rv;++j){
+                if(sum(table,i-ru,i+ru,j-rv,j+rv))continue;
+                float c=cost(float(i)/float(grid),float(j)/float(grid),sum(rocks,i-ru,i+ru,j-rv,j+rv)/float(4*ru*rv));
+                if(c<best){best=c;bi=i;bj=j;}
+            }
+            if(bi>=0)return Spot{true,float(bi)/float(grid),float(bj)/float(grid),factor};
+        }
+        return Spot{false,0.f,0.f,1.f};
+    };
+    // Nearest the building's own spot; on rock, the lowest ground toward the camera.
+    auto nearest=[&](float cu,float cv){return [=](float u,float v,float r){
+        return std::hypot(u-cu,v-cv)+r+(rocky>.01f?.2f*(2.f-u-v):0.f);};};
+    // Pieces moved to (u,v) from their box centre (cu,cv), scaled and turned
+    // about it; rigid ones settle within `fit` of their anchor. A wall section
+    // stretches along its mesh's x (its length) alone.
+    auto emit=[&](Items const& items,float cu,float cv,float u,float v,float factor,float turn,float fit,float stretch=1.f){
+        float co=std::cos(turn),si=std::sin(turn);
+        for(auto const* item:items){
+            if(item->asset>=bundle.assets.size())continue;
+            float du=(item->u-cu)*factor,dv=(item->v-cv)*factor;
+            bool decal=bundle.assets[item->asset].id.rfind("decal/",0)==0;
+            Instance instance{site_family,item->asset,site_layer,u+du*co-dv*si,v+du*si+dv*co,item->rotation+turn,
+                item->scale*factor,21.f,decal?0.f:.18f,false};
+            instance.ground_fit=decal?0.f:fit;instance.stretch=stretch;
+            plan.instances.push_back(instance);
+        }
+    };
+    std::vector<float> const whole{1.f,.85f,.7f};
+    // A composition at its own spot, else whole at the nearest good one, else
+    // by its pieces. Returns where its (largest) part stands: box.
+    auto place=[&](FeatureComposition const& composition,float margin,std::vector<float> const& factors){
+        auto items=items_of(composition);
+        auto put=[&](Items const& part,std::array<float,4> const& b,float u,float v,float factor){
+            emit(part,b[0],b[1],u,v,factor,0.f,.3f*std::min(b[2],b[3])*factor);
+            mark(u-b[2]*factor-.01f,v-b[3]*factor-.01f,u+b[2]*factor+.01f,v+b[3]*factor+.01f);
+            return std::array<float,4>{u,v,b[2]*factor,b[3]*factor};
+        };
+        auto b=footprint(items);
+        if(!blocked(b))return put(items,b,b[0],b[1],1.f);
+        auto spot=settle(b[2],b[3],factors,margin,nearest(b[0],b[1]));
+        if(spot.found)return put(items,b,spot.u,spot.v,spot.factor);
+        // Pieces that touch move together, the largest first.
+        std::vector<std::array<float,4>> boxes;
+        std::vector<unsigned> owner(items.size());
+        for(unsigned k=0;k<items.size();++k){boxes.push_back(footprint({items[k]}));owner[k]=k;}
+        auto root=[&](unsigned k){while(owner[k]!=k)k=owner[k];return k;};
+        for(unsigned a=0;a<items.size();++a)for(unsigned c=a+1;c<items.size();++c)
+            if(std::abs(boxes[a][0]-boxes[c][0])<boxes[a][2]+boxes[c][2]+.01f &&
+               std::abs(boxes[a][1]-boxes[c][1])<boxes[a][3]+boxes[c][3]+.01f)owner[root(c)]=root(a);
+        std::vector<Items> parts;std::vector<unsigned> roots;
+        for(unsigned k=0;k<items.size();++k){
+            auto r=root(k);auto at=std::find(roots.begin(),roots.end(),r);
+            if(at==roots.end()){roots.push_back(r);parts.push_back({});at=roots.end()-1;}
+            parts[std::size_t(at-roots.begin())].push_back(items[k]);
+        }
+        std::vector<std::array<float,4>> part_boxes;
+        for(auto const& part:parts)part_boxes.push_back(footprint(part));
+        std::vector<unsigned> order(parts.size());
+        for(unsigned k=0;k<order.size();++k)order[k]=k;
+        std::stable_sort(order.begin(),order.end(),[&](unsigned a,unsigned c){
+            return part_boxes[a][2]*part_boxes[a][3]>part_boxes[c][2]*part_boxes[c][3];});
+        std::array<float,4> first{};
+        for(unsigned k=0;k<order.size();++k){
+            auto const& pb=part_boxes[order[k]];
+            std::array<float,4> placed{};bool done=false;
+            if(!blocked(pb)){placed=put(parts[order[k]],pb,pb[0],pb[1],1.f);done=true;}
+            else{
+                auto s=settle(pb[2],pb[3],whole,margin,nearest(pb[0],pb[1]));
+                if(s.found){placed=put(parts[order[k]],pb,s.u,s.v,s.factor);done=true;}
+                else if(!k){placed=put(parts[order[k]],pb,pb[0],pb[1],1.f);done=true;}
+            }
+            if(done && !k)first=placed;
+        }
+        return first;
+    };
+    constexpr float edge=.03f;   // pieces and the ring's line stay this far inside the tile
+    // A barricade's ring round the dry ground holding its keep at (ku,kv).
+    auto ring=[&](float ku,float kv){
+        auto const* wall=find("wall_"+era);auto const* tower=find("tower_"+era);auto const* gate=find("gate_"+era);
+        if(!wall || !tower)return false;
+        constexpr int lo=1;   // cells outside the ring's line
+        auto inside=[&](int i,int j){return i>=lo && j>=lo && i<grid-lo && j<grid-lo && !water[std::size_t(i*grid+j)];};
+        std::vector<unsigned char> region(grid*grid);
+        int seed=-1;float seed_distance=1e9f;
+        for(int i=lo;i<grid-lo;++i)for(int j=lo;j<grid-lo;++j)if(inside(i,j)){
+            float d=std::hypot((float(i)+.5f)/float(grid)-ku,(float(j)+.5f)/float(grid)-kv);
+            if(d<seed_distance){seed_distance=d;seed=i*grid+j;}
+        }
+        if(seed<0)return true;
+        std::vector<int> stack{seed};region[std::size_t(seed)]=1;
+        while(!stack.empty()){
+            int c=stack.back();stack.pop_back();
+            int const steps[4][2]={{1,0},{-1,0},{0,1},{0,-1}};
+            for(auto const& d:steps){
+                int i=c/grid+d[0],j=c%grid+d[1];
+                if(inside(i,j) && !region[i*grid+j]){region[i*grid+j]=1;stack.push_back(i*grid+j);}
+            }
+        }
+        // The region's outline, on cell corners, with the region on its left;
+        // where two cells touch at a corner the outline turns right, through it.
+        auto in=[&](int i,int j){return i>=0 && j>=0 && i<grid && j<grid && region[i*grid+j];};
+        struct Edge {int x0,y0,x1,y1;bool used=false;};
+        std::vector<Edge> edges;
+        for(int i=0;i<grid;++i)for(int j=0;j<grid;++j)if(region[i*grid+j]){
+            if(!in(i,j-1))edges.push_back({i,j,i+1,j});
+            if(!in(i+1,j))edges.push_back({i+1,j,i+1,j+1});
+            if(!in(i,j+1))edges.push_back({i+1,j+1,i,j+1});
+            if(!in(i-1,j))edges.push_back({i,j+1,i,j});
+        }
+        // At most two edges leave a corner (where two cells touch there).
+        std::vector<std::array<int,2>> starts(std::size_t((grid+1)*(grid+1)),std::array<int,2>{-1,-1});
+        for(std::size_t k=0;k<edges.size();++k){
+            auto& slot=starts[std::size_t(edges[k].x0*(grid+1)+edges[k].y0)];slot[slot[0]<0?0:1]=int(k);}
+        std::vector<std::array<float,2>> outline;float outline_area=0;
+        for(std::size_t first=0;first<edges.size();++first){
+            if(edges[first].used)continue;
+            std::vector<std::array<float,2>> loop;float area=0;
+            for(std::size_t k=first;!edges[k].used;){
+                auto& e=edges[k];e.used=true;loop.push_back({float(e.x0),float(e.y0)});
+                area+=float(e.x0*e.y1-e.x1*e.y0);
+                int dx=e.x1-e.x0,dy=e.y1-e.y0,best_turn=3;std::size_t next=k;
+                for(int candidate:starts[std::size_t(e.x1*(grid+1)+e.y1)]){
+                    if(candidate<0)continue;
+                    auto const& n=edges[std::size_t(candidate)];
+                    if(n.used && std::size_t(candidate)!=first)continue;
+                    int ndx=n.x1-n.x0,ndy=n.y1-n.y0,cross=dx*ndy-dy*ndx;
+                    int turn=cross<0?0:cross==0?1:2;
+                    if(turn<best_turn){best_turn=turn;next=std::size_t(candidate);}
+                }
+                k=next;
+            }
+            if(area>outline_area){outline_area=area;outline=std::move(loop);}
+        }
+        if(outline.size()<4)return true;
+        // Straight runs: the outline's staircase simplified (Douglas-Peucker).
+        std::vector<char> keep(outline.size());
+        auto simplify=[&](auto&& self,std::size_t a,std::size_t b)->void{
+            auto const& p=outline[a%outline.size()];auto const& q=outline[b%outline.size()];
+            float lx=q[0]-p[0],ly=q[1]-p[1],length=std::max(1e-6f,std::hypot(lx,ly)),worst=0;std::size_t at=a;
+            for(std::size_t k=a+1;k<b;++k){auto const& r=outline[k%outline.size()];
+                float d=std::abs((r[0]-p[0])*ly-(r[1]-p[1])*lx)/length;if(d>worst){worst=d;at=k;}}
+            if(worst>1.5f){keep[at%outline.size()]=1;self(self,a,at);self(self,at,b);}
+        };
+        std::size_t opposite=0;   // not "far": a windows.h macro
+        for(std::size_t k=1;k<outline.size();++k)
+            if(std::hypot(outline[k][0]-outline[0][0],outline[k][1]-outline[0][1])>
+               std::hypot(outline[opposite][0]-outline[0][0],outline[opposite][1]-outline[0][1]))opposite=k;
+        keep[0]=keep[opposite]=1;
+        simplify(simplify,0,opposite);simplify(simplify,opposite,outline.size());
+        // Corners mapped onto the ring's line (the tile's edge, inset).
+        std::vector<std::array<float,2>> corners;
+        for(std::size_t k=0;k<outline.size();++k)if(keep[k])corners.push_back({
+            edge+(outline[k][0]-float(lo))/float(grid-2*lo)*(1.f-2.f*edge),
+            edge+(outline[k][1]-float(lo))/float(grid-2*lo)*(1.f-2.f*edge)});
+        auto wall_items=items_of(*wall),tower_items=items_of(*tower);
+        auto wb=footprint(wall_items),tb=footprint(tower_items);
+        // A piece's length runs along its mesh's x (the frozen pack turns wall
+        // meshes so): its heading is the piece's rotation, its length the
+        // mesh's x extent. A mesh longer in y turns a quarter and scales whole.
+        auto axis=[&](Items const& items,float& length,bool& along_x){
+            if(items.empty() || items.front()->asset>=bundle.assets.size()){length=0;along_x=false;return 0.f;}
+            float x0=1e9f,x1=-1e9f,y0=1e9f,y1=-1e9f;
+            for(auto const& p:bundle.assets[items.front()->asset].vertices){
+                x0=std::min(x0,p.position[0]);x1=std::max(x1,p.position[0]);y0=std::min(y0,p.position[1]);y1=std::max(y1,p.position[1]);}
+            along_x=x1-x0>=y1-y0;length=(along_x?x1-x0:y1-y0)*items.front()->scale;
+            return items.front()->rotation+(along_x?0.f:1.5707963f);
+        };
+        float wall_length=0,gate_length=0;bool wall_x=false,gate_x=false;
+        float wall_axis=axis(wall_items,wall_length,wall_x);
+        if(wall_length<=0)return false;
+        Items gate_items;std::array<float,4> gb{};float gate_axis=0;
+        if(gate){gate_items=items_of(*gate);gb=footprint(gate_items);gate_axis=axis(gate_items,gate_length,gate_x);}
+        // Where a road or railroad crosses the ring (its routes' tile-local
+        // lines), it passes through the era's gate, or through an opening
+        // between two towers where the era has none. A ring no route crosses
+        // keeps its gate in the middle of the longest run along the front
+        // sides (v, then u, at the tile's far edge), as it was drafted.
+        std::vector<std::array<float,4>> paths;
+        for(auto const& route:routes.patterns)if(auto const* set=assets.patterns_for(route.style)){
+            if(route.line>=set->lines.size())continue;
+            auto const& line=set->lines[route.line];
+            auto point=[&](unsigned i){return route.points.size()==line.count?route.points[i]:set->points[line.first+i];};
+            for(unsigned i=1;i<line.count;++i){auto p=point(i-1),q=point(i);paths.push_back({p[0],p[1],q[0],q[1]});}
+        }
+        for(auto const& route:routes.routes)paths.push_back({route.u0,route.v0,route.u1,route.v1});
+        float const opening=gate?gate_length:.14f;
+        std::vector<std::vector<float>> crossings(corners.size());   // along each run, from its start
+        bool crossed=false;
+        for(std::size_t k=0;k<corners.size();++k){
+            auto const& a=corners[k];auto const& b=corners[(k+1)%corners.size()];
+            float lu=b[0]-a[0],lv=b[1]-a[1],length=std::hypot(lu,lv);
+            for(auto const& path:paths){
+                float pu=path[2]-path[0],pv=path[3]-path[1],den=lu*pv-lv*pu;
+                if(std::abs(den)<1e-9f)continue;
+                float t=((path[0]-a[0])*pv-(path[1]-a[1])*pu)/den,along=((path[0]-a[0])*lv-(path[1]-a[1])*lu)/den;
+                if(t<0 || t>1 || along<0 || along>1)continue;
+                crossings[k].push_back(t*length);crossed=true;
+            }
+        }
+        if(gate && !crossed)for(int side=0;side<2;++side){
+            float longest=2.2f*wall_length;std::size_t gate_run=corners.size();
+            for(std::size_t k=0;k<corners.size();++k){
+                auto const& a=corners[k];auto const& b=corners[(k+1)%corners.size()];
+                float length=std::hypot(b[0]-a[0],b[1]-a[1]);
+                if(std::abs(a[side?0:1]-(1.f-edge))<.005f && std::abs(b[side?0:1]-(1.f-edge))<.005f && length>longest){
+                    longest=length;gate_run=k;}
+            }
+            if(gate_run<corners.size()){crossings[gate_run].push_back(longest*.5f);break;}
+        }
+        std::vector<std::array<float,2>> towers;
+        auto tower_at=[&](std::array<float,2> const& c){
+            for(auto const& t:towers)if(std::hypot(t[0]-c[0],t[1]-c[1])<.08f)return;
+            towers.push_back(c);
+            emit(tower_items,tb[0],tb[1],c[0],c[1],1.f,0.f,.3f*std::min(tb[2],tb[3]));
+        };
+        for(std::size_t k=0;k<corners.size();++k){
+            auto const& a=corners[k];auto const& b=corners[(k+1)%corners.size()];
+            float lu=b[0]-a[0],lv=b[1]-a[1],length=std::hypot(lu,lv),heading=std::atan2(lv,lu);
+            if(length<.15f*wall_length)continue;
+            auto at=[&](float along){return std::array<float,2>{a[0]+lu*along/length,a[1]+lv*along/length};};
+            // Openings, kept off the run's ends and merged where they meet.
+            auto& run=crossings[k];std::sort(run.begin(),run.end());
+            std::vector<std::array<float,2>> gaps;
+            for(float along:run){
+                if(length<opening+.04f){gaps={{0.f,length}};break;}
+                float c=std::clamp(along,opening*.5f+.02f,length-opening*.5f-.02f);
+                if(!gaps.empty() && c-opening*.5f<gaps.back()[1]+.03f)gaps.back()[1]=std::max(gaps.back()[1],c+opening*.5f);
+                else gaps.push_back({c-opening*.5f,c+opening*.5f});
+            }
+            // Walls in the runs between them, whole sections stretched to fit.
+            auto lay=[&](float from,float to){
+                float span=to-from;
+                if(span<.15f*wall_length)return;
+                unsigned count=std::max(1u,unsigned(std::lround(span/wall_length)));
+                float stretch=std::clamp(span/(float(count)*wall_length)*1.02f,.25f,1.6f);
+                for(unsigned slot=0;slot<count;++slot){
+                    auto p=at(from+span*(float(slot)+.5f)/float(count));
+                    if(wall_x)emit(wall_items,wb[0],wb[1],p[0],p[1],1.f,heading-wall_axis,0.f,stretch);
+                    else emit(wall_items,wb[0],wb[1],p[0],p[1],stretch,heading-wall_axis,0.f);
+                }
+            };
+            float from=0;
+            for(auto const& g:gaps){
+                lay(from,g[0]);from=g[1];
+                float width=g[1]-g[0];
+                if(gate && width>=opening*.9f && width<=opening*1.5f){
+                    auto mid=at((g[0]+g[1])*.5f);emit(gate_items,gb[0],gb[1],mid[0],mid[1],1.f,heading-gate_axis,0.f);}
+                else {tower_at(at(g[0]));tower_at(at(g[1]));}
+            }
+            lay(from,length);
+        }
+        // Towers where the ring turns.
+        for(std::size_t k=0;k<corners.size();++k){
+            auto const& p=corners[(k+corners.size()-1)%corners.size()];auto const& c=corners[k];
+            auto const& n=corners[(k+1)%corners.size()];
+            float turn=std::atan2(n[1]-c[1],n[0]-c[0])-std::atan2(c[1]-p[1],c[0]-p[0]);
+            if(std::abs(std::atan2(std::sin(turn),std::cos(turn)))>=.52f)tower_at(c);
+        }
+        // The ring keeps later buildings off: its cells, inside and out.
+        for(int i=0;i<grid;++i)for(int j=0;j<grid;++j)if(region[i*grid+j] &&
+            (!in(i-1,j) || !in(i+1,j) || !in(i,j-1) || !in(i,j+1)))mark((float(i)-1.f)/grid,(float(j)-1.f)/grid,
+                (float(i)+2.f)/grid,(float(j)+2.f)/grid);
+        return true;
+    };
+    if(flags&(C3X_RENDERER_IMPROVEMENT_BARRICADE|C3X_RENDERER_IMPROVEMENT_FORTRESS)){
+        bool barricade=(flags&C3X_RENDERER_IMPROVEMENT_BARRICADE)!=0;
+        auto const* keep=find((barricade?"keep_":"fortress_")+era);
+        if(!keep)return false;
+        auto at=place(*keep,barricade?.08f:edge,barricade?std::vector<float>{1.f,.85f,.7f,.6f,.5f}:whole);
+        if(barricade && !ring(at[0],at[1]))return false;
+    }
+    std::pair<unsigned,std::string> const lone[]={
+        {C3X_RENDERER_IMPROVEMENT_AIRFIELD,viewer_era<3?"airfield_0":"airfield_1"},
+        {C3X_RENDERER_IMPROVEMENT_RADAR,"radar"},
+        {C3X_RENDERER_IMPROVEMENT_OUTPOST,"outpost_"+owner_era},
+        {C3X_RENDERER_IMPROVEMENT_VICTORY_POINT,"victory"}};
+    for(auto const& [flag,name]:lone){
+        if(!(flags&flag))continue;
+        auto const* composition=find(name);
+        if(!composition)return false;
+        place(*composition,edge,whole);
+    }
+    if(!(flags&C3X_RENDERER_IMPROVEMENT_COLONY))return true;
+    std::string prefix="colony_"+owner_era+"_";
+    struct Piece {FeatureComposition const* composition;int rank;std::array<float,4> box;};
+    std::vector<Piece> pieces;
+    for(auto const& composition:bundle.compositions){
+        if(composition.name.rfind(prefix,0)!=0 || composition.variants.empty())continue;
+        char role=composition.name[prefix.size()];
+        auto b=footprint(items_of(composition));
+        if(b[2]<=0 && b[3]<=0)continue;
+        pieces.push_back({&composition,role=='a'?0:role=='b'?1:2,b});
+    }
+    std::stable_sort(pieces.begin(),pieces.end(),[](Piece const& a,Piece const& b){
+        return a.rank!=b.rank?a.rank<b.rank:a.box[2]*a.box[3]>b.box[2]*b.box[3];});
+    constexpr float margin=.015f;
+    for(auto const& box:resource)mark(box[0]-margin,box[1]-margin,box[2]+margin,box[3]+margin);
+    std::vector<std::array<float,2>> standing;
+    for(auto const& piece:pieces){
+        auto spot=settle(piece.box[2],piece.box[3],piece.rank==0?std::vector<float>{1.f,.85f,.7f,.6f,.5f}:whole,edge,
+            [&](float u,float v,float r){
+                if(piece.rank<2)return u+v+.35f*std::abs(u-v)+r;
+                float closest=0;   // not "near": a windows.h macro
+                if(!standing.empty()){closest=1e9f;for(auto const& s:standing)closest=std::min(closest,std::hypot(u-s[0],v-s[1]));}
+                return closest+.5f*(u+v)+r;
+            });
+        if(!spot.found)continue;
+        auto const& b=piece.box;
+        emit(items_of(*piece.composition),b[0],b[1],spot.u,spot.v,spot.factor,0.f,.3f*std::min(b[2],b[3])*spot.factor);
+        mark(spot.u-b[2]*spot.factor-1.f/grid,spot.v-b[3]*spot.factor-1.f/grid,
+             spot.u+b[2]*spot.factor+1.f/grid,spot.v+b[3]*spot.factor+1.f/grid);
+        if(piece.rank<2)standing.push_back({spot.u,spot.v});
+    }
+    return true;
 }
 // The ground a farm kit keeps open on its tile: its drawn routes with a
 // verge, and its resource's parts (tile-local boxes from the caller). Each
@@ -2814,7 +3256,8 @@ void compile(Plan const& plan,Projection const& input,Assets const& assets,Relie
         else append_instance(input,assets[instance.family],placement,instance.u,instance.v,instance.rotation,
             instance.scale,instance.material,instance.owner,instance.shadow,
             instance.family==site_family || instance.family==mine_family,
-            relief,height,output.layers[instance.layer],output.shadows,indexed?&output.indices[instance.layer]:nullptr);
+            relief,height,output.layers[instance.layer],output.shadows,indexed?&output.indices[instance.layer]:nullptr,
+            0.f,instance.ground_fit,false,instance.stretch);
         if(instance_counts)instance_counts->push_back(unsigned(
             (indexed?output.indices[instance.layer].size():output.layers[instance.layer].size())-before));
     }

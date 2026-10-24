@@ -178,6 +178,9 @@ float stable_random(std::uint32_t value){return patterns::stable_random(value);}
 FeatureGroup const* find_feature_group(FeatureBundle const& bundle,char const* name){
  for(auto const& group:bundle.groups)if(group.name==name)return &group;
  return nullptr;}
+FeatureComposition const* find_feature_composition(FeatureBundle const& bundle,char const* name){
+ for(auto const& composition:bundle.compositions)if(composition.name==name)return &composition;
+ return nullptr;}
 }
 using namespace c3x_renderer;
 using fidelity::CanopyClearing;
@@ -188,9 +191,9 @@ struct Renderer {
  bool route_assets_ready=false,site_assets_ready=true,mine_assets_ready=false;
  int ground_type(c3x_renderer_tile_v1 const&)const{return 2;}
  // One stationary plant in the middle of a resource tile.
- template<class Part> void resource_footprint(c3x_renderer_tile_v1 const& t,int c,int r,Part part)const{
-  if(t.resource_id>=0)part(float(c)+.45f,float(r)+.45f,float(c)+.55f,float(r)+.55f,false);}
- std::vector<std::array<float,4>> resource_boxes(c3x_renderer_tile_v1 const&,bool=false)const{return {};}
+ template<class Part> void resource_footprint(c3x_renderer_tile_v1 const& t,int c,int r,Part part,bool=false)const{
+  if(t.resource_id>=0)part(float(c)+.45f,float(r)+.45f,float(c)+.55f,float(r)+.55f,false,false);}
+ std::vector<std::array<float,4>> resource_boxes(c3x_renderer_tile_v1 const&,bool=false,bool=false)const{return {};}
 '''+clearing+r'''
 };
 // A pyramid standing on a square, or a flat square when tall is zero.

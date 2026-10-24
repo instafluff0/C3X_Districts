@@ -128,6 +128,55 @@ if(fidelity_profile) {
         };
         auto&hash=c3x_renderer::stable_hash;
         auto&random=c3x_renderer::stable_random;
+        // Civ III's tile buildings of this tile and its neighbors stand where
+        // their ground lets them (objects::place_tile_buildings, queried as the
+        // object jobs query it): trees keep off the ground their standing
+        // pieces cover, on a grid of .05 tile in row runs.
+        if(site_assets_ready)for(int r=nr-1;r<=nr+1;r++)for(int c=nc-1;c<=nc+1;c++){
+            auto building_found=ground_observations.current(observed_coordinate_key(c+r,c-r));
+            if(!building_found || !(building_found->occurrence.improvement_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS))continue;
+            auto building_site=building_found->occurrence;building_site.tile_x=c+r;building_site.tile_y=c-r;
+            c3x_renderer::objects::Plan building_plan,building_routes;
+            if(building_site.improvement_flags&C3X_RENDERER_IMPROVEMENT_BARRICADE)
+                c3x_renderer::objects::select_routes(building_site,object_assets,route_assets_ready,true,
+                    [&](int x,int y){return ground_observations.current(observed_coordinate_key(x,y));},building_routes);
+            if(!c3x_renderer::objects::place_tile_buildings(building_plan,object_assets,building_site,building_routes,
+                    resource_boxes(building_site,false,true),tile_building_wet(building_site),tile_building_rock(building_site)))continue;
+            for(auto const&building_piece:building_plan.instances){
+                if(building_piece.asset>=site_bundle.assets.size())continue;
+                auto const&building_asset=site_bundle.assets[building_piece.asset];
+                float building_co=std::cos(building_piece.rotation),building_si=std::sin(building_piece.rotation),bx0=1e9f,by0=1e9f,bx1=-1e9f,by1=-1e9f;
+                std::vector<std::array<float,3>> building_points(building_asset.vertices.size());
+                for(std::size_t i=0;i<building_points.size();i++){auto const&p=building_asset.vertices[i];
+                    float building_px=p.position[0]*building_piece.stretch;   // a wall section's own length
+                    building_points[i]={float(c)+building_piece.u+(building_px*building_co-p.position[1]*building_si)*building_piece.scale,
+                           float(r)+1-building_piece.v-(building_px*building_si+p.position[1]*building_co)*building_piece.scale,p.position[2]*building_piece.scale};
+                    bx0=std::min(bx0,building_points[i][0]);bx1=std::max(bx1,building_points[i][0]);by0=std::min(by0,building_points[i][1]);by1=std::max(by1,building_points[i][1]);}
+                if(bx0>bx1 || bx1<float(nc)-1.f || bx0>float(nc)+2.f || by1<float(nr)-1.f || by0>float(nr)+2.f)continue;
+                constexpr float building_cell=.05f,building_standing=.04f;
+                int building_columns=int((bx1-bx0)/building_cell)+1,building_rows=int((by1-by0)/building_cell)+1;
+                std::vector<char> building_covered(std::size_t(building_columns)*std::size_t(building_rows));
+                for(std::size_t i=0;i+2<building_asset.indices.size();i+=3){
+                    float btx0=1e9f,bty0=1e9f,btx1=-1e9f,bty1=-1e9f,building_rise=0;bool building_valid=true;
+                    for(std::size_t bk=i;bk<i+3;bk++){
+                        if(building_asset.indices[bk]>=building_points.size()){building_valid=false;break;}
+                        auto const&building_q=building_points[building_asset.indices[bk]];building_rise=std::max(building_rise,building_q[2]);
+                        btx0=std::min(btx0,building_q[0]);btx1=std::max(btx1,building_q[0]);bty0=std::min(bty0,building_q[1]);bty1=std::max(bty1,building_q[1]);}
+                    if(!building_valid || building_rise<building_standing)continue;
+                    for(int building_row=int((bty0-by0)/building_cell);building_row<=int((bty1-by0)/building_cell);building_row++)
+                        for(int building_column=int((btx0-bx0)/building_cell);building_column<=int((btx1-bx0)/building_cell);building_column++)
+                            building_covered[std::size_t(building_row)*std::size_t(building_columns)+std::size_t(building_column)]=1;
+                }
+                for(int building_row=0;building_row<building_rows;building_row++)for(int building_column=0;building_column<building_columns;){
+                    if(!building_covered[std::size_t(building_row)*std::size_t(building_columns)+std::size_t(building_column)]){building_column++;continue;}
+                    int building_end=building_column;
+                    while(building_end<building_columns && building_covered[std::size_t(building_row)*std::size_t(building_columns)+std::size_t(building_end)])building_end++;
+                    buildings.push_back({bx0+float(building_column)*building_cell,by0+float(building_row)*building_cell,
+                        std::min(bx1,bx0+float(building_end)*building_cell),std::min(by1,by0+float(building_row+1)*building_cell)});
+                    building_column=building_end;
+                }
+            }
+        }
         if(tile.real_terrain_type==7 || hill_forest){
             #include "../../lab/shared/natural/forest_mesh_body.h"
         }

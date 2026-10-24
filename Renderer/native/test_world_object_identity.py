@@ -4,6 +4,18 @@ from pathlib import Path
 from Renderer.native.native_cpp_test import run_cpp
 
 
+# The runtime's composition lookup compares with _stricmp (Windows); this host
+# copy keeps its alias semantics with strcasecmp.
+PORTABLE_COMPOSITION_LOOKUP = r'''
+FeatureComposition const * find_feature_composition(FeatureBundle const & bundle, char const * name) {
+    if (name == nullptr) return nullptr;
+    for (auto const & alias : bundle.composition_aliases)
+        if (strcasecmp(alias.first.c_str(), name) == 0) return &bundle.compositions[alias.second];
+    return nullptr;
+}
+'''
+
+
 class WorldObjectIdentityTests(unittest.TestCase):
     def test_palette_and_edges_preserve_object_recipe_but_invalidate_full_raster(self):
         run_cpp(r'''
@@ -101,7 +113,7 @@ int main(){
                 end += 1
             definitions.append(source[start:end])
         leaves = "namespace c3x_renderer { namespace {\n" + definitions[0] + "\n}\n"
-        leaves += "\n".join(definitions[1:]) + "\n}\n"
+        leaves += "\n".join(definitions[1:]) + "\n" + PORTABLE_COMPOSITION_LOOKUP + "}\n"
         program = r'''
 #define NOMINMAX
 #include "Renderer/native/object_preparation.h"
@@ -171,7 +183,8 @@ int main(){
                 depth += (source[end] == "{") - (source[end] == "}")
                 end += 1
             definitions.append(source[start:end])
-        leaves = "namespace c3x_renderer { namespace {\n" + definitions[0] + "\n}\n" + "\n".join(definitions[1:]) + "\n}\n"
+        leaves = "namespace c3x_renderer { namespace {\n" + definitions[0] + "\n}\n" + "\n".join(definitions[1:]) + "\n" + \
+            PORTABLE_COMPOSITION_LOOKUP + "}\n"
         program = r'''
 #define NOMINMAX
 #include "Renderer/native/object_preparation.h"

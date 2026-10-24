@@ -58,6 +58,13 @@ typedef struct TileVtable {
     int (*m25_Check_Roads)(Tile*,int,int);
     int (*m23_Check_Railroads)(Tile*,int,int);
     int (*m12_Check_Forest_Pines)(Tile*);
+    int (*m14_Check_Barricade)(Tile*,int,int);
+    int (*m13_Check_Fortress)(Tile*,int,int);
+    int (*m06_Check_Airfield)(Tile*,int,int);
+    int (*m33_Check_Radar)(Tile*,int,int);
+    int (*m19_Check_Outpost)(Tile*,int,int);
+    int (*m34_Check_field_20_hiword)(Tile*);
+    int (*m70_Get_Tile_Building_OwnerID)(Tile*);
 } TileVtable;
 struct Tile {
     TileVtable* vtable;
@@ -65,7 +72,10 @@ struct Tile {
             unsigned char Visibile_Overlays[32];}Body;
     unsigned Overlays;
     int city_id,tribe,live_resource,live_building,live_effect;
+    int colony,victory,building_owner;
 };
+static bool Tile_has_colony(Tile* tile){return tile->colony!=0;}
+static bool Tile_has_city(Tile* tile){return tile->city_id>=0;}
 typedef struct Map Map;
 typedef struct MapVtable {char (*m10_Get_Map_Zoom)(Map*);} MapVtable;
 struct Map {MapVtable* vtable;int Width,Height,Flags,Seed;Map_Renderer Renderer;};
@@ -168,7 +178,20 @@ static int rail(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused
 static int tribe(Tile* tile){++tribe_reads;return tile->tribe;}
 static int city_id(Tile* tile){++city_reads;return tile->city_id;}
 static int pines(Tile* tile){(void)tile;return 0;}
-static TileVtable tile_vtable={irrigation,mine,pollution,crater,hut,camp,tribe,city_id,roads,rail,pines};
+// Tile buildings: fortress 0x10 sits in the remembered byte; barricade,
+// airfield, radar and outpost are high Overlays bits, live only. As native,
+// the int-typed fortress and victory answers carry other bits above their low
+// byte, which is all native m12 tests.
+static int fortress(Tile* tile,int unused,int viewer){
+    assert(unused==0);last_viewer=viewer;return (int)(native_overlays(tile,(byte)viewer)&0xffffff10u);}
+static int barricade(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,28)!=0;}
+static int airfield(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,29)!=0;}
+static int radar(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,30)!=0;}
+static int outpost(Tile* tile,int unused,int viewer){return overlay_bit(tile,unused,viewer,31)!=0;}
+static int victory(Tile* tile){return tile->victory|0x00470200;}
+static int building_owner(Tile* tile){return tile->building_owner;}
+static TileVtable tile_vtable={irrigation,mine,pollution,crater,hut,camp,tribe,city_id,roads,rail,pines,
+    barricade,fortress,airfield,radar,outpost,victory,building_owner};
 static void reset(void){
     memset(tiles,0,sizeof tiles);memset(topology,0,sizeof topology);
     memset(&bic_data,0,sizeof bic_data);memset(leaders,0,sizeof leaders);
@@ -268,6 +291,29 @@ static void camp_admission(void){
     tile->Body.Visibile_Overlays[1]=0;record=read_record();assert(tribe_reads==1&&record.barbarian_tribe_id==-1);
     tile->Body.Visibility=2;record=read_record();assert(tribe_reads==2&&record.barbarian_tribe_id==5);
 }
+static void tile_buildings(void){
+    unsigned const all=C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS,era=C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_MASK;
+    reset();Tile* tile=tile_at(2,2);tile->Body.Visibility=2;tile->city_id=-1;
+    tile->Overlays=0x10;c3x_renderer_tile_v1 record=read_record();
+    assert((record.improvement_flags&(all|era))==C3X_RENDERER_IMPROVEMENT_FORTRESS);
+    // A barricade is drawn instead of its fortress; an airfield beside it.
+    tile->Overlays=0x10|0x10000000u|0x20000000u;record=read_record();
+    assert((record.improvement_flags&all)==(C3X_RENDERER_IMPROVEMENT_BARRICADE|C3X_RENDERER_IMPROVEMENT_AIRFIELD));
+    // Radar and outpost carry their owner's era (leaders[2] is in era 3).
+    tile->Overlays=0x40000000u|0x80000000u;tile->building_owner=2;record=read_record();
+    assert((record.improvement_flags&all)==(C3X_RENDERER_IMPROVEMENT_RADAR|C3X_RENDERER_IMPROVEMENT_OUTPOST));
+    assert((record.improvement_flags&era)>>C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_SHIFT==3);
+    tile->Overlays=0;tile->colony=1;tile->building_owner=1;record=read_record();
+    assert((record.improvement_flags&(all|era))==(C3X_RENDERER_IMPROVEMENT_COLONY|1u<<C3X_RENDERER_IMPROVEMENT_BUILDING_ERA_SHIFT));
+    // A victory point shows unless a city stands on it.
+    tile->colony=0;tile->victory=1;record=read_record();
+    assert((record.improvement_flags&(all|era))==C3X_RENDERER_IMPROVEMENT_VICTORY_POINT);
+    tile->city_id=4;record=read_record();assert(!(record.improvement_flags&C3X_RENDERER_IMPROVEMENT_VICTORY_POINT));
+    // Fogged, the viewer remembers the fortress byte only: no barricade then.
+    tile->victory=0;tile->Body.Visibility=0;tile->Body.Visibile_Overlays[1]=0x10;tile->Overlays=0x10|0x10000000u;
+    record=read_record();
+    assert((record.improvement_flags&all)==C3X_RENDERER_IMPROVEMENT_FORTRESS);
+}
 static void full_visible(void){
     reset();visible=true;c3x_renderer_tile_v1 record=read_record();
     assert(full_reads==1&&(record.tile_flags&C3X_RENDERER_TILE_PREFETCH));
@@ -327,6 +373,7 @@ int main(int argc,char** argv){
     else if(!strcmp(argv[1],"seed"))deterministic_seed();
     else if(!strcmp(argv[1],"terrain"))terrain_recipe();
     else if(!strcmp(argv[1],"fog"))fog_objects();
+    else if(!strcmp(argv[1],"buildings"))tile_buildings();
     else assert(false);
 }
 '''
@@ -402,6 +449,9 @@ class InjectedWorldAuthorityTests(unittest.TestCase):
 
     def test_explored_fog_reads_objects_as_the_capture_does(self):
         self.contract("fog")
+
+    def test_tile_buildings_follow_native_queries_and_owner_era(self):
+        self.contract("buildings")
 
 
 if __name__ == "__main__":

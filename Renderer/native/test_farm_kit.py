@@ -21,6 +21,8 @@ KIT = r'''
 namespace c3x_renderer {
 FeatureGroup const* find_feature_group(FeatureBundle const& bundle,char const* name){
  for(auto const& group:bundle.groups)if(group.name==name)return &group;return nullptr;}
+FeatureComposition const* find_feature_composition(FeatureBundle const& bundle,char const* name){
+ for(auto const& item:bundle.compositions)if(item.name==name)return &item;return nullptr;}
 std::uint32_t stable_hash(std::uint32_t value){return patterns::feature_hash(value);}
 float stable_random(std::uint32_t value){return patterns::stable_random(value);}
 }

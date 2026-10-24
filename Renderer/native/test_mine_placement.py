@@ -134,8 +134,12 @@ int main(){
         renderer = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         self.assertIn("(input.mine_ready && (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE)))",
                       preparation)
-        self.assertIn('bool on_rock=asset.id.rfind("route/tunnel/",0)==0 || instance.family==mine_family;', preparation)
+        # Tile buildings stand on the drawn rock too (their shape is built for them).
+        self.assertIn('bool on_rock=asset.id.rfind("route/tunnel/",0)==0 || instance.family==mine_family ||\n'
+                      '                    (instance.family==site_family && tile_building_asset(asset));', preparation)
+        self.assertIn("(input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS) ||", preparation)
         self.assertIn("return on_rock?route_height(x,y):height_natural(x,y);", preparation)
+        self.assertIn("(site_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS));", renderer)
         self.assertIn("if(mined_peak)c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,\n"
                       "                    resource_height_at,object_output);", renderer)
 

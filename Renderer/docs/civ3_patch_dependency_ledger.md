@@ -3126,3 +3126,34 @@ supported-build address is added.
 - **Config-off:** the capture runs only for custom rendering.
 - **Test:** `Renderer/native/test_city_view_halo.py` (fails on the folded
   anchors).
+
+## Tile buildings: fortress, barricade, airfield, radar, outpost, colony, victory point
+
+`required_user_action: ["Re-run INSTALL.bat"]`. No patch-table entry,
+injected-state field, signature or supported-build address is added.
+
+- **What changes:** `capture_custom_renderer_overlay_body` records the tile
+  buildings that native `Map_Renderer::m12_Draw_Tile_Buildings` would draw, in
+  `improvement_flags` (no ABI change). A barricade replaces its fortress, as
+  natively. Radar, outposts and colonies also carry their owner's era
+  (`m70_Get_Tile_Building_OwnerID`, the native sprite rule). Fortress,
+  barricade and airfield follow the viewer's era (`route_style`). Renderer64
+  draws them from the site pack; colonies stand around the tile's resource.
+  `validate_custom_renderer_replacement_ownership` requires
+  `C3X_RENDERER_TILE_CUSTOM_TILE_BUILDING_REPLACED` for every captured
+  building. A pack without the art keeps the tile native.
+- **Why:** the patched m19 tile hook skips the native tile plane under custom
+  rendering, so these buildings were never drawn (for example the 1498 save's
+  Japanese barricade line).
+- **Existing symbols relied on:** the Tile vtable's `m13_Check_Fortress`,
+  `m14_Check_Barricade` and `m06_Check_Airfield` (with the viewer, as native
+  fog memory keeps them), `m33_Check_Radar`, `m19_Check_Outpost`,
+  `m34_Check_field_20_hiword` (victory point) and
+  `m70_Get_Tile_Building_OwnerID`, plus `Tile_has_colony` and `Tile_has_city`.
+  All of these are already bound. Native m12 tests only the low byte of each
+  answer; `m13` and `m34` are int-typed and carry other bits above it (the
+  first game run drew a victory obelisk on nearly every tile), so the capture
+  casts them to `char`.
+- **Config-off:** the capture runs only for custom rendering.
+- **Test:** `Renderer/native/test_tile_buildings.py` and the "buildings"
+  contract in `Renderer/native/test_injected_world_authority.py`.
