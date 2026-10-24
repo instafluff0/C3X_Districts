@@ -8,7 +8,7 @@ param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory
       # Renderer diagnostics for the game child only, e.g. C3X_SANDBOX_PASS_COUNTS=1;C3X_RENDERER_PROFILE=1
       [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='',
       # Camera route for F24 steps (x,y,zoom width in native pixels; see parse_custom_renderer_test_route)
-      [ValidatePattern('^$|^[0-9]+,[0-9]+,[0-9]+(;[0-9]+,[0-9]+,[0-9]+)*$')][string]$Route='')
+      [ValidatePattern('^$|^[0-9]+,[0-9]+,[0-9]+(;[0-9]+,[0-9]+,[0-9]+)*$')][string]$Route='', [ValidateRange(0,8)][int]$LoadWarnings=0)
 $ErrorActionPreference = 'Stop'
 # 'volcanoes' is the units camera script aimed at the 1498 AD save's volcano groups;
 # 'resources' aims it at that save's ivory near rivers, fish and whales, and coastal gems.
@@ -505,7 +505,13 @@ try {
                 Write-Host ('Mouse command: '+($step -join ',')); ++$mouseIndex
             }
             $key=if ($Scenario -eq 'scroll') {0x87} else {0}
-            if ($enterCount -lt 2 -and $elapsed -ge (5+2*$enterCount)) { $key=13; ++$enterCount }
+            # -LoadWarnings: further Enters, two seconds apart, dismiss benign C3X warnings
+            # (a scenario's config) shown during the load, never after the first map. The
+            # log may not exist yet: an empty read is "not ready", not an empty array.
+            if ($enterCount -lt 2+$LoadWarnings -and $elapsed -ge (5+2*$enterCount) -and
+                ($enterCount -lt 2 -or [string](Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw -ErrorAction SilentlyContinue) -notmatch 'stage=render-done result=1')) {
+                $key=13; ++$enterCount
+            }
             $interactionElapsed=if ($Scenario -eq 'camera') {$elapsed} else {$inputElapsed}
             if ($Scenario -ne 'scroll' -and $interactionIndex -lt $interaction.Count -and $interactionElapsed -ge $interaction[$interactionIndex][0]) {
                 $key=$interaction[$interactionIndex][1]

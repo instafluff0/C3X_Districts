@@ -106,7 +106,16 @@ width of 64-384) turns each F24 step of a scenario into the next camera stop
 (`parse_custom_renderer_test_route`). With `-Scenario debug-scroll -Seconds 190`
 it surveys the whole revealed map, e.g. every natural wonder at 2x and 1x. The
 steps posted while the reveal builds arrive together, so start the route with
-about eight copies of the first stop.
+about eight copies of the first stop. A stop is the native 1x camera (top-left,
+map pixels at 128: tile x*64, y*32); a zoomed width keeps that view's centre, so
+`x*64-1120,y*32-596` centres tile (x, y) at any width.
+
+`-LoadWarnings N` (0-8) sends up to N further load Enters, two seconds apart,
+until the first map is ready: C3X shows benign warning popups while loading a
+scenario save whose configs predate the current keys (a local 1845 AD
+scenario save with Wonder Districts needs 8). Such a save's Wonder Districts
+also need `enable_districts = true` when its scenario leaves that to the custom
+config.
 
 `-Scenario reveal-scroll -Seconds 240 -SampleHz 10 -MeasureCadence -ProfileRenderer`
 extends the fresh 4000 BC `research-turn` witness: found a city, zoom to 1.75×,
