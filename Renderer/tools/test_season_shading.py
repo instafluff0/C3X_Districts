@@ -174,6 +174,22 @@ class SeasonShading(unittest.TestCase):
         self.assertNotRegex(insertion, r"lch\.z = lerp\(")
         self.assertEqual(insertion.count("lch.z = hue + "), 3)
 
+    def test_volcano_apron_keeps_the_autumn_and_spring_ground(self):
+        # User, 2026-10-23: volcano_surface blends a volcano's apron back toward
+        # ground_albedo, which the seasons never touched, so Autumn's and Spring's
+        # ground tints faded back to Summer at every volcano's foot.
+        for name, root in trees():
+            text = seasons.apply(seasons.MOUNTAIN, (root / seasons.MOUNTAIN).read_text())
+            calls = [i for i in range(len(text)) if text.startswith("albedo = volcano_surface(albedo, ground_albedo,", i)]
+            self.assertEqual(len(calls), 2)
+            for season, ground in ((1, "autumn_ground"), (3, "spring_ground")):
+                with self.subTest(tree=name, season=season):
+                    block = text[text.index(f"[branch] if (C3X_SEASON_INDEX == {season})"):]
+                    block = block[:block.index(seasons.END)]
+                    self.assertIn("if (input.volcano_owner.z > 0.001) {", block)
+                    self.assertIn(f"ground_albedo = {ground}(ground_albedo, input.world.xy);", block)
+                    self.assertLess(text.index(f"ground_albedo = {ground}(ground_albedo"), min(calls))
+
 
 if __name__ == "__main__":
     unittest.main()

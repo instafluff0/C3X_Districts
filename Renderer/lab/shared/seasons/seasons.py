@@ -215,8 +215,13 @@ AUTUMN_EDITS = [
     after("autumn/fallen-leaves-color", [TERRAIN], "        albedo = floor_sample.rgb * canopy_tint;",
           guard(AUTUMN, """        albedo = lerp(floor_sample.rgb * canopy_tint, autumn_leaf_color * AUTUMN_LEAF_SHADE,
                       autumn_leaf_weight / max(floor_sample.a, 0.001));""")),
+    # A volcano's apron blends back toward the ground (volcano_surface), so near
+    # a volcano (owner.z > 0) that ground takes the season too (user, 2026-10-23).
     before("autumn/mountain-ground", [MOUNTAIN], MOUNTAIN_ALBEDO_END,
-           guard(AUTUMN, "        albedo = autumn_ground(albedo, input.world.xy);")),
+           guard(AUTUMN, """        albedo = autumn_ground(albedo, input.world.xy);
+        if (input.volcano_owner.z > 0.001) {
+            ground_albedo = autumn_ground(ground_albedo, input.world.xy);
+        }""")),
     # Coasts and underlay, farms, roads, rivers (Lab open water too).
     before("autumn/underlay", INTEGRATED[:3], DEBUG_ALBEDO,
            guard(AUTUMN, "        albedo = autumn_ground(albedo, world_position);")),
@@ -525,7 +530,10 @@ SPRING_EDITS = [
         spring_straw = plains_weight * (1 - desert_weight);
         spring_bloom = spring_meadow(input.world.xy, input.world.z, spring_density, ShadowL.xy, spring_leaf);""")),
     before("spring/mountain-ground", [MOUNTAIN], MOUNTAIN_ALBEDO_END,
-           guard(SPRING, "        albedo = spring_ground(albedo, input.world.xy);")),
+           guard(SPRING, """        albedo = spring_ground(albedo, input.world.xy);
+        if (input.volcano_owner.z > 0.001) {
+            ground_albedo = spring_ground(ground_albedo, input.world.xy);
+        }""")),
     before("spring/crowns", [OBJECTS], "        if (has_normal)\n            normal = mapped_normal(geometric, input.world, input.uv,",
            guard(SPRING, """        if (foliage) {
             float3 average = BaseColor.SampleLevel(Clamp, float2(0.5, 0.5), 15).rgb;
