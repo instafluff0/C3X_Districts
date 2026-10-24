@@ -1351,8 +1351,9 @@ class RouteRegressionContractTests(unittest.TestCase):
         self.assertTrue(20.0 <= float(fade.group(1)) < float(fade.group(2)) <= 90.0)
         self.assertNotIn("pattern_route_mountain_cap", source)
         self.assertRegex(source, r"rise\[index\]=route_height\(x,y\)-height_natural\(x,y\);")
-        # Built for route tiles (and volcano tiles, which are mountain shapes).
-        self.assertRegex(source, r"if\(input\.projection\.tile\.road_mask \|\| input\.projection\.tile\.railroad_mask( \|\| volcano)?\)\n")
+        # Built for route tiles, and for volcano and natural-wonder tiles, which are
+        # mountain shapes; later clauses seat mines and tile buildings on the same shape.
+        self.assertRegex(source, r"if\(input\.projection\.tile\.road_mask \|\| input\.projection\.tile\.railroad_mask \|\| volcano \|\| wonder \|\|\n")
 
     def test_route_strips_never_write_depth(self):
         # Overlapping translucent road fringes once wrote depth and rejected
