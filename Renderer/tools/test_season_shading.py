@@ -137,6 +137,29 @@ class SeasonShading(unittest.TestCase):
         self.assertIn("lerp(WINTER_COAST_SHIFT,", surface)
         self.assertLess(surface.index("gate *= open_sea;"), surface.index("lch.x = "))
 
+    def test_winter_sea_is_calm_and_keeps_its_white(self):
+        # User, 2026-10-24: Winter water "subtler and less vibrant" (open sea x3
+        # chroma read vivid royal blue), then lower still; waves, ripples and
+        # light effects kept. Sparkle, foam and wave crests take no grade.
+        defines = {}
+        for name in ("winter_integrated.hlsl", "winter_natural.hlsl"):
+            for key, value in re.findall(r"^#define (WINTER_WATER_CHROMA|WINTER_WATER_CONTRAST|WINTER_COAST_CHROMA_GAIN|WINTER_BED_CHROMA) "
+                                         r"([0-9.]+)$", (seasons.HERE / name).read_text(), re.M):
+                defines.setdefault(key, set()).add(float(value))
+        self.assertLessEqual(max(defines["WINTER_WATER_CHROMA"]), 1.4)
+        self.assertLessEqual(max(defines["WINTER_WATER_CONTRAST"]), 1.15)
+        self.assertLessEqual(max(defines["WINTER_COAST_CHROMA_GAIN"]), 1.15)
+        self.assertLessEqual(max(defines["WINTER_BED_CHROMA"]), 0.05)
+        game = seasons.apply(seasons.WATER_SURFACE, (ROOT / seasons.WATER_SURFACE).read_text())
+        protect = "gate *= 1 - smoothstep(0.62, 0.85, lch.x) * (1 - smoothstep(0.03, 0.08, lch.y));"
+        for season in (1, 2, 3):
+            block = game[game.index(f"C3X_SEASON_INDEX == {season}"):]
+            block = block[:block.index("color = ")]
+            if season == 2:
+                self.assertLess(block.index(protect), block.index("lch.y *= "))
+            else:
+                self.assertNotIn(protect, block)
+
     def test_spring_flower_ground_keeps_the_turf(self):
         # User, 2026-10-23: the leaf shade made ground under the flower drifts
         # look gritty. Only the blooms themselves change the ground's colour.

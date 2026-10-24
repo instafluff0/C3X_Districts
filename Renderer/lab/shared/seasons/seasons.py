@@ -643,6 +643,8 @@ def _open_water(season, prefix, shift, chroma, light, pivot=None, contrast=None,
         float open_sea = smoothstep(.34, .63, saturate(input.surface_coordinate));
         float gate = smoothstep(150, 185, hue) * (1 - smoothstep(280, 300, hue)) * smoothstep(0.008, 0.02, lch.y) *
             lerp({prefix.upper()}_WATER_NIGHT, 1, saturate(environment_sun_intensity * 2.5));
+        // Sparkle, foam and wave crests keep their white (user, 2026-10-24).
+        gate *= 1 - smoothstep(0.62, 0.85, lch.x) * (1 - smoothstep(0.03, 0.08, lch.y));
         lch.z = hue + lerp({coast_shift}, {shift}, open_sea) * gate;
         lch.y *= lerp(1, lerp({coast_chroma}, {chroma}, open_sea), gate);
         gate *= open_sea;

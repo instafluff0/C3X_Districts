@@ -74,8 +74,10 @@
 #define WINTER_RAIL_SNOW 0.7
 #define WINTER_WATER_HUE 248
 #define WINTER_WATER_PULL 0.8
-#define WINTER_WATER_CHROMA 3.0
-#define WINTER_WATER_LIGHT 0.9
+// Open water calmed (user, 2026-10-24: subtler, less vibrant, twice): chroma x1.4
+// (was x3), light .96 (.9), contrast 1.15 (1.25 below); sparkle and foam keep their white.
+#define WINTER_WATER_CHROMA 1.4
+#define WINTER_WATER_LIGHT 0.96
 #define WINTER_RIVER_CHROMA 2.6
 #define WINTER_RIVER_LIGHT 1.25
 #define WINTER_WATER_NIGHT 0.3
@@ -105,7 +107,7 @@
 #define WINTER_RIVER_DAYLIGHT 1
 #define WINTER_WATER_REF_HUE 241
 #define WINTER_WATER_PIVOT 0.45
-#define WINTER_WATER_CONTRAST 1.25
+#define WINTER_WATER_CONTRAST 1.15
 #define WINTER_COAST_LIFT 0.01
 #define WINTER_COAST_HUE -4
 #define WINTER_OCEAN_DROP 0.018
@@ -155,11 +157,12 @@
 // than the open sea, and no lightness change.
 #define WINTER_BED_TINT 0.6
 #define WINTER_BED_HUE 226
-#define WINTER_BED_CHROMA 0.075
+#define WINTER_BED_CHROMA 0.05
 #define WINTER_TINT_NEAR 0.02
 #define WINTER_TINT_FAR 0.22
 #define WINTER_COAST_SHIFT 24
-#define WINTER_COAST_CHROMA_GAIN 1.6
+// Coast chroma gain 1.15 (was 1.6) and bed tint chroma .05 (was .075): user, 2026-10-24, subtler.
+#define WINTER_COAST_CHROMA_GAIN 1.15
 // Winter farm plots, hedgerow fields (user, 2026-10-23).
 #define WINTER_FIELD_ROWS 3.0
 #define WINTER_FIELD_FURROW float3(0.84, 0.89, 0.98)

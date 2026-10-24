@@ -215,6 +215,13 @@ with a mountain then redraws continuously, like a smoking city.
   Near-vertical faces and cooled lava streaks stay mostly dark. Views
   `volcanoes`, `-smoke`, `-erupt` (1498 save near Misawa). Before/after:
   out/winter/review/volcano-winter.png.
+- 2026-10-24, open water (user: Winter water "too vibrant"; then "subtler and
+  less vibrant", lower still, with waves, ripples and light effects kept): the
+  open-sea grade's chroma x3 read vivid royal blue. Now chroma x1.4, light
+  .96, contrast 1.15, coast gain 1.15, bed tint chroma .05, and sparkle, foam
+  and crests skip the grade (seasons.py _open_water). In game, zoomed out:
+  ocean chroma .086 -> .042 (Summer .031), ripples and sparkle unchanged.
+  out/winter/review/water-v2-*.jpg.
 - 2026-10-23, coast (user: keep the bed and rocks visible but "I still like
   the winter coast *color*"): beds keep their lightness and texture while
   their OKLab a/b turn toward the coast tint with depth; the coast water

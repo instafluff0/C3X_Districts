@@ -74,8 +74,10 @@
 #define WINTER_RAIL_SNOW 0.7
 #define WINTER_WATER_HUE 248
 #define WINTER_WATER_PULL 0.8
-#define WINTER_WATER_CHROMA 3.0
-#define WINTER_WATER_LIGHT 0.9
+// Open water calmed (user, 2026-10-24: subtler, less vibrant, twice): chroma x1.4
+// (was x3), light .96 (.9), contrast 1.15 (1.25 below); sparkle and foam keep their white.
+#define WINTER_WATER_CHROMA 1.4
+#define WINTER_WATER_LIGHT 0.96
 #define WINTER_RIVER_CHROMA 2.6
 #define WINTER_RIVER_LIGHT 1.25
 #define WINTER_WATER_NIGHT 0.3
@@ -105,7 +107,7 @@
 #define WINTER_RIVER_DAYLIGHT 1
 #define WINTER_WATER_REF_HUE 241
 #define WINTER_WATER_PIVOT 0.45
-#define WINTER_WATER_CONTRAST 1.25
+#define WINTER_WATER_CONTRAST 1.15
 #define WINTER_COAST_LIFT 0.01
 #define WINTER_COAST_HUE -4
 #define WINTER_OCEAN_DROP 0.018
