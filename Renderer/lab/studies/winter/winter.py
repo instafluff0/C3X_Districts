@@ -1028,6 +1028,157 @@ LOOKS["v24-dunes-soft"] = [(paths, a, r.replace("#define WINTER_DUNE_FREQ 3.0", 
 LOOKS["v25-laden"] = LOOKS["v24-dunes-soft"]
 
 
+# Farms v2 (user, 2026-10-23: Winter farms are "ugly", though clear in what
+# they are). The plot pass made rows binary (contrast x9), bared near-black
+# soil on most plots and drew black hedgerow dashes: a barcode. Styles:
+# 1 every plot under snow, rows as soft relief, edges a cool line of snow
+# shadow with a few twigs; 2 adds a per-plot patchwork (smooth snow, soft
+# rows, ploughed loam thinly in the furrows, straw stubble flecks); 3 shows
+# winter wheat shoots instead of stubble.
+OLD_FIELDS = INTEGRATED_COMMON[INTEGRATED_COMMON.index("// Second field pass keyed on the farm kit"):
+                               INTEGRATED_COMMON.index("\n}\n", INTEGRATED_COMMON.index("float3 winter_field_plot(")) + 3]
+SOFT_FIELDS = """#define WINTER_FIELD_ROWS 3.0
+#define WINTER_FIELD_FURROW float3(0.84, 0.89, 0.98)
+#define WINTER_FIELD_EDGE float3(0.70, 0.76, 0.88)
+#define WINTER_FIELD_TWIGS float3(0.22, 0.20, 0.19)
+#define WINTER_FIELD_LOAM float3(0.36, 0.28, 0.21)
+#define WINTER_FIELD_WHEAT float3(0.30, 0.42, 0.20)
+#define WINTER_FIELD_SMOOTH 0.35
+#define WINTER_FIELD_LOAM_SHOW 0.45
+#define WINTER_FIELD_STRAW_SHOW 0.6
+#define WINTER_FIELD_TWIG_SHOW 0.6
+#define WINTER_FIELD_TWIG_FROM 0.62
+#define WINTER_FIELD_PLOT_TONE 0.0
+#define WINTER_FIELD_STUBBLE_ALL 0.0
+#define WINTER_FIELD_STUBBLE_TONE float3(0.70, 0.58, 0.38)
+// Winter farm plots (farms v2): snow over the crop rows as soft relief, a
+// per-plot state in the patchwork styles, and field edges as a cool line of
+// snow shadow with a few twigs, never dark dashes.
+float3 winter_field_soft(float3 albedo, float plot_light, float pick, float2 world, float3 snow) {
+    float3 lch = winter_lch(albedo);
+    float speck = winter_noise(world * 61.0);
+    float path = smoothstep(-0.01, 0.04, albedo.r - albedo.g);
+    float row = saturate((lch.x - plot_light) * WINTER_FIELD_ROWS + 0.5);
+    float3 white = snow * WINTER_FIELD_SNOW_GAIN;
+    float3 field = lerp(white * WINTER_FIELD_FURROW, white, row);
+    if (WINTER_FIELD_STYLE > 1.5) {
+        if (pick < WINTER_FIELD_SMOOTH) {
+            field = lerp(white, field, 0.3);
+        } else if (pick >= 0.6 && pick < 0.8) {
+            field = lerp(field, WINTER_FIELD_LOAM * (0.85 + 0.3 * speck), WINTER_FIELD_PLOT_TONE + (1 - row) * WINTER_FIELD_LOAM_SHOW);
+        } else if (pick >= 0.8) {
+            float fleck = smoothstep(0.55, 0.75, winter_noise(world * 140.0));
+            float straw = WINTER_FIELD_STYLE > 3.5 ? 0.5 + 0.5 * fleck : fleck;
+            field = abs(WINTER_FIELD_STYLE - 3) < 0.5 ? lerp(field, WINTER_FIELD_WHEAT, (1 - row) * 0.4)
+                                                      : lerp(field, WINTER_FIELD_STRAW, WINTER_FIELD_PLOT_TONE + straw * row * WINTER_FIELD_STRAW_SHOW);
+        }
+    }
+    field = lerp(field, WINTER_FIELD_STUBBLE_TONE, WINTER_FIELD_STUBBLE_ALL * row);
+    float3 edge = lerp(white * WINTER_FIELD_EDGE, WINTER_FIELD_TWIGS,
+        smoothstep(WINTER_FIELD_TWIG_FROM, WINTER_FIELD_TWIG_FROM + 0.18, speck) * WINTER_FIELD_TWIG_SHOW);
+    return lerp(field, edge, path);
+}
+float3 winter_field_kit(float3 albedo, float2 world, float3 snow, bool ground) {
+    if (ground)
+        return lerp(winter_dormant(albedo), snow, saturate(WINTER_FIELD_GROUND + (winter_noise(world * 61.0) - 0.5) * 0.3));
+    float ripe = smoothstep(108, 96, winter_lch(albedo).z);
+    return winter_field_soft(albedo, WINTER_FIELD_MID, ripe > 0.5 ? 0.85 : 0.45, world, snow);
+}
+float3 winter_field_plot(float3 albedo, float3 mean, float2 world, float3 snow) {
+    float3 plot = winter_lch(mean);
+    return winter_field_soft(albedo, plot.x, frac(plot.x * 53.1 + plot.z * 0.37 + plot.y * 91.7), world, snow);
+}
+"""
+def _farms(style):
+    return [(paths, a, r.replace(OLD_FIELDS, f"#define WINTER_FIELD_STYLE {style}\n" + SOFT_FIELDS))
+            for paths, a, r in LOOKS["v25-laden"]]
+for _style in (1, 2, 3):
+    LOOKS[f"v25-farms{_style}"] = _farms(_style)
+# 4: a hedged patchwork. The patchwork of style 2, strong enough to read:
+# firmer soft rows, ploughed plots' furrows clearly loam, stubble plots straw
+# along their ridges, hedgerows broken lines of dark twigs over a cool shadow.
+_HEDGED = {"#define WINTER_FIELD_ROWS 3.0": "#define WINTER_FIELD_ROWS 5.0",
+           "#define WINTER_FIELD_FURROW float3(0.84, 0.89, 0.98)": "#define WINTER_FIELD_FURROW float3(0.80, 0.86, 0.97)",
+           "#define WINTER_FIELD_LOAM float3(0.36, 0.28, 0.21)": "#define WINTER_FIELD_LOAM float3(0.38, 0.29, 0.21)",
+           "#define WINTER_FIELD_SMOOTH 0.35": "#define WINTER_FIELD_SMOOTH 0.3",
+           "#define WINTER_FIELD_LOAM_SHOW 0.45": "#define WINTER_FIELD_LOAM_SHOW 0.7",
+           "#define WINTER_FIELD_STRAW_SHOW 0.6": "#define WINTER_FIELD_STRAW_SHOW 0.55",
+           "#define WINTER_FIELD_TWIG_SHOW 0.6": "#define WINTER_FIELD_TWIG_SHOW 0.85",
+           "#define WINTER_FIELD_TWIG_FROM 0.62": "#define WINTER_FIELD_TWIG_FROM 0.42"}
+def _hedged(text):
+    for a, b in _HEDGED.items():
+        text = text.replace(a, b)
+    return text
+LOOKS["v25-farms4"] = [(paths, a, _hedged(r)) for paths, a, r in _farms(4)]
+# 5: the hedged patchwork with whole-plot tone, so plots read apart at map
+# zoom: ploughed fields a grey-brown tone, stubble a light golden one.
+def _toned(text):
+    return (_hedged(text).replace("#define WINTER_FIELD_PLOT_TONE 0.0", "#define WINTER_FIELD_PLOT_TONE 0.2")
+            .replace("#define WINTER_FIELD_LOAM_SHOW 0.7", "#define WINTER_FIELD_LOAM_SHOW 0.45"))
+# Hedgerow fields: white fields framed by broken dark hedgerows of twigs with
+# snow on them. Stubble rows: every field shows soft golden stubble along its
+# rows through thin snow.
+LOOKS["v25-hedgerows"] = [(paths, a, r.replace("#define WINTER_FIELD_TWIG_FROM 0.62", "#define WINTER_FIELD_TWIG_FROM 0.22")
+                           .replace("#define WINTER_FIELD_TWIG_SHOW 0.6", "#define WINTER_FIELD_TWIG_SHOW 0.9")
+                           .replace("#define WINTER_FIELD_TWIGS float3(0.22, 0.20, 0.19)", "#define WINTER_FIELD_TWIGS float3(0.24, 0.21, 0.19)"))
+                          for paths, a, r in _farms(1)]
+LOOKS["v25-stubble"] = [(paths, a, r.replace("#define WINTER_FIELD_STUBBLE_ALL 0.0", "#define WINTER_FIELD_STUBBLE_ALL 0.4")
+                         .replace("#define WINTER_FIELD_ROWS 3.0", "#define WINTER_FIELD_ROWS 5.0"))
+                        for paths, a, r in _farms(1)]
+LOOKS["v25-farms5"] = [(paths, a, _toned(r).replace("WINTER_FIELD_STRAW, WINTER_FIELD_PLOT_TONE",
+                       "float3(0.62, 0.52, 0.34), WINTER_FIELD_PLOT_TONE")) for paths, a, r in _farms(4)]
+# The current look (user, 2026-10-23: hedgerow fields for Winter farms).
+# Production: winter_integrated.hlsl winter_field_soft/kit/plot.
+LOOKS["v26-laden"] = LOOKS["v25-hedgerows"]
+# Hedgerows v2 (2026-10-23 game check: in the 1498 AD save at map zoom the v25
+# hedgerows vanish, as their twigs sit only on the kit's in-plot paths and the
+# plots are white on white snow). Each plot is framed by a broken hedge along
+# its own alpha rim, so every field reads apart at map zoom.
+_RIM_PLOT = """#define WINTER_HEDGE_INNER {inner}
+#define WINTER_HEDGE_SHOW {show}
+#define WINTER_HEDGE_TWIGS 0.8
+#define WINTER_HEDGE_BREAKS 12.0
+float3 winter_field_plot(float3 albedo, float3 mean, float2 world, float3 snow, float rim) {{
+    float3 plot = winter_lch(mean);
+    float3 field = winter_field_soft(albedo, plot.x, frac(plot.x * 53.1 + plot.z * 0.37 + plot.y * 91.7), world, snow);
+    float hedge = (1 - smoothstep(WINTER_HEDGE_INNER, 1.0, rim)) * smoothstep(0.2, 0.45, winter_noise(world * WINTER_HEDGE_BREAKS));
+    float3 twigs = lerp(snow * WINTER_FIELD_EDGE, WINTER_FIELD_TWIGS, smoothstep(0.3, 0.55, winter_noise(world * 61.0)) * WINTER_HEDGE_TWIGS);
+    return lerp(field, twigs, hedge * WINTER_HEDGE_SHOW);
+}}"""
+def _rim(inner, show):
+    old_plot = SOFT_FIELDS[SOFT_FIELDS.index("float3 winter_field_plot("):SOFT_FIELDS.rindex("}") + 1]
+    call = "                                  winter_world, winter_white);\n"
+    return [(paths, a, r.replace(old_plot, _RIM_PLOT.format(inner=inner, show=show))
+             .replace(call, call.replace("winter_white);", "winter_white, mine_sample.a);")))
+            for paths, a, r in LOOKS["v25-hedgerows"]]
+LOOKS["v27-hedges-a"] = _rim(0.8, 0.85)
+LOOKS["v27-hedges-b"] = _rim(0.95, 1.0)
+# The kit's alpha also dips between crop rows, so a and b hatch every row at
+# close zoom. c/d read the rim from the blurred (biased) plot sample instead,
+# which keeps only the plot outlines.
+_BLUR_PLOT = """#define WINTER_HEDGE_LOW {low}
+#define WINTER_HEDGE_HIGH {high}
+#define WINTER_HEDGE_TWIGS 0.8
+#define WINTER_HEDGE_BREAKS 12.0
+float3 winter_field_plot(float3 albedo, float4 mean, float2 world, float3 snow) {{
+    float3 plot = winter_lch(mean.rgb);
+    float3 field = winter_field_soft(albedo, plot.x, frac(plot.x * 53.1 + plot.z * 0.37 + plot.y * 91.7), world, snow);
+    float hedge = (1 - smoothstep(WINTER_HEDGE_LOW, WINTER_HEDGE_HIGH, mean.a)) * smoothstep(0.2, 0.45, winter_noise(world * WINTER_HEDGE_BREAKS));
+    float3 twigs = lerp(snow * WINTER_FIELD_EDGE, WINTER_FIELD_TWIGS, smoothstep(0.3, 0.55, winter_noise(world * 61.0)) * WINTER_HEDGE_TWIGS);
+    return lerp(field, twigs, hedge);
+}}"""
+def _blur(low, high):
+    old_plot = SOFT_FIELDS[SOFT_FIELDS.index("float3 winter_field_plot("):SOFT_FIELDS.rindex("}") + 1]
+    return [(paths, a, r.replace(old_plot, _BLUR_PLOT.format(low=low, high=high))
+             .replace("input.uv, WINTER_FIELD_BIAS).rgb,", "input.uv, WINTER_FIELD_BIAS),"))
+            for paths, a, r in LOOKS["v25-hedgerows"]]
+LOOKS["v27-hedges-c"] = _blur(0.5, 0.8)
+LOOKS["v27-hedges-d"] = _blur(0.65, 0.92)
+# The current look (user, 2026-10-23: fix D). Production: winter_integrated.hlsl
+# winter_field_plot (WINTER_HEDGE_*), seasons.py winter/objects.
+LOOKS["v28-laden"] = LOOKS["v27-hedges-d"]
+
+
 def apply(look: str, relative: str, text: str) -> str:
     for paths, anchor, replacement in LOOKS[look]:
         if relative not in paths:

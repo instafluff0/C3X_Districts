@@ -101,6 +101,12 @@ class SeasonShading(unittest.TestCase):
         # User, 2026-10-22: the translucent Summer coast in every season. Every
         # seasonal water grade is weighted by the open-sea fraction (0 on Coast,
         # 0 on shallow beds); Winter's bed ice is gone.
+        # User, 2026-10-23: "I had autumn revert coastal water to the summer
+        # default, as the coastal textures and rocks, etc were no longer visible
+        # under the water and it didn't look as good. But I still like the winter
+        # coast *color*." So Winter alone tints the coast: beds and coast water
+        # turn in hue and chroma only; their lightness (sand, rocks, texture) is
+        # kept, and lightness still changes only toward Sea and Ocean.
         game = seasons.apply(seasons.WATER_SURFACE, (ROOT / seasons.WATER_SURFACE).read_text())
         self.assertEqual(game.count("smoothstep(.34, .63, saturate(input.surface_coordinate))"), 3)
         lab = seasons.apply(seasons.HYDROLOGY, (ROOT / seasons.HYDROLOGY).read_text())
@@ -108,9 +114,28 @@ class SeasonShading(unittest.TestCase):
         for name in ("autumn_strength", "spring_strength"):
             line = lab[lab.index(f"float {name} ="):]
             self.assertIn("* c3x_open_sea;", line[:line.index(";") + 1])
+        # Autumn and Spring open water: weighted by the open sea alone, as before.
+        for season in (1, 3):
+            block = game[game.index(f"C3X_SEASON_INDEX == {season}"):]
+            block = block[:block.index("color = ")]
+            self.assertIn("smoothstep(.34, .63, saturate(input.surface_coordinate));\n", block)
+            self.assertNotIn("open_sea", block)
         winter = lab[lab.index("c3x-season:winter/water"):]
-        self.assertIn("c3x_open_sea", winter[:winter.index("c3x-season-end")])
-        self.assertNotIn("WINTER_ICE_BED", winter[:winter.index("c3x-season-end")])
+        winter = winter[:winter.index("c3x-season-end")]
+        self.assertIn("c3x_open_sea", winter)
+        self.assertNotIn("WINTER_ICE_BED", winter)
+        self.assertNotIn("winter_snow_tex", winter)
+        # Beds: a hue/chroma tint after the open-sea grade, never a lightness change.
+        bed = winter[winter.index("float winter_bed"):]
+        self.assertIn("lch.yz = ", bed)
+        self.assertNotRegex(bed, r"lch\.x\s*[-+*/]?=")
+        self.assertNotRegex(bed, r"lch\s*=")
+        # Coast water surface: hue and chroma blend from coast to sea values;
+        # the lightness grade is gated by the open sea.
+        surface = game[game.index("C3X_SEASON_INDEX == 2"):]
+        surface = surface[:surface.index("color = ")]
+        self.assertIn("lerp(WINTER_COAST_SHIFT,", surface)
+        self.assertLess(surface.index("gate *= open_sea;"), surface.index("lch.x = "))
 
     def test_spring_flower_ground_keeps_the_turf(self):
         # User, 2026-10-23: the leaf shade made ground under the flower drifts
@@ -123,6 +148,22 @@ class SeasonShading(unittest.TestCase):
         # Nor does Spring boost the turf's fine detail (the "painterly turf").
         self.assertNotIn("c3x-season:spring/turf", relief)
         self.assertNotIn("SPRING_TURF", relief[relief.index("c3x-season:spring/meadow"):])
+
+    def test_winter_plots_are_framed_by_blurred_hedges(self):
+        # User, 2026-10-23 (fix D): hedgerow plots vanished white on white at map
+        # zoom, their twigs only on the kit's in-plot paths. Each plot gets a hedge
+        # along its outline from the blurred alpha, never the sharp per-row alpha.
+        relative = "Renderer/native/city_fidelity/feature.hlsl"
+        text = seasons.apply(relative, (ROOT / relative).read_text())
+        objects = text[text.index("c3x-season:winter/objects"):]
+        objects = objects[:objects.index("c3x-season-end")]
+        self.assertIn("winter_field_plot(albedo, resource_base_texture_0.SampleBias(material_sampler, input.uv, WINTER_FIELD_BIAS),",
+                      objects)
+        plot = text[text.index("float3 winter_field_plot("):]
+        plot = plot[:plot.index("\n}\n")]
+        self.assertIn("float4 mean", plot)
+        self.assertIn("smoothstep(WINTER_HEDGE_LOW, WINTER_HEDGE_HIGH, mean.a)", plot)
+        self.assertNotIn("mine_sample", plot + objects)
 
     def test_game_water_recolour_is_relative(self):
         # Coast, Sea and Ocean keep their family tint: a hue offset, never a pull to one hue.

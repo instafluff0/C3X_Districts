@@ -56,7 +56,7 @@ through the **current production renderer** on the Windows VM.
   "Winter selects the snowy variety". The older `snow-pines` views marked the
   tiles tundra instead, which leaked tundra into the neighbouring ground.
 
-## Current look (v25-laden) and what each layer does
+## Current look (v28-laden) and what each layer does
 
 Colour targets measured on the concept (OKLab): lit snow L .92 C .025 h 261,
 deep water L .47 C .096 h 249, forests dark navy-green under white boughs.
@@ -77,7 +77,7 @@ deep water L .47 C .096 h 249, forests dark navy-green under white boughs.
 | Water | water dispatch | deeper, saturated winter blue; v11+: all water hues turn together (Coast, Sea and Ocean keep their differences), lightness steps widened, smooth darkening with tiles from shore (depth inverted) plus a mild step from the tile's Civ III class |
 | Rivers (v9; v12 dims at dusk/night; v24 banks) | `hydrology.hlsl` river branch | user, 2026-10-21: icy, matching the sea; open channel in the sea's winter blue; shelf ice in some reaches only, scalloped, snow-covered to a thin glassy edge; a few mid-channel floes; banks carry the ground's snow (gain-matched) to the water |
 | Shoreline rocks | `q4_coastal_rock` | user, 2026-10-21: cool grey stone, thick snow caps on their tops |
-| Farms | `q6_raw_feature` | rows against each plot's own blurred mean; per-plot state from that mean colour: fallow under snow, ploughed (dark furrows), straw stubble; field paths as dark hedgerow lines |
+| Farms (v26 hedgerows; v28 framed) | `q6_raw_feature` | user, 2026-10-23: snow over the rows as soft relief against each plot's blurred mean; each plot framed by a broken hedge of twigs along its blurred-alpha outline; kit paths a cool line of snow shadow with twigs |
 | Rocks, resources, small plants | `q6_raw_feature` | snow on up-facing surfaces, partly dormant colour; units excluded |
 | City buildings | `PSNativeCityBody` | snow coat on roofs and ledges (normal z), lit after the city look so its whitewash shoulder does not grey it; walls keep their material; windows still glow at night |
 | Settlement plates | `PSNativeCityBody` | trodden snow over streets and yards |
@@ -191,3 +191,24 @@ with a mountain then redraws continuously, like a smoking city.
   gentle meander, long rise and short lee face, WINTER_DUNE_FREQ 1.2,
   WINTER_DESERT_RELIEF .12, faded where unresolvable. Options:
   out/winter/review/desert-options.png.
+- 2026-10-23, farms (user: "ugly ... clear in what they are"): the plot pass
+  made rows binary (contrast x9), bared near-black soil on most plots and drew
+  black hedgerow dashes, a barcode. Tried: calm snow fields, a per-plot
+  patchwork (it could not show: the plot mean drifts across a plot, so no
+  stable per-plot state), hedgerow fields, stubble rows. The user picked
+  hedgerow fields (v26): snow over the rows as soft relief, edges as broken
+  hedgerows of dark twigs over a cool line of snow shadow. Options:
+  out/winter/review/farm-options.png.
+- 2026-10-23, farms in game: in the 1498 AD save at map zoom the v26
+  hedgerow plots vanished, white on white snow, as their twigs sit only on the
+  kit's in-plot paths (out/winter/review/farm-game-kyoto.jpg). Each plot is
+  now framed by a broken hedge along its outline, read from the blurred
+  (biased) plot sample's alpha; the sharp alpha also dips between crop rows
+  and hatched every row. The user picked fix D (v28: hedge band .65-.92):
+  out/winter/review/farm-hedges.png (picked, C, D).
+- 2026-10-23, coast (user: keep the bed and rocks visible but "I still like
+  the winter coast *color*"): beds keep their lightness and texture while
+  their OKLab a/b turn toward the coast tint with depth; the coast water
+  surface takes a gentler hue turn and chroma gain than the open sea, and no
+  lightness change (seasons.py winter/water, _open_water coast term).
+  Before/after in game: out/winter/review/coast-winter.png.

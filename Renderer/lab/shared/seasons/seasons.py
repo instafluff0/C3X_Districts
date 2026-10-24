@@ -448,7 +448,7 @@ WINTER_EDITS = [
         if (farm_kit_field_weight > 0.5)
             albedo = mine_slot > 2.5 && mine_slot < 3.5 ?
                 winter_field_kit(albedo, winter_world, winter_white, true) :
-                winter_field_plot(albedo, resource_base_texture_0.SampleBias(material_sampler, input.uv, WINTER_FIELD_BIAS).rgb,
+                winter_field_plot(albedo, resource_base_texture_0.SampleBias(material_sampler, input.uv, WINTER_FIELD_BIAS),
                                   winter_world, winter_white);
         else if (unit_weight < 0.5) {
             float flat_decal = saturate(resource_decal_weight + ground_state_weight);
@@ -484,6 +484,16 @@ WINTER_EDITS = [
         float winter_deep = smoothstep(WINTER_DEEP_NEAR, WINTER_DEEP_FAR, winter_offshore) * (1 - winter_river);
         lch.x -= winter_deep * WINTER_DEEP_DROP * gate;
         lch.z += winter_deep * WINTER_DEEP_HUE * gate;
+        // User, 2026-10-23: the Winter coast colour, yet the coast bed's sand,
+        // rocks and texture visible. Water absorption over the bed: its hue and
+        // chroma turn toward the coast tint with depth, its lightness is kept.
+        float winter_bed = input.surface_kind > 3.5 && input.surface_kind < 4.5 ? 1 : 0;
+        float winter_tint = winter_bed * WINTER_BED_TINT *
+            smoothstep(WINTER_TINT_NEAR, WINTER_TINT_FAR, max(0, input.hydrology_data.w)) *
+            lerp(WINTER_WATER_NIGHT, 1, saturate(environment_sun_intensity * 2.5));
+        float2 winter_ab = lerp(lch.y * float2(cos(radians(lch.z)), sin(radians(lch.z))),
+            WINTER_BED_CHROMA * float2(cos(radians(WINTER_BED_HUE)), sin(radians(WINTER_BED_HUE))), winter_tint);
+        lch.yz = float2(length(winter_ab), degrees(atan2(winter_ab.y, winter_ab.x)));
         c3x_water = float4(winter_from_lch(lch), winter_surface.a);""")),
 ]
 
@@ -561,10 +571,11 @@ SPRING_EDITS = [
 # chroma/lightness scale, faded at night, never a pull to a single hue. Coast
 # water keeps Summer's translucent look (user, 2026-10-22); the grade fades in
 # from Coast to Sea. Low-chroma foam and glints sit outside the gate.
-def _open_water(season, prefix, shift, chroma, light, pivot=None, contrast=None):
+def _open_water(season, prefix, shift, chroma, light, pivot=None, contrast=None, coast=None):
     lightness = (f"lch.x = lerp(lch.x, {pivot} * {light} + (lch.x - {pivot}) * {contrast}, gate);"
                  if pivot is not None else f"lch.x *= lerp(1, {light}, gate);")
-    return guard(season, f"""        float3 lch = {prefix}_lch(color);
+    if coast is None:
+        return guard(season, f"""        float3 lch = {prefix}_lch(color);
         float hue = lch.z < 0 ? lch.z + 360 : lch.z;
         float gate = smoothstep(150, 185, hue) * (1 - smoothstep(280, 300, hue)) * smoothstep(0.008, 0.02, lch.y) *
             lerp({prefix.upper()}_WATER_NIGHT, 1, saturate(environment_sun_intensity * 2.5)) *
@@ -573,13 +584,27 @@ def _open_water(season, prefix, shift, chroma, light, pivot=None, contrast=None)
         lch.y *= lerp(1, {chroma}, gate);
         {lightness}
         color = {prefix}_from_lch(lch);""")
+    # coast = (hue shift, chroma gain) on Coast water, blending to the sea's
+    # across the families; lightness changes only toward Sea and Ocean.
+    coast_shift, coast_chroma = coast
+    return guard(season, f"""        float3 lch = {prefix}_lch(color);
+        float hue = lch.z < 0 ? lch.z + 360 : lch.z;
+        float open_sea = smoothstep(.34, .63, saturate(input.surface_coordinate));
+        float gate = smoothstep(150, 185, hue) * (1 - smoothstep(280, 300, hue)) * smoothstep(0.008, 0.02, lch.y) *
+            lerp({prefix.upper()}_WATER_NIGHT, 1, saturate(environment_sun_intensity * 2.5));
+        lch.z = hue + lerp({coast_shift}, {shift}, open_sea) * gate;
+        lch.y *= lerp(1, lerp({coast_chroma}, {chroma}, open_sea), gate);
+        gate *= open_sea;
+        {lightness}
+        color = {prefix}_from_lch(lch);""")
 
 
 WATER_EDITS = [
     before("water/open", [WATER_SURFACE], "    return q6_scene_output(float4(color, alpha)).color;",
            _open_water(AUTUMN, "autumn", 4, "AUTUMN_WATER_CHROMA", "AUTUMN_WATER_LIGHT")
            + _open_water(WINTER, "winter", "(WINTER_WATER_HUE - WINTER_WATER_REF_HUE)", "WINTER_WATER_CHROMA",
-                         "WINTER_WATER_LIGHT", "WINTER_WATER_PIVOT", "WINTER_WATER_CONTRAST")
+                         "WINTER_WATER_LIGHT", "WINTER_WATER_PIVOT", "WINTER_WATER_CONTRAST",
+                         coast=("WINTER_COAST_SHIFT", "WINTER_COAST_CHROMA_GAIN"))
            + _open_water(SPRING, "spring", 6, "SPRING_WATER_CHROMA", "0.9")),
 ]
 

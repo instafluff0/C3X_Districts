@@ -148,6 +148,29 @@
 #define WINTER_SHELF_WINDOW 7.0
 #define WINTER_RIVER_RIM 0.6
 #define WINTER_RIVER_RIM_TONE float3(0.66, 0.74, 0.84)
+// ---- Integrated shaders only (not in winter_natural.hlsl) -----------------
+// Winter coast colour over Summer's coast (user, 2026-10-23): beds keep their
+// lightness and texture, their hue and chroma turn toward the coast tint with
+// depth; the coast water surface takes a gentler hue turn and chroma gain
+// than the open sea, and no lightness change.
+#define WINTER_BED_TINT 0.6
+#define WINTER_BED_HUE 226
+#define WINTER_BED_CHROMA 0.075
+#define WINTER_TINT_NEAR 0.02
+#define WINTER_TINT_FAR 0.22
+#define WINTER_COAST_SHIFT 24
+#define WINTER_COAST_CHROMA_GAIN 1.6
+// Winter farm plots, hedgerow fields (user, 2026-10-23).
+#define WINTER_FIELD_ROWS 3.0
+#define WINTER_FIELD_FURROW float3(0.84, 0.89, 0.98)
+#define WINTER_FIELD_EDGE float3(0.70, 0.76, 0.88)
+#define WINTER_FIELD_TWIGS float3(0.24, 0.21, 0.19)
+#define WINTER_FIELD_TWIG_FROM 0.22
+#define WINTER_FIELD_TWIG_SHOW 0.9
+#define WINTER_HEDGE_LOW 0.65
+#define WINTER_HEDGE_HIGH 0.92
+#define WINTER_HEDGE_TWIGS 0.8
+#define WINTER_HEDGE_BREAKS 12.0
 // ---- Lab winter study (Renderer/lab/studies/winter) -----------------------
 // Colour work in OKLab so source texture detail survives; snow cover is a
 // world-space field over the authored material height, never a tile stamp.
@@ -238,38 +261,37 @@ float3 winter_field(float3 albedo, float2 world, float3 snow) {
     soil *= 0.75 + 0.5 * ridge;
     return lerp(soil, snow, cover);
 }
-// Second field pass keyed on the farm kit's own structure (no world cells, so
-// no seams inside a plot): tan field paths become dark hedgerow lines, ripe
-// (yellow) plots pale stubble, green plots ploughed soil; snow settles in the
-// furrows. The farm ground around the plots is mostly snow.
-float3 winter_field_kit(float3 albedo, float2 world, float3 snow, bool ground) {
+// Winter farm plots (user's pick, 2026-10-23: "hedgerow fields"; the earlier
+// pass made rows binary, bared near-black soil and drew dark dashes, a
+// barcode). Snow over the crop rows as soft relief, ridges a little brighter
+// and furrows cooler; field edges are broken hedgerows of dark twigs over a
+// cool line of snow shadow. The farm ground around the plots is mostly snow.
+float3 winter_field_soft(float3 albedo, float plot_light, float2 world, float3 snow) {
     float3 lch = winter_lch(albedo);
     float speck = winter_noise(world * 61.0);
-    if (ground)
-        return lerp(winter_dormant(albedo), snow, saturate(WINTER_FIELD_GROUND + (speck - 0.5) * 0.3));
     float path = smoothstep(-0.01, 0.04, albedo.r - albedo.g);
-    float ripe = smoothstep(108, 96, lch.z);
-    float ridge = saturate((lch.x - WINTER_FIELD_MID) * WINTER_FIELD_CONTRAST + 0.5);
-    float depth = lerp(WINTER_FIELD_COVER_LOW, WINTER_FIELD_COVER_HIGH, ripe);
-    float cover = smoothstep(depth - 0.25, depth + 0.25, 1 - ridge + (speck - 0.5) * 0.2);
-    float3 soil = lerp(WINTER_FIELD_SOIL, WINTER_FIELD_STRAW, ripe) * (0.8 + 0.4 * ridge);
-    float3 hedge = lerp(WINTER_FIELD_HEDGE, snow, WINTER_FIELD_HEDGE_SNOW * speck);
-    return lerp(lerp(soil, snow, cover), hedge, path);
+    float row = saturate((lch.x - plot_light) * WINTER_FIELD_ROWS + 0.5);
+    float3 white = snow * WINTER_FIELD_SNOW_GAIN;
+    float3 field = lerp(white * WINTER_FIELD_FURROW, white, row);
+    float3 edge = lerp(white * WINTER_FIELD_EDGE, WINTER_FIELD_TWIGS,
+        smoothstep(WINTER_FIELD_TWIG_FROM, WINTER_FIELD_TWIG_FROM + 0.18, speck) * WINTER_FIELD_TWIG_SHOW);
+    return lerp(field, edge, path);
 }
-// Third field pass: rows against each plot's own blurred mean (the crop
-// texture resampled at a higher mip), and a per-plot state picked from that
-// mean colour: fallow under snow with faint rows, ploughed (dark furrows), or
-// straw stubble. Tan field paths stay as dark hedgerow lines.
-float3 winter_field_plot(float3 albedo, float3 mean, float2 world, float3 snow) {
-    float3 lch = winter_lch(albedo), plot = winter_lch(mean);
-    float speck = winter_noise(world * 61.0);
-    float pick = frac(plot.x * 53.1 + plot.z * 0.37 + plot.y * 91.7);
-    float path = smoothstep(-0.01, 0.04, albedo.r - albedo.g);
-    float ridge = saturate((lch.x - plot.x) * WINTER_FIELD_CONTRAST + 0.5);
-    float depth = pick < WINTER_FIELD_FALLOW ? WINTER_FIELD_COVER_HIGH : WINTER_FIELD_COVER_LOW;
-    float3 soil = pick < WINTER_FIELD_STUBBLE ? WINTER_FIELD_SOIL : WINTER_FIELD_STRAW;
-    float cover = smoothstep(depth - 0.2, depth + 0.2, 1 - ridge + (speck - 0.5) * 0.15);
-    soil *= 0.8 + 0.4 * ridge;
-    float3 hedge = lerp(WINTER_FIELD_HEDGE, snow, WINTER_FIELD_HEDGE_SNOW * speck);
-    return lerp(lerp(soil, snow * WINTER_FIELD_SNOW_GAIN, cover), hedge, path);
+float3 winter_field_kit(float3 albedo, float2 world, float3 snow, bool ground) {
+    if (ground)
+        return lerp(winter_dormant(albedo), snow, saturate(WINTER_FIELD_GROUND + (winter_noise(world * 61.0) - 0.5) * 0.3));
+    return winter_field_soft(albedo, WINTER_FIELD_MID, world, snow);
+}
+// Rows are measured against each plot's own blurred mean (the crop texture
+// resampled at a higher mip), so every crop's rows read alike. The blurred
+// alpha frames each plot with a broken hedge along its outline (not along the
+// rows, where the sharp alpha also dips), so fields read apart at map zoom
+// (user, 2026-10-23: fix D; plain hedgerow plots vanished white on white).
+float3 winter_field_plot(float3 albedo, float4 mean, float2 world, float3 snow) {
+    float3 field = winter_field_soft(albedo, winter_lch(mean.rgb).x, world, snow);
+    float hedge = (1 - smoothstep(WINTER_HEDGE_LOW, WINTER_HEDGE_HIGH, mean.a)) *
+        smoothstep(0.2, 0.45, winter_noise(world * WINTER_HEDGE_BREAKS));
+    float3 twigs = lerp(snow * WINTER_FIELD_EDGE, WINTER_FIELD_TWIGS,
+        smoothstep(0.3, 0.55, winter_noise(world * 61.0)) * WINTER_HEDGE_TWIGS);
+    return lerp(field, twigs, hedge);
 }
