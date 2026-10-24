@@ -83,6 +83,10 @@ RAW_FEATURE = "float4 q6_raw_feature(FeaturePixelInput input)\n{"
 RELIEF_LIGHT = "#ifdef BEAUTY_COMPOSED_SHADOWS\n    // Q6ShadowL is also the projection direction"
 OBJECT_LIGHT = "#ifdef BEAUTY_COMPOSED_SHADOWS\n    // Use the exact vector that projects the Q6 "
 MOUNTAIN_ALBEDO_END = "#endif\n#ifdef SANDBOX_TERRAIN_MATERIAL\n#ifdef BEAUTY_VOLCANO_MATERIAL"
+# Both mountain paths draw a volcano over the mountain at this call, each
+# followed by its own tail.
+VOLCANO_SURFACE = "    albedo = volcano_surface(albedo, ground_albedo, input.volcano_owner, mountain_rise);\n"
+VOLCANO_TAILS = ("#endif\n    float altitude", "#endif\n    float ndl")
 GRAIN = "        albedo *= 1 + clamp((grain - 0.303) * 0.9, -0.16, 0.22) * grass_plains_detail;"
 DEBUG_ALBEDO = "#ifdef Q8_DEBUG_ALBEDO\n        return float4(albedo,1);"
 WATER_DISPATCH = "        return q3_water_material(input);\n#endif"
@@ -358,6 +362,32 @@ WINTER_EDITS = [
         float3 bare = lerp(winter_dormant(albedo), winter_from_lch(rock_lch), rock_albedo_coverage);
         albedo = lerp(bare, winter_snow_albedo(height_detail, input.world.xy), winter_snow);
         specular_map = lerp(specular_map, WINTER_SNOW_GLOSS, winter_snow);""")),
+    # Volcanoes (user, 2026-10-23: "Did we not add winter treatment for volcanoes?"; Lab
+    # look v30). volcano_surface runs after the mountain snow: it repaints the cone with its
+    # rock and fades the apron to ground_albedo. That ground takes the Winter snow (as Autumn
+    # and Spring season it), and after the call the cone gets a snow cap by activity.
+    before("winter/volcano-ground", [MOUNTAIN], MOUNTAIN_ALBEDO_END, guard(WINTER, """        if (input.volcano_owner.z > 0.001) {
+            ground_albedo = lerp(winter_dormant(ground_albedo), winter_snow_albedo(height_detail, input.world.xy),
+                winter_cover(1, height_detail, 1 - saturate(normalize(input.normal).z), input.world.xy));
+        }""")),
+    *[between("winter/volcano", [MOUNTAIN], VOLCANO_SURFACE, tail, guard(WINTER, """        if (input.volcano_owner.z > 0.001) {
+            float winter_cone = volcano_coverage(input.volcano_owner, mountain_rise);
+            float winter_activity = volcano_activity(input.volcano_owner);
+            float winter_warm = winter_activity < 0.5 ? WINTER_VOLCANO_DORMANT :
+                winter_activity < 1.5 ? WINTER_VOLCANO_SMOKE : WINTER_VOLCANO_ERUPT;
+            float winter_r = length(input.volcano_owner.xy);
+            float winter_angle = atan2(input.volcano_owner.y, input.volcano_owner.x);
+            float winter_line = WINTER_VOLCANO_SNOWLINE + (winter_noise(float2(winter_angle * 2.2, 0.37)) - 0.5) * 0.12 +
+                (winter_noise(float2(winter_angle * 9.0, 1.7)) - 0.5) * 0.06;
+            float winter_open = smoothstep(winter_warm, winter_warm + 0.04,
+                winter_r + (winter_noise(input.world.xy * 9.0) - 0.5) * 0.04);
+            float winter_cap = winter_open * lerp(WINTER_VOLCANO_DUST, 1,
+                1 - smoothstep(winter_line - 0.03, winter_line + 0.03, winter_r));
+            winter_cap *= smoothstep(WINTER_VOLCANO_UP_LOW, WINTER_VOLCANO_UP_HIGH, normal.z) *
+                (1 - WINTER_VOLCANO_STREAK * volcano_channel(input.volcano_owner)) *
+                (0.8 + 0.4 * winter_noise(input.world.xy * 23.0));
+            albedo = lerp(albedo, winter_snow_albedo(height_detail, input.world.xy), saturate(winter_cap) * winter_cone);
+        }""")) for tail in VOLCANO_TAILS],
     after("winter/mountain-sky", [MOUNTAIN],
           "    float3 ambient = Ambient.rgb * Ambient.a * lerp(ambient_floor, 1.0, sky) * cavity * crevice_visibility;",
           guard(WINTER, "        ambient *= lerp(1, WINTER_SKY, winter_snow);")),

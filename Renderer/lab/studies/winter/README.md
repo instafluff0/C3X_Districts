@@ -206,6 +206,15 @@ with a mountain then redraws continuously, like a smoking city.
   (biased) plot sample's alpha; the sharp alpha also dips between crop rows
   and hatched every row. The user picked fix D (v28: hedge band .65-.92):
   out/winter/review/farm-hedges.png (picked, C, D).
+- 2026-10-23, volcanoes (user: "Did we not add winter treatment for
+  volcanoes?"): the volcano material runs after the mountain snow, repainting
+  the cone with its rock and its foot apron with unseasoned (green) ground.
+  v30 gives the apron the Winter ground and the cone a snow cap by activity:
+  dormant from the crater rim to a ragged snowline at r .21 with tongues and a
+  light dusting below; smoldering bare to r .13; erupting bare under its ash.
+  Near-vertical faces and cooled lava streaks stay mostly dark. Views
+  `volcanoes`, `-smoke`, `-erupt` (1498 save near Misawa). Before/after:
+  out/winter/review/volcano-winter.png.
 - 2026-10-23, coast (user: keep the bed and rocks visible but "I still like
   the winter coast *color*"): beds keep their lightness and texture while
   their OKLab a/b turn toward the coast tint with depth; the coast water

@@ -149,6 +149,27 @@ class SeasonShading(unittest.TestCase):
         self.assertNotIn("c3x-season:spring/turf", relief)
         self.assertNotIn("SPRING_TURF", relief[relief.index("c3x-season:spring/meadow"):])
 
+    def test_winter_volcanoes_take_snow(self):
+        # User, 2026-10-23: "Did we not add winter treatment for volcanoes?" The
+        # volcano material ran after the mountain snow, repainting the cone with
+        # bare rock and its apron with unseasoned ground. Both paths now cap the
+        # cone right after the call, and the apron's ground is Winter ground.
+        text = seasons.apply(seasons.MOUNTAIN, (ROOT / seasons.MOUNTAIN).read_text())
+        for tail in seasons.VOLCANO_TAILS:
+            with self.subTest(tail=tail):
+                cap = text[text.index(seasons.VOLCANO_SURFACE + seasons.BEGIN + "winter/volcano*/"):]
+                cap = cap[:cap.index(seasons.END)]
+                self.assertIn("C3X_SEASON_INDEX == 2", cap)
+                self.assertIn("volcano_coverage(input.volcano_owner, mountain_rise)", cap)
+                self.assertIn("winter_activity < 1.5 ? WINTER_VOLCANO_SMOKE : WINTER_VOLCANO_ERUPT", cap)
+                self.assertIn(seasons.END + tail, text[text.index(cap):])
+        self.assertEqual(text.count(seasons.BEGIN + "winter/volcano*/"), 2)
+        ground = text[text.index(seasons.BEGIN + "winter/volcano-ground*/"):]
+        ground = ground[:ground.index(seasons.END)]
+        self.assertIn("input.volcano_owner.z > 0.001", ground)
+        self.assertIn("ground_albedo = lerp(winter_dormant(ground_albedo), winter_snow_albedo(", ground)
+        self.assertLess(text.index(seasons.BEGIN + "winter/volcano-ground*/"), text.index(seasons.VOLCANO_SURFACE))
+
     def test_winter_plots_are_framed_by_blurred_hedges(self):
         # User, 2026-10-23 (fix D): hedgerow plots vanished white on white at map
         # zoom, their twigs only on the kit's in-plot paths. Each plot gets a hedge

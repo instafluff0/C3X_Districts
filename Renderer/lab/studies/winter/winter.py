@@ -1179,6 +1179,65 @@ LOOKS["v27-hedges-d"] = _blur(0.65, 0.92)
 LOOKS["v28-laden"] = LOOKS["v27-hedges-d"]
 
 
+# Volcanoes (user, 2026-10-23: "Did we not add winter treatment for
+# volcanoes?"). The volcano material runs after the mountain snow: it repaints
+# the cone with its rock and fades its foot apron to unseasoned ground. The
+# apron now takes the Winter ground, and the cone a snow cap by activity:
+# from the crater rim when dormant, the lower flanks when smoldering, none
+# under an eruption's fresh ash. Cooled lava streaks stay mostly dark.
+VOLCANO_GROUND = ("    ground_albedo = lerp(winter_dormant(ground_albedo), winter_snow_albedo(height_detail, input.world.xy),\n"
+                  "        winter_cover(1, height_detail, 1 - saturate(normalize(input.normal).z), input.world.xy));\n")
+VOLCANO_CAP = """    {
+        float winter_cone = volcano_coverage(input.volcano_owner, mountain_rise);
+        float winter_activity = volcano_activity(input.volcano_owner);
+        float winter_warm = winter_activity < 0.5 ? DORMANT : winter_activity < 1.5 ? SMOKE : ERUPT;
+        float winter_r = length(input.volcano_owner.xy) + (winter_noise(input.world.xy * 9.0) - 0.5) * 0.05;
+        float winter_cap = smoothstep(winter_warm, winter_warm + 0.06, winter_r) *
+            smoothstep(UP_LOW, UP_HIGH, normal.z) * (1 - STREAK * volcano_channel(input.volcano_owner)) *
+            (0.75 + 0.5 * winter_noise(input.world.xy * 23.0));
+        albedo = lerp(albedo, winter_snow_albedo(height_detail, input.world.xy), saturate(winter_cap * COVER) * winter_cone);
+    }
+"""
+VOLCANO_CALL = "    albedo = volcano_surface(albedo, ground_albedo, input.volcano_owner, mountain_rise);\n"
+def _volcano(base, **values):
+    cap = VOLCANO_CAP
+    for key, value in values.items():
+        cap = cap.replace(key.upper(), str(value))
+    return LOOKS[base] + [((MOUNTAIN,), VOLCANO_CALL + "#endif\n    float " + tail,
+                           VOLCANO_GROUND + VOLCANO_CALL + cap + "#endif\n    float " + tail)
+                          for tail in ("altitude", "ndl")]
+LOOKS["v29-volcano"] = _volcano("v28-laden", dormant=0.05, smoke=0.14, erupt=0.40, up_low=0.3, up_high=0.6,
+                                streak=0.7, cover=1.0)
+# v29's cap barely showed: the cones are steeper than mountain snow's up
+# threshold. v30 reads as a snow cap: from the warm radius down to a ragged
+# snowline with tongues down the flanks, a light dusting below it, bare
+# near-vertical faces and mostly dark cooled lava streaks.
+VOLCANO_CAP2 = """    {
+        float winter_cone = volcano_coverage(input.volcano_owner, mountain_rise);
+        float winter_activity = volcano_activity(input.volcano_owner);
+        float winter_warm = winter_activity < 0.5 ? DORMANT : winter_activity < 1.5 ? SMOKE : ERUPT;
+        float winter_r = length(input.volcano_owner.xy);
+        float winter_angle = atan2(input.volcano_owner.y, input.volcano_owner.x);
+        float winter_line = SNOWLINE + (winter_noise(float2(winter_angle * 2.2, 0.37)) - 0.5) * 0.12 +
+            (winter_noise(float2(winter_angle * 9.0, 1.7)) - 0.5) * 0.06;
+        float winter_open = smoothstep(winter_warm, winter_warm + 0.04, winter_r + (winter_noise(input.world.xy * 9.0) - 0.5) * 0.04);
+        float winter_cap = winter_open * lerp(DUST, 1, 1 - smoothstep(winter_line - 0.03, winter_line + 0.03, winter_r));
+        winter_cap *= smoothstep(UP_LOW, UP_HIGH, normal.z) * (1 - STREAK * volcano_channel(input.volcano_owner)) *
+            (0.8 + 0.4 * winter_noise(input.world.xy * 23.0));
+        albedo = lerp(albedo, winter_snow_albedo(height_detail, input.world.xy), saturate(winter_cap) * winter_cone);
+    }
+"""
+def _volcano2(base, **values):
+    cap = VOLCANO_CAP2
+    for key, value in values.items():
+        cap = cap.replace(key.upper(), str(value))
+    return LOOKS[base] + [((MOUNTAIN,), VOLCANO_CALL + "#endif\n    float " + tail,
+                           VOLCANO_GROUND + VOLCANO_CALL + cap + "#endif\n    float " + tail)
+                          for tail in ("altitude", "ndl")]
+LOOKS["v30-volcano"] = _volcano2("v28-laden", dormant=0.05, smoke=0.13, erupt=0.40, snowline=0.21, dust=0.3,
+                                 up_low=0.02, up_high=0.3, streak=0.7)
+
+
 def apply(look: str, relative: str, text: str) -> str:
     for paths, anchor, replacement in LOOKS[look]:
         if relative not in paths:

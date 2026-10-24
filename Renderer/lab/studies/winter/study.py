@@ -66,6 +66,14 @@ VIEWS = {
     "salamanca-close": ((15, 17), 224, 12, (1600, 900), "salamanca"),
     "salamanca-night": ((16, 16), 128, 0, (1600, 900), "salamanca"),
     "salamanca-close-sp": ((15, 17), 224, 12, (1600, 900), "salamanca", "snow-pines"),
+    # The 1498 AD save around Misawa and Echizen: four volcanoes (Lab tiles
+    # 17,15 14,16 9,17 23,19), shown dormant, smoldering ("smoke") or erupting.
+    "volcanoes": ((16, 17), 160, 12, (1600, 900), "volcanoes"),
+    "volcanoes-smoke": ((16, 17), 160, 12, (1600, 900), "volcanoes", "smoke"),
+    "volcanoes-erupt": ((16, 17), 160, 12, (1600, 900), "volcanoes", "erupt"),
+    "volcano-close": ((16, 15), 256, 12, (1600, 900), "volcanoes"),
+    "volcano-close-smoke": ((16, 15), 256, 12, (1600, 900), "volcanoes", "smoke"),
+    "volcano-close-erupt": ((16, 15), 256, 12, (1600, 900), "volcanoes", "erupt"),
     "evening-sp": ((20, 75), 128, 18, (1600, 900), "biq", "snow-pines"),
     "pines-evening": ((20, 75), 128, 18, (1600, 900), "biq"),
     # All four open land types with interior tiles (desert band at the top, tundra lower left).
@@ -153,13 +161,13 @@ def snow_pines(scene: Path) -> Path:
     return target
 
 
-def salamanca_scene() -> tuple[Path, list]:
-    folder = OUT / "scenes/salamanca"
+def salamanca_scene(name="salamanca", center=(113, 75)) -> tuple[Path, list]:
+    folder = OUT / f"scenes/{name}"
     scene, cities = folder / "scene.csv", folder / "cities.json"
     if not scene.is_file() or not cities.is_file():
         folder.mkdir(parents=True, exist_ok=True)
         subprocess.run(["node", str(ROOT / "Renderer/lab/studies/roads/save_window.js"), str(SAVE_1498),
-                        str(scene), str(cities), "113", "75"], cwd=ROOT, check=True)
+                        str(scene), str(cities), str(center[0]), str(center[1])], cwd=ROOT, check=True)
     return scene, [(c["x"], c["y"], 0 if (c.get("pop") or 0) < 7 else 1, 0) for c in json.loads(cities.read_text())]
 
 
@@ -198,12 +206,17 @@ def capture(label: str, view: str, dll: Path, scene: Path, look: str | None, sea
     if variant:
         kind, options = variant[0], variant[1:]
         scene, cities = (village_scene(scene) if kind == "village" else
-                         salamanca_scene() if kind == "salamanca" else (scene, []))
+                         salamanca_scene() if kind == "salamanca" else
+                         salamanca_scene("volcanoes", (95, 91)) if kind == "volcanoes" else (scene, []))
         if "snow-pines" in options:
             scene = snow_pines(scene)
+        if "smoke" in options:
+            context["C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO"] = "1"
+        if "erupt" in options:
+            context["C3X_RENDERER_PREVIEW_ERUPTING_VOLCANO"] = "1"
         era = 0 if kind == "village" else 2
         # "dx,dy,culture,era,size,capital,walled" from the view centre.
-        context = {"C3X_LAB_TILE_OVERLAYS": "1", "C3X_LAB_TILE_CITIES":
+        context |= {"C3X_LAB_TILE_OVERLAYS": "1", "C3X_LAB_TILE_CITIES":
                    ";".join(f"{x - center[0]},{y - center[1]},0,{era},{size},{cap},0" for x, y, size, cap in cities)}
     folder = OUT / label / view
     folder.mkdir(parents=True, exist_ok=True)

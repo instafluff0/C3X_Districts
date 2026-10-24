@@ -148,6 +148,19 @@
 #define WINTER_SHELF_WINDOW 7.0
 #define WINTER_RIVER_RIM 0.6
 #define WINTER_RIVER_RIM_TONE float3(0.66, 0.74, 0.84)
+// ---- Natural shaders only (not in winter_integrated.hlsl) -----------------
+// Winter volcanoes (user, 2026-10-23; Lab look v30): the cone's snow cap opens
+// beyond a warm radius by activity (dormant, smoldering, erupting) and reaches
+// a ragged snowline, dusted below; near-vertical faces and cooled lava
+// streaks stay mostly dark. Radii in volcano element units (rim ~.055, foot ~.29).
+#define WINTER_VOLCANO_DORMANT 0.05
+#define WINTER_VOLCANO_SMOKE 0.13
+#define WINTER_VOLCANO_ERUPT 0.40
+#define WINTER_VOLCANO_SNOWLINE 0.21
+#define WINTER_VOLCANO_DUST 0.3
+#define WINTER_VOLCANO_UP_LOW 0.02
+#define WINTER_VOLCANO_UP_HIGH 0.3
+#define WINTER_VOLCANO_STREAK 0.7
 // ---- Lab winter study (Renderer/lab/studies/winter) -----------------------
 // Colour work in OKLab so source texture detail survives; snow cover is a
 // world-space field over the authored material height, never a tile stamp.
