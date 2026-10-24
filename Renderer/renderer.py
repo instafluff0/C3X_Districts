@@ -488,7 +488,9 @@ def scene(category, case, destination, *, world_size=32):
                 if case == "water-gameplay" and x < 12:
                     base = real = 2 if x < 10 else 11
             if category == "resources" and case in resource_roster.CASES:
-                base, real = resource_roster.terrain(case, x - 16, y - 16, base, real)
+                # A case may add Civ III bonus bits as a third value (0x10: snow-capped mountain).
+                base, real, *extra = resource_roster.terrain(case, x - 16, y - 16, base, real)
+                bonus = extra[0] if extra else bonus
                 river = resource_roster.river(case, x - 16, y - 16, river)
             if category == "shadows":
                 # Stable adjacent systems, all under one captured environment.

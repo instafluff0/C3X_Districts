@@ -1,5 +1,6 @@
 #pragma once
 #include "../animation_runtime.h"
+#include "../unit_animation_runtime.h"
 #include <map>
 #include <utility>
 
@@ -117,8 +118,12 @@ public:
         if(!fresh&&source_identity&&state.sampled_source==source_identity&&state.sampled_frame==frame&&
                 state.action==action&&!state.blending){state.ticks=ticks;return nullptr;}
         bool changed=!fresh&&state.action!=action;
-        if(changed){
-            state.duration=state.action==2&&action==1?.20:std::min(.12,double(mesh.duration)*.2);
+        // A work loop wrapping to its first frame returns there from its end
+        // pose while UnitPlayback holds that frame for the same duration.
+        bool wrapped=!fresh&&!changed&&native_work_action(action)&&frame<state.sampled_frame;
+        if(changed||wrapped){
+            state.duration=wrapped?work_loop_return_seconds:
+                state.action==2&&action==1?.20:std::min(.12,double(mesh.duration)*.2);
             state.from=state.current;state.started=ticks;state.blending=true;
         }
         state.incarnation=incarnation;state.action=action;state.ticks=ticks;state.frequency=frequency;

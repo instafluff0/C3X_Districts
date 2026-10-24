@@ -580,6 +580,13 @@ capture from before its fix and to pass after it (performance review 4t, 4v,
   In the VM every D3D allocation counts in private memory. The RAM world
   copy's eviction churn and a 5.7 GB peak failed it (review 87).
 
+- `python3 Renderer/tools/sound_probe_report.py PROBE.txt [--record REC.txt]`
+  reads a `sound_service_probe.exe` log taken alongside any scenario. It
+  fails if Civ III's sound mixer went 280 ms or more without service, or if
+  a loopback recording replays stale ring audio. That is the music blip.
+  Its hold test confirmed both detections: holds of 300 ms and longer fail,
+  150 ms passes. See `Renderer/docs/audio_skips.md`.
+
 Their logic is covered on the Mac by `test_borrowed_snapshot_reuse.py`,
 `test_hit_scene_fast_paths.py` and `test_required_geometry_admission.py`,
 together with exact hit-test answers and mutation-checked counters for the

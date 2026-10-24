@@ -49,6 +49,15 @@ inline char const * native_unit_action(int action) {
     }
 }
 
+// Worker jobs: fortress, road, mine, irrigate, jungle, forest and plant.
+inline bool native_work_action(int action) {
+    return action == 11 || (action >= 13 && action <= 18);
+}
+// Authored work clips end far from their first pose. Each ambient work cycle
+// ends with this return: playback holds the first frame while the joint
+// transition carries the limbs back to it, instead of snapping.
+constexpr double work_loop_return_seconds = .4;
+
 // Native directions are NE=1, E=2, SE=3, S=4, SW=5, W=6, NW=7, N=8.
 // Pack yaw calibration already includes the source model's forward axis.
 inline float native_unit_yaw(float offset,int direction){

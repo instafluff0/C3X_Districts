@@ -27,7 +27,12 @@ int main() {
   r.action_cursor=frame%15;r.frame_count=15;
   assert(draw((frame*1000000LL+29)/30) && r.action_cursor==(origin+frame)%90);
  }
- assert(draw(3000000) && r.action_cursor==origin); // Exact authored three-second cycle.
+ // The three-second clip ends, then its first frame holds while the joints
+ // return there (work_loop_return_seconds) before the next cycle starts.
+ assert(c3x_renderer::work_loop_return_seconds==.4);
+ assert(draw(3000000) && r.action_cursor==origin && step==0);
+ assert(draw(3399000) && r.action_cursor==origin);
+ assert(draw(3434000) && r.action_cursor==origin+1);
  r.action=1;assert(!draw(3100000));assert(r.action_cursor==0 && queue.empty());
  for(int i=1;i<=40;++i) {r.action_cursor=i%15;assert(!draw(3100000+i*66000));assert(r.action_cursor==0 && queue.empty());}
  assert(draw(5800000,true) && r.action_cursor==0); // Selection starts here, no catch-up.
@@ -46,7 +51,7 @@ int main() {
  assert(draw(10732000,true) && r.action_cursor==15);
  r.action=13;r.action_cursor=0;r.frame_count=15;assert(draw(11000000)&&r.action_cursor==0);origin=r.action_cursor;
  assert(draw(11700000) && r.action_cursor==(origin+21)%90);
- assert(draw(15700000) && r.action_cursor==(origin+51)%90); // modulo authored duration, no catch-up draws
+ assert(draw(15700000) && r.action_cursor==(origin+39)%90); // modulo clip plus return, no catch-up draws
  playback.forget(r.unit_id);r.action_cursor=5;r.frame_count=15;
  assert(draw(20000000) && r.action_cursor==30); // new observation uses native phase
 
@@ -62,6 +67,9 @@ using namespace c3x_renderer::render_core;
 struct Clip {bool ambient=true,loop=true;double duration=3;unsigned frames=91;};
 int main(){
  Clip clip;
+ // Three-second clip plus the held first frame of the limb return.
+ double cycle=3+c3x_renderer::work_loop_return_seconds;
+ auto expected=[&](double seconds){seconds=std::fmod(seconds,cycle);return seconds<3?int(seconds*30+1e-7)%90:0;};
  for(int action:{11,13,14,15,16,17,18}){
   UnitPlayback visible,reordered;std::set<int> phases;int first[15]={};
   c3x_renderer_unit_v1 request{};request.action=action;request.presentation_frequency=1000000;
@@ -79,13 +87,13 @@ int main(){
   request.presentation_time_ticks+=900000;
   for(int id=0;id<15;++id){request.unit_id=id;request.action_cursor=0;request.frame_count=15;
    assert(visible.resolve(request,clip,false,step));
-   int wanted=(first[id]+27)%90;assert(request.action_cursor==wanted);
+   int wanted=expected(first[id]/30.+.9);assert(request.action_cursor==wanted);
    assert(visible.resolve(request,clip,false,step)&&request.action_cursor==wanted);
   }
   // A camera revisit retains the authored cycle even if native cursors wrapped.
-  request.presentation_time_ticks+=3000000;
+  request.presentation_time_ticks+=std::llround(cycle*1000000);
   for(int id=0;id<15;++id){request.unit_id=id;request.action_cursor=0;request.frame_count=15;
-   assert(visible.resolve(request,clip,false,step)&&request.action_cursor==(first[id]+27)%90);}
+   assert(visible.resolve(request,clip,false,step)&&request.action_cursor==expected(first[id]/30.+.9));}
   // Fresh visible jobs start at zero, regardless of ID or absolute clock.
   for(int id:{100,201,302}){request.unit_id=id;request.action_cursor=0;request.frame_count=15;
    assert(visible.resolve(request,clip,false,step)&&request.action_cursor==0);
@@ -109,6 +117,38 @@ int main(){
  }
  clip.ambient=false;request.action=13;request.action_cursor=7;request.frame_count=15;
  assert(playback.resolve(request,clip,false,step)&&request.action_cursor==7&&request.frame_count==15);
+}
+''')
+
+    def test_work_cycle_holds_first_frame_through_the_limb_return(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_playback.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Clip {bool ambient=true,loop=true;double duration=3;unsigned frames=91;};
+int main(){
+ Clip clip;double back=c3x_renderer::work_loop_return_seconds;
+ assert(back>=.25&&back<=.6); // A short return, not a pause in the job.
+ for(int action:{11,13,14,15,16,17,18}){
+  UnitPlayback playback;c3x_renderer_unit_v1 r{};unsigned step;
+  r.unit_id=4;r.action=action;r.action_cursor=0;r.frame_count=15;r.presentation_frequency=1000000;
+  std::strcpy(r.unit_key,"worker");
+  int previous=-1,returns=0,restarts=0;
+  for(long long t=0;t<=2*(3+back)*1000000;t+=16667){
+   r.presentation_time_ticks=t;assert(playback.resolve(r,clip,false,step));assert(r.frame_count==90);
+   double s=std::fmod(t/1e6,3+back);
+   if(s<3)assert(r.action_cursor==int(s*30+1e-7)%90); // authored clip time is unchanged
+   else {assert(r.action_cursor==0);++returns;}        // the first frame holds while joints return
+   if(previous>r.action_cursor)++restarts;previous=r.action_cursor;
+  }
+  assert(restarts==2&&returns>=2*int(back*60)-2);
+ }
+ // A selected idle loop is not a work job: it keeps its exact authored cycle.
+ UnitPlayback playback;c3x_renderer_unit_v1 r{};unsigned step;
+ r.unit_id=5;r.action=1;r.presentation_frequency=1000000;std::strcpy(r.unit_key,"worker");
+ r.presentation_time_ticks=0;assert(playback.resolve(r,clip,true,step)&&r.action_cursor==0);
+ r.presentation_time_ticks=2990000;assert(playback.resolve(r,clip,true,step)&&r.action_cursor==89);
+ r.presentation_time_ticks=3040000;assert(playback.resolve(r,clip,true,step)&&r.action_cursor==1);
 }
 ''')
 

@@ -200,6 +200,11 @@ Rig data is bounded and included in asset residency accounting.
 
 The same transition handles idle, run, fortify, attack variants, fidget,
 victory, death, capture and work actions when their component binding matches.
+Worker job clips (fortress, road, mine, irrigate, jungle, forest, plant) end
+away from their first pose, so each work cycle adds `work_loop_return_seconds`
+(0.4 s): playback holds the first frame while this transition returns the
+limbs from the end pose, instead of snapping at the wrap. Run and idle loops
+are authored seamless and keep their exact cycle.
 Fidget, capture and build now use copied native timing between sparse body
 captures, as attack/death already did. Native outcomes and retirement still
 control visibility; blending cannot extend a dead unit's gameplay lifetime.

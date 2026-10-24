@@ -6,6 +6,7 @@
 #include <cstring>
 #include <deque>
 #include "../c3x_renderer_api.h"
+#include "../unit_animation_runtime.h"
 
 namespace c3x_renderer { namespace render_core {
 // UI-caller-owned visual state. Native actions/anchors are never advanced here.
@@ -58,7 +59,7 @@ public:
     bool resolve(c3x_renderer_unit_v1& request,Clip const& clip,bool selected,unsigned& next_step) {
         next_step=1;
         bool idle=request.action==1;
-        bool work=request.action==11 || (request.action>=13 && request.action<=18);
+        bool work=native_work_action(request.action);
         bool advancing=!idle || selected;
         auto phase=std::find_if(actions.begin(),actions.end(),[&](auto const& a){return a.id==request.unit_id&&a.action==request.action;});
         if(phase!=actions.end()&&phase->frequency==request.presentation_frequency){
@@ -95,20 +96,25 @@ public:
             instances.erase(old);
         }
         double interval=1.0/15; // First observation: current native timer opportunity.
+        // A work cycle ends by holding the first frame while UnitPoseTransitions
+        // returns the limbs from the authored end pose (work_loop_return_seconds).
+        double cycle=double(clip.duration)+(work?work_loop_return_seconds:0.);
         if(advancing && state.advancing && state.frequency==request.presentation_frequency &&
            request.presentation_time_ticks>=state.ticks) {
             double elapsed=double(request.presentation_time_ticks-state.ticks)/request.presentation_frequency;
             // Visibility retirement forgets hidden instances. A slow frame or native
             // action must not stop time for an instance that is still visible.
             if(elapsed>0) {
-                state.seconds=std::fmod(state.seconds+elapsed,double(clip.duration));interval=elapsed;
+                state.seconds=std::fmod(state.seconds+elapsed,cycle);interval=elapsed;
             }
         }
         state.ticks=request.presentation_time_ticks;state.frequency=request.presentation_frequency;
         state.advancing=advancing;
-        state.cursor=int(state.seconds/clip.duration*state.frames+1e-7)%state.frames;
+        auto cursor=[&](double seconds){
+            return seconds<clip.duration?int(seconds/clip.duration*state.frames+1e-7)%state.frames:0;};
+        state.cursor=cursor(state.seconds);
         request.action_cursor=state.cursor;request.frame_count=state.frames;
-        int next=int(std::fmod(state.seconds+interval,double(clip.duration))/clip.duration*state.frames+1e-7)%state.frames;
+        int next=cursor(std::fmod(state.seconds+interval,cycle));
         next_step=unsigned((next-state.cursor+state.frames)%state.frames);
         if(!advancing)next_step=0;
         if(instances.size()==4096)instances.pop_front();
