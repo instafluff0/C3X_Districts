@@ -11,6 +11,7 @@ struct ID3D11ShaderResourceView;
 inline void wonder_release_view(ID3D11ShaderResourceView*){}
 #endif
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <condition_variable>
 #include <cstdlib>
@@ -104,9 +105,53 @@ struct WonderStore {
     std::function<bool(std::vector<std::uint8_t> const&,ID3D11ShaderResourceView*&)> upload;
     WonderSlots slots;
     bool ready=false;
+    // Prefetch: the groups the world's Wonder Districts show (with their era district
+    // and the next build stage) load on a preparation worker as soon as the district
+    // appears in world state, and stay pinned while the world holds it, so a camera's
+    // first visit finds them resident instead of loading them on the tile's preparation.
+    std::mutex pin_mutex;
+    std::vector<std::string> wanted,refused;  // sorted; refused: not loadable (budget, no kit)
+    std::unordered_map<std::string,std::shared_ptr<WonderGroup const>> pinned;
+    std::atomic<bool> prefetch_due{false};
     void clear(){
+        {
+            std::lock_guard<std::mutex> lock(pin_mutex);
+            wanted.clear();refused.clear();pinned.clear();prefetch_due=false;
+        }
         std::lock_guard<std::mutex> lock(mutex);
         index.clear();by_key.clear();loaded.clear();textures.clear();ready=false;
+    }
+    // The keys a Wonder District needs: the group it shows, its era district and the
+    // next build stage.
+    void needs(WonderFact const& fact,std::vector<std::string>& keys)const{
+        for(auto const& key:{this->key(fact),district(fact),next(fact)})if(!key.empty())keys.push_back(key);
+    }
+    // The world's keys (any order, repeats allowed): unpins groups it no longer shows.
+    void want(std::vector<std::string> keys){
+        std::sort(keys.begin(),keys.end());keys.erase(std::unique(keys.begin(),keys.end()),keys.end());
+        std::lock_guard<std::mutex> lock(pin_mutex);
+        if(keys==wanted)return;
+        for(auto at=pinned.begin();at!=pinned.end();)
+            at=std::binary_search(keys.begin(),keys.end(),at->first)?std::next(at):pinned.erase(at);
+        wanted=std::move(keys);refused.clear();prefetch_due=true;
+    }
+    // Loads the wanted keys not yet pinned (a preparation worker); an interrupted pass
+    // is due again.
+    void prefetch(std::atomic<bool> const& stop){
+        std::vector<std::string> keys;
+        {
+            std::lock_guard<std::mutex> lock(pin_mutex);
+            for(auto const& key:wanted)
+                if(!pinned.count(key) && !std::binary_search(refused.begin(),refused.end(),key))keys.push_back(key);
+        }
+        for(auto const& key:keys){
+            if(stop.load(std::memory_order_relaxed)){prefetch_due=true;return;}
+            auto group=acquire(key);
+            std::lock_guard<std::mutex> lock(pin_mutex);
+            if(!std::binary_search(wanted.begin(),wanted.end(),key))continue;
+            if(group)pinned.emplace(key,std::move(group));
+            else refused.insert(std::upper_bound(refused.begin(),refused.end(),key),key);
+        }
     }
 
     bool parse(std::vector<std::uint8_t> const& bytes){

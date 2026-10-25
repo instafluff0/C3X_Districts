@@ -8,7 +8,7 @@ param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory
       # Renderer diagnostics for the game child only, e.g. C3X_SANDBOX_PASS_COUNTS=1;C3X_RENDERER_PROFILE=1
       [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='',
       # Camera route for F24 steps (x,y,zoom width in native pixels; see parse_custom_renderer_test_route)
-      [ValidatePattern('^$|^[0-9]+,[0-9]+,[0-9]+(;[0-9]+,[0-9]+,[0-9]+)*$')][string]$Route='', [ValidateRange(0,8)][int]$LoadWarnings=0)
+      [ValidatePattern('^$|^[0-9]+,[0-9]+,[0-9]+(;[0-9]+,[0-9]+,[0-9]+)*$')][string]$Route='', [ValidateRange(0,20)][int]$LoadWarnings=0)
 $ErrorActionPreference = 'Stop'
 # 'volcanoes' is the units camera script aimed at the 1498 AD save's volcano groups;
 # 'resources' aims it at that save's ivory near rivers, fish and whales, and coastal gems.

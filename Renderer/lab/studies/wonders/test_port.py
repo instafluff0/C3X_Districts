@@ -154,6 +154,60 @@ int main(){
 }
 ''')
 
+    def test_world_wonders_prefetch_before_a_visit(self):
+        """A Wonder District in world state has its group (era district, next stage)
+        loaded and pinned off the frame before any tile asks, so a camera's first visit
+        finds it resident; groups the world no longer shows are released, and an
+        interrupted pass stays due (2026-10-25: first visits stalled 150-490 ms)."""
+        from Renderer.native.native_cpp_test import run_cpp
+        if not (ROOT / "Renderer/packs/WonderRuntime/index.bin").is_file():
+            self.skipTest("build the wonder pack first")
+        run_cpp(r'''
+#include <cassert>
+#include <cstring>
+#include <fstream>
+#include <iterator>
+#include "Renderer/native/city_fidelity/wonders.h"
+using namespace c3x_renderer::city_fidelity;
+static bool read_file(std::string const& path,std::vector<std::uint8_t>& out){
+    std::ifstream file(path,std::ios::binary);if(!file)return false;
+    out.assign(std::istreambuf_iterator<char>(file),{});return true;
+}
+static WonderFact fact(char const* name,unsigned state,unsigned progress){
+    c3x_renderer_tile_v1 tile{};std::strcpy(tile.wonder,name);tile.wonder_state=state;tile.wonder_progress=progress;
+    WonderFact out;assert(wonder_fact(tile,out));return out;
+}
+int main(){
+    WonderStore store;std::vector<std::uint8_t> index;
+    assert(read_file("Renderer/packs/WonderRuntime/index.bin",index) && store.parse(index));
+    std::vector<Material> materials(wonder_material_slots);
+    std::vector<std::array<ID3D11ShaderResourceView*,7>> views(wonder_material_slots);
+    store.slots.used.assign(wonder_material_slots,false);store.slots.materials=&materials;store.slots.views=&views;
+    store.read=[](std::string const& path,std::vector<std::uint8_t>& out){return read_file(path,out);};
+    store.upload=[](std::vector<std::uint8_t> const&,ID3D11ShaderResourceView*& view){view=nullptr;return true;};
+    store.ready=true;
+    auto const pyramids=fact("The Pyramids",C3X_RENDERER_WONDER_COMPLETE,0);
+    auto const gardens=fact("The Hanging Gardens",C3X_RENDERER_WONDER_BUILDING,120);
+    std::vector<std::string> keys;store.needs(pyramids,keys);store.needs(gardens,keys);
+    assert(!store.resident(store.key(pyramids)) && !store.resident(store.key(gardens)));
+    // The world shows them: due, then loaded and pinned with no tile holding them.
+    store.want(keys);assert(store.prefetch_due.exchange(false));
+    std::atomic<bool> go{false},stop{true};
+    store.prefetch(go);
+    assert(store.resident(store.key(pyramids)) && store.resident(store.key(gardens)) && store.resident(store.district(gardens)));
+    // The same world again is not due again.
+    store.want(keys);assert(!store.prefetch_due.load());
+    // The Hanging Gardens leave the world: released (nothing else holds it).
+    std::vector<std::string> fewer;store.needs(pyramids,fewer);store.want(fewer);
+    assert(store.resident(store.key(pyramids)) && !store.resident(store.key(gardens)));
+    // An interrupted pass loads nothing and stays due.
+    store.want(keys);assert(store.prefetch_due.exchange(false));
+    store.prefetch(stop);
+    assert(!store.resident(store.key(gardens)) && store.prefetch_due.load());
+    return 0;
+}
+''')
+
     def test_combined_relief_slots_fit(self):
         """The packs' relief kits (natural stamps and wave kits, then constructed stamps) fit
         the 15 slots of topology bits 28-31, with none dropped."""

@@ -9435,17 +9435,28 @@ public:
         std::uint32_t const* topology=frame.world_topology;
         c3x_renderer_i64 revision=frame.world_topology_revision;
         bool masked_change=false;
+        auto& wonders=c3x_renderer::city_fidelity::wonder_store();
         if(topology_cache.matches_world(frame))try{
+            // The world's Wonder Districts, prefetched before any tile needs them.
+            std::vector<std::string> wonder_keys;bool visited=false;
             topology=viewer_topology.update(frame.world_topology,frame.world_topology_count,frame.world_width_tiles,
                 frame.world_height_tiles,frame.world_topology_revision,topology_cache.world_input_sequence(),
-                [&](auto mark){topology_cache.world_snapshot()->visit([&](auto const& input){
+                [&](auto mark){visited=true;topology_cache.world_snapshot()->visit([&](auto const& input){
                     // Native exploration: the hidden ring is drawn as explored only.
                     auto flags=input.occurrence.tile_flags;
                     if(flags&topology_cache.hidden_ring)flags&=~unsigned(C3X_RENDERER_TILE_EXPLORED);
                     mark(input.occurrence.tile_x,input.occurrence.tile_y,flags,
-                        wonder_tile_slot(input.occurrence));});},&masked_change);
+                        wonder_tile_slot(input.occurrence));
+                    c3x_renderer::city_fidelity::WonderFact fact;
+                    if(wonders.ready && c3x_renderer::city_fidelity::wonder_fact(input.occurrence,fact))wonders.needs(fact,wonder_keys);});},
+                &masked_change);
+            if(visited)wonders.want(std::move(wonder_keys));
             revision=viewer_topology.revision;
         }catch(std::length_error const&){topology=frame.world_topology;revision=frame.world_topology_revision;}
+        if(wonders.ready && wonders.prefetch_due.exchange(false) &&
+           !world_preparation_queue.offer_optional({[](auto const& stop,unsigned){
+               c3x_renderer::city_fidelity::wonder_store().prefetch(stop);},1}))
+            wonders.prefetch_due=true;
         auto updated = world_coast.update({frame.world_width_tiles, frame.world_height_tiles,
             frame.world_wrap_x != 0, frame.world_wrap_y != 0}, topology,
             frame.world_topology_count, revision);
