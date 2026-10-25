@@ -505,10 +505,10 @@ try {
                 Write-Host ('Mouse command: '+($step -join ',')); ++$mouseIndex
             }
             $key=if ($Scenario -eq 'scroll') {0x87} else {0}
-            # -LoadWarnings: further Enters, two seconds apart, dismiss benign C3X warnings
+            # -LoadWarnings: further Enters, four seconds apart, dismiss benign C3X warnings
             # (a scenario's config) shown during the load, never after the first map. The
             # log may not exist yet: an empty read is "not ready", not an empty array.
-            if ($enterCount -lt 2+$LoadWarnings -and $elapsed -ge (5+2*$enterCount) -and
+            if ($enterCount -lt 2+$LoadWarnings -and $elapsed -ge $(if ($enterCount -lt 2) {5+2*$enterCount} else {7+4*($enterCount-1)}) -and
                 ($enterCount -lt 2 -or [string](Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw -ErrorAction SilentlyContinue) -notmatch 'stage=render-done result=1')) {
                 $key=13; ++$enterCount
             }

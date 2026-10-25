@@ -110,7 +110,7 @@ about eight copies of the first stop. A stop is the native 1x camera (top-left,
 map pixels at 128: tile x*64, y*32); a zoomed width keeps that view's centre, so
 `x*64-1120,y*32-596` centres tile (x, y) at any width.
 
-`-LoadWarnings N` (0-8) sends up to N further load Enters, two seconds apart,
+`-LoadWarnings N` (0-8) sends up to N further load Enters, four seconds apart,
 until the first map is ready: C3X shows benign warning popups while loading a
 scenario save whose configs predate the current keys (a local 1845 AD
 scenario save with Wonder Districts needs 8). Such a save's Wonder Districts
