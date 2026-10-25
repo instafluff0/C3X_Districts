@@ -239,6 +239,8 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             [&](float x,float y){return input.river_ready?float(scratch.rivers.river_sample({x,y}).distance):1000.f;}),
         [&](float u,float v){return mountain_count?float(mountain_shape.sample(natural,tile_u+u,tile_v+1.f-v).displacement)*
             (.82f/150.f):0.f;}))return {};
+    // Tile buildings stand on the drawn rock (route_height, as their rigid seat).
+    auto const lamps=tile_building_lamps(plan,assets,tile,route_height);
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
         clear_farm(plan,plan,assets,input.resource_boxes);
         // A plot kit lays out the areas it shares with neighbouring farms:
@@ -407,6 +409,22 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             input.projection.relief_projection_scale,float(input.projection.content_view_height)};
         if(city_fidelity::wonder_effects(library,nc,nr,wonder_kit->effects,route_height,projection,true,effects) &&
            !adopt_city(effects))return {};
+    }
+    // Tile buildings' night lights (lanterns, runway lights, masts) as city lamps:
+    // the lamp mode rides in the seed (seed + 64 * mode, q8_city_effect).
+    if(!lamps.empty() && library.effect_material<library.materials.size()){
+        std::vector<city_fidelity::EffectAnchor> anchors;
+        for(std::size_t k=0;k<lamps.size();++k){
+            auto const& lamp=lamps[k];
+            anchors.push_back({{lamp.world[0],lamp.world[1],lamp.world[2]},city_fidelity::Effect{{0,0,0},
+                float(city_fidelity::effect_night_light),.075f*lamp.strength,.075f*lamp.strength,
+                float(k%16u*4u)+64.f*lamp.mode,lamp.strength}});
+        }
+        city_fidelity::Surfaces effects;
+        GroundProjection projection{nc,nr,input.projection.half_w,input.projection.half_h,
+            input.projection.relief_projection_scale,float(input.projection.content_view_height)};
+        city_fidelity::append_effects(library,anchors,std::make_shared<city_fidelity::Lighting>(),projection,true,effects);
+        if(!adopt_city(effects))return {};
     }
     if(stop())return {};
     result->rivers.assign(river_inputs.begin(),river_inputs.end());

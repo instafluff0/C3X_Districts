@@ -476,6 +476,163 @@ int main(){
 }
 ''')
 
+    def test_lit_parts_name_their_glow_slot_and_lamps_follow_their_building(self):
+        # Tile buildings had no night light at all: the freeze dropped Civ VI's
+        # emissive maps and night_light points. A part Civ VI lights names its
+        # glow map's slot (owner .181-.188); a mesh's "lamps/" companion puts its
+        # lamps wherever the building's instance stands, moved or not.
+        run_cpp(PRELUDE + r'''
+int main(){
+ std::array<FeatureBundle,objects::family_count> bundles;objects::Assets assets{};
+ for(unsigned f=0;f<bundles.size();++f)assets.bundles[f]=&bundles[f];
+ auto& bundle=bundles[objects::site_family];
+ // A body, its lit part (glow map in slot 5), a part still named ":glow" (no glow map), a runway decal.
+ for(std::string id:{"district/hangar_dark","district/hangar_lit:g5","district/house_lit:glow","decal/runway/x"})
+  bundle.assets.push_back(box(id,.1f,.08f,id.rfind("decal/",0)==0?0.f:.1f));
+ // The body's night lights in its mesh's space: a lantern (mode 1) and a red blinking mast light (7).
+ FeatureAsset lamps;lamps.id="lamps/district/hangar_dark";
+ for(auto l:{std::array<float,5>{.05f,-.02f,.04f,1,1.4f},std::array<float,5>{-.03f,.06f,.31f,7,1.6f}})
+  for(int k=0;k<3;++k)lamps.vertices.push_back({{l[0],l[1],l[2]},{0,0,1},{l[3],l[4]}});
+ lamps.indices={0,1,2,3,4,5};bundle.assets.push_back(lamps);
+ FeatureComposition c;c.name="airfield_0";FeatureComposition::Variant variant;
+ for(unsigned a=0;a<4;++a){FeatureComposition::Instance item;item.asset=a;item.u=item.v=.5f;item.rotation=.5f;item.scale=1.5f;
+  variant.instances.push_back(item);}
+ c.variants.push_back(variant);bundle.compositions.push_back(c);
+ auto tile=site(C3X_RENDERER_IMPROVEMENT_AIRFIELD,0,0);
+ // On dry ground it stands at its own spot; with water at the centre it moves (and may shrink).
+ for(bool wet:{false,true}){
+  objects::Plan plan;
+  assert(objects::place_tile_buildings(plan,assets,tile,objects::Plan{},{},
+   [&](float u,float v){return wet && std::abs(u-.5f)<.12f && std::abs(v-.5f)<.12f;},flat));
+  assert(plan.instances.size()==4);
+  objects::Instance const* body=nullptr;
+  for(auto const& instance:plan.instances){
+   auto const& id=bundle.assets[instance.asset].id;
+   float expected=id=="district/hangar_lit:g5"?.186f:id.rfind("decal/",0)==0?0.f:.18f;
+   assert(std::abs(instance.owner-expected)<1e-6f && id.rfind("lamps/",0)!=0);
+   if(id=="district/hangar_dark")body=&instance;
+  }
+  assert(body && (body->u!=.5f || body->v!=.5f)==wet);
+  auto height=[](float x,float y){return 30.f+2.f*x-y;};
+  auto found=objects::tile_building_lamps(plan,assets,tile,height);
+  assert(found.size()==2);
+  float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
+  float x=tile_u+body->u,y=tile_v+1-body->v,ground=height(x,y)-2.5f,fit=body->ground_fit;
+  for(int corner=0;corner<4;++corner)ground=std::min(ground,height(x+(corner&1?fit:-fit),y+(corner&2?fit:-fit))-2.5f);
+  float co=std::cos(body->rotation),si=std::sin(body->rotation);
+  for(unsigned k=0;k<2;++k){
+   auto const& p=lamps.vertices[k*3].position;
+   float lx=(p[0]*co-p[1]*si)*body->scale,ly=(p[0]*si+p[1]*co)*body->scale;
+   assert(std::abs(found[k].world[0]-(x+lx))<1e-5f && std::abs(found[k].world[1]-(y-ly))<1e-5f);
+   assert(std::abs(found[k].world[2]-(ground+2.5f+p[2]*body->scale*150.f/.82f)/112.f)<1e-5f);
+   assert(found[k].mode==(k?7.f:1.f) && found[k].strength==(k?1.6f:1.4f));
+  }
+ }
+}
+''')
+
+    def test_site_pack_puts_glow_maps_in_spare_slots_and_names_lit_parts(self):
+        import json, struct, tempfile
+        from Renderer.tools.asset_compiler import build_site_runtime as sites
+        from Renderer.tools.asset_compiler import tile_buildings_runtime as tile_buildings
+        import hashlib
+        _, textures, _ = sites.plan()
+        string = lambda value: struct.pack("<I", len(value.encode())) + value.encode()
+        cells = {hashlib.sha256((sites.SOURCE / t).read_bytes()).hexdigest(): [0, .5, .125 * k, .125, 512]
+                 for k, t in enumerate(textures)}
+        names = ("district/radar_dark", "district/radar_lit:glow", "lamps/district/radar_dark")
+        bundle = bytearray(b"C3XVEG1\0" + struct.pack("<IIII", 2, 8, len(names), 0))
+        for k in range(8):
+            bundle += string("textures/atlas_0.dds" if k == 0 else "textures/unused.dds")
+        for name in names:
+            bundle += string(name) + struct.pack("<III", 0, 3, 3)
+            bundle += b"".join(struct.pack("<8f", x, y, .1, 0, 0, 1, .1, .1) for x, y in ((0, 0), (.1, 0), (0, .1)))
+            bundle += struct.pack("<3I", 0, 1, 2)
+        bundle += struct.pack("<I", 1) + string("radar") + struct.pack("<I", 1) + struct.pack("<II", 255, 2)
+        bundle += struct.pack("<I6f", 0, .5, .5, 0, 1, 0, 0) + struct.pack("<I6f", 1, .5, .5, 0, 1, 0, 0)
+        bundle += struct.pack("<I", 1) + string("radar") + struct.pack("<I", 0)
+        with tempfile.TemporaryDirectory() as folder:
+            frozen, out = Path(folder) / "frozen", Path(folder) / "out"
+            (frozen / "textures").mkdir(parents=True)
+            (frozen / "textures/atlas_0.dds").write_bytes(b"atlas")
+            (frozen / "textures/emissive_0.dds").write_bytes(b"glow")
+            (frozen / "tile_buildings.bin").write_bytes(bytes(bundle))
+            manifest = {"bundle": "tile_buildings.bin", "atlases": ["textures/atlas_0.dds"], "site_cells": cells,
+                        "glows": {"0": "textures/emissive_0.dds"}}
+            (frozen / "manifest.json").write_text(json.dumps(manifest))
+            sites.build(out, frozen)
+            pack = (out / "sites.bin").read_bytes()
+            self.assertEqual(b"glow", (out / "textures/glow_0.dds").read_bytes())
+            # A lit part whose atlas has no glow map is refused rather than drawn unlit.
+            manifest["glows"] = {}
+            (frozen / "manifest.json").write_text(json.dumps(manifest))
+            with self.assertRaises(ValueError):
+                sites.build(Path(folder) / "unlit", frozen)
+        # The glow map follows the atlas and the three ground states: slot 4.
+        at, paths = 24, []
+        for _ in range(8):
+            length, = struct.unpack_from("<I", pack, at)
+            paths.append(pack[at + 4:at + 4 + length].decode()); at += 4 + length
+        self.assertEqual("textures/glow_0.dds", paths[4])
+        for name, renamed in zip(names, ("district/radar_dark", "district/radar_lit:g4", "lamps/district/radar_dark")):
+            self.assertIn(string(renamed), pack, name)
+        self.assertNotIn(b":glow", pack)
+        self.assertEqual(tile_buildings.lit(string("district/x") + b"rest", {}), string("district/x") + b"rest")
+
+    def test_tile_glow_lights_at_night_and_lamps_join_the_effect_layer(self):
+        # Every feature shader lights the glow code the object compiler writes, at
+        # night only, from the site pack's slot; Renderer64 turns lamps into city
+        # night lights (lamp mode in the seed, as constructed wonders' lamps).
+        for path in ("city_fidelity/feature.hlsl", "render_core/terrain_scene.hlsl", "environment_refresh/feature.hlsl"):
+            shader = (ROOT / "Renderer/native" / path).read_text()
+            self.assertIn("float tile_glow_code = floor(material_fraction * 1000.0 + 0.5) - 180.0;", shader, path)
+            self.assertIn("if (tile_object_weight > 0.5 && tile_glow_code > 0.5)\n"
+                          "        lit_color += sample_reused_resource_slot(tile_glow_code - 1.0, input.uv).rgb *\n"
+                          "            environment_night_activation * environment_emissive_scale * 1.45;", shader, path)
+        preparation = (ROOT / "Renderer/native/object_preparation.h").read_text()
+        self.assertIn("auto const lamps=tile_building_lamps(plan,assets,tile,route_height);", preparation)
+        self.assertIn("float(city_fidelity::effect_night_light),.075f*lamp.strength,.075f*lamp.strength,\n"
+                      "                float(k%16u*4u)+64.f*lamp.mode,lamp.strength}});", preparation)
+
+    @unittest.skipUnless((ROOT / "Renderer/packs/TileBuildingsFrozen/manifest.json").is_file(), "frozen pack absent")
+    def test_frozen_airfields_light_as_civ6_does(self):
+        # By uv2 Civ VI lights 7.5% of the early airfield and 20% of the modern one;
+        # by uv0 (the kit's emissive square) 45-52%. Lamps: the airstrip's
+        # lanterns (warm), the aerodrome's runway (white) and mast (red, blinking).
+        import json, re, struct
+        from collections import Counter
+        import numpy as np
+        from Renderer.tools.asset_compiler import tile_buildings_runtime as tile_buildings
+        frozen = tile_buildings.FROZEN
+        manifest = json.loads((frozen / "manifest.json").read_text())
+        self.assertTrue(manifest.get("glows"), "a glow map")
+        pack = tile_buildings.load(lambda path: path.read_bytes(), frozen)
+        assets = []
+        for raw in pack["assets"]:
+            length, = struct.unpack_from("<I", raw)
+            texture, vertices, indices = struct.unpack_from("<III", raw, 4 + length)
+            payload = raw[16 + length:]
+            assets.append((raw[4:4 + length].decode(), np.frombuffer(payload, np.float32, vertices * 8).reshape(-1, 8),
+                           np.frombuffer(payload, np.uint32, indices, vertices * 32).reshape(-1, 3)))
+        names = {name: k for k, (name, _, _) in enumerate(assets)}
+        for composition, (lit_low, lit_high), expected in (("airfield_0", (.03, .15), {(1, 1.4): 8}),
+                                                         ("airfield_1", (.1, .3), {(7, 1.6): 7, (2, 1.2): 10})):
+            items = dict(pack["compositions"])[composition][0][1]
+            total = lit = 0.0
+            lamps = Counter()
+            for asset, _u, _v, _rotation, scale, _lift, _fit in items:
+                name, vertices, triangles = assets[asset]
+                if name.startswith("decal/"):
+                    continue
+                corners = vertices[triangles][:, :, :3]
+                area = np.linalg.norm(np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]), axis=1).sum() / 2
+                total += area * scale * scale
+                lit += area * scale * scale if re.search(r":glow$", name) else 0.0
+                if "lamps/" + name in names:
+                    lamps.update((int(v[6]), round(float(v[7]), 1)) for v in assets[names["lamps/" + name]][1][::3])
+            self.assertTrue(lit_low < lit / total < lit_high, (composition, lit / total))
+            self.assertEqual(expected, dict(lamps), composition)
+
 
 if __name__ == "__main__":
     unittest.main()

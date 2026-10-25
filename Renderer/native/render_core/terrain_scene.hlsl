@@ -1287,6 +1287,13 @@ float4 q6_raw_feature(FeaturePixelInput input)
     float3 lit_color = albedo * light + emissive *
         saturate(city_weight + mine_weight + raised_infrastructure_weight) *
         environment_night_activation * environment_emissive_scale * 1.45;
+    // Tile buildings' night light: a part Civ VI lights carries owner code
+    // .181-.188 (object_compiler.h place_tile_buildings), its site-pack glow
+    // map's slot + 1, sampled by the part's own atlas UV.
+    float tile_glow_code = floor(material_fraction * 1000.0 + 0.5) - 180.0;
+    if (tile_object_weight > 0.5 && tile_glow_code > 0.5)
+        lit_color += sample_reused_resource_slot(tile_glow_code - 1.0, input.uv).rgb *
+            environment_night_activation * environment_emissive_scale * 1.45;
 #ifdef C3X_GAME_RENDERER
     // Resource bodies take the units' readability look from their pack
     // (gain, saturation; zeros keep this response exactly): saturation about

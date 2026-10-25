@@ -205,11 +205,13 @@ def bake_light(meshes: list[dict], emissive: np.ndarray) -> tuple[list[dict], li
             keep[bool(glowing)].append(triangle)
             if not glowing:
                 continue
+            # A uv0 past the texture's edge repeats it (as its atlas cell does):
+            # the light goes to the wrapped texels.
             uv0 = np.array([corner["uv0"] for corner in corners]) * size - .5
-            if uv0.min() < -.5 or uv0.max() > size - .5:
-                raise ValueError("A lit triangle's uv0 leaves the atlas; it cannot be baked")
-            x0, y0 = np.floor(uv0.min(0)).astype(int).clip(0, size - 1)
-            x1, y1 = np.ceil(uv0.max(0)).astype(int).clip(0, size - 1)
+            x0, y0 = np.floor(uv0.min(0)).astype(int)
+            x1, y1 = np.ceil(uv0.max(0)).astype(int)
+            if x1 - x0 > 4 * size or y1 - y0 > 4 * size:
+                raise ValueError("A lit triangle repeats its texture too often to bake")
             ys, xs = np.mgrid[y0:y1 + 1, x0:x1 + 1]
             (ax, ay), (bx, by), (cx, cy) = uv0
             area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay)
@@ -220,9 +222,11 @@ def bake_light(meshes: list[dict], emissive: np.ndarray) -> tuple[list[dict], li
             inside = (wb >= -1e-6) & (wc >= -1e-6) & (wb + wc <= 1 + 1e-6)
             wa = 1 - wb - wc
             uv = wa[..., None] * uv2[0] + wb[..., None] * uv2[1] + wc[..., None] * uv2[2]
-            region = light[y0:y1 + 1, x0:x1 + 1]
-            region[inside] = np.maximum(region[inside], texel(uv)[inside])
-            filled[y0:y1 + 1, x0:x1 + 1] |= inside
+            wy, wx = ys[inside] % size, xs[inside] % size
+            values = texel(uv)[inside]
+            for channel in range(3):
+                np.maximum.at(light[..., channel], (wy, wx), values[:, channel])
+            filled[wy, wx] = True
         for glowing, chosen in keep.items():
             if not chosen:
                 continue

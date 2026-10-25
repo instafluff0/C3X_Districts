@@ -6,7 +6,10 @@ frozen pack Renderer/packs/TileBuildingsFrozen: a version-2 feature bundle of
 compositions over its own atlases. Its first BC1 atlas also holds the hut and
 camp textures, keyed by their bytes, so the site pack stays within its eight
 texture slots: build_site_runtime moves the hut and camp meshes into those
-cells and appends the compositions after its own assets.
+cells and appends the compositions after its own assets. Night light: lit
+meshes (named ":glow") sample their atlas's glow map, which build_site_runtime
+puts in a spare slot and names (":g<slot>"); "lamps/<mesh>" assets carry the
+mesh's night lights.
 """
 from pathlib import Path
 import hashlib
@@ -26,7 +29,7 @@ def load(read, frozen=FROZEN):
         return None
     manifest = json.loads(read(frozen / "manifest.json"))
     data = read(frozen / manifest["bundle"])
-    for atlas in manifest["atlases"]:
+    for atlas in [*manifest["atlases"], *manifest.get("glows", {}).values()]:
         read(frozen / atlas)
     at = 8
     def take(layout):
@@ -60,6 +63,19 @@ def load(read, frozen=FROZEN):
         compositions.append((name, variants))
     aliases = [(text(), take("<I")[0]) for _ in range(take("<I")[0])]
     return {"manifest": manifest, "assets": assets, "compositions": compositions, "aliases": aliases}
+
+
+def lit(asset: bytes, slots: dict) -> bytes:
+    """A frozen asset with ":glow" named for its atlas's glow slot (":g<slot>")."""
+    length, = struct.unpack_from("<I", asset)
+    name = asset[4:4 + length].decode()
+    if ":glow" not in name:
+        return asset
+    texture, = struct.unpack_from("<I", asset, 4 + length)
+    if texture not in slots:
+        raise ValueError(f"{name} glows but atlas {texture} has no glow map")
+    name = name.replace(":glow", f":g{slots[texture]}").encode()
+    return struct.pack("<I", len(name)) + name + asset[4 + length:]
 
 
 def cell(frozen, texture: bytes):

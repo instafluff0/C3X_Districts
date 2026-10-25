@@ -3,7 +3,7 @@
     "current-selected-city-recipes"
   ],
   "source_sha256": {
-    "Renderer/native/environment_refresh/feature.hlsl": "49ad0319d594706ae326e51be169106b9a8fc177c18e45c24e85a6b4d9864f0b",
+    "Renderer/native/environment_refresh/feature.hlsl": "cc3b2b6466eb9a7ec87775f849dacfd6504232c87fc90fc045f12a6830dce609",
     "Renderer/lab/shared/shaders/lighting/local_facade_lights.hlsl": "264bd350d639f897924489c2773434b2f9e0af5cf37e8f3c7034764ae47bb2c3",
     "Renderer/lab/shared/shaders/objects/city_scene_material.hlsl": "10f58c9512bc3643ca693163079f072e27dc5aae1b763454f57d06c7c5e64238",
     "Renderer/lab/shared/shaders/lighting/city_environment.hlsl": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9",

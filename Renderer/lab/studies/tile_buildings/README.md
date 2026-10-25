@@ -30,9 +30,29 @@ python3 Renderer/lab/studies/tile_buildings/study.py compile
 python3 Renderer/lab/studies/tile_buildings/study.py render [--catalog tb-colony]
 python3 Renderer/lab/studies/tile_buildings/study.py crops
 python3 Renderer/lab/studies/tile_buildings/page.py
-python3 Renderer/lab/studies/tile_buildings/sitepack.py --lab-pack TileSitesLab
+python3 Renderer/lab/studies/tile_buildings/sitepack.py --frozen TileBuildingsFrozenLab --lab-pack TileSitesLab
 python3 Renderer/lab/studies/tile_buildings/study.py scene [--pack TileSitesLab]
 ```
+
+Night light (2026-10-25): Civ VI lays a building's emissive map out by uv2
+(as the city pack reads it), not by its colour's uv0, which the kit squares it
+by. Imports keep uv1/uv2 (`study.py` patches the borrowed compiler), and
+`sitepack.light_sources` splits each emissive draw into its dark faces and the
+faces uv2 lights, baking their light by uv0 (`build_mine_runtime.bake_light`)
+into one texture per colour texture. The picks catalog sets kits' `"night":
+"sources"`, so `kits.bake` neither splits nor merges again (its own uv2 split,
+for districts, would split these twice). Lit parts are named `:glow`; their glow
+atlas, kept at a quarter of the colour atlas's resolution, takes a spare site
+pack slot (`:g<slot>`, owner code .181-.188, feature shaders' tile glow).
+Night_light points (Civ VI's lantern and light bones) become `lamps/<mesh>`
+companion assets, which Renderer64 draws as city lamps where the building
+stands (`object_compiler.h tile_building_lamps`). The airstrip lights 7.5% of
+its surface (uv0 would light 45%) and has 8 warm lanterns. The aerodrome lights
+20% and has 10 white runway lights and 7 mast lights; the mast lights are taken
+as red blinkers (`FX_Light_Airport_Tower`'s colour is not decoded). Lamps
+show only in game (Renderer64); Lab frames show the glow. Freeze into a Lab
+pack with `--frozen TileBuildingsFrozenLab --lab-pack TileSitesLab`; plain
+`sitepack.py` writes production's `TileBuildingsFrozen`.
 
 Findings:
 - The Alcázar (Vikings Landmarks) names its buildings without a package; the

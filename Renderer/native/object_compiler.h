@@ -2252,9 +2252,13 @@ bool place_tile_buildings(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 c
         for(auto const* item:items){
             if(item->asset>=bundle.assets.size())continue;
             float du=(item->u-cu)*factor,dv=(item->v-cv)*factor;
-            bool decal=bundle.assets[item->asset].id.rfind("decal/",0)==0;
+            auto const& id=bundle.assets[item->asset].id;
+            bool decal=id.rfind("decal/",0)==0;
+            // A part Civ VI lights at night names its glow map's site-pack slot,
+            // ":g<slot>" (sitepack.light_sources): owner .181-.188 (feature.hlsl).
+            bool glow=id.size()>3 && id.compare(id.size()-3,2,":g")==0 && id.back()>='0' && id.back()<='7';
             Instance instance{site_family,item->asset,site_layer,u+du*co-dv*si,v+du*si+dv*co,item->rotation+turn,
-                item->scale*factor,21.f,decal?0.f:.18f,false};
+                item->scale*factor,21.f,decal?0.f:glow?.181f+.001f*float(id.back()-'0'):.18f,false};
             instance.ground_fit=decal?0.f:fit;instance.stretch=stretch;
             plan.instances.push_back(instance);
         }
@@ -2546,6 +2550,38 @@ bool place_tile_buildings(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 c
         if(piece.rank<2)standing.push_back({spot.u,spot.v});
     }
     return true;
+}
+// The placed tile buildings' night lights (Civ VI's night_light points). A mesh
+// "<id>" may have a companion asset "lamps/<id>" (sitepack.night_assets): one
+// degenerate triangle per lamp at its point in the mesh's space, uv (city lamp
+// mode, strength). Each lamp goes where its instance puts that point, above the
+// ground it is seated on (prepare_rigid's seat on `height`): world column, row
+// and height (tile units, as city effect anchors), lamp mode, strength.
+struct TileLamp {float world[3],mode,strength;};
+template<class Height>
+std::vector<TileLamp> tile_building_lamps(Plan const& plan,Assets const& assets,c3x_renderer_tile_v1 const& tile,Height height){
+    std::vector<TileLamp> lamps;
+    auto const& bundle=assets[site_family];
+    float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
+    for(auto const& instance:plan.instances){
+        if(instance.family!=site_family || instance.asset>=bundle.assets.size())continue;
+        std::string const name="lamps/"+bundle.assets[instance.asset].id;
+        auto found=std::find_if(bundle.assets.begin(),bundle.assets.end(),[&](FeatureAsset const& a){return a.id==name;});
+        if(found==bundle.assets.end())continue;
+        float x=tile_u+instance.u,y=tile_v+1.f-instance.v,ground=height(x,y)-2.5f,fit=instance.ground_fit;
+        if(fit>0.f)for(int corner=0;corner<4;++corner)
+            ground=std::min(ground,height(x+(corner&1?fit:-fit),y+(corner&2?fit:-fit))-2.5f);
+        float co=std::cos(instance.rotation),si=std::sin(instance.rotation);
+        for(std::size_t k=0;k<found->vertices.size();k+=3){
+            auto const& p=found->vertices[k];
+            float local_x=(p.position[0]*instance.stretch*co-p.position[1]*si)*instance.scale;
+            float local_y=(p.position[0]*instance.stretch*si+p.position[1]*co)*instance.scale;
+            // World-object feature height: local tiles * 150 / .82 (append_instance).
+            lamps.push_back({{x+local_x,y-local_y,(ground+2.5f+p.position[2]*instance.scale*150.f/.82f)/112.f},
+                p.uv[0],p.uv[1]});
+        }
+    }
+    return lamps;
 }
 // The ground a farm kit keeps open on its tile: its drawn routes with a
 // verge, and its resource's parts (tile-local boxes from the caller). Each

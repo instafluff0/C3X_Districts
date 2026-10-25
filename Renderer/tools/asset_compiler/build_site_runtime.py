@@ -217,9 +217,17 @@ def build(output, frozen=tile_buildings.FROZEN):
         # texture, so repeating an atlas would load it again for nothing.
         from Renderer.tools.asset_compiler.build_resource_compositions import dds_header
         (output / "textures/unused.dds").write_bytes(dds_header(4, 4, 1, 72, 8) + bytes(8))
+        # Glow maps (night light) take the slots after the ground states.
+        slots = {}
+        for k, glow in sorted(buildings["manifest"].get("glows", {}).items()):
+            target = output / f"textures/glow_{k}.dds"
+            shutil.copyfile(frozen / glow, target); paths.append(target.relative_to(output).as_posix())
+            slots[int(k)] = len(paths) - 1
+        if len(paths) > 8:
+            raise ValueError(f"{len(paths)} textures exceed the site pack's eight slots")
         paths += ["textures/unused.dds"] * (8-len(paths))
         offset = len(assets)
-        assets += buildings["assets"]
+        assets += [tile_buildings.lit(asset, slots) for asset in buildings["assets"]]
     else:
         paths += [paths[0]] * (8-len(paths))
     bundle = bytearray(MAGIC) + struct.pack("<IIII", 2 if buildings else 1, 8, len(assets), len(payloads))

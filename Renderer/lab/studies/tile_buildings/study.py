@@ -17,6 +17,7 @@ drives the district survey's compile/bake/render pipeline
 from __future__ import annotations
 
 import argparse
+import functools
 import shutil
 import sys
 from pathlib import Path
@@ -49,6 +50,10 @@ def bake(catalog, compiler, *args, **kwargs):
 
 
 kits.bake = bake
+# Imports keep Civ VI's uv1/uv2: its emissive maps are laid out by uv2, which
+# sitepack.light_sources needs to place the buildings' night light.
+_lab_compiler = kits._lab_compiler
+kits._lab_compiler = lambda: functools.partial(_lab_compiler(), auxiliary_uvs=True)
 census = ROOT / "Renderer/lab/out/districts/census.json"
 if census.is_file() and not (OUT / "census.json").is_file():
     shutil.copy2(census, OUT / "census.json")
