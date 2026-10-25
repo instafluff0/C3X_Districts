@@ -391,17 +391,16 @@ public:
         auto const& shadow=prepared->shadow;
         // Selected BeautyStudies response, driven by the same native phase as
         // the existing pose-local caster. No independent sun or animation clock.
-        auto noon=evaluate_environment(12,0);
         auto key_light=lighting::key_light(environment);
-        float const* light_color=key_light.color.data();
+        auto response=lighting::source_response(environment);
         float beauty[20]={};float const ambient_source[]={.34f,.45f,.60f};
         float const chromatic[]={1.f,4.5f/6.2f,3.5f/6.2f};
         auto light=key_light.direction.data();
         for(unsigned axis=0;axis<3;++axis) {
-            beauty[axis]=light[axis];beauty[4+axis]=chromatic[axis]*light_color[axis]/std::max(.001f,noon.sun_color[axis]);
-            beauty[8+axis]=ambient_source[axis]*environment.ambient_color[axis]/std::max(.001f,noon.ambient_color[axis]);
+            beauty[axis]=light[axis];beauty[4+axis]=chromatic[axis]*response.color[axis];
+            beauty[8+axis]=ambient_source[axis]*response.ambient[axis];
         }
-        beauty[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/(noon.sun_intensity+noon.moon_intensity);
+        beauty[3]=2.05f*response.strength;
         beauty[7]=1;beauty[11]=.62f;beauty[12]=.490290f;beauty[13]=-.735435f;beauty[14]=.469979f;
         beauty[15]=environment.shadow_strength;beauty[16]=float(shadow.extent);beauty[17]=look[0];beauty[18]=look[1];beauty[19]=look[2];
         context->UpdateSubresource(beauty_frame,0,nullptr,beauty,0,0);

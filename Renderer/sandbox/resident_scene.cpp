@@ -125,7 +125,7 @@ Texture2D<float4> bloom : register(t2);
 SamplerState linear_clamp : register(s0);
 cbuffer OutputSettings : register(b0) {
  float exposure;float gain;float2 inverse_scene;
- float zoom;float filmic;float2 padding;
+ float zoom;float filmic;float saturation;float padding;
 };
 float4 VSOutput(uint id : SV_VertexID) : SV_Position {
  float2 p=float2((id<<1)&2,id&2); return float4(p*float2(2,-2)+float2(-1,1),0,1);
@@ -145,6 +145,8 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
   c=dynamic_color+scene.SampleLevel(linear_clamp,uv,0)*(1-dynamic_color.a);
  }
  if(c.a<=.000001) return 0;
+ // Time-of-day grade (EnvironmentState::saturation) before the glow.
+ c.rgb=max(0,lerp(dot(c.rgb,float3(.2126,.7152,.0722)),c.rgb,saturation));
  c.rgb+=bloom.SampleLevel(linear_clamp,(source_position+.5)*inverse_scene,0).rgb*gain*c.a;
  float3 rgb=scene_display_srgb(c.rgb/c.a*exposure,filmic);
  return float4(saturate(rgb),saturate(c.a));
@@ -189,7 +191,7 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
         float values[8]={renderer.display_exposure,sandbox_fresh.glow.gain,
             1.f/sandbox_fresh.glow.native_extent,1.f/sandbox_fresh.glow.native_height,
-            sandbox_fresh.display_zoom,sandbox_scene_filmic(),0,0};
+            sandbox_fresh.display_zoom,sandbox_scene_filmic(),renderer.linear_output.saturation,0};
         context->UpdateSubresource(settings,0,nullptr,values,0,0);
         context->PSSetConstantBuffers(0,1,&settings);
         ID3D11ShaderResourceView* sources[]={sandbox_fresh.static_cache.view,

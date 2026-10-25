@@ -270,16 +270,13 @@ struct NaturalData {
     }
     std::array<Frame,3> frame_settings(EnvironmentState const&e,float const*light)const{
         // Source response coefficients retained; one authoritative phase and L.
-        auto noon=evaluate_environment(12,0);
-        float strength=(e.sun_intensity+e.moon_intensity)/(noon.sun_intensity+noon.moon_intensity);
-        auto key=lighting::key_light(e);
-        float const*color=key.color.data();
+        auto response=lighting::source_response(e);
         std::array<Frame,3> result={};
         for(unsigned i=0;i<3;i++){
-            Frame f={};std::copy(light,light+3,f.sun);f.sun[3]=(i==0?2.08f:i==1?2.18f:2.05f)*strength;
+            Frame f={};std::copy(light,light+3,f.sun);f.sun[3]=(i==0?2.08f:i==1?2.18f:2.05f)*response.strength;
             float source_color[]={1,i==2?4.5f/6.2f:.91f,i==2?3.5f/6.2f:.76f};
-            for(unsigned j=0;j<3;j++){f.color[j]=source_color[j]*color[j]/std::max(.001f,noon.sun_color[j]);
-                f.ambient[j]=(j==0?(i==2?.34f:.35f):j==1?(i==2?.45f:.46f):(i==2?.60f:.61f))*e.ambient_color[j]/std::max(.001f,noon.ambient_color[j]);}
+            for(unsigned j=0;j<3;j++){f.color[j]=source_color[j]*response.color[j];
+                f.ambient[j]=(j==0?(i==2?.34f:.35f):j==1?(i==2?.45f:.46f):(i==2?.60f:.61f))*response.ambient[j];}
             f.ambient[3]=i==0?.61f:i==1?.58f:.62f;
             f.view[0]=.490290f;f.view[1]=-.735435f;f.view[2]=.469979f;
             if(i==0){f.detail[0]=.43f;f.detail[1]=.075f;f.detail[2]=.70f;}

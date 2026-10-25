@@ -35,6 +35,29 @@ inline KeyLight key_light(EnvironmentState const& e) {
     return out;
 }
 
+// Source (BeautyFrame) receivers keep their own coefficients and take the
+// environment relative to the approved noon: direct colour and strength with
+// moonlight weighted as frame_illumination weights it, and its night-lifted
+// sky, so relief, trees and units match cities and water at every hour.
+struct SourceResponse {
+    std::array<float,3> color{}, ambient{};
+    float strength=0;
+};
+
+inline SourceResponse source_response(EnvironmentState const& e) {
+    auto noon=evaluate_environment(12,0);
+    float direct=e.sun_intensity+moon_response*e.moon_intensity;
+    float lift=1+night_ambient_lift*e.night_activation;
+    SourceResponse out;
+    out.strength=direct/(noon.sun_intensity+moon_response*noon.moon_intensity);
+    for(unsigned i=0;i<3;++i) {
+        out.color[i]=(e.sun_color[i]*e.sun_intensity+moon_response*e.moon_color[i]*e.moon_intensity)/
+            std::max(.000001f,direct)/std::max(.001f,noon.sun_color[i]);
+        out.ambient[i]=e.ambient_color[i]*lift/std::max(.001f,noon.ambient_color[i]);
+    }
+    return out;
+}
+
 // CPU copy of the gameplay frame_illumination (Q6_GAMEPLAY_NIGHT) on open
 // flat ground, lit by the key light. Unit ground shadows blend this opacity.
 inline float dynamic_shadow_opacity(EnvironmentState const& e) {

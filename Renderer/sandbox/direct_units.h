@@ -462,20 +462,17 @@ float4 PSShadow(Output i):SV_Target {
         context->PSSetShaderResources(1,1,&unshadowed_view);
         context->PSSetSamplers(1,1,&samplers[3]);
         auto environment=c3x_renderer::evaluate_environment(visual_hour,frame.season);
-        auto noon=c3x_renderer::evaluate_environment(12,0);
         auto key_light=c3x_renderer::lighting::key_light(environment);
+        auto response=c3x_renderer::lighting::source_response(environment);
         float beauty_values[20]={};float const ambient_source[]={.34f,.45f,.60f};
         float const chromatic[]={1.f,4.5f/6.2f,3.5f/6.2f};
-        auto beauty_light=key_light.direction.data();auto light_color=key_light.color.data();
+        auto beauty_light=key_light.direction.data();
         for(unsigned axis=0;axis<3;++axis){
             beauty_values[axis]=beauty_light[axis];
-            beauty_values[4+axis]=chromatic[axis]*light_color[axis]/
-                std::max(.001f,noon.sun_color[axis]);
-            beauty_values[8+axis]=ambient_source[axis]*environment.ambient_color[axis]/
-                std::max(.001f,noon.ambient_color[axis]);
+            beauty_values[4+axis]=chromatic[axis]*response.color[axis];
+            beauty_values[8+axis]=ambient_source[axis]*response.ambient[axis];
         }
-        beauty_values[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/
-            (noon.sun_intensity+noon.moon_intensity);
+        beauty_values[3]=2.05f*response.strength;
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
         beauty_values[14]=.469979f;beauty_values[15]=environment.shadow_strength;beauty_values[16]=1;
@@ -818,20 +815,17 @@ float4 PSShadow(Output i):SV_Target {
         auto light=c3x_renderer::fidelity::light_frame(environment);
         prepared_light[0]=light[0];prepared_light[1]=light[1];
 
-        auto noon=c3x_renderer::evaluate_environment(12,0);
         auto key_light=c3x_renderer::lighting::key_light(environment);
+        auto response=c3x_renderer::lighting::source_response(environment);
         float beauty_values[20]={};float const ambient_source[]={.34f,.45f,.60f};
         float const chromatic[]={1.f,4.5f/6.2f,3.5f/6.2f};
-        auto beauty_light=key_light.direction.data();auto light_color=key_light.color.data();
+        auto beauty_light=key_light.direction.data();
         for(unsigned axis=0;axis<3;++axis){
             beauty_values[axis]=beauty_light[axis];
-            beauty_values[4+axis]=chromatic[axis]*light_color[axis]/
-                std::max(.001f,noon.sun_color[axis]);
-            beauty_values[8+axis]=ambient_source[axis]*environment.ambient_color[axis]/
-                std::max(.001f,noon.ambient_color[axis]);
+            beauty_values[4+axis]=chromatic[axis]*response.color[axis];
+            beauty_values[8+axis]=ambient_source[axis]*response.ambient[axis];
         }
-        beauty_values[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/
-            (noon.sun_intensity+noon.moon_intensity);
+        beauty_values[3]=2.05f*response.strength;
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
         // Self-shadowed limbs lose the share of direct light world shadows do.

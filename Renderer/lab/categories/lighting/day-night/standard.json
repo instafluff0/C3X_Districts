@@ -33,7 +33,8 @@
     "Renderer.native.source_fidelity.test_contract",
     "Renderer.native.test_render_core",
     "Renderer.tools.test_season_shading",
-    "Renderer.native.test_day_night_clock"
+    "Renderer.native.test_day_night_clock",
+    "Renderer.native.test_source_night_response"
   ],
   "references": {
     "d3d11": [

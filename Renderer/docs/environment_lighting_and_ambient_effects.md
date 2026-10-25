@@ -41,10 +41,54 @@ Each immutable render frame derives these source-independent values from the cap
   projection slope remains fixed so caster height—not clock elevation—sets
   footprint length. Every raised renderer-owned class receives both
   normal-driven face shading and a neighboring cast shadow.
-- Sky/ambient color, exposure, and tone-mapping parameters.
+- Sky/ambient color, exposure, and tone-mapping parameters, plus a map-only
+  display saturation (the final output transfer greys the 3D map toward its
+  luminance; Civ III's UI is untouched).
 - Water reflection/specular scale, roughness response, Fresnel response, and optional normal/wave animation phase.
 - Global emissive multiplier and a continuous night-activation value from `0.0` in daylight to `1.0` at full night.
 - Optional wind/effect phase inputs only when a later visual effect actually needs them.
+
+### Time-of-day curve
+
+`evaluate_environment` follows Civ VI's `GameLighting.artdef` timing
+([findings](civ6_lighting_findings.md)): direct-light keys at the artdef's
+sun-colour hours (03:50 and 23:00 night, 06:00 sunrise, 12:02 noon, 18:33
+sunset) and sky keys (ambient colour, display saturation, exposure) at its
+light-rig weight hours (04:00, 06:00, 09:00, 15:00, 18:35, 23:02), eased
+between neighbours so a continuous clock never kinks. The key times are source
+data; the values are C3X calibrations against the user's four-panel Civ VI
+reference relative to the approved noon, because the cooked rigs and ColorKey
+grades are not decoded. Like Civ VI, exposure rises at sunset (1.18) instead of
+dimming; night keeps C3X's 0.79 so city emissives are unchanged. The intended
+reading, with OKLab lightness relative to noon measured on the concept view
+(Civ VI in brackets):
+
+- 06:00 a rose-gold golden hour, as bright as sunset so units stay easy to
+  see. This departs from Civ VI's dim lavender sunrise (grass 0.63 of noon) by
+  the user's choice; before it the night blue passes through a short, dim
+  pre-dawn;
+- 12:00 the approved noon, unchanged;
+- 18:00 bright gold sunset with a blue sky fill, so shadows read cool,
+  grass 0.91 (0.94), whole view hue 72° (72°);
+- midnight blue moonlight and night sky, legible rather than dark, grass 0.70
+  (0.74), tundra blue at Civ VI's chroma, desaturated slightly by the grade.
+  Bright neutral surfaces (sand, snow, shores) read pale blue, as in Civ VI;
+  calmer variants (a tinted grade, silvered highlights) lost the vibrancy and
+  the user chose this match.
+
+Seasons share the curve. Winter alone scales its night light (ambient and
+moonlight) and display saturation toward `winter_night_light` and
+`winter_night_saturation` with the night activation: snow is a bright neutral
+everywhere, and at full strength a winter midnight was 91% as bright as winter
+noon (Summer 74%) and read as a glaring periwinkle sheet. At 0.42 and 0.75
+it is 75%, and farms read better at night (field–turf ΔE 13.3 against 8.5).
+
+Moonlight is the night share of the direct keys, in noon-sun units: every
+receiver weights it by `moon_response`, the gameplay `frame_illumination`
+weight (Q6_GAMEPLAY_NIGHT), and lifts ambient by `night_ambient_lift`.
+Source (BeautyFrame) receivers—relief, mountains, trees and units—take the same
+response through `lighting::source_response`, so they no longer sit half as
+bright as cities and water at night.
 
 The moonlit-water proof does not require a literal reflected moon disk. Directional moonlight must produce a stable, camera-consistent specular response on water while land, coast geometry, retained Civ III overlays, and HUD remain correctly exposed.
 

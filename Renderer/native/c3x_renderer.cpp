@@ -10282,6 +10282,7 @@ public:
         if (!prewarming) {
             context->UpdateSubresource(terrain_settings_buffer, 0, nullptr, &frame_settings, 0, 0);
             display_exposure = environment.exposure;
+            linear_output.saturation = environment.saturation;
             if (pickup_profile) {
                 int period = frame.world_wrap_x ? frame.world_width_tiles :
                     frame.world_wrap_y ? frame.world_height_tiles : 0;

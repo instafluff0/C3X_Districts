@@ -32,6 +32,8 @@ struct EnvironmentState {
     float emissive_scale;
     float water_fresnel;
     float water_specular;
+    // Map-only display saturation (1 keeps colour); Civ VI grades by time of day.
+    float saturation;
     // C3X season (0 Summer, 1 Fall, 2 Winter, 3 Spring) for seasonal shading;
     // progress is reserved for staged seasons and is 1 today.
     float season;
@@ -100,6 +102,14 @@ struct AttachmentState {
     bool fallback;
 };
 
+// The gameplay frame_illumination (Q6_GAMEPLAY_NIGHT) lights flat ground
+// with moonlight x2.2*.82 at its .2+.8 diffuse against the sun's .16+.84,
+// under the shared key-light slope (z = 1.35/sqrt(1+1.35^2)), and lifts
+// ambient by up to night_ambient_lift. Source (BeautyFrame) receivers take the
+// same response through lighting::source_response, so every receiver sees
+// moonlight in noon-sun units and the same night sky.
+constexpr float moon_response = 2.2f * .82f * (.2f + .8f * .8037f) / (.16f + .84f * .8037f);
+constexpr float night_ambient_lift = .8f;
 EnvironmentState evaluate_environment(float hour, int season);
 // C3X's continuous and user-time clocks: the frame's hour plus whole game
 // minutes, advanced from when its minute began (QPC) at its rate, at most an

@@ -1,6 +1,7 @@
 #include "environment_runtime.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -40,6 +41,64 @@ void normalize(float vector[3]) {
     vector[2] /= length;
 }
 
+// Civ VI's GameLighting.artdef (DEFAULT_LIGHTING) keys its sun colour at
+// 03:50, 06:00, 12:02, 18:33 and 23:00, and blends noon, twilight (one rig
+// serves sunrise and sunset) and night light rigs whose weight curves turn at
+// 04:00, 06:00, 09:00, 15:00, 18:35 and 23:02 (civ6_lighting_findings.md).
+// Only those times are source data. The values are C3X calibrations against
+// the four-panel Civ VI reference (12, 18, 00, 06) relative to the approved
+// noon: the source's cooked rigs and colour-grading keys are not decoded.
+// Sunrise departs from Civ VI's dim lavender by the user's choice: a rose-gold
+// golden hour as bright as sunset, so units stay easy to see.
+
+// Direct light {hour, r, g, b, moonlight share} in units of the approved noon
+// sun. Moonlight is the night share, so the sun fades as it takes over.
+constexpr float night_direct[3] = {0.09f, 0.30f, 1.50f};
+constexpr float direct_keys[][5] = {
+    {3.825f, 0.0f, 0.0f, 0.0f, 1.0f},
+    {6.0f, 0.97f, 0.56f, 0.40f, 0.0f},     // rose-gold sunrise
+    {12.036f, 1.0f, 0.96f, 0.88f, 0.0f},   // approved noon
+    {18.55f, 0.97f, 0.47f, 0.17f, 0.0f},   // golden sunset
+    {23.0f, 0.0f, 0.0f, 0.0f, 1.0f},
+};
+// Sky {hour, r, g, b, display saturation, exposure}. Blue twilight and night
+// fill keep shadows cool beside a warm sun; Civ VI also lifts exposure and
+// grades colour by hour.
+constexpr float sky_keys[][6] = {
+    {4.0f, 0.34f, 0.66f, 2.50f, 0.70f, 0.79f},
+    {6.0f, 0.45f, 0.46f, 1.05f, 0.95f, 1.14f},
+    {9.0f, 0.73f, 0.78f, 0.82f, 1.0f, 1.0f},
+    {15.0f, 0.73f, 0.78f, 0.82f, 1.0f, 1.0f},
+    {18.575f, 0.50f, 0.50f, 1.15f, 0.88f, 1.18f},
+    {23.04f, 0.34f, 0.66f, 2.50f, 0.70f, 0.79f},
+};
+// Snow is a bright neutral everywhere, so Winter's blue night glared (91% of
+// noon's brightness against Summer's 74%). Its night light and colour scale
+// by these at full night.
+constexpr float winter_night_light = 0.42f;
+constexpr float winter_night_saturation = 0.75f;
+
+// The values at an hour, eased between neighbouring keys (wrapping
+// midnight) so a continuous clock never kinks at a key.
+template <std::size_t count, std::size_t width>
+std::array<float, width - 1> interpolate(float const (&keys)[count][width], float hour) {
+    std::size_t next = 0;
+    while (next < count && keys[next][0] <= hour)
+        ++next;
+    float const * a = keys[(next + count - 1) % count];
+    float const * b = keys[next % count];
+    float span = b[0] - a[0], into = hour - a[0];
+    if (span <= 0.0f)
+        span += 24.0f;
+    if (into < 0.0f)
+        into += 24.0f;
+    float t = smoothstep(0.0f, 1.0f, into / span);
+    std::array<float, width - 1> result = {};
+    for (std::size_t i = 0; i + 1 < width; ++i)
+        result[i] = a[i + 1] + (b[i + 1] - a[i + 1]) * t;
+    return result;
+}
+
 } // namespace
 
 EnvironmentState evaluate_environment(float requested_hour, int season) {
@@ -47,13 +106,10 @@ EnvironmentState evaluate_environment(float requested_hour, int season) {
     float sunrise = smoothstep(5.0f, 7.0f, hour);
     float sunset = 1.0f - smoothstep(17.0f, 19.0f, hour);
     float daylight = clamp01(sunrise * sunset);
-    // Elevation controls radiance; the shared scene light uses a fixed shadow
-    // slope so clock phase never changes an object's height-to-length scale.
+    // Elevation only tilts the Lab's sun vector; the shared scene light uses
+    // a fixed shadow slope so clock phase never changes an object's
+    // height-to-length scale.
     float sun_elevation = std::max(0.0f, std::sin((hour - 5.0f) * pi / 14.0f));
-    float warm = clamp01(1.0f - std::abs(sun_elevation - 0.18f) / 0.32f) *
-                 smoothstep(0.02f, 0.16f, sun_elevation);
-    float dusk_mix = warm * smoothstep(12.0f, 18.0f, hour);
-    float dawn_mix = warm * (1.0f - smoothstep(12.0f, 18.0f, hour));
 
     EnvironmentState result = {};
     // User-selected Civ VI visual convention, expressed in screen space:
@@ -69,13 +125,11 @@ EnvironmentState evaluate_environment(float requested_hour, int season) {
     result.sun_direction[1] = -world_y / horizontal;
     result.sun_direction[2] = std::max(0.08f, sun_elevation);
     normalize(result.sun_direction);
-    result.sun_color[0] = 1.0f;
-    result.sun_color[1] = 0.96f - 0.30f * dusk_mix - 0.16f * dawn_mix;
-    result.sun_color[2] = 0.88f - 0.46f * dusk_mix - 0.28f * dawn_mix;
-    // Keep low-angle phases bright enough to read like the canonical Civ VI
-    // 06:00/18:00 frames. A daylight fill term keeps twilight legible.
-    result.sun_intensity = clamp01(sun_elevation * (0.45f + 0.35f * daylight) +
-                                   0.20f * daylight);
+    auto direct = interpolate(direct_keys, hour);
+    result.sun_intensity = std::max({direct[0], direct[1], direct[2]});
+    for (int channel = 0; channel < 3; ++channel)
+        result.sun_color[channel] = result.sun_intensity > 0.0f
+            ? direct[channel] / result.sun_intensity : direct_keys[2][channel + 1];
 
     // One continuous presentation orbit crosses the sun/moon handover. The
     // active night light must not reverse the intended midnight cast direction.
@@ -83,31 +137,30 @@ EnvironmentState evaluate_environment(float requested_hour, int season) {
     result.moon_direction[1] = -world_y / horizontal;
     result.moon_direction[2] = std::max(0.18f, 1.0f - sun_elevation);
     normalize(result.moon_direction);
-    result.moon_color[0] = 0.42f;
-    result.moon_color[1] = 0.56f;
-    result.moon_color[2] = 1.00f;
+    float moon_peak = std::max({night_direct[0], night_direct[1], night_direct[2]});
+    for (int channel = 0; channel < 3; ++channel)
+        result.moon_color[channel] = night_direct[channel] / moon_peak;
+    // Every receiver weights moonlight by moon_response, so night_direct is
+    // in the same noon-sun units as the sun keys.
+    result.moon_intensity = direct[3] * moon_peak / moon_response;
     result.night_activation = clamp01(1.0f - daylight);
-    result.moon_intensity = result.night_activation *
-                            (0.18f + 0.16f * (1.0f - daylight));
 
-    // Match the canonical four-panel reference: a distinctly golden 18:00,
-    // blue but legible midnight, and a cooler/greener 06:00.  Noon totals
-    // remain unchanged so this calibration cannot wash out the approved
-    // daylight terrain materials.
-    result.ambient_color[0] = 0.18f + 0.55f * daylight +
-                              0.20f * dusk_mix + 0.040f * dawn_mix;
-    result.ambient_color[1] = 0.23f + 0.55f * daylight +
-                              0.070f * dusk_mix + 0.020f * dawn_mix;
-    result.ambient_color[2] = 0.42f + 0.40f * daylight -
-                              0.12f * dusk_mix + 0.030f * dawn_mix;
+    auto sky = interpolate(sky_keys, hour);
+    std::copy(sky.begin(), sky.begin() + 3, std::begin(result.ambient_color));
+    result.exposure = sky[4];
+    result.saturation = sky[3];
     if (season == 1) {
         result.ambient_color[0] *= 1.04f;
         result.ambient_color[1] *= 0.94f;
     } else if (season == 2) {
         result.ambient_color[0] *= 0.88f;
         result.ambient_color[2] *= 1.08f;
+        float night_light = 1.0f + (winter_night_light - 1.0f) * result.night_activation;
+        for (float & channel : result.ambient_color)
+            channel *= night_light;
+        result.moon_intensity *= night_light;
+        result.saturation *= 1.0f + (winter_night_saturation - 1.0f) * result.night_activation;
     }
-    result.exposure = 0.79f + 0.21f * daylight;
     result.shadow_strength = clamp01(0.16f + 0.68f * result.sun_intensity +
                                      0.10f * result.moon_intensity);
     result.emissive_scale = 0.25f + 1.10f * result.night_activation;
@@ -188,8 +241,12 @@ void shade_terrain(EnvironmentState const & environment, int terrain_type, int t
         output_rgb[1] += moon_highlight * environment.moon_color[1];
         output_rgb[2] += moon_highlight * environment.moon_color[2];
     }
+    // Compress like the display's max-channel Reinhard, scaled to keep noon,
+    // instead of clipping: the blue night sky would flatten moonlit water
+    // into land at a clipped blue channel.
+    float peak = std::max({output_rgb[0], output_rgb[1], output_rgb[2], 0.0f});
     for (int channel = 0; channel < 3; ++channel)
-        output_rgb[channel] = std::clamp(output_rgb[channel], 0.0f, 1.35f);
+        output_rgb[channel] = std::max(0.0f, output_rgb[channel]) * 2.12f / (1.0f + peak);
 }
 
 } // namespace c3x_renderer

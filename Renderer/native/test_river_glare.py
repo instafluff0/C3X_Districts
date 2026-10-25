@@ -31,6 +31,10 @@ SUN = re.compile(r'float glint=smoothstep\(([.\d]+),([.\d]+),facing\)\*([.\d]+);
 MOON = re.compile(r'float moon_glint=smoothstep\(([.\d]+),([.\d]+),max\(dot\(reflect\(-environment_moon_direction,'
                   r'glint_normal\),eye\),0\)\)\s*\*smoothstep\(\.18,\.28,environment_moon_intensity\)\*([.\d]+);')
 EYE = 'eye=normalize(float3(float2(.43,-.43)*2.5-delta,2.5));'
+RUNTIME = 'Renderer/native/environment_runtime.cpp'
+SHADOW_SLOPE = 1.35  # scene_lighting.h shadow_slope
+PALE_LIMIT = .05
+KEY = re.compile(r'\{([\d.]+)f, ([\d.]+)f, ([\d.]+)f, ([\d.]+)f, ([\d.]+)f\}')
 
 
 def river_branch(text):
@@ -54,16 +58,29 @@ def normalize(vector):
     return [v / length for v in vector]
 
 
+def direct_keys():
+    """The sun's hour keys (hour, r, g, b, moon share) from environment_runtime.cpp."""
+    text = (ROOT / RUNTIME).read_text()
+    block = text[text.index('constexpr float direct_keys[][5]'):]
+    keys = [tuple(float(v) for v in match.groups()) for match in KEY.finditer(block[:block.index('};')])]
+    assert len(keys) >= 3, 'the direct key table changed; update this model'
+    return keys
+
+
 def sun(hour):
-    """Direction toward the sun and its intensity, as environment_runtime.cpp evaluate_environment."""
+    """Direction toward the sun and its intensity: environment_runtime.cpp's
+    sun keys and scene_lighting.h's key light (fixed slope), which every
+    receiver gets except the legacy frozen profile."""
     phase = hour * math.pi / 12
     cast_x, cast_y = math.cos(phase), -math.sin(phase)
     world_x, world_y = cast_x + 2 * cast_y, cast_x - 2 * cast_y
     horizontal = math.hypot(world_x, world_y)
-    elevation = max(0.0, math.sin((hour - 5) * math.pi / 14))
-    daylight = min(max(smoothstep(5, 7, hour) * (1 - smoothstep(17, 19, hour)), 0.0), 1.0)
-    intensity = min(max(elevation * (.45 + .35 * daylight) + .2 * daylight, 0.0), 1.0)
-    return normalize([-world_x / horizontal, -world_y / horizontal, max(.08, elevation)]), intensity
+    keys = direct_keys()
+    after = next((index for index, key in enumerate(keys) if key[0] > hour), len(keys))
+    a, b = keys[after - 1], keys[after % len(keys)]
+    t = smoothstep(0, 1, ((hour - a[0]) % 24) / ((b[0] - a[0]) % 24 or 24))
+    intensity = max(a[channel] + (b[channel] - a[channel]) * t for channel in (1, 2, 3))
+    return normalize([-world_x / horizontal, -world_y / horizontal, SHADOW_SLOPE]), intensity
 
 
 def glint_field(low, high, strength, light, width=1024, height=768, tile=128, step=8):
@@ -103,8 +120,8 @@ class RiverGlareTests(unittest.TestCase):
 
     def test_river_glint_is_a_small_soft_sheen(self):
         glint, moon = glints((ROOT / SOURCE).read_text())
-        # The old wide, open-sea glint whitened up to a quarter of the view.
-        self.assertLess(pale_share(glint), .05)
+        # The old wide, open-sea glint whitened about 8% of the view all day.
+        self.assertLess(pale_share(glint), PALE_LIMIT)
         self.assertLessEqual(glint[2], .4, 'peak glint too strong for a river')
         # The moon shares the lobe and stays fainter than the sun.
         self.assertEqual(moon[:2], glint[:2])
@@ -112,7 +129,7 @@ class RiverGlareTests(unittest.TestCase):
 
     def test_the_old_glint_whitened_the_glare_zone(self):
         # Confirm the check against the glint the user reported.
-        self.assertGreater(pale_share((.82, .995, .9)), .2)
+        self.assertGreater(pale_share((.82, .995, .9)), PALE_LIMIT * 1.5)
         # Noon: right of centre, as the Lab render and the in-game report show.
         field = glint_field(.82, .995, .9, sun(12)[0])
         columns = 1024 // 8

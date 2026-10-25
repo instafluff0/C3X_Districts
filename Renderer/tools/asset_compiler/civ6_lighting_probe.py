@@ -129,6 +129,54 @@ def parse_game_lighting(path: Path) -> dict[str, Any]:
     return {"profiles": profiles, "rigs": rigs}
 
 
+def weight_curve(element: ET.Element) -> list[dict[str, float]]:
+    points: list[dict[str, float]] = []
+    for collection in element.findall("./m_ChildCollections/Element"):
+        if text_attribute(collection.find("./m_CollectionName")) != "WeightCurve":
+            continue
+        for point in collection.findall("./Element"):
+            values = parse_float_fields(point)
+            if "Time" in values and "Weight" in values:
+                points.append({"time": values["Time"], "weight": values["Weight"]})
+    return sorted(points, key=lambda point: point["time"])
+
+
+def parse_time_of_day_keys(path: Path) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    """Each profile's hour-keyed collections (sun colour, exposure, azimuth,
+    light-map weight, fog tint) and its weighted cooked ColorKey grades."""
+    root = ET.parse(path).getroot()
+    profiles: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for profile in root.iter("Element"):
+        children = profile.findall("./m_ChildCollections/Element")
+        if not any(text_attribute(child.find("./m_CollectionName")) == "CubeLights" for child in children):
+            continue
+        keys: dict[str, list[dict[str, Any]]] = {}
+        for collection in children:
+            name = text_attribute(collection.find("./m_CollectionName"))
+            if name in (None, "CubeLights", "CloudShadows"):
+                continue
+            points: list[dict[str, Any]] = []
+            for element in collection.findall("./Element"):
+                binding = element.find("./m_Fields/m_Values/Element[@class='AssetObjects..BLPEntryValue']")
+                if binding is not None:
+                    points.append({
+                        "entry": text_attribute(binding.find("./m_EntryName")),
+                        "xlp_class": text_attribute(binding.find("./m_XLPClass")),
+                        "blp_package": text_attribute(binding.find("./m_BLPPackage")),
+                        "weight_curve": weight_curve(element),
+                    })
+                    continue
+                values: dict[str, Any] = dict(parse_float_fields(element))
+                for color in element.findall("./m_Fields/m_Values/Element[@class='AssetObjects..RGBValue']"):
+                    values[text_attribute(color.find("./m_ParamName")) or "Color"] = [
+                        float(color.findtext(channel)) for channel in ("m_r", "m_g", "m_b")]
+                if values:
+                    points.append(values)
+            keys[name] = sorted(points, key=lambda point: point.get("Time", -1.0))
+        profiles[text_attribute(profile.find("./m_Name")) or "unnamed"] = keys
+    return profiles
+
+
 def parse_artdef_bindings(assets_root: Path, relative_paths: Iterable[Path]) -> list[dict[str, Any]]:
     evidence: list[dict[str, Any]] = []
     for relative in relative_paths:
@@ -213,6 +261,7 @@ def build_report(assets_root: Path) -> dict[str, Any]:
         "global_lighting": {
             "artdef": GAME_LIGHTING_ARTDEF.as_posix(),
             **lighting,
+            "time_of_day_keys": parse_time_of_day_keys(artdef),
         },
         "primary_package_evidence": package_evidence(assets_root, PRIMARY_PACKAGES),
         "model_attachment_evidence": package_evidence(assets_root, ATTACHMENT_PACKAGES),
@@ -254,6 +303,7 @@ def build_report(assets_root: Path) -> dict[str, Any]:
         "interpretation": {
             "confirmed": [
                 "GameLighting.artdef binds named time-of-day phases to cooked GameLighting entries and weight curves.",
+                "GameLighting.artdef keys sun colour, exposure, sun azimuth, light-map weight and fog tint by hour, and weights cooked ColorKey grades by hour.",
                 "Cooked Light and VFX packages contain named analytic-light, glow, fire, smoke, steam, and torch resources.",
                 "Shared-data trees contain concrete effect and emissive texture payload candidates.",
             ],

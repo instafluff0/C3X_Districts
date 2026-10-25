@@ -19,6 +19,24 @@ The command writes `civ6_lighting_probe.json`. Paths in that report are relative
 
 `Base/ArtDefs/GameLighting.artdef` contains two profiles, `DEFAULT_LIGHTING` and `WONDER_TOD`. Both bind Sunrise, Noon, Sunset, and Night phases through `GameLighting` library entries in `default_lighting.xlp` and `lighting/default_lighting.blp`. Their `WeightCurve` records contain time/weight control points. The ArtDef also contains sun azimuth/tilt/zenith, sun color, exposure, light-map weight, fog-of-war tint, and cloud-shadow collections.
 
+The hour-keyed collections are plain XML and the probe reports them as
+`time_of_day_keys`. `DEFAULT_LIGHTING` (default time 11.5):
+
+| Collection | Keys (hour: value) |
+| --- | --- |
+| SunColor (RGB intensity) | 3.825: .18/.28/.60 · 6.0: 2.5/1.5/2.0 · 12.036: 6.5/5.3/3.8 · 18.55: 5.0/4.0/1.0 · 23.0: .18/.28/.60 |
+| Exposure (EV) | 3.975: 1.5 · 5.425: .25 · 9.449: 0 · 12: 0 · 17.075: 0 · 20.04: .75 · 24: 1.5 |
+| SunAzimuth (deg) | 6: 20 · 12: -60 · 18: -140 · 21.04: -180 · 0/24: 120; SunTilt 15 |
+| Light rig weights | Noon 4: 0, 9–15: 1, 18.75: 0 · Sunrise rig (also the Sunset phase) 4.025: 0, 6: 1, 12–15.55: 0, 18.575: 1, 24: 0 · Night 19.075: 0, 23.04–4: 1, 6: 0 |
+| LightMapWeight | 1.45 from 17.05 to 6.0, 0 from 6.15 to 16.875 |
+| ColorKeys (cooked `ColorKey` grades in `ColorKeys` BLP) | Night .5 from 23.75 to 3.95 · Sunrise 1 at 5.975 · Noon 1 from 11.55 to 17.375 · Sunset .75 at 19.425 |
+| FOWTintColor | white 6.025–18.025, 171/174/203 at midnight |
+
+So sunrise is a dim lavender key light, sunset a bright gold one, and night a
+weak blue key lifted 1.5 EV. The rigs' ambient and the ColorKey grades are
+cooked and still undecoded; C3X's clock curve uses these key times with
+calibrated colours (environment contract, Frame Environment).
+
 `Base/Platforms/Windows/BLPs/lighting/default_lighting.blp` is the referenced cooked package. Its printable metadata includes `Sunrise_LightRig`, `Noon_LightRig`, `Night_LightRig`, `m_vSunDirection`, and `m_vSunIntensity`. This is direct evidence that Civ VI's global lighting is data-backed; interpolation and shading remain engine behavior.
 
 ### Analytic Lights

@@ -23,7 +23,30 @@ ARTDEF = """<?xml version="1.0" encoding="UTF-8"?>
 <Element class="AssetObjects..FloatValue"><m_fValue>23.0</m_fValue><m_ParamName text="Time"/></Element>
 <Element class="AssetObjects..FloatValue"><m_fValue>1.0</m_fValue><m_ParamName text="Weight"/></Element>
 </m_Values></m_Fields></Element></Element></m_ChildCollections>
-<m_Name text="Night"/></Element></Element></m_ChildCollections>
+<m_Name text="Night"/></Element></Element>
+<Element><m_CollectionName text="SunColor"/>
+<Element><m_Fields><m_Values>
+<Element class="AssetObjects..FloatValue"><m_fValue>18.55</m_fValue><m_ParamName text="Time"/></Element>
+<Element class="AssetObjects..FloatValue"><m_fValue>5.0</m_fValue><m_ParamName text="Red_Intensity"/></Element>
+</m_Values></m_Fields><m_Name text="SunColor002"/></Element>
+<Element><m_Fields><m_Values>
+<Element class="AssetObjects..FloatValue"><m_fValue>6.0</m_fValue><m_ParamName text="Time"/></Element>
+<Element class="AssetObjects..FloatValue"><m_fValue>2.5</m_fValue><m_ParamName text="Red_Intensity"/></Element>
+</m_Values></m_Fields><m_Name text="SunColor001"/></Element></Element>
+<Element><m_CollectionName text="FOWTintColor"/>
+<Element><m_Fields><m_Values>
+<Element class="AssetObjects..FloatValue"><m_fValue>0.0</m_fValue><m_ParamName text="Time"/></Element>
+<Element class="AssetObjects..RGBValue"><m_r>171.0</m_r><m_g>174.0</m_g><m_b>203.0</m_b><m_ParamName text="Color"/></Element>
+</m_Values></m_Fields></Element></Element>
+<Element><m_CollectionName text="ColorKeys"/>
+<Element><m_Fields><m_Values><Element class="AssetObjects..BLPEntryValue">
+<m_EntryName text="Night"/><m_XLPClass text="ColorKey"/><m_BLPPackage text="ColorKeys"/>
+<m_ParamName text="Key"/></Element></m_Values></m_Fields>
+<m_ChildCollections><Element><m_CollectionName text="WeightCurve"/>
+<Element><m_Fields><m_Values>
+<Element class="AssetObjects..FloatValue"><m_fValue>23.75</m_fValue><m_ParamName text="Time"/></Element>
+<Element class="AssetObjects..FloatValue"><m_fValue>0.5</m_fValue><m_ParamName text="Weight"/></Element>
+</m_Values></m_Fields></Element></Element></m_ChildCollections></Element></Element></m_ChildCollections>
 <m_Name text="DEFAULT_LIGHTING"/></Element></Element></m_RootCollections></AssetObjects..ArtDefSet>
 """
 
@@ -70,6 +93,13 @@ class Civ6LightingProbeTests(unittest.TestCase):
             report["global_lighting"]["rigs"][0]["weight_curve"],
             [{"time": 23.0, "weight": 1.0}],
         )
+        keys = report["global_lighting"]["time_of_day_keys"]["DEFAULT_LIGHTING"]
+        self.assertEqual(keys["SunColor"], [{"Time": 6.0, "Red_Intensity": 2.5},
+                                            {"Time": 18.55, "Red_Intensity": 5.0}])
+        self.assertEqual(keys["FOWTintColor"], [{"Time": 0.0, "Color": [171.0, 174.0, 203.0]}])
+        self.assertEqual(keys["ColorKeys"], [{"entry": "Night", "xlp_class": "ColorKey", "blp_package": "ColorKeys",
+                                              "weight_curve": [{"time": 23.75, "weight": 0.5}]}])
+        self.assertNotIn("CubeLights", keys)
         self.assertIn(
             "Base/Platforms/Windows/BLPs/Light.blp",
             report["all_named_lighting_packages"],

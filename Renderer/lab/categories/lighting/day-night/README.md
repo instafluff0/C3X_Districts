@@ -23,6 +23,15 @@ frames. With the throttle, 20× idles at 58.9–59.4 fps (control 60.0) and
 record each change's wait and cost; `Renderer/tools/day_night_cost_report.py`
 summarises a capture.
 
+The look per hour follows the user's four-panel Civ VI reference (noon, 18:00,
+midnight, 06:00): `evaluate_environment` keys direct light and sky (colour,
+display saturation, exposure) at Civ VI's GameLighting.artdef hours, with
+calibrated values; see the environment contract's time-of-day curve.
+`Renderer/lab/studies/daynight/study.py` renders the concept view at any hour
+from a private build whose keys load from a file, and `measure` prints the
+OKLab patch figures against the Civ VI targets. Lab previews normally show
+plain Reinhard; the study's private DLL uses the game's output transfer.
+
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.
 Reference captures reproduce production using small synthetic diagnostic scenes;

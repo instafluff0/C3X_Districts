@@ -290,6 +290,7 @@ struct LinearOutput {
     ID3D11VertexShader *vertex=nullptr;
     ID3D11PixelShader *pixel=nullptr;
     ID3D11Buffer *settings=nullptr;
+    float saturation=1; // EnvironmentState::saturation, beside the display exposure
     template<class T> void release(T*& p) { if(p) { p->Release(); p=nullptr; } }
     void reset() { release(settings); release(pixel); release(vertex); }
     ~LinearOutput() { reset(); }
@@ -299,7 +300,7 @@ struct LinearOutput {
         // straight for the existing Civ III surface-copy contract.
         char const* source=R"(
 Texture2D<float4> scene : register(t0);
-cbuffer OutputSettings : register(b0) { float exposure; int render_scale; float2 padding; };
+cbuffer OutputSettings : register(b0) { float exposure; int render_scale; float saturation; float padding; };
 float4 VSOutput(uint id : SV_VertexID) : SV_Position {
  float2 p=float2((id<<1)&2,id&2); return float4(p*float2(2,-2)+float2(-1,1),0,1);
 }
@@ -310,6 +311,7 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
  c/=render_scale*render_scale;
  if(c.a<=.000001) return 0;
  float3 rgb=max(0,c.rgb/c.a*exposure);
+ rgb=max(0,lerp(dot(rgb,float3(.2126,.7152,.0722)),rgb,saturation));
  rgb/=1+max(rgb.r,max(rgb.g,rgb.b));
  rgb=float3(rgb.r<=.0031308?rgb.r*12.92:1.055*pow(rgb.r,1/2.4)-.055,
             rgb.g<=.0031308?rgb.g*12.92:1.055*pow(rgb.g,1/2.4)-.055,
@@ -351,7 +353,7 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         context->IASetInputLayout(nullptr);
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0); context->PSSetShader(pixel,nullptr,0);
-        struct {float exposure;int scale;float padding[2];}values={exposure,render_scale,{0,0}};
+        struct {float exposure;int scale;float saturation,padding;}values={exposure,render_scale,saturation,0};
         context->UpdateSubresource(settings,0,nullptr,&values,0,0);
         context->PSSetConstantBuffers(0,1,&settings);
         ID3D11ShaderResourceView*source=reconstructed?reconstructed:linear.view;
