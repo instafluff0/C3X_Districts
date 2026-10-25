@@ -15785,12 +15785,12 @@ public:
                 state->metadata.world_height_tiles,state->metadata.world_wrap_x!=0,
                 state->metadata.world_wrap_y!=0)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
         char detail[256];std::snprintf(detail,sizeof(detail),
-            "id=%d from=%d,%d to=%d,%d result=%d instances=%zu segments=%zu scope=%llu,%llu expected=%llu,%llu",
+            "id=%d from=%d,%d to=%d,%d result=%d instances=%zu segments=%zu scope=%llu,%llu expected=%llu,%llu target_visible=%u",
             value.unit_id,value.old_x,value.old_y,value.new_x,value.new_y,result,
             unit_instances.size(),unit_instances.motion_count(value.unit_id),
             static_cast<unsigned long long>(value.map_epoch),static_cast<unsigned long long>(value.viewer_epoch),
             static_cast<unsigned long long>(state?state->identity.map_epoch:0),
-            static_cast<unsigned long long>(state?state->identity.viewer_epoch:0));
+            static_cast<unsigned long long>(state?state->identity.viewer_epoch:0),value.target_visible);
         renderer_state.trace.write("unit-motion-admitted",detail,true);
         return result;
     }

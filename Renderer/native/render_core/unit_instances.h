@@ -270,7 +270,9 @@ public:
            value.old_y<0||value.old_y>=height||value.new_y<0||value.new_y>=height||!capacity)return false;
         if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency))return false;
         auto found=instances.find(value.unit_id);
-        if(!value.source_visible||!value.target_visible||found==instances.end()||retired(value.unit_id))return true;
+        // A step leaving sight still travels into its hidden tile, as in Civ III;
+        // its accepted hidden arrival (move, target_visible 0) removes the body.
+        if(!value.source_visible||found==instances.end()||retired(value.unit_id))return true;
         int dx=value.new_x-value.old_x,dy=value.new_y-value.old_y;
         if(wrap_x){if(dx>width/2)dx-=width;else if(dx<-width/2)dx+=width;}
         if(wrap_y){if(dy>height/2)dy-=height;else if(dy<-height/2)dy+=height;}

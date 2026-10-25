@@ -49640,7 +49640,9 @@ patch_FLC_Animation_set_move_target (FLC_Animation * this, int edx, int x, int y
 	// may enter that edge now; this admits its body, not hidden terrain or enemies.
 	move.target_visible = unit->Body.CivID == is->custom_renderer_viewer_civ_id ||
 		custom_renderer_tile_visible_at (move.new_x, move.new_y);
-	if (! move.source_visible || ! move.target_visible) return;
+	// Like Civ III, a unit leaving sight still travels into its hidden tile;
+	// the hidden arrival (notify_custom_renderer_unit_move) then removes it.
+	if (! move.source_visible) return;
 	move.map_epoch = is->custom_renderer_map_epoch;
 	move.viewer_epoch = is->custom_renderer_viewer_epoch;
 	move.presentation_frequency = is->custom_renderer_qpc_frequency.QuadPart;

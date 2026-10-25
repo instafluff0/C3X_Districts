@@ -165,6 +165,16 @@ int main(){
   turn.begin();assert(turn.pose(0).draw.direction==direction);
   assert(turn.pose(100000).draw.direction==direction);
  }
+ // A foreign unit leaving sight travels the whole step into its hidden tile,
+ // as in Civ III, instead of running in place at its source (native run-action
+ // captures continue there). Its accepted hidden arrival then removes it.
+ Fixture leave;leave.event.target_visible=0;leave.tiles[1].tile_flags=C3X_RENDERER_TILE_RENDER;
+ leave.begin();leave.pose(0);
+ leave.state.action=leave.body.action=2;
+ leave.state.presentation_time_ticks=leave.body.presentation_time_ticks=50;leave.capture();
+ p=leave.pose(300000);assert(p.draw.body_x==1071&&p.draw.action==2&&p.travelling);
+ leave.commit();assert(leave.world.motion_count(7)==0&&leave.world.size()==0);
+ assert(leave.world.scene_poses(leave.frame,400000,1000000,leave.catalog).empty());
  // Hidden/retired actors and unrelated corrections end travel immediately.
  c.state.visible=0;c.state.presentation_time_ticks=1000;assert(c.world.state(c.state));
  assert(c.world.scene_poses(c.frame,910000,1000000,c.catalog).empty());
@@ -294,9 +304,9 @@ struct Animation_Info{int field_98[41];};
 struct FLC_Animation{struct Unit* Unit;struct Animation_Info* Animation_Info;float field_104;};
 struct LARGE_INTEGER{long long QuadPart;};
 struct {int Map;} bic,*p_bic_data=&bic;
-int natives=0,events=0;FLC_Animation* original=nullptr;
+int natives=0,events=0,target=-1;FLC_Animation* original=nullptr;
 void FLC_Animation_set_pixel_target_with_offset(FLC_Animation* a,int edx,int x,int y){assert(edx==123&&x==768&&y==128);original=a;++natives;}
-int receive(c3x_renderer_unit_move_v1 const* v){assert(natives>events);assert(v->old_x==10&&v->old_y==4&&v->new_x==0&&v->new_y==4&&v->unit_id==7&&v->action==2&&v->speed==250);++events;return 1;}
+int receive(c3x_renderer_unit_move_v1 const* v){assert(natives>events);assert(v->old_x==10&&v->old_y==4&&v->new_x==0&&v->new_y==4&&v->unit_id==7&&v->action==2&&v->speed==250&&v->source_visible);target=v->target_visible;++events;return 1;}
 struct {struct{bool enable_custom_rendering=false;}current_config;c3x_renderer_unit_move_fn custom_renderer_unit_motion=receive;
  int custom_renderer_viewer_civ_id=2;unsigned custom_renderer_map_epoch=2,custom_renderer_viewer_epoch=3;LARGE_INTEGER custom_renderer_qpc_frequency{1000};char custom_renderer_test_save[1]={};}state,*is=&state;
 void wrap_tile_coords(int*,int* x,int* y){*x=(*x+12)%12;*y=(*y+12)%12;}
@@ -312,11 +322,13 @@ int main(){
  state.current_config.enable_custom_rendering=true;
  patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==2&&events==1);
  // Own exploration begins before native terrain sight catches up.
- target_visible=false;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==3&&events==2);
- // The same step by a foreign unit cannot animate into hidden terrain.
- unit.Body.CivID=3;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==4&&events==2);
+ target_visible=false;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==3&&events==2&&target==1);
+ // Civ III animates a foreign unit leaving sight into its hidden tile; the
+ // renderer travels it there too (target_visible 0), instead of running in place.
+ unit.Body.CivID=3;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==4&&events==3&&target==0);
  unit.Body.CivID=2;
- visible=false;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==5&&events==2);
+ // A hidden source has no displayed body to move.
+ visible=false;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==5&&events==3);
 
 }
 ''')

@@ -181,6 +181,25 @@ repl call, 0x4F0AF0, 0x0, 0x0, "FLC_Animation_tick_map_unit", ""
 - **Not added:** no patch-table entry and no injected-state field.
 - **Config-off:** delegation is unchanged.
 
+## Units travelling out of sight
+
+`required_user_action: ["Re-run INSTALL.bat"]`.
+
+- **Existing symbol relied on:** `FLC_Animation_set_move_target` (above). Its
+  signature and supported-build addresses are unchanged.
+- **What changes:** the move event is now sent whenever the source tile is
+  visible, including a step into a hidden tile (`target_visible = 0`).
+  Natively, `Unit::move` animates a step when either tile is visible, so a
+  foreign unit walks into fog or black and then disappears. Before this, the
+  hook dropped such steps, and Renderer64 played the unit's run clip at its
+  source tile ("running in place"). `UnitInstances::begin_motion` now travels
+  them. The accepted hidden arrival (`notify_custom_renderer_unit_move`,
+  `target_visible = 0`) removes the body, as before.
+- **Not added:** no patch-table entry and no injected-state field.
+- **Config-off:** delegation is unchanged.
+- **Test:** `Renderer/native/test_unit_motion.py` (travel into a hidden tile
+  and the hook's foreign-unit case both fail on the old gates).
+
 ## Held edge-scroll motion during camera jobs
 
 `required_user_action: []`.
