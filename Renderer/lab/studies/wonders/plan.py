@@ -110,6 +110,51 @@ PICKS: dict[str, list[dict]] = {
     ],
 }
 
+# A wonder fills its tile but stands only a little above the cities around it: no taller
+# than HEIGHT_OVER_CITY times the tallest building of its era's production cities (or an
+# earlier era's; read from the city pack). Civ III era of each wonder's prerequisite tech
+# (0 Ancient, 1 Middle Ages, 2 Industrial, 3 Modern); build-time art fitting only.
+ERA = {"pyramids": 0, "hanging_gardens": 0, "oracle": 0, "temple_of_artemis": 0, "mausoleum_of_mausollos": 0,
+       "statue_of_zeus": 0, "great_library": 0, "great_lighthouse": 0, "colossus": 0, "forbidden_palace": 0,
+       "copernicus_observatory": 1, "js_bachs_cathedral": 1, "sistine_chapel": 1, "newtons_university": 1,
+       "military_academy": 1, "shakespeares_theater": 2, "hoover_dam": 2, "iron_works": 2, "wall_street": 2,
+       "pentagon": 3, "seti_program": 3, "apollo_program": 3, "intelligence_agency": 3}
+HEIGHT_OVER_CITY = 1.6
+# Landmarks meant to tower over their city (a harbour statue, a lighthouse, a tomb, a
+# skyline of towers) take this multiple instead, so they keep most of their tile.
+LANDMARK_OVER_CITY = {"colossus": 2.4, "great_lighthouse": 2.4, "mausoleum_of_mausollos": 2.0, "wall_street": 2.4}
+
+
+def city_skyline() -> list[float]:
+    """Per Civ III era, the tallest building (tiles) of the production cities of that
+    era or an earlier one."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+    from Renderer.lab.studies.city_readability import runtime_pack as rp
+    city = rp.decode(Path(__file__).resolve().parents[4] / "Renderer/packs/CityCompositionRuntime/city.bin")
+    models, tallest = city["models"], [0.0] * 4
+    for template in city["templates"]:
+        for instance in template["instances"]:
+            model = models[instance["model"]]
+            era = min(max(template["era"], 0), 3)
+            tallest[era] = max(tallest[era], (model["high"][2] - model["low"][2]) * instance["scale"])
+    for era in range(1, 4):
+        tallest[era] = max(tallest[era], tallest[era - 1])
+    return tallest
+
+
+def _cap_heights() -> None:
+    skyline = city_skyline()
+    for key, choices in PICKS.items():
+        cap = round(LANDMARK_OVER_CITY.get(key, HEIGHT_OVER_CITY) * skyline[ERA.get(key, 0)], 3)
+        for pick in choices:
+            for item in pick["parts"]:
+                if not item["source"].startswith("prop:"):
+                    item["height"] = min(item.get("height", cap), cap)
+
+
+_cap_heights()
+
 GROUPS = (
     ("ancient", "Ancient wonders", ("pyramids", "hanging_gardens", "oracle", "temple_of_artemis",
                                     "mausoleum_of_mausollos", "statue_of_zeus", "great_library")),
@@ -269,8 +314,8 @@ def districts() -> dict:
 # Bumped when kits.py changes how wonders are laid on the tile or drawn (2: squared
 # to the Civ III tile; 3: night lights and seasons; 4: Civ VI fire and light effects; 5: city
 # bodies with Civ VI's full materials and the finished, lit building; 6: light maps, metalness and
-# authored fire anchors), so older renders are redone.
-LAYOUT = 6
+# authored fire anchors; 7: heights capped by the era's city skyline), so older renders are redone.
+LAYOUT = 7
 
 
 def everything() -> dict:

@@ -190,6 +190,23 @@ int main(){
         special = wp.gorge_fields(wp.GORGE["size"], wp.GORGE["channel"], wp.GORGE["crest"], wp.GORGE["outer"])[2]
         self.assertEqual(max(special), 0)
 
+    def test_wonders_stand_near_their_cities(self):
+        # A wonder fills its tile but rises only a little above its era's cities: no taller
+        # than plan.HEIGHT_OVER_CITY times their tallest building (the user, 2026-10-24).
+        ledger = {entry["c3x_name"].lower(): entry["c3x_key"] for entry in json.loads(wp.LEDGER.read_text())["mappings"]}
+        skyline = wp.plan.city_skyline()
+        for key, library in self.libraries.items():
+            kind, alias, variant = key.split("|")
+            if kind != "wonder" or not variant.startswith("complete"):
+                continue
+            wonder = ledger[alias]
+            cap = wp.plan.LANDMARK_OVER_CITY.get(wonder, wp.plan.HEIGHT_OVER_CITY) * skyline[wp.plan.ERA[wonder]]
+            tallest = max(library["models"][i["model"]]["high"][2] * i["scale"]
+                          for t in library["templates"] for i in t["instances"])
+            # The fit measures raised pieces; baked bodies measure 6% taller throughout
+            # (2026-10-24 pack: every capped wonder at 1.06), so allow 8%.
+            self.assertLessEqual(tallest, cap * 1.08, key)
+
     def test_foundations_only_where_asked(self):
         # The city terrace lays a skirt and top plates even on gentle relief, so only
         # kits whose metadata asks for one carry it (none of the approved picks yet).
