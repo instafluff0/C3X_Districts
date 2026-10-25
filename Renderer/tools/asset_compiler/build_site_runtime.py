@@ -1,7 +1,10 @@
 """Compile neutral huts and camps into the generic feature-bundle format.
 
 Inputs remain local normalized art. Runtime receives no source-game paths,
-gameplay rules, or source-specific loader behavior.
+gameplay rules, or source-specific loader behavior. Night light follows the
+tile buildings': faces lit by their emissive map's uv2 layout are their own
+asset named for the glow slot, and torches, campfires and lamps ride in a
+"lamps/<asset>" companion.
 """
 from pathlib import Path
 from collections import defaultdict
@@ -53,7 +56,34 @@ def resize(mesh, body, spread):
                                                     v["position"][2] * body]} for v in mesh["vertices"]]}
 
 
+# A Civ VI night light or fire by its bone's name: the site lamp mode (0 a
+# flame; 1-4 steady warm, white, red, green lamps; 5-8 the same blinking,
+# q8_city_effect) and strength. The airstrip's lanterns burn FX_Glow_Lantern,
+# the aerodrome's runway FX_Lights_Runway_White; its mast's
+# FX_Light_Airport_Tower is taken for red obstruction lights (its colour is not
+# decoded from VFX.blp). Torches burn smaller than campfires and braziers.
+LAMP_LOOKS = (("fx_runwaylight", 2, 1.2), ("fx_light0", 7, 1.6))
+
+
+def light_look(semantic: str, bone: str) -> tuple[int, float]:
+    n = bone.lower()
+    if semantic == "flame":
+        return 0, .8 if "torch" in n else 1.3
+    for prefix, mode, strength in LAMP_LOOKS:
+        if n.startswith(prefix):
+            return mode, strength
+    band = 2 if "red" in n else 3 if "green" in n else 1 if "white" in n else 0
+    return 1 + band + (4 if "blink" in n else 0), 1.4
+
+
 def plan():
+    """The huts' and camp's parts, their textures, the bytes read, and their night
+    light: each part is (mesh, texture, lit), lit faces being those Civ VI's
+    emissive map lights by uv2 (build_mine_runtime.bake_light); "lights" holds each
+    texture's baked light laid out by uv0, "fires" each role's Civ VI torches,
+    campfires and lamps (x, y, z, mode, strength) in its parts' space."""
+    from Renderer.tools.asset_compiler.build_mine_runtime import bake_light, bc1_rgb
+    import numpy as np
     consumed = {}
     def read(path):
         path = path.resolve()
@@ -79,23 +109,53 @@ def plan():
             mesh = document(SOURCE / landmark["components"]["geometry"][binding["geometry"]])
             material = document(SOURCE / landmark["components"]["materials"][binding["material"]])
             base = material.get("channels", {}).get("base_color")
+            emissive = material.get("channels", {}).get("emissive")
             if base:
                 transformed = transform_mesh(mesh, matrix, height_scale)
                 # Source ground decals do not replace C3X's authoritative ground.
                 if max(v["position"][2] for v in transformed["vertices"]) >= .006*height_scale:
-                    parts.append((transformed, base["texture"]))
+                    parts.append([transformed, base["texture"],
+                                  emissive["texture"] if isinstance(emissive, dict) else None, []])
         skeletons = [_skeleton_worlds(document(SOURCE / name)) for name in landmark["components"]["skeletons"]]
+        bones = [document(SOURCE / name)["bones"] for name in landmark["components"]["skeletons"]]
+        # The component's torches, campfires and lamps go with its first part.
+        for point in landmark["attachment_points"]:
+            if parts and point.get("semantic") in ("flame", "night_light") and \
+                    point.get("state_hint") == "operational" and point.get("skeleton") is not None:
+                world = skeletons[point["skeleton"]][point["bone"]]
+                x, y, z = _point([world[12], world[13], world[14]], matrix, True)
+                parts[0][3].append((x, y, z * height_scale,
+                                    *light_look(point["semantic"], bones[point["skeleton"]][point["bone"]].get("name", ""))))
         for point in landmark["attachment_points"]:
             if point["binding_status"] == "resolved":
                 child = _matrix_multiply(skeletons[point["skeleton"]][point["bone"]], matrix)
                 parts.extend(collect(point["component_asset"], child, stack+(key,), height_scale))
         return parts
-    groups = {}
+    groups, lights, fires, maps = {}, {}, {}, {}
     for role, key in roots:
         size = looks["sizes"]["camp" if role == "camp" else "hut"]
-        groups[role] = [(resize(mesh, size["body"], size["spread"]), texture)
-                        for mesh, texture in collect(key, height_scale=size["height_scale"])]
-    textures = sorted({texture for parts in groups.values() for _, texture in parts})
+        body, spread = size["body"], size["spread"]
+        groups[role], fires[role] = [], []
+        for mesh, texture, emissive, points in collect(key, height_scale=size["height_scale"]):
+            xs = [v["position"][0] for v in mesh["vertices"]]; ys = [v["position"][1] for v in mesh["vertices"]]
+            cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+            fires[role] += [((x - cx) * body + cx * spread, (y - cy) * body + cy * spread, z * body, mode, strength)
+                            for x, y, z, mode, strength in points]
+            mesh = resize(mesh, body, spread)
+            if emissive is None or any("uv2" not in v for v in mesh["vertices"]):
+                groups[role].append((mesh, texture, False))
+                continue
+            if emissive not in maps:
+                maps[emissive] = bc1_rgb(SOURCE / emissive)
+                read(SOURCE / emissive)
+            dark, lit, light = bake_light([mesh], maps[emissive])
+            groups[role] += [(part, texture, False) for part in dark] + [(part, texture, True) for part in lit]
+            if lit:
+                held = lights.get(texture)
+                if held is not None and held.shape != light.shape:
+                    raise ValueError(f"{texture} has emissive maps of two sizes")
+                lights[texture] = light if held is None else np.maximum(held, light)
+    textures = sorted({texture for parts in groups.values() for _, texture, _ in parts})
     if not 1 <= len(textures) <= 8 or any(not parts for parts in groups.values()):
         raise ValueError("Site material/body count exceeds the feature binding")
     for texture in textures:
@@ -106,7 +166,7 @@ def plan():
         read(ROOT / name)
     ground_sources(read)
     tile_buildings.load(read)
-    return groups, textures, consumed
+    return groups, textures, consumed, {"lights": lights, "fires": fires}
 
 
 def ground_sources(read):
@@ -167,8 +227,18 @@ def ground_groups(first_texture):
     return textures, groups
 
 
+def lamp_asset(name: str, texture: int, lamps: list) -> bytes:
+    """A companion asset "lamps/<mesh>": one degenerate triangle per night light
+    or fire at its point, uv (mode, strength) (object_compiler.h tile_building_lamps)."""
+    count = len(lamps) * 3
+    payload = bytearray(bundle_string("lamps/" + name) + struct.pack("<III", texture, count, count))
+    for x, y, z, mode, strength in lamps:
+        payload += struct.pack("<8f", x, y, z, 0.0, 0.0, 1.0, float(mode), strength) * 3
+    return bytes(payload + struct.pack(f"<{count}I", *range(count)))
+
+
 def build(output, frozen=tile_buildings.FROZEN):
-    groups, textures, consumed = plan()
+    groups, textures, consumed, night = plan()
     output.mkdir(parents=True, exist_ok=True)
     (output / "textures").mkdir(exist_ok=True)
     paths = []
@@ -187,16 +257,23 @@ def build(output, frozen=tile_buildings.FROZEN):
     assets, payloads = [], []
     counts = {}
     for role, parts in groups.items():
+        # Faces Civ VI lights at night form their own asset, named for its atlas's
+        # glow slot (":glow"), where the tile buildings bring that atlas a glow map.
         merged = defaultdict(list)
-        for mesh, texture in parts:
+        glows = buildings["manifest"].get("glows", {}) if buildings else {}
+        for mesh, texture, lit in parts:
             if buildings:
-                merged[cells[texture][0]].append(tile_buildings.atlas_mesh(mesh, cells[texture]))
+                merged[cells[texture][0], lit and str(cells[texture][0]) in glows].append(
+                    tile_buildings.atlas_mesh(mesh, cells[texture]))
             else:
-                merged[textures.index(texture)].append(mesh)
+                merged[textures.index(texture), False].append(mesh)
         placements = []
-        for texture, meshes in sorted(merged.items()):
+        for (texture, lit), meshes in sorted(merged.items()):
             placements.append((len(assets), .5))
-            assets.append(merged_asset(role, texture, 0, meshes))
+            assets.append(merged_asset(role + "_lit:glow" if lit else role, texture, 0, meshes))
+        if night["fires"].get(role):
+            owner = sorted(merged)[0]
+            assets.append(lamp_asset(f"{role}:e0", owner[0], night["fires"][role]))
         payloads.append(group_payload(role, placements)); counts[role] = len(parts)
     # Ground states share the bundle's eight texture slots after the site art.
     ground = ground_groups(len(paths)) if len(paths) + 3 <= 8 else None
@@ -227,7 +304,7 @@ def build(output, frozen=tile_buildings.FROZEN):
             raise ValueError(f"{len(paths)} textures exceed the site pack's eight slots")
         paths += ["textures/unused.dds"] * (8-len(paths))
         offset = len(assets)
-        assets += [tile_buildings.lit(asset, slots) for asset in buildings["assets"]]
+        assets = [tile_buildings.lit(asset, slots) for asset in assets + buildings["assets"]]
     else:
         paths += [paths[0]] * (8-len(paths))
     bundle = bytearray(MAGIC) + struct.pack("<IIII", 2 if buildings else 1, 8, len(assets), len(payloads))

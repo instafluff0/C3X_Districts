@@ -44,9 +44,14 @@ into one texture per colour texture. The picks catalog sets kits' `"night":
 for districts, would split these twice). Lit parts are named `:glow`; their glow
 atlas, kept at a quarter of the colour atlas's resolution, takes a spare site
 pack slot (`:g<slot>`, owner code .181-.188, feature shaders' tile glow).
-Night_light points (Civ VI's lantern and light bones) become `lamps/<mesh>`
-companion assets, which Renderer64 draws as city lamps where the building
-stands (`object_compiler.h tile_building_lamps`). The airstrip lights 7.5% of
+Night_light and flame points (Civ VI's lantern, light, torch and campfire
+bones) become `lamps/<mesh>` companion assets, which Renderer64 draws as city
+lamps or flames where the building stands (`object_compiler.h
+tile_building_lamps`); fires whose Civ VI triggers are all pillage effects
+(the aerodrome airport's) are left out (`sitepack.pillage_fires`). Goody huts
+(torches, campfire) and the barbarian camp (campfire, two lit windows) get the
+same from `build_site_runtime.plan`; their glow cells in the tile buildings'
+glow atlas hold their baked light. The airstrip lights 7.5% of
 its surface (uv0 would light 45%) and has 8 warm lanterns. The aerodrome lights
 20% and has 10 white runway lights and 7 mast lights; the mast lights are taken
 as red blinkers (`FX_Light_Airport_Tower`'s colour is not decoded). Lamps

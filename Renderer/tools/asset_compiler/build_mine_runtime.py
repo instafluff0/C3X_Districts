@@ -237,7 +237,7 @@ def bake_light(meshes: list[dict], emissive: np.ndarray) -> tuple[list[dict], li
             (lit if glowing else dark).append(part)
     # Spread the light 16 texels past the lit faces: their small mips then
     # average light with light, not with the black around it.
-    for _ in range(16):
+    for _ in range(16 if filled.any() else 0):
         total = np.zeros_like(light)
         count = np.zeros(filled.shape)
         for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):

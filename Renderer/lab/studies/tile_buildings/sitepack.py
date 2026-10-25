@@ -57,21 +57,45 @@ def whiten(compiler, record: dict) -> None:
 
 
 
-# A Civ VI night light by its bone's name: city lamp mode (1-4 steady warm, white,
-# red, green; 5-8 the same blinking, q8_city_effect) and strength. The airstrip's
-# lanterns burn FX_Glow_Lantern, the aerodrome's runway FX_Lights_Runway_White;
-# its mast's FX_Light_Airport_Tower is taken for red obstruction lights (its
-# colour is not decoded from VFX.blp).
-LAMP_LOOKS = (("fx_runwaylight", 2, 1.2), ("fx_light0", 7, 1.6))
-
-
-def lamp_look(bone: str) -> tuple[int, float]:
-    n = bone.lower()
-    for prefix, mode, strength in LAMP_LOOKS:
-        if n.startswith(prefix):
-            return mode, strength
-    band = 2 if "red" in n else 3 if "green" in n else 1 if "white" in n else 0
-    return 1 + band + (4 if "blink" in n else 0), 1.4
+def pillage_fires(entries: set) -> dict:
+    """Per Civ VI entry, the bones (FNV-1a of their names) whose effect triggers are
+    all pillage effects ("PIL"): the aerodrome airport's fire burns only when
+    pillaged though its bone is plainly named. Entries are found in the installed
+    landmark packages; one that is not keeps all its fires."""
+    import re
+    from collections import defaultdict
+    from Renderer.tools.asset_compiler import clutter_blp_extractor as cbe
+    from Renderer.tools.asset_compiler.artdef_graph_resolver import DEFAULT_ASSETS_ROOT
+    from Renderer.tools.asset_compiler.indexed_static_package import IndexedStaticPackage
+    from Renderer.tools.asset_compiler.resource_pack_builder import fnv1a32
+    names = {}
+    for path in (DEFAULT_ASSETS_ROOT / "Base").rglob("*.blp"):
+        if any(word in path.name.lower() for word in ("vfx", "light", "fx")):
+            for name in re.findall(rb"[A-Za-z0-9_\-. ]{4,80}", path.read_bytes()):
+                names[fnv1a32(name.decode())] = name.decode()
+    packages = sorted((path for path in DEFAULT_ASSETS_ROOT.parent.rglob("*.blp") if "landmark" in str(path).lower()),
+                      key=lambda path: ("/Base/" not in str(path), str(path)))
+    found, result = {}, {}
+    for path in packages:
+        data = path.read_bytes()
+        for entry in entries - set(found):
+            if entry.encode() in data:
+                found[entry] = path
+    for entry, path in found.items():
+        try:
+            package = IndexedStaticPackage(path, entry)
+            _landmark, _user, base = cbe.landmark_base_model(package)
+        except ValueError:
+            continue
+        effects = defaultdict(set)
+        for _offset, pointer in package.pointer_fields(base, "TimelineSet::Trigger"):
+            raw = package.bytes_for(pointer)
+            for index in range(len(raw) // 28):
+                kind, _a, _start, _attachment, bone, name, _c = struct.unpack_from("<IIfIIII", raw, index * 28)
+                if kind == 1:
+                    effects[bone].add("pil" in names.get(name, "").lower())
+        result[entry] = {bone for bone, pillage in effects.items() if all(pillage)}
+    return result
 
 
 def light_sources(compiler, cells: list) -> dict:
@@ -81,9 +105,9 @@ def light_sources(compiler, cells: list) -> dict:
     each emissive draw splits into its dark faces and the faces uv2 lights
     (build_mine_runtime.bake_light, a "_lit" geometry); one light texture per
     colour texture, laid out by uv0, holds them all. The import's own draws are
-    kept and the split is redone on every freeze. Returns the night lights
-    (semantic night_light points): mesh key, as kits.bake names it, to points in
-    that mesh's space, each (x, y, z, lamp mode, strength)."""
+    kept and the split is redone on every freeze. Returns the night lights and
+    fires (semantic night_light and flame points): mesh key, as kits.bake names
+    it, to points in that mesh's space, each (x, y, z, mode, strength)."""
     import numpy as np
     from Renderer.tools.asset_compiler import build_mine_runtime as mine
     manifest = compiler.manifest
@@ -164,17 +188,26 @@ def light_sources(compiler, cells: list) -> dict:
                                  "material": len(components["materials"]) - 1})
         document["draw_bindings"] = bindings
         path.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n")
-    # Night lights in the space of the first mesh their component draws.
+    # Night lights and fires in the space of the first mesh their component
+    # draws; fires Civ VI lights only when pillaged are left out.
+    from Renderer.tools.asset_compiler.resource_pack_builder import fnv1a32
+    entries = {path: manifest["assets"][asset_id].get("source_entry") for asset_id in manifest["assets"]
+               for path in [kits.SOURCES / manifest["assets"][asset_id]["landmark"]] if path in documents}
+    burning = {entries[path] for path, document in documents.items() if entries.get(path) and
+               any(p.get("semantic") == "flame" for p in document["attachment_points"])}
+    fires = pillage_fires(burning)
     lamps = {}
     for cell, part, path, transform in occurrences:
         document = documents[path]
         if part.get("merge") or part.get("ramp"):
             continue
         skeletons = [kits.load(kits.SOURCES / p) for p in document["components"]["skeletons"]]
-        points = [(kits._skeleton_worlds(skeletons[p["skeleton"]])[p["bone"]],
+        points = [(kits._skeleton_worlds(skeletons[p["skeleton"]])[p["bone"]], p["semantic"],
                    skeletons[p["skeleton"]]["bones"][p["bone"]].get("name", ""))
-                  for p in document["attachment_points"] if p.get("semantic") == "night_light"
+                  for p in document["attachment_points"] if p.get("semantic") in ("night_light", "flame")
                   and p.get("state_hint") == "operational" and p.get("skeleton") is not None]
+        pillaged = fires.get(entries.get(path), set())
+        points = [point for point in points if fnv1a32(point[2]) not in pillaged]
         owner = next((b for b in document["draw_bindings"] if cell.get("state", "worked") in b["states"] and
                       isinstance(kits.load(kits.SOURCES / document["components"]["materials"][b["material"]])
                                  .get("channels", {}).get("base_color"), dict)), None)
@@ -197,12 +230,12 @@ def light_sources(compiler, cells: list) -> dict:
         if part.get("conform"):
             key = "city/walls/" + key
         found = []
-        for world, bone in points:
+        for world, semantic, bone in points:
             x, y, z = world[12], world[13], world[14]
             x, y, z = (x * linear[0] + y * linear[4] + z * linear[8], x * linear[1] + y * linear[5] + z * linear[9],
                        (x * linear[2] + y * linear[6] + z * linear[10]) * part.get("squash", 1.0))
             if clip is None or z <= clip:
-                found.append((x, y, z, *lamp_look(bone)))
+                found.append((x, y, z, *sites.light_look(semantic, bone)))
         if found:
             lamps[key] = found
     return lamps
@@ -254,8 +287,19 @@ def freeze(out: Path = FROZEN) -> dict:
             for part in cell["parts"]:
                 whiten(compiler, part["record"])
     lamps = light_sources(compiler, catalog["cells"])
-    _, textures, _ = sites.plan()
+    _, textures, _, site_night = sites.plan()
     extra = [sites.SOURCE / texture for texture in textures]
+    # A hut or camp texture's glow cell holds its baked night light (build_site_runtime.plan).
+    def site_glow(path):
+        size = kits.rc.dds(path)[0]
+        light = site_night["lights"].get(path.relative_to(sites.SOURCE).as_posix())
+        if light is None:
+            return kits._dark_square(size, kits.OUT / "texture_cache")
+        step = light.shape[0] // size
+        image = light.reshape(size, step, size, step, 3).mean((1, 3)) if step > 1 else \
+            light.repeat(size // light.shape[0], 0).repeat(size // light.shape[0], 1)
+        target = kits.OUT / "texture_cache" / f"glow_site_{hashlib.sha256(image.tobytes()).hexdigest()[:16]}.dds"
+        return target if target.is_file() else kits._write_bc1(image * 255, target)
     # The hut and camp textures take the next cells of the first BC1 atlas;
     # every atlas shrinks to the cells it holds. kits.bake then lays out each
     # colour atlas's glow maps (its cells in order): those repeat the colour
@@ -265,8 +309,8 @@ def freeze(out: Path = FROZEN) -> dict:
     def pack(textures, kind, first=0):
         if any(Path(path).name.startswith("glow") for path in textures):
             size, levels, with_extra = colour.pop(0)
-            dark = [kits._dark_square(kits.rc.dds(path)[0], kits.OUT / "texture_cache") for path in extra]
-            return original(list(textures) + (dark if with_extra else []), (size, levels, *kits.rc.MODEL_ATLAS[2:]), first)
+            return original(list(textures) + ([site_glow(path) for path in extra] if with_extra else []),
+                            (size, levels, *kits.rc.MODEL_ATLAS[2:]), first)
         with_extra = kind == kits.rc.MODEL_ATLAS
         textures = list(textures) + (extra if with_extra else [])
         if len(textures) <= (kind[0] // kits.rc.CELL) ** 2:

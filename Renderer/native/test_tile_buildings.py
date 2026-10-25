@@ -309,7 +309,7 @@ int main(){
     def test_site_pack_merges_the_frozen_buildings_and_moves_huts_into_their_atlas(self):
         import hashlib, json, struct, tempfile
         from Renderer.tools.asset_compiler import build_site_runtime as sites
-        _, textures, _ = sites.plan()
+        _, textures, *_ = sites.plan()
         string = lambda value: struct.pack("<I", len(value.encode())) + value.encode()
         # A frozen pack: one atlas whose cells hold the hut and camp textures, one radar.
         cells = {hashlib.sha256((sites.SOURCE / t).read_bytes()).hexdigest(): [0, .5, .125 * k, .125, 512]
@@ -357,7 +357,7 @@ int main(){
             texture, vertices, indices = take("<III")
             uvs = [struct.unpack_from("<2f", data, at + k * 32 + 24) for k in range(vertices)]
             at += vertices * 32 + indices * 4
-            if not ids[-1].startswith(("decal/", "district/")):
+            if not ids[-1].startswith(("decal/", "district/", "lamps/")):
                 # A hut or camp body: inside its cells of atlas 0, never wrapping.
                 self.assertEqual(0, texture)
                 self.assertTrue(all(.5 <= u <= .625 and 0 <= v <= .125 * len(textures) for u, v in uvs), ids[-1])
@@ -514,7 +514,7 @@ int main(){
   }
   assert(body && (body->u!=.5f || body->v!=.5f)==wet);
   auto height=[](float x,float y){return 30.f+2.f*x-y;};
-  auto found=objects::tile_building_lamps(plan,assets,tile,height);
+  auto found=objects::tile_building_lamps(plan,assets,tile,height,[](float,float){return -500.f;});
   assert(found.size()==2);
   float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
   float x=tile_u+body->u,y=tile_v+1-body->v,ground=height(x,y)-2.5f,fit=body->ground_fit;
@@ -531,12 +531,50 @@ int main(){
 }
 ''')
 
+    def test_huts_and_camps_glow_and_burn_where_they_stand(self):
+        # Goody huts' torches and campfire and the barbarian camp's campfire and
+        # lit windows were missing: their parts were drawn unlit and their fire
+        # points dropped. A hut or camp part named for a glow slot (":g<slot>",
+        # before merged_asset's ":e0") lights; its fires sit on the natural ground,
+        # as prepare_rigid seats a hut, not on the drawn rock.
+        run_cpp(PRELUDE + r'''
+int main(){
+ std::array<FeatureBundle,objects::family_count> bundles;objects::Assets assets{};
+ for(unsigned f=0;f<bundles.size();++f)assets.bundles[f]=&bundles[f];
+ auto& bundle=bundles[objects::site_family];
+ for(std::string id:{"camp:e0","camp_lit:g5:e0","camp_lit:glow:e0","hut_0:g:e0"})bundle.assets.push_back(box(id,.1f,.1f,.1f));
+ assert(std::abs(objects::site_owner(bundle.assets[0])-.18f)<1e-6f && std::abs(objects::site_owner(bundle.assets[1])-.186f)<1e-6f);
+ assert(objects::site_owner(bundle.assets[2])==.18f && objects::site_owner(bundle.assets[3])==.18f);
+ // The camp's campfire (a flame, mode 0) in its mesh's space.
+ FeatureAsset fires;fires.id="lamps/camp:e0";
+ for(int k=0;k<3;++k)fires.vertices.push_back({{.04f,-.03f,.02f},{0,0,1},{0,1.3f}});
+ fires.indices={0,1,2};bundle.assets.push_back(fires);
+ FeatureGroup group;group.name="camp";
+ for(unsigned a=0;a<2;++a){FeaturePlacement placement{};placement.asset_index=a;placement.scale=1;group.placements.push_back(placement);}
+ bundle.groups.push_back(group);
+ auto tile=site(0,0,0);tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;tile.real_terrain_type=2;
+ objects::Plan plan;assert(objects::select_improvements(tile,assets,2,tile.improvement_flags,false,false,plan));
+ assert(plan.instances.size()==2);
+ for(auto const& instance:plan.instances)
+  assert(std::abs(instance.owner-(instance.asset==1?.186f:.18f))<1e-6f);
+ auto rock=[](float,float){return 90.f;};auto natural=[](float x,float){return 20.f+x;};
+ auto found=objects::tile_building_lamps(plan,assets,tile,rock,natural);
+ assert(found.size()==1 && found[0].mode==0.f && found[0].strength==1.3f);
+ auto const& camp=plan.instances[0];
+ float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
+ float x=tile_u+camp.u,y=tile_v+1-camp.v,co=std::cos(camp.rotation),si=std::sin(camp.rotation);
+ float lx=(.04f*co+.03f*si)*camp.scale,ly=(.04f*si-.03f*co)*camp.scale;
+ assert(std::abs(found[0].world[0]-(x+lx))<1e-5f && std::abs(found[0].world[1]-(y-ly))<1e-5f);
+ assert(std::abs(found[0].world[2]-(natural(x,y)+.02f*camp.scale*150.f/.82f)/112.f)<1e-5f);
+}
+''')
+
     def test_site_pack_puts_glow_maps_in_spare_slots_and_names_lit_parts(self):
         import json, struct, tempfile
         from Renderer.tools.asset_compiler import build_site_runtime as sites
         from Renderer.tools.asset_compiler import tile_buildings_runtime as tile_buildings
         import hashlib
-        _, textures, _ = sites.plan()
+        _, textures, *_ = sites.plan()
         string = lambda value: struct.pack("<I", len(value.encode())) + value.encode()
         cells = {hashlib.sha256((sites.SOURCE / t).read_bytes()).hexdigest(): [0, .5, .125 * k, .125, 512]
                  for k, t in enumerate(textures)}
@@ -590,8 +628,9 @@ int main(){
                           "        lit_color += sample_reused_resource_slot(tile_glow_code - 1.0, input.uv).rgb *\n"
                           "            environment_night_activation * environment_emissive_scale * 1.45;", shader, path)
         preparation = (ROOT / "Renderer/native/object_preparation.h").read_text()
-        self.assertIn("auto const lamps=tile_building_lamps(plan,assets,tile,route_height);", preparation)
-        self.assertIn("float(city_fidelity::effect_night_light),.075f*lamp.strength,.075f*lamp.strength,\n"
+        self.assertIn("auto const lamps=tile_building_lamps(plan,assets,tile,route_height,height_natural);", preparation)
+        self.assertIn("float(fire?city_fidelity::effect_flame:city_fidelity::effect_night_light),\n"
+                      "                (fire?.09f:.075f)*lamp.strength,(fire?.18f:.075f)*lamp.strength,\n"
                       "                float(k%16u*4u)+64.f*lamp.mode,lamp.strength}});", preparation)
 
     @unittest.skipUnless((ROOT / "Renderer/packs/TileBuildingsFrozen/manifest.json").is_file(), "frozen pack absent")

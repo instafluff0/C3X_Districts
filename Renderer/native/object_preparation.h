@@ -239,8 +239,8 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             [&](float x,float y){return input.river_ready?float(scratch.rivers.river_sample({x,y}).distance):1000.f;}),
         [&](float u,float v){return mountain_count?float(mountain_shape.sample(natural,tile_u+u,tile_v+1.f-v).displacement)*
             (.82f/150.f):0.f;}))return {};
-    // Tile buildings stand on the drawn rock (route_height, as their rigid seat).
-    auto const lamps=tile_building_lamps(plan,assets,tile,route_height);
+    // Seated as prepare_rigid seats them: tile buildings on the drawn rock.
+    auto const lamps=tile_building_lamps(plan,assets,tile,route_height,height_natural);
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
         clear_farm(plan,plan,assets,input.resource_boxes);
         // A plot kit lays out the areas it shares with neighbouring farms:
@@ -410,14 +410,17 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         if(city_fidelity::wonder_effects(library,nc,nr,wonder_kit->effects,route_height,projection,true,effects) &&
            !adopt_city(effects))return {};
     }
-    // Tile buildings' night lights (lanterns, runway lights, masts) as city lamps:
-    // the lamp mode rides in the seed (seed + 64 * mode, q8_city_effect).
+    // Sites' night lights and fires (lanterns, runway lights, masts; torches and
+    // campfires) in the city effect layer: a lamp's mode rides in the seed
+    // (seed + 64 * mode, q8_city_effect); mode 0 is a flame.
     if(!lamps.empty() && library.effect_material<library.materials.size()){
         std::vector<city_fidelity::EffectAnchor> anchors;
         for(std::size_t k=0;k<lamps.size();++k){
             auto const& lamp=lamps[k];
+            bool fire=lamp.mode<.5f;
             anchors.push_back({{lamp.world[0],lamp.world[1],lamp.world[2]},city_fidelity::Effect{{0,0,0},
-                float(city_fidelity::effect_night_light),.075f*lamp.strength,.075f*lamp.strength,
+                float(fire?city_fidelity::effect_flame:city_fidelity::effect_night_light),
+                (fire?.09f:.075f)*lamp.strength,(fire?.18f:.075f)*lamp.strength,
                 float(k%16u*4u)+64.f*lamp.mode,lamp.strength}});
         }
         city_fidelity::Surfaces effects;

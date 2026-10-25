@@ -184,6 +184,16 @@ inline bool terrain_wall_asset(FeatureAsset const& asset){
 inline bool tile_building_asset(FeatureAsset const& asset){
     return asset.id.rfind("district/",0)==0 || asset.id.rfind("walls/",0)==0;
 }
+// A site part Civ VI lights at night names its glow map's site-pack slot,
+// ":g<slot>" (sitepack.light_sources, build_site_runtime): owner .181-.188
+// (feature.hlsl); other parts .18.
+inline float site_owner(FeatureAsset const& asset){
+    auto const& id=asset.id;
+    for(auto at=id.find(":g");at!=std::string::npos;at=id.find(":g",at+1))
+        if(at+2<id.size() && id[at+2]>='0' && id[at+2]<='7' && (at+3==id.size() || id[at+3]==':'))
+            return .181f+.001f*float(id[at+2]-'0');
+    return .18f;
+}
 // A baked resource ground decal follows gentle relief but does not climb a steep
 // face: no point rises more than half its distance from the decal's centre
 // (heights in relief units, 150/.82 per tile), and the face hides the rest
@@ -1841,7 +1851,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
             for(auto const& placement:group->placements) {
                 if(placement.asset_index>=site_bundle.assets.size())return false;
                 append_feature_instance(site_bundle,placement,.5f,.5f,rotation,
-                    1.55f,21.f,.18f,false,site_vertices);
+                    1.55f,21.f,site_owner(site_bundle.assets[placement.asset_index]),false,site_vertices);
             }
         }
         // Ground states (user choice 2026-10-07) follow Civ III's tile state:
@@ -2252,13 +2262,9 @@ bool place_tile_buildings(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 c
         for(auto const* item:items){
             if(item->asset>=bundle.assets.size())continue;
             float du=(item->u-cu)*factor,dv=(item->v-cv)*factor;
-            auto const& id=bundle.assets[item->asset].id;
-            bool decal=id.rfind("decal/",0)==0;
-            // A part Civ VI lights at night names its glow map's site-pack slot,
-            // ":g<slot>" (sitepack.light_sources): owner .181-.188 (feature.hlsl).
-            bool glow=id.size()>3 && id.compare(id.size()-3,2,":g")==0 && id.back()>='0' && id.back()<='7';
+            bool decal=bundle.assets[item->asset].id.rfind("decal/",0)==0;
             Instance instance{site_family,item->asset,site_layer,u+du*co-dv*si,v+du*si+dv*co,item->rotation+turn,
-                item->scale*factor,21.f,decal?0.f:glow?.181f+.001f*float(id.back()-'0'):.18f,false};
+                item->scale*factor,21.f,decal?0.f:site_owner(bundle.assets[item->asset]),false};
             instance.ground_fit=decal?0.f:fit;instance.stretch=stretch;
             plan.instances.push_back(instance);
         }
@@ -2551,23 +2557,29 @@ bool place_tile_buildings(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 c
     }
     return true;
 }
-// The placed tile buildings' night lights (Civ VI's night_light points). A mesh
-// "<id>" may have a companion asset "lamps/<id>" (sitepack.night_assets): one
-// degenerate triangle per lamp at its point in the mesh's space, uv (city lamp
-// mode, strength). Each lamp goes where its instance puts that point, above the
-// ground it is seated on (prepare_rigid's seat on `height`): world column, row
-// and height (tile units, as city effect anchors), lamp mode, strength.
+// The placed site parts' night lights and fires (Civ VI's night_light and
+// flame points). A mesh "<id>" may have a companion asset "lamps/<id>"
+// (sitepack.night_assets, build_site_runtime): one degenerate triangle per
+// light at its point in the mesh's space, uv (mode: 0 a fire, 1-8 a city lamp;
+// strength). Each goes where its instance puts that point, above the ground the
+// instance is seated on (prepare_rigid's seat: tile buildings on the drawn
+// rock, `rock`, other sites on `natural`): world column, row and height (tile
+// units, as city effect anchors), mode, strength.
 struct TileLamp {float world[3],mode,strength;};
-template<class Height>
-std::vector<TileLamp> tile_building_lamps(Plan const& plan,Assets const& assets,c3x_renderer_tile_v1 const& tile,Height height){
+template<class Rock,class Natural>
+std::vector<TileLamp> tile_building_lamps(Plan const& plan,Assets const& assets,c3x_renderer_tile_v1 const& tile,
+        Rock rock,Natural natural){
     std::vector<TileLamp> lamps;
     auto const& bundle=assets[site_family];
     float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
     for(auto const& instance:plan.instances){
         if(instance.family!=site_family || instance.asset>=bundle.assets.size())continue;
-        std::string const name="lamps/"+bundle.assets[instance.asset].id;
+        auto const& owner=bundle.assets[instance.asset];
+        std::string const name="lamps/"+owner.id;
         auto found=std::find_if(bundle.assets.begin(),bundle.assets.end(),[&](FeatureAsset const& a){return a.id==name;});
         if(found==bundle.assets.end())continue;
+        bool on_rock=tile_building_asset(owner);
+        auto height=[&](float x,float y){return on_rock?rock(x,y):natural(x,y);};
         float x=tile_u+instance.u,y=tile_v+1.f-instance.v,ground=height(x,y)-2.5f,fit=instance.ground_fit;
         if(fit>0.f)for(int corner=0;corner<4;++corner)
             ground=std::min(ground,height(x+(corner&1?fit:-fit),y+(corner&2?fit:-fit))-2.5f);

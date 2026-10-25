@@ -332,6 +332,9 @@ def compile_tile_objects(
                 float(strategy["source_units_per_tile"]),
                 texture_cache,
                 terrain_edit_policy="preserve_unresolved",
+                # Civ VI lays a building's emissive map out by uv2 (as the city
+                # pack reads it): the site runtime needs it for a camp's night light.
+                auxiliary_uvs=True,
             )
         except (OSError, ValueError, KeyError, TypeError, struct.error) as exc:
             visiting.discard(key)
