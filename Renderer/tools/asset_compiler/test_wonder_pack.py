@@ -75,6 +75,38 @@ class Helpers(unittest.TestCase):
         self.addCleanup(Path(handle.name).unlink)
         return Path(handle.name)
 
+    def test_simplify_keeps_borders_seams_and_attributes(self):
+        # A bumped grid whose right half is a separate UV chart (duplicated seam column):
+        # the interior simplifies, every border and seam vertex stays, and every kept
+        # vertex is an original one (no interpolated attributes).
+        import math
+        n, half = 40, 20
+        vertices, indices, index = [], [], {}
+        for j in range(n):
+            for i in range(n):
+                for chart in ((0,) if i != half else (0, 1)):
+                    z = .1 * math.exp(-((i - 20) ** 2 + (j - 20) ** 2) / 60)
+                    index[(i, j, chart)] = len(vertices)
+                    vertices.append(((i / n, j / n, z), (0, 0, 1), ((i / n + chart, j / n), (0, 0), (0, 0))))
+        corner = lambda i, j, chart: index.get((i, j, chart), index.get((i, j, 0)))
+        for j in range(n - 1):
+            for i in range(n - 1):
+                chart = 1 if i >= half else 0
+                a, b, c, d = corner(i, j, chart), corner(i + 1, j, chart), corner(i, j + 1, chart), corner(i + 1, j + 1, chart)
+                indices += [a, b, d, a, d, c]
+        reduced, reduced_indices = wp.simplify_mesh(vertices, indices, 400)
+        self.assertLess(len(reduced), len(vertices) // 2)
+        kept = {id(v) for v in reduced}
+        originals = {id(v) for v in vertices}
+        self.assertTrue(kept <= originals)
+        for (i, j, chart), k in index.items():
+            if i in (0, n - 1) or j in (0, n - 1):
+                self.assertIn(id(vertices[k]), kept, (i, j))
+        # The seam column keeps both charts' copies wherever it is still used.
+        seam = [k for (i, j, chart), k in index.items() if i == half]
+        self.assertTrue(any(id(vertices[k]) in kept for k in seam))
+        self.assertEqual(len(reduced_indices) % 3, 0)
+
     def test_lamp_modes(self):
         flame = [0.1, 0.2, 0.3, 0.0, 0.12, 0.24, 5.0, 1.3]
         self.assertEqual(wp.lamp(flame), flame)

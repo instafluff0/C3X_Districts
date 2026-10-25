@@ -57,10 +57,12 @@ CAP_SCHEDULES = ({"base_color": 1024, "emissive": 1024, "": 512},
                  {"base_color": 256, "emissive": 256, "": 256})
 PROP_CAP = 512
 BUILDS = (.25, .5, .75)
-# Vertices per group: a tile's prepared objects stay under half the preparation byte
-# limit (render_core/content_preparation.h), so heavy build stages shed their smallest
-# construction pieces (loose bricks, rubble) first.
-GROUP_VERTICES = 60000
+# Vertices per group (season variants counted): about a city tile's (the production
+# city pack's median is 17k), so a wonder costs no more to draw than a city (the user,
+# 2026-10-25: first visits recomposed slower around heavy wonders). Meshes are
+# simplified to it first; only then are the smallest pieces (loose bricks) left out. It
+# also keeps a tile's prepared objects far under half the preparation byte limit.
+GROUP_VERTICES = 20000
 ALL, SUMMER_WINTER, AUTUMN, SPRING = 0, 0b0101, 0b0010, 0b1000
 # Lab lamp kinds (studies/wonders kits.LAMP_EDIT) become the night-light kind with a
 # mode: 1 + colour band (warm, white, red, green), + 4 when it blinks. The mode rides
@@ -168,6 +170,146 @@ def lamp(record: list) -> list:
     return record[:3] + [NIGHT_LIGHT] + record[4:6] + [(seed % 16) * 4 + 64 * mode] + record[7:]
 
 
+def simplify_mesh(vertices: list, indices: list, target: int) -> tuple[list, list]:
+    """A mesh reduced toward `target` vertices by quadric half-edge collapses
+    (Garland-Heckbert error, area-weighted planes) on its welded surface: vertices at
+    one position are one point, each triangle corner keeps its own normal and UVs. A
+    collapse moves a point onto a neighbour; every corner of the moving point must
+    continue across the collapsed edge (it takes the neighbour's corner there), so UV
+    charts and hard edges are never torn, only shortened along their own length.
+    Points on an open border never move and a collapse that would flip or crush a
+    triangle is refused; no attribute is interpolated."""
+    import heapq
+    import numpy as np
+    if len(vertices) <= target or len(indices) < 3:
+        return vertices, indices
+    weld: dict[tuple, int] = {}
+    point = [weld.setdefault(tuple(round(c, 6) for c in v[0]), len(weld)) for v in vertices]
+    points = len(weld)
+    positions = np.zeros((points, 3))
+    for vertex, w in zip(vertices, point):
+        positions[w] = vertex[0]
+    corners = [list(indices[i:i + 3]) for i in range(0, len(indices) - 2, 3)]
+    alive = [True] * len(corners)
+    around = [set() for _ in range(points)]
+    edges: dict[tuple[int, int], int] = {}
+    quadric = np.zeros((points, 4, 4))
+    for t, tri in enumerate(corners):
+        a, b, c = (point[i] for i in tri)
+        if a == b or b == c or a == c:
+            alive[t] = False
+            continue
+        for w in (a, b, c):
+            around[w].add(t)
+        for e in ((a, b), (b, c), (c, a)):
+            key = (min(e), max(e))
+            edges[key] = edges.get(key, 0) + 1
+        normal = np.cross(positions[b] - positions[a], positions[c] - positions[a])
+        area = np.linalg.norm(normal)
+        if area > 1e-12:
+            n = normal / area
+            plane = np.append(n, -n.dot(positions[a]))
+            k = np.outer(plane, plane) * area
+            quadric[a] += k
+            quadric[b] += k
+            quadric[c] += k
+    locked = [False] * points
+    for (a, b), uses in edges.items():
+        if uses != 2:
+            locked[a] = locked[b] = True
+    version = [0] * points
+    heap: list = []
+
+    def neighbours(w):
+        return {point[i] for t in around[w] for i in corners[t]} - {w}
+
+    def push(u):
+        if locked[u]:
+            return
+        for v in neighbours(u):
+            q = np.append(positions[v], 1.0)
+            heapq.heappush(heap, (float(q @ (quadric[u] + quadric[v]) @ q), u, v, version[u], version[v]))
+
+    def plan(u, v):
+        """The corner mapping of a legal collapse u -> v, or None."""
+        mapping: dict[int, int] = {}
+        for t in around[u]:
+            tri = corners[t]
+            if v in (point[i] for i in tri):
+                cu = next(i for i in tri if point[i] == u)
+                cv = next(i for i in tri if point[i] == v)
+                if mapping.setdefault(cu, cv) != cv:
+                    return None
+        for t in around[u]:
+            tri = corners[t]
+            if v in (point[i] for i in tri):
+                continue
+            if any(point[i] == u and i not in mapping for i in tri):
+                return None
+            a, b, c = (positions[point[i]] for i in tri)
+            moved = [positions[v] if point[i] == u else positions[point[i]] for i in tri]
+            before = np.cross(b - a, c - a)
+            after = np.cross(moved[1] - moved[0], moved[2] - moved[0])
+            if np.dot(before, after) <= .2 * np.linalg.norm(before) * np.linalg.norm(after):
+                return None
+        return mapping
+
+    for u in range(points):
+        push(u)
+    live = {i for t, tri in enumerate(corners) if alive[t] for i in tri}
+    while heap and len(live) > target:
+        _cost, u, v, vu, vv = heapq.heappop(heap)
+        if vu != version[u] or vv != version[v] or locked[u]:
+            continue
+        mapping = plan(u, v)
+        if mapping is None:
+            continue
+        for t in list(around[u]):
+            tri = corners[t]
+            if v in (point[i] for i in tri):
+                alive[t] = False
+                for i in tri:
+                    around[point[i]].discard(t)
+            else:
+                corners[t] = [mapping.get(i, i) for i in tri]
+                around[v].add(t)
+        around[u].clear()
+        live -= set(mapping)
+        quadric[v] += quadric[u]
+        version[u] += 1
+        touched = neighbours(v) | {v}
+        for w in touched:
+            version[w] += 1
+        for w in touched:
+            push(w)
+    remap: dict[int, int] = {}
+    out_vertices, out_indices = [], []
+    for t, tri in enumerate(corners):
+        if not alive[t]:
+            continue
+        for i in tri:
+            if i not in remap:
+                remap[i] = len(out_vertices)
+                out_vertices.append(vertices[i])
+            out_indices.append(remap[i])
+    return out_vertices, out_indices
+
+
+def simplified(pieces: list, budget: int, weights: list[int]) -> list:
+    """Pieces simplified toward a vertex budget (weights as thinned()): every piece
+    reduced by the same ratio, so detail falls evenly; thinned() takes what remains."""
+    total = sum(len(vertices) * weight for (_, _, vertices, _), weight in zip(pieces, weights))
+    if total <= budget:
+        return pieces
+    ratio = budget / total
+    out = []
+    for path, material, vertices, indices in pieces:
+        reduced, reduced_indices = simplify_mesh(vertices, indices, max(3, int(len(vertices) * ratio)))
+        if reduced_indices:
+            out.append((path, material, reduced, reduced_indices))
+    return out
+
+
 def thinned(pieces: list, budget: int, weights: list[int]) -> list:
     """Pieces within a vertex budget (each piece's vertices counted `weights` times:
     foliage draws once per season form): their connected parts largest first (by
@@ -226,6 +368,8 @@ def bodies(library: PackLibrary, cell: dict) -> tuple[dict[int, list], dict | No
         if not pieces:
             continue
         sources = kits.use(part["source"])
+        weights = [3 if foliage(piece[1], sources) else 1 for piece in pieces]
+        pieces = simplified(pieces, budget, weights)
         pieces = thinned(pieces, budget, [3 if foliage(piece[1], sources) else 1 for piece in pieces])
         leaves = [piece for piece in pieces if foliage(piece[1], sources)]
         rest = [piece for piece in pieces if piece not in leaves]
