@@ -217,6 +217,10 @@ def compile_improvements(
                 float(strategy["source_units_per_tile"]),
                 texture_cache,
                 terrain_edit_policy="preserve_unresolved",
+                # Civ VI lays a building's AO out by uv1 and its emissive map
+                # by uv2 (as the city pack reads them); runtime builders need
+                # uv2 to place a mine's night light.
+                auxiliary_uvs=True,
             )
         except (OSError, ValueError, KeyError, TypeError, struct.error) as exc:
             visiting.discard(key)

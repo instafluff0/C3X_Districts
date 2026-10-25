@@ -42,6 +42,20 @@ form and materials first; use one scene-wide lighting basis; compose terrain,
 trees, objects and shadows together; distinguish source evidence from
 inference; and compare close and gameplay views on real map terrain.
 
+## Night light (production, 2026-10-25)
+
+Civ VI lays a building's emissive map out by uv2 (AO by uv1), as the city pack
+reads them; uv0 is the shared base-colour atlas. The production mine sampled
+its emissive maps by uv0, so the maps' glow blocks fell on the headframe's
+planks and beams (17.6% of its surface) and at night it looked plastered with
+yellow. By uv2, Civ VI lights only a doorway and part of one face (about 1%).
+The improvement importer now keeps uv1/uv2, and `build_mine_runtime.py`
+(`bake_light`) splits those lit faces into their own part, baking their uv2
+light into a texture laid out by their uv0 (`textures/mine/light_*.dds`); the
+runtime is unchanged. Only the chosen building's meshes were refreshed in the
+pack (a full re-import matched every shared mesh apart from the new UVs).
+Tests: `native/test_mine_placement.py` (`*light*`).
+
 ## Witnesses
 
 - `test-biq-mine-detail-study.png`: matched ground-decal control, no-decal

@@ -171,8 +171,8 @@ int main(){
             name = text()
             _texture, vertex_count, index_count = take("<III")
             vertices = [take("<8f") for _ in range(vertex_count)]
-            take(f"<{index_count}I")
-            assets.append((name, vertices))
+            indices = take(f"<{index_count}I")
+            assets.append((name, vertices, indices))
         groups = {}
         for _ in range(group_count):
             name = text()
@@ -187,20 +187,93 @@ int main(){
         manifest = json.loads((PACK / "manifest.json").read_text())
         landmark = json.loads((PACK / manifest["assets"][
             _asset_id(strategy["source_package"], choice["source_entry"])]["landmark"]).read_text())
+        # Lit faces are split into their own part (bake_light), so compare the
+        # triangles' corners rather than vertex lists.
         source = []
         for binding in landmark["draw_bindings"]:
             if "worked" in binding["states"]:
                 mesh = json.loads((PACK / landmark["components"]["geometry"][binding["geometry"]]).read_text())
-                source += [vertex["position"] for vertex in mesh["vertices"]]
-        self.assertEqual(len(source), sum(len(vertices) for _, vertices in assets))
+                source += [mesh["vertices"][index]["position"] for index in mesh["topology"]["indices"]]
+        self.assertEqual(len(source), sum(len(indices) for _, _, indices in assets))
         turn = math.radians(choice["facing_degrees"])
         expected = [(x * math.cos(turn) - y * math.sin(turn), x * math.sin(turn) + y * math.cos(turn), z)
                     for x, y, z in source]
-        actual = [vertex[:3] for _, vertices in assets for vertex in vertices]
+        actual = [vertices[index][:3] for _, vertices, indices in assets for index in indices]
         for axis in range(3):
             # Each axis sorted on its own: float32 rounding cannot reorder it.
             pairs = zip(sorted(point[axis] for point in expected), sorted(point[axis] for point in actual))
             self.assertTrue(all(abs(a - b) < 1e-5 for a, b in pairs))
+
+    def test_light_bakes_only_faces_civ6_lights(self):
+        # Civ VI lays a building's emissive map out by uv2. Sampled by the base
+        # colour's uv0 (an atlas many faces share), its glow blocks landed on the
+        # mine's planks and beams, and at night the headframe was plastered with
+        # yellow. Two faces share one uv0 patch; only the first is lit by uv2.
+        import numpy as np
+        from Renderer.tools.asset_compiler import build_mine_runtime as mine
+        emissive = np.zeros((64, 64, 3))
+        emissive[:16, :16] = (.8, .5, .1)
+        patch = [[.5, .5], [.75, .5], [.5, .75]]
+        lit_uv2 = [[.02, .02], [.2, .02], [.02, .2]]
+        dark_uv2 = [[.6, .6], [.9, .6], [.6, .9]]
+        vertices = [{"position": [i, 0.0, 0.0], "normal": [0.0, 0.0, 1.0], "uv0": uv0, "uv2": uv2}
+                    for i, (uv0, uv2) in enumerate(zip(patch + patch, lit_uv2 + dark_uv2))]
+        mesh = {"vertices": vertices, "topology": {"primitive": "triangles", "indices": [0, 1, 2, 3, 4, 5]}}
+        dark, lit, light = mine.bake_light([mesh], emissive)
+        self.assertEqual([[0.0, 1.0, 2.0]], [[v["position"][0] for v in part["vertices"]] for part in lit])
+        self.assertEqual([[3.0, 4.0, 5.0]], [[v["position"][0] for v in part["vertices"]] for part in dark])
+        self.assertEqual([0, 1, 2], lit[0]["topology"]["indices"])
+        # The lit face's uv0 patch holds its uv2 light; far from it stays black.
+        self.assertTrue(np.allclose(light[34, 34], (.8, .5, .1)))
+        self.assertTrue((light[5, 5] == 0).all() and (light[60, 10] == 0).all())
+        # Without uv2 the light cannot be placed: the face stays dark.
+        bare = {**mesh, "vertices": [{k: v for k, v in vertex.items() if k != "uv2"} for vertex in vertices]}
+        dark, lit, light = mine.bake_light([bare], emissive)
+        self.assertEqual(([], 1, 6), (lit, len(dark), len(dark[0]["topology"]["indices"])))
+        self.assertFalse(light.any())
+
+    @unittest.skipUnless((PACK / "manifest.json").is_file(), "local ImprovementsNormalized pack absent")
+    def test_runtime_lights_only_civ6_lit_faces(self):
+        # Production: Civ VI lights one doorway and a window on this building, about
+        # 1% of its surface; the uv0 sampling lit 17.6% of it, mostly timber.
+        import numpy as np
+        from Renderer.tools.asset_compiler import build_mine_runtime as mine
+        with tempfile.TemporaryDirectory() as directory:
+            data = mine.build(PACK, target_name=str(Path(directory) / "mine_runtime.bin")).read_bytes()
+        cursor = [len(mine.MAGIC)]
+
+        def take(fmt):
+            values = struct.unpack_from(fmt, data, cursor[0])
+            cursor[0] += struct.calcsize(fmt)
+            return values
+
+        def text():
+            (length,) = take("<I")
+            cursor[0] += length
+            return data[cursor[0] - length:cursor[0]].decode()
+        _version, texture_count, asset_count, _groups = take("<IIII")
+        textures = [text() for _ in range(texture_count)]
+        total = glowing = 0.0
+        brightest = []
+        for _ in range(asset_count):
+            code = int(text().rsplit(":e", 1)[1])
+            _texture, vertex_count, index_count = take("<III")
+            vertices = np.array([take("<8f") for _ in range(vertex_count)])
+            triangles = vertices[np.array(take(f"<{index_count}I")).reshape(-1, 3)]
+            area = np.linalg.norm(np.cross(triangles[:, 1, :3] - triangles[:, 0, :3],
+                                           triangles[:, 2, :3] - triangles[:, 0, :3]), axis=1) / 2
+            total += area.sum()
+            if code:
+                # The runtime samples the emissive slot by uv0 (feature.hlsl).
+                light = mine.bc1_rgb(PACK / textures[mine.BASE_SLOTS + code - 1])
+                size = light.shape[0]
+                uv = triangles[:, :, 6:8].mean(1)
+                texels = light[(uv[:, 1] * size).astype(int) % size, (uv[:, 0] * size).astype(int) % size]
+                brightest.append(texels.max())
+                glowing += area.sum()
+        self.assertLess(glowing / total, .02)
+        # And the doorway does glow.
+        self.assertGreater(min(brightest, default=0), .5)
 
 
 if __name__ == "__main__":
