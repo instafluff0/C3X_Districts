@@ -89,6 +89,54 @@ PREVIEW_MINUTE = ("Renderer/native/biq_preview.cpp",
                   "    char lab_minute[8] = {};\n"
                   "    if (GetEnvironmentVariableA(\"C3X_LAB_PREVIEW_MINUTE\", lab_minute, sizeof(lab_minute)))\n"
                   "        frame.minute = std::atoi(lab_minute);\n")
+# Lab-only: Renderer64 draws the Winter mountain flurry as per-view quads in its
+# x64 pass, which Lab previews never run. With C3X_LAB_MOUNTAIN_FLURRY set, both
+# Lab object paths attach the same quad (kind 6, 1.05 by 3.6 tiles on the tile's
+# front corner, same seed) as a city effect; the season root's shader draws kind 6
+# only in Winter. After studies/winter/flurry_tree.py.
+FLURRY_SWITCH = 'GetEnvironmentVariableA("C3X_LAB_MOUNTAIN_FLURRY",nullptr,0)!=0'
+FLURRY = {
+    "Renderer/native/city_fidelity/compiler.h": (
+        ("            e.kind==float(effect_geyser) || e.kind==float(effect_spray);\n",
+         "            e.kind==float(effect_geyser) || e.kind==float(effect_spray) || e.kind==6.f;\n"),
+        ("    append_effects(library,{plume},std::make_shared<Lighting>(),project_natural,indexed,output);\n"
+         "    return output.chunks.size()>before;\n}\n",
+         "    append_effects(library,{plume},std::make_shared<Lighting>(),project_natural,indexed,output);\n"
+         "    return output.chunks.size()>before;\n}\n"
+         "template<class Project>\n"
+         "bool mountain_flurry(Library const& library,int nc,int nr,float ground,\n"
+         "        Project project_natural,bool indexed,Surfaces& output){\n"
+         "    EffectAnchor flurry{{float(nc)+1.f,float(nr),ground/112},\n"
+         "        Effect{{0,0,0},6.f,1.05f,3.6f,float((unsigned(nc)*73u^unsigned(nr)*151u)%64u),1.f}};\n"
+         "    auto before=output.chunks.size();\n"
+         "    append_effects(library,{flurry},std::make_shared<Lighting>(),project_natural,indexed,output);\n"
+         "    return output.chunks.size()>before;\n}\n"),
+    ),
+    "Renderer/native/object_preparation.h": (
+        ("    if(!capture.road_mask && !capture.railroad_mask && capture.city_id<0 && !volcano && !wonder && !wonder_tile &&\n",
+         "    bool const flurry=capture.real_terrain_type==6 && input.city_ready && " + FLURRY_SWITCH + ";\n"
+         "    if(!capture.road_mask && !capture.railroad_mask && capture.city_id<0 && !volcano && !wonder && !wonder_tile && !flurry &&\n"),
+        ("    if(stop())return {};\n    result->rivers.assign(",
+         "    if(flurry && library.effect_material<library.materials.size()){\n"
+         "        city_fidelity::Surfaces snow;\n"
+         "        GroundProjection projection{nc,nr,input.projection.half_w,input.projection.half_h,\n"
+         "            input.projection.relief_projection_scale,float(input.projection.content_view_height)};\n"
+         "        if(city_fidelity::mountain_flurry(library,nc,nr,height_natural(float(nc)+1.f,float(nr)),projection,true,snow) &&\n"
+         "           !adopt_city(snow))return {};\n"
+         "    }\n"
+         "    if(stop())return {};\n    result->rivers.assign("),
+    ),
+    "Renderer/native/source_fidelity/geometry.h": (
+        ("            for(auto& chunk:plume.chunks)city_chunks.push_back(std::move(chunk));\n    }\n",
+         "            for(auto& chunk:plume.chunks)city_chunks.push_back(std::move(chunk));\n    }\n"
+         "    if(!prepared_objects && city_profile && cities.ready && owner.real==6 && " + FLURRY_SWITCH + "){\n"
+         "        c3x_renderer::city_fidelity::Surfaces snow;\n"
+         "        if(c3x_renderer::city_fidelity::mountain_flurry(cities.library,nc,nr,height_natural(float(nc)+1.f,float(nr)),\n"
+         "                project_natural,false,snow))\n"
+         "            for(auto& chunk:snow.chunks)city_chunks.push_back(std::move(chunk));\n"
+         "    }\n"),
+    ),
+}
 PATCHES = (
     ('#include "environment_runtime.h"\n', '#define _CRT_SECURE_NO_WARNINGS\n#include "environment_runtime.h"\n'),
     ("#include <limits>\n", "#include <limits>\n#include <cstdio>\n#include <cstdlib>\n#include <string>\n"),
@@ -103,14 +151,22 @@ PATCHES = (
 )
 
 
-def build_private(overlay: Path | None) -> Path:
+def build_private(overlay: Path | None, head: bool = False) -> Path:
     from Renderer.lab.platform import native_command_result
     private = PRIVATE if overlay else BASELINE
-    files = subprocess.run(["git", "ls-files", "-c", "-o", "--exclude-standard", "Renderer/native", "Renderer/sandbox",
-                            "Renderer/lab/shared", "Renderer/lab/studies/borders", "Renderer/lab/native_preview.cpp",
-                            "Renderer/lab/build_native_preview.bat", "Renderer/lab/volcano_witness.h",
-                            "Renderer/default.custom_rendering.txt"],
+    sources = ["Renderer/native", "Renderer/sandbox", "Renderer/lab/shared", "Renderer/lab/studies/borders",
+               "Renderer/lab/native_preview.cpp", "Renderer/lab/build_native_preview.bat",
+               "Renderer/lab/volcano_witness.h", "Renderer/default.custom_rendering.txt"]
+    files = subprocess.run(["git", "ls-files", "-c", "-o", "--exclude-standard", *sources],
                            cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines()
+    if head:
+        # Tracked sources as committed: other sessions' uncommitted edits stay out.
+        private.mkdir(parents=True, exist_ok=True)
+        archive = subprocess.run(["git", "archive", "HEAD", *sources], cwd=ROOT, capture_output=True, check=True).stdout
+        subprocess.run(["tar", "-x", "-C", str(private)], input=archive, check=True)
+        tracked = set(subprocess.run(["git", "ls-files", "-c", *sources], cwd=ROOT, capture_output=True,
+                                     text=True, check=True).stdout.splitlines())
+        files = [name for name in files if name not in tracked]
     for name in files:
         if name.startswith("Renderer/native/build/"):
             continue
@@ -135,6 +191,7 @@ def build_private(overlay: Path | None) -> Path:
         raise RuntimeError("Lab transfer anchor changed in " + path)
     (private / path).write_text(text.replace(old, new))
     patch_preview(private)
+    patch_flurry(private)
     harness.wait_for_vm()
     result = native_command_result(private.relative_to(ROOT).as_posix() + "/Renderer/native",
                                    "call BUILD.bat candidate-compile", timeout_seconds=1500)
@@ -151,6 +208,16 @@ def patch_preview(private: Path) -> None:
     if text.count(old) != 1:
         raise RuntimeError("Lab preview-minute anchor changed in " + path)
     (private / path).write_text(text.replace(old, new))
+
+
+def patch_flurry(private: Path) -> None:
+    for path, edits in FLURRY.items():
+        text = (private / path).read_text()
+        for old, new in edits:
+            if text.count(old) != 1:
+                raise RuntimeError("Lab flurry anchor changed in " + path)
+            text = text.replace(old, new)
+        (private / path).write_text(text)
 
 
 def build_preview(private: Path, refresh: bool = True) -> Path:
@@ -170,7 +237,7 @@ def build_preview(private: Path, refresh: bool = True) -> Path:
 
 
 def render(label: str, dll: Path, keys: Path | None, views, season: int = 0, shader_root: Path | None = None,
-           minute: int = 0) -> None:
+           minute: int = 0, seconds: float | None = None, flurry: bool = False) -> None:
     harness.OUT = OUT
     # Each tree's DLL renders through the preview built from the same tree.
     harness.PREVIEW = dll.resolve().parents[4] / "Renderer/lab/.cache/native_preview.exe"
@@ -179,6 +246,12 @@ def render(label: str, dll: Path, keys: Path | None, views, season: int = 0, sha
         extra["C3X_RENDERER_SHADER_SOURCE_ROOT"] = harness.windows(shader_root.resolve())
     if minute:
         extra["C3X_LAB_PREVIEW_MINUTE"] = str(minute)
+    if seconds is not None:
+        # The animation clock: water, waves and effects move with it (still
+        # renders otherwise all sit at second 1, so a film's sea froze).
+        extra["C3X_LAB_EFFECT_TIME"] = f"{seconds:.6f}"
+    if flurry:
+        extra["C3X_LAB_MOUNTAIN_FLURRY"] = "1"
     harness.render(label, None, season, views, dll.resolve(), extra)
 
 
@@ -280,12 +353,15 @@ def main():
     build = sub.add_parser("build")
     build.add_argument("--overlay", type=Path, help="tree of proposed production files; omit for the baseline")
     build.add_argument("--preview-only", action="store_true", help="rebuild only the private preview tool")
+    build.add_argument("--head", action="store_true", help="tracked sources from HEAD, not the shared working tree")
     run = sub.add_parser("render")
     run.add_argument("label")
     run.add_argument("--dll", type=Path, default=PRIVATE_DLL)
     run.add_argument("--keys", type=Path, help="key file for the private DLL")
     run.add_argument("--season", type=int, default=0, choices=range(4), help="0 Summer, 1 Autumn, 2 Winter, 3 Spring")
     run.add_argument("--minute", type=int, default=0, help="minutes past each view's hour (private preview)")
+    run.add_argument("--time", type=float, help="animation clock second (water, waves, effects)")
+    run.add_argument("--flurry", action="store_true", help="Winter mountain flurry (private build, season root)")
     run.add_argument("--shader-root", type=Path,
                      help="private shader root; seasons need `tools/season_shading.py --lab-root DIR`")
     run.add_argument("--views", nargs="*", default=[f"concept-{h:02d}" for h in HOURS],
@@ -305,9 +381,9 @@ def main():
         print(timelapse(args.labels, args.view, args.seasons, target=args.out, minutes=args.minutes))
     elif args.command == "build":
         print(build_preview(PRIVATE) if args.preview_only else
-              build_private(args.overlay.resolve() if args.overlay else None))
+              build_private(args.overlay.resolve() if args.overlay else None, args.head))
     else:
-        render(args.label, args.dll, args.keys, args.views, args.season, args.shader_root, args.minute)
+        render(args.label, args.dll, args.keys, args.views, args.season, args.shader_root, args.minute, args.time, args.flurry)
 
 
 if __name__ == "__main__":

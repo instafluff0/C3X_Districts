@@ -39,6 +39,20 @@ non-Summer render shows only the seasonal tree stands;
 the whole view against the Civ VI targets; `timelapse LABEL` crossfades the 24
 hourly `concept` renders into a looping MP4 with a clock bar.
 
+`build --head` snapshots tracked sources from HEAD instead of the shared working
+tree (other sessions' uncommitted edits stay out). Every private build also
+carries a Lab-only flurry patch: Renderer64 draws the Winter mountain flurry as
+per-view quads in its x64 pass, which Lab previews never run, so with
+`render --flurry` (`C3X_LAB_MOUNTAIN_FLURRY`) both Lab object paths attach the
+same quad as a city effect, and the season root's shader draws it in Winter.
+`render --minute M --time T` places a frame at M minutes past each hour with
+animation clock T, so films step in quarter hours and their water moves.
+
+The x64 sandbox client (`Renderer/sandbox`) cannot stand in for the game here:
+it never establishes the game's world window, so rivers, roads, farms, sites
+and mine bodies get no instances (hut shadows without huts). Films of the Lab
+village use the private Lab build.
+
 Looks: v1 first plausible keys; v2 keyed exposure and saturation; v3 more
 orange sunset, brighter bluer night (the user's pick for midnight: it matches
 Civ VI). v4–v7 tried calming the pale-blue glow of sand, snow and shores at
@@ -46,3 +60,15 @@ night (a blue tint grade with neutral light, then silvered highlights); each
 lost the vibrancy and was dropped. v5 introduced the rose-gold golden-hour
 sunrise the user asked for (Civ VI's dim lavender made units hard to see),
 which stays.
+
+Lab coast blotches (2026-10-25): dark patches offshore in the village view. The
+game's mirror-ground clip (84c7115f, one height unit) now also holds in the
+Lab's terrain and mountain mirrors (`environment_refresh/prepare.py`), but that
+only lightened them. A mirror tinted per provider (each `PSReflection` painting
+any covered pixel one solid colour) showed the rest was the terrain mirror's
+faint coastal margin: the land fades to a few percent over the beach, the
+ground blend writes colour without alpha, and the sea (`water_natural.hlsl`)
+takes any mirrored colour as full coverage, so over open sea that margin read
+as a near-black solid. The Lab terrain mirror now keeps only ground the main
+pass draws at least half opaque, at its own colour. They showed most away from
+the screen centre, where the sea's Fresnel is strongest.
