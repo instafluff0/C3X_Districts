@@ -255,6 +255,41 @@ cursor, then closes the city. Require all 600 mouse events and the three
 interactions, and check the frames for the "C" cursor over the commerce rows.
 Read it with `check_retained_growth.py --hover` below (performance review 90-91).
 
+`-Scenario foreign-advisor -Seconds 100 -SampleHz 4 -ProfileRenderer` uses the
+user's 3400 BC autosave (`.cache/foreign-advisor-20261026/user-3400BC.SAV`,
+several known leaders). It opens the Foreign Advisor (F4), hovers the advisor
+heads and leader portraits, clicks the three tabs and three advisor heads (the
+third switches to Military), circles the pointer, closes with Esc and takes one
+camera step. Require every mouse event,
+the three interactions, one scroll step and no `native-operation-failed`.
+Before the 512K-pixel text raster cap (2026-10-26), a 43-character string at a
+27-pixel font (502x81) fell back to CPU drawing; Renderer64 rejects that
+readback, so the GPU image session died and the screen froze while music played.
+
+`-Scenario diplomacy-hover -Seconds 115 -SampleHz 4 -ProfileRenderer` uses the
+same 3400 BC autosave: F4, a double click on Bismarck's portrait (a single click
+only selects him), "We would like to propose a deal...", a click on our
+collapsed Technology category, then 30 s circling its links (Civ III's software
+Civilopedia cursor) and 10 s over plain dialogue text, two Esc and one camera
+step. The animated leader head presents its area ~55 times a second. On
+October 26 the hover pinned up to eight full-screen screen versions, each a
+keyed expand of the panel over the animated map. Before the retained-
+composition fixes it measured: +354 nodes, slowest frame 146 ms, 45 M copied
+pixels per frame, native presents blocked 660 ms/s. Front rebase, the
+cursor-restore proof and 16x8 upload tiles gave +84 nodes, 59 ms, 28 M and
+452-605 ms/s. The panel is still redrawn from new temporary images and
+re-uploaded whole, so some versions stay unprovable; cropped versions (each
+costs only the area the front shows, one crop per version) and per-pixel
+source reads over the read area then gave hover frames at idle cost: 5.2 ms
+median against 4.2 idle, 173 copies against 136, 11.6 M copied pixels against
+11.3, slowest frame 69 ms, presents blocked 149 ms/s
+(`test_front_rebase.py`, `test_retained_composition.cpp` "cropped screen
+versions"). Native presents do not wait until shown on the direct-surface
+path; they wait behind image batches on the helper's single worker, so the
+per-frame recomposition cost is the lever. `check_retained_growth.py` passes
+it either way (depth stays 10-13); judge it by the direct-visual numbers and
+"presents blocked", A/B in one session (runs vary by ~100 ms/s).
+
 For user-controlled play instead of a scripted fixture, use
 [`CAPTURE_GAMEPLAY.bat`](../docs/gameplay_profile.md). Its console can finish
 collecting evidence while the game remains frozen.

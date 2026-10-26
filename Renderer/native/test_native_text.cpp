@@ -172,6 +172,25 @@ void actual_native_message_contract(){
         SelectObject(source.dc,old);DeleteObject(font);
     }
 }
+// Capture 20261026-134601: a 43-character Foreign Advisor string at a 27-pixel
+// font needed a 502x81 raster. A 32K-pixel cap refused it; the CPU fallback on
+// that GPU-owned canvas needs a readback Renderer64 rejects, ending the session.
+void advisor_text_admission_contract(){
+    char const text[]="President Lincoln of America meets Bismarck";
+    static_assert(sizeof(text)-1==43,"recorded advisor string length");
+    Dib source(32,false);LOGFONTA description={};description.lfHeight=27;description.lfOutPrecision=7;strcpy_s(description.lfFaceName,"Arial");
+    for(int quality:{DEFAULT_QUALITY,ANTIALIASED_QUALITY}){
+        description.lfQuality=BYTE(quality);auto font=CreateFontIndirectA(&description);if(!font)throw std::runtime_error("advisor font");auto old=SelectObject(source.dc,font);
+        SetTextColor(source.dc,RGB(40,32,20));SetBkColor(source.dc,RGB(222,206,170));SetTextAlign(source.dc,TA_LEFT|TA_TOP);SetBkMode(source.dc,TRANSPARENT);
+        c3x_native_text::State state;c3x_native_text::Raster raster;c3x_native_text::Diagnostic diagnostic;
+        bool compiled=c3x_native_text::capture(source.dc,state,&diagnostic)&&c3x_native_text::compile(source.dc,state,text,43,raster,&diagnostic);
+        if(std::uint64_t(diagnostic.width)*diagnostic.height<=32768)throw std::runtime_error("advisor fixture no longer exceeds the old 32K-pixel raster cap");
+        if(!compiled){std::printf("FAIL advisor text refused reason=%s raster=%u,%u\n",c3x_native_text::refusal_name(diagnostic.reason),diagnostic.width,diagnostic.height);
+            throw std::runtime_error("ordinary advisor text must stay on the GPU path");}
+        qualify_gpu_text(source.dc,raster,text,43,{300,200,0,0},{0,0,1024,768});
+        SelectObject(source.dc,old);DeleteObject(font);
+    }
+}
 
 void native_strip_seam_contract(){
     Dib source(32,false);LOGFONTA description={};description.lfHeight=-32;description.lfQuality=ANTIALIASED_QUALITY;strcpy_s(description.lfFaceName,"Arial");
@@ -205,6 +224,7 @@ int main(int argc,char** argv){try {
     if(argc!=1)throw std::runtime_error("usage: test_native_text [--reproduce-refusal|--reproduce-candidate|--qualify-candidate renderer.log]");
     text_extent_refusal_contract();
     actual_native_message_contract();
+    advisor_text_admission_contract();
     native_strip_seam_contract();
     using namespace c3x_gpu_images;Microsoft::WRL::ComPtr<ID3D11Device> device;Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL feature;
     checked(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,D3D11_CREATE_DEVICE_BGRA_SUPPORT,nullptr,0,D3D11_SDK_VERSION,&device,&feature,&context));

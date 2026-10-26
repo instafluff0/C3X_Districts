@@ -22,7 +22,8 @@ from Renderer.native.native_cpp_test import run_cpp
 def method(source, signature):
     begin = source.index(signature)
     # record's default arguments contain braces; the body follows ')'.
-    brace = source.index('){', begin) + 1
+    # A signature that ends at its brace (e.g. a const method) is exact.
+    brace = begin + len(signature) - 1 if signature.endswith('{') else source.index('){', begin) + 1
     depth = 1
     end = brace + 1
     while depth:
@@ -41,7 +42,8 @@ struct ''' + name + r''' {
  struct BatchOp {Picture inputs[6];};
  struct Node {Rect area{},recipe_clip{};Command command{};bool operation=false,dynamic=false,map_dynamic=false,constant=false,view_dependent=false,retired=false;
   Picture inputs[6];Id original[6]={};Direct direct;std::shared_ptr<c3x_renderer::ZoomTransition> placement;int anchor_x=0,anchor_y=0;
-  std::vector<BatchOp> batch;bool projects_scene=false;std::shared_ptr<c3x_renderer::ZoomTransition> view;};
+  std::vector<BatchOp> batch;bool projects_scene=false,selected_world=false;std::shared_ptr<c3x_renderer::ZoomTransition> view;
+  std::shared_ptr<Node> projected;Sample sample;};
  struct PlanNode {std::weak_ptr<Node> node;bool project=false;};
  struct PrepareNode {std::weak_ptr<Node> node;bool project=false;std::weak_ptr<c3x_renderer::ZoomTransition> scale;};
  struct PlanReuse {std::uint64_t builds=0,reuses=0;std::size_t nodes=0;unsigned depth=0;};
@@ -49,6 +51,12 @@ struct ''' + name + r''' {
  Picture front;std::uint64_t front_revision=0,topology_revision=0,planned_front=~std::uint64_t(0),planned_topology=~std::uint64_t(0);
  std::vector<PlanNode> collect_plan;std::vector<PrepareNode> prepare_plan;PlanReuse plan_counts;bool trace_evaluated=false;void trace_plan(){}
  unsigned plan_depth(Id id){front=images.at(id);++front_revision;compile_plan();return plan_counts.depth;}
+ static bool same_rect(Rect a,Rect b){return a.left==b.left&&a.top==b.top&&a.right==b.right&&a.bottom==b.bottom;}
+ static bool same_picture(Picture const& a,Picture const& b,bool require_version=true){
+  if(a.width!=b.width||a.height!=b.height||a.format!=b.format||a.partitioned!=b.partitioned||
+     (require_version&&a.version!=b.version)||!same_rect(a.required,b.required)||a.patches.size()!=b.patches.size())return false;
+  for(std::size_t i=0;i<a.patches.size();++i){auto const& x=a.patches[i];auto const& y=b.patches[i];
+   if(x.node!=y.node||x.output!=y.output||!same_rect(x.area,y.area))return false;}return true;}
  Rect intersect(Rect a,Rect b)const{return intersection(a,b);}
  bool empty(Rect r)const{return r.left>=r.right||r.top>=r.bottom;}
  Rect extent(Picture const& p)const{return {0,0,int(p.width),int(p.height)};}
@@ -64,7 +72,11 @@ class CursorSaveRestoreTests(unittest.TestCase):
         source = (ROOT / 'Renderer/native/retained_composition.h').read_text()
         methods = '\n'.join(method(source, s) for s in (
             '    Picture read(Id id,Rect region){', '    void replace(Picture& image,',
-            '    void write(Picture& image,', '    void record(Command const& c,', '    void compile_plan(){'))
+            '    void write(Picture& image,', '    void record(Command const& c,', '    void compile_plan(){',
+            '    bool pixel_local(Node const& n)const{',
+            '    bool same_pixels(Node const& a,Node const& b,Rect r,unsigned depth,unsigned& budget)const{',
+            '    bool same_region(Picture const& a,Picture const& b,Rect r,unsigned depth,unsigned& budget)const{',
+            '    std::vector<Patch> keep_current(Id image,std::vector<Patch> const& selected){'))
         begin = methods.index("        // Civ III's software cursor")
         end = methods.index("        // JGL's unscaled opaque transfer")
         general = methods[:begin] + methods[end:]
@@ -82,6 +94,7 @@ using namespace c3x_gpu_images;
 // Outside the owners: a nested default member initializer cannot serve
 // record's `Direct direct={}` default argument.
 struct Compositor {};
+struct Sample {explicit operator bool()const{return false;}};
 struct Direct {bool animated=false;std::uint64_t input_bytes=0;std::function<std::uint64_t(long long,long long)> revision;std::function<bool(Compositor&,Command const&)> draw;};
 ''' + owner('Current', methods) + owner('General', general) + r'''
 // Pixel model: the base is the animated map (time t), fills are UI, copies

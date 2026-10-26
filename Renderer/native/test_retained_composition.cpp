@@ -1762,6 +1762,60 @@ int test_retained_composition(){
         fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
         std::printf("PASS retained damaged front: format=%u exact=14 rotating_targets=1 failed_display_retry=1 unchanged_fixed_pixels=1 partial_commit=1 shifted_self_copy=1 saved_version=1 sparse_fallback=1 optional_admission_eviction=1 reset=1\n",unsigned(format));
     }
+    // Hovering Civ III's diplomacy panel presents only small rectangles while
+    // the panel, redrawn from new temporary images and re-uploaded whole,
+    // cannot be proven unchanged: the front keeps several screen versions,
+    // each a full-screen keyed expand over the animated map. Their cropped
+    // copies and per-pixel source reads must show exactly what was presented.
+    {
+        constexpr unsigned width=160,height=96,key=31775;Rect bounds={0,0,int(width),int(height)};
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());auto& live=*live_owner;
+        auto retained_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& retained=*retained_owner;
+        auto make=[&](unsigned x,unsigned y,Format f){auto id=live.create(x,y,f);assert(id);retained.create(id,x,y,f);return id;};
+        auto map=make(width,height,Format::bgra32),screen=make(width,height,Format::bgra32),panel=make(width,height,Format::rgb555);
+        std::vector<unsigned> pixels(width*height);
+        for(unsigned i=0;i<pixels.size();++i)pixels[i]=0xff000000u|((i*711+97)&0xffffffu);
+        assert(live.upload(map,1,pixels.data(),pixels.size()));
+        RetainedComposition::Texture map_texture=live.texture(map);
+        retained.source(map,map_texture.Get(),[&](long long,long long){return map_texture;},true,true);
+        unsigned revision=1;
+        auto words=[&](unsigned count,unsigned seed,unsigned holes){std::vector<unsigned> out(count);
+            for(unsigned i=0;i<count;++i){unsigned v=(i*37+seed*11)&32767u;out[i]=i%holes==0?key:v==key?v^1u:v;}return out;};
+        auto upload_panel=[&](unsigned seed){auto data=words(width*height,seed,7);
+            assert(live.upload(panel,++revision,data.data(),data.size()));retained.source(panel,live.texture(panel));};
+        auto redraw=[&](unsigned tick,Rect r){auto tw=unsigned(r.right-r.left),th=unsigned(r.bottom-r.top);auto temporary=make(tw,th,Format::rgb555);
+            auto data=words(tw*th,tick*5+3,5);assert(live.upload(temporary,1,data.data(),data.size()));retained.source(temporary,live.texture(temporary));
+            Command c={Kind::copy,panel,temporary,r,bounds,0,0};assert(live.submit(&c,1));retained.record(c);
+            live.destroy(temporary);retained.destroy(temporary);};
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET;
+        ComPtr<ID3D11Texture2D> display,buffer;ComPtr<ID3D11RenderTargetView> target;
+        checked(device->CreateTexture2D(&desc,nullptr,&display));checked(device->CreateTexture2D(&desc,nullptr,&buffer));
+        checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
+        std::vector<unsigned> presented(width*height,0);
+        auto present=[&](Rect r){retained.commit(screen,r);auto now=retained_read(device.Get(),context.Get(),live.texture(screen));
+            for(int y=r.top;y<r.bottom;++y)for(int x=r.left;x<r.right;++x)presented[y*width+x]=now[y*width+x];};
+        Command base={Kind::copy,screen,map,bounds,bounds,0,0},form={Kind::expand,screen,panel,bounds,bounds,0,0,key};
+        upload_panel(0);std::uint64_t most=0;
+        for(unsigned k=0;k<40;++k){
+            Rect list=k%2?Rect{8,40,120,64}:Rect{8,10,120,34};
+            redraw(k,list);if(k%7==3)upload_panel(k);
+            for(auto c:{base,form}){assert(live.submit(&c,1));retained.record(c);}
+            if(!k)present(bounds);
+            present(list);int x=20+int(k*13%120),y=60+int(k*7%20);present({x,y,x+16,y+16});
+            assert(retained.draw(k+1,1000,target.Get(),display.Get(),buffer.Get())>=1);
+            auto shown=retained_read(device.Get(),context.Get(),display.Get());
+            for(unsigned i=0;i<shown.size();++i)if((shown[i]^presented[i])&0xffffffu){
+                std::fprintf(stderr,"FAIL cropped screen versions: tick %u pixel %u,%u shown %08x presented %08x\n",k,i%width,i/width,shown[i],presented[i]);return 1;}
+            ++checks;if(k>=8)most=std::max(most,retained.last_work().assembly_pixels);
+        }
+        // Shown pixels cost about two screens of assembly (the front, then
+        // each crop's before-image and source read). Whole versions assembled
+        // a cleared full panel for each version still shown: 2.95 screens.
+        assert(most<std::uint64_t(width)*height*9/4);
+        retained.clear();assert(!retained.bytes()&&!retained.node_count());
+        std::printf("PASS cropped screen versions: ticks=40 exact=1 unprovable_panel=1 assembly_screens=%.2f\n",double(most)/(width*height));
+    }
     // Cached sparse HUD artwork is optional. A fresh native output pair has
     // priority under the same hard cap, including when another saved pair
     // shares the compiled artwork. Keep both generations pixel-exact.

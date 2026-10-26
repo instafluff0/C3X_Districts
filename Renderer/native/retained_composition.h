@@ -8,6 +8,7 @@
 #include "gpu_projected_layer.h"
 #include <array>
 #include <map>
+#include <tuple>
 #include <memory>
 #include <functional>
 #include <unordered_set>
@@ -950,6 +951,13 @@ private:
                 for(unsigned i:{1u,4u})if(n->original[i]&&(n->original[i]==n->original[0]||n->original[i]==n->original[3]))owned_native=false;
                 Rect source_area={original.source_x+n->area.left-original.area.left,original.source_y+n->area.top-original.area.top,
                     original.source_x+n->area.right-original.area.left,original.source_y+n->area.bottom-original.area.top};
+                // A per-pixel transfer reads only source_area. Assembling its
+                // whole source cleared a full-canvas scratch for each cursor
+                // save and each cropped screen version; a single whole
+                // version still binds directly.
+                bool read_area=!n->placement&&local&&!n->direct.draw&&n->original[1]&&
+                    (original.kind==Kind::copy||original.kind==Kind::color_key||original.kind==Kind::expand)&&!directly_bindable(n->inputs[1]);
+                Rect source_read=intersect(source_area,extent(n->inputs[1]));if(read_area&&empty(source_read))read_area=false;
                 int x=local?n->area.left:0,y=local?n->area.top:0;
                 try{
                     if(owned_native){
@@ -981,7 +989,7 @@ private:
                             bool target=i==0||i==3||(i==2&&original.kind!=Kind::native_text)||(i==4&&original.kind!=Kind::native_image);
                             bool writable=n->original[i]==n->original[0]||n->original[i]==n->original[3];
                             temporary[i]=assemble(n->inputs[i],ticks,frequency,depth+1,
-                                tight_source&&(i==1||i==4)?source_area:local&&target?n->area:Rect{},!writable,
+                                tight_source&&(i==1||i==4)?source_area:read_area&&i==1?source_read:local&&target?n->area:Rect{},!writable,
                                 !(overwrite&&(i==0||i==3)));
                         }
                     }
@@ -994,6 +1002,7 @@ private:
                         c.clip={c.clip.left+dx,c.clip.top+dy,c.clip.right+dx,c.clip.bottom+dy};
                     }
                     Rect result={n->area.left-x,n->area.top-y,n->area.right-x,n->area.bottom-y};
+                    if(read_area){c.source_x-=source_read.left;c.source_y-=source_read.top;}
                     if(tight_source){c.area=c.clip=result;c.source_x=c.source_y=0;
                         c.source_width=result.right-result.left;c.source_height=result.bottom-result.top;}
                     if(!(n->direct.draw?n->direct.draw(replay,c):replay.submit(&c,1)))throw std::runtime_error("retained operation rejected");
@@ -1344,8 +1353,8 @@ public:
         return !cancelled || !cancelled();
     }
     ~RetainedComposition(){front={};images.clear();world_selection.reset();}
-    void clear(){release_front();fused_sources[0]={};fused_sources[1]={};recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
-    void discard(){release_front();fused_sources[0]={};fused_sources[1]={};recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
+    void clear(){release_front();fused_sources[0]={};fused_sources[1]={};recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();upload_tiles.clear();crop_cache.clear();replay.clear_working();admitted=true;}
+    void discard(){release_front();fused_sources[0]={};fused_sources[1]={};recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();upload_tiles.clear();crop_cache.clear();replay.clear_working();admitted=false;}
     void uncommit(){release_front();collect_plan.clear();prepare_plan.clear();invalidate_plan();front={};}
     // The interpreter remains executable at the same clock for pixel oracles.
     // This switch changes execution only, never captured native semantics.
@@ -1399,7 +1408,33 @@ public:
     bool ready()const{return admitted&&front.width!=0;}
     void create(Id id,unsigned w,unsigned h,Format format){if(admitted){images[id]={w,h,format,{}};images[id].version=++serial;}}
     void snapshot(Id destination,Id source){images[destination]=images.at(source);images[destination].version=++serial;}
-    void destroy(Id id){images.erase(id);} // committed versions retain their own source data
+    void destroy(Id id){images.erase(id);upload_tiles.erase(id);} // committed versions retain their own source data
+    // Civ III re-uploads a whole native canvas whenever it redraws any of it
+    // (a hovered link's highlight is one line of the diplomacy panel). Only
+    // 16x8 tiles whose pixels changed take the new snapshot; the rest keep
+    // their earlier node, so versions built on them stay provably identical
+    // for rebase_front. Any other write since the last upload voids this.
+    struct UploadTiles {std::uint64_t version=0;std::vector<std::uint64_t> hashes;};
+    std::map<Id,UploadTiles> upload_tiles;
+    void upload_source(Id id,ID3D11Texture2D* texture,unsigned const* pixels,std::size_t count){
+        if(!admitted)return;auto& p=images.at(id);constexpr unsigned tile_w=16,tile_h=8;
+        if(!pixels||!p.width||count!=std::size_t(p.width)*p.height){upload_tiles.erase(id);source(id,texture);return;}
+        unsigned across=(p.width+tile_w-1)/tile_w,down=(p.height+tile_h-1)/tile_h;
+        std::vector<std::uint64_t> hashes(std::size_t(across)*down,14695981039346656037ull);
+        for(unsigned y=0;y<p.height;++y){auto row=pixels+std::size_t(y)*p.width;auto band=hashes.data()+std::size_t(y/tile_h)*across;
+            for(unsigned x=0;x<p.width;++x){auto& h=band[x/tile_w];h=(h^row[x])*1099511628211ull;}}
+        auto found=upload_tiles.find(id);
+        if(found==upload_tiles.end()||found->second.version!=p.version||found->second.hashes.size()!=hashes.size()){
+            source(id,texture);upload_tiles[id]={p.version,std::move(hashes)};return;}
+        std::vector<Rect> changed;
+        for(unsigned ty=0;ty<down;++ty)for(unsigned tx=0;tx<across;++tx){auto i=std::size_t(ty)*across+tx;if(hashes[i]==found->second.hashes[i])continue;
+            int left=int(tx*tile_w),top=int(ty*tile_h),right=std::min(int(p.width),left+int(tile_w)),bottom=std::min(int(p.height),top+int(tile_h));
+            if(!changed.empty()&&changed.back().top==top&&changed.back().right==left)changed.back().right=right;else changed.push_back({left,top,right,bottom});}
+        if(changed.empty())return;
+        auto kept=p.patches;source(id,texture);auto fresh=p.patches.front();p.patches=std::move(kept);
+        for(auto const& r:changed)replace(p,r,{{r,fresh.node,0}});
+        found->second={p.version,std::move(hashes)};
+    }
     void source(Id id,ID3D11Texture2D* texture,Sample sample={},bool immutable=false,bool map_source=false,std::uint64_t publication=0,std::uint64_t generation=0){
         if(!admitted)return;auto& p=images.at(id);auto n=node();n->area=extent(p);n->revision=++serial;
         output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->map_dynamic=map_source&&n->dynamic;n->map_source=map_source;n->publication=map_source?publication:0;n->source_generation=generation;n->sample=std::move(sample);p.patches={{n->area,n,0}};p.version=++serial;
@@ -1509,7 +1544,7 @@ public:
                 for(auto const& q:n.inputs[1].patches){auto r=intersect(q.area,wanted);
                     if(!empty(r)){covered+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);selected.push_back({r,q.node,q.output});}}
             }
-            if(exact&&covered==std::uint64_t(area.right-area.left)*(area.bottom-area.top)){replace(target->second,area,selected);return;}
+            if(exact&&covered==std::uint64_t(area.right-area.left)*(area.bottom-area.top)){replace(target->second,area,keep_current(c.destination,selected));return;}
         }
         // JGL's unscaled opaque transfer is the same version selection for
         // both its native words and full-color companion. Replaying it as a
@@ -1604,6 +1639,208 @@ public:
         auto selected=read(image,area);
         auto zero=node();zero->area=area;write(front,area,zero,0);
         for(auto const& part:selected.patches)write(front,part.area,part.node,part.output);
+        rebase_front(image);
+    }
+    // One unscaled per-pixel command: each output pixel depends only on the
+    // command and its inputs at that pixel (and the source offset).
+    bool pixel_local(Node const& n)const{
+        auto const& x=n.command;
+        return n.operation&&!n.retired&&!n.placement&&!n.view&&!n.projected&&!n.sample&&n.batch.empty()&&
+            !n.projects_scene&&!n.selected_world&&!n.direct.draw&&!n.direct.revision&&!n.direct.animated&&!n.direct.input_bytes&&
+            (x.kind==Kind::fill||x.kind==Kind::copy||x.kind==Kind::color_key||x.kind==Kind::expand||
+             (x.kind==Kind::native_image&&x.source_width==x.area.right-x.area.left&&x.source_height==x.area.bottom-x.area.top));
+    }
+    // Same pixels by construction: one per-pixel command over the same input
+    // versions within r, painting the same part of r (a crop of a node is
+    // the same command with a narrower paint). Unproven cases keep the old version.
+    bool same_pixels(Node const& a,Node const& b,Rect r,unsigned depth,unsigned& budget)const{
+        if(&a==&b)return true;
+        if(depth>8||!budget)return false;--budget;
+        auto const& x=a.command;auto const& y=b.command;
+        auto inside=[&](Rect outer){return outer.left<=r.left&&outer.top<=r.top&&outer.right>=r.right&&outer.bottom>=r.bottom;};
+        auto pa=intersect(r,x.clip),pb=intersect(r,y.clip);
+        if(!pixel_local(a)||!pixel_local(b)||x.kind!=y.kind||!same_rect(x.area,y.area)||!inside(a.area)||!inside(b.area)||
+           (!(empty(pa)&&empty(pb))&&!same_rect(pa,pb))||
+           !same_rect(a.recipe_clip,b.recipe_clip)||x.source_x!=y.source_x||x.source_y!=y.source_y||x.color!=y.color||
+           x.source_width!=y.source_width||x.source_height!=y.source_height)return false;
+        int dx=x.source_x-x.area.left,dy=x.source_y-x.area.top;
+        for(unsigned i=0;i<6;++i){
+            if(a.original[i]!=b.original[i])return false;if(!a.original[i])continue;
+            if(i==5){if(!same_picture(a.inputs[i],b.inputs[i],false))return false;continue;}
+            Rect region=i==1||i==4?Rect{r.left+dx,r.top+dy,r.right+dx,r.bottom+dy}:r;
+            if(!same_region(a.inputs[i],b.inputs[i],region,depth,budget))return false;
+        }
+        return true;
+    }
+    // Every pixel of r that either picture covers comes from the same
+    // version (or a provably identical one) in both.
+    bool same_region(Picture const& a,Picture const& b,Rect r,unsigned depth,unsigned& budget)const{
+        if(a.width!=b.width||a.height!=b.height||a.format!=b.format)return false;
+        if(!a.partitioned||!b.partitioned)return same_picture(a,b,false);
+        auto pixels=[](Rect s){return std::uint64_t(s.right-s.left)*std::uint64_t(s.bottom-s.top);};
+        std::uint64_t covered_a=0,covered_b=0,matched=0;
+        for(auto const& q:b.patches){auto t=intersect(q.area,r);if(!empty(t))covered_b+=pixels(t);}
+        for(auto const& p:a.patches){auto s=intersect(p.area,r);if(empty(s))continue;covered_a+=pixels(s);
+            for(auto const& q:b.patches){auto t=intersect(q.area,s);if(empty(t))continue;
+                if(p.output!=q.output||(p.node!=q.node&&!same_pixels(*p.node,*q.node,t,depth+1,budget)))return false;
+                matched+=pixels(t);}}
+        return matched==covered_a&&matched==covered_b;
+    }
+    // A cursor restore selects the screen version its save read, usually the
+    // previous tick's. Where the newer screen already has the same pixels,
+    // keep it: overlapping restores otherwise carried old versions forward.
+    // Under the cursor sprite the newer screen is the sprite's before-image.
+    std::vector<Patch> keep_current(Id image,std::vector<Patch> const& selected){
+        std::vector<Patch> result;unsigned budget=4096;
+        auto pixels=[](Rect r){return std::uint64_t(r.right-r.left)*(r.bottom-r.top);};
+        for(auto const& s:selected){
+            auto now=read(image,s.area);std::uint64_t covered=0;bool same=now.partitioned&&!now.patches.empty();
+            std::vector<Patch> kept;
+            for(auto const& q:now.patches){covered+=pixels(q.area);
+                if(q.output==s.output&&(q.node==s.node||same_pixels(*s.node,*q.node,q.area,0,budget))){kept.push_back(q);continue;}
+                // A keyed draw over the restored area: compare what it covered.
+                auto const& c=q.node->command;Picture const* under=q.output==0?&q.node->inputs[0]:q.output==1?&q.node->inputs[3]:nullptr;
+                bool keyed=q.node->operation&&(c.kind==Kind::native_sprite||(c.kind==Kind::native_image&&c.color<65536))&&
+                    under&&q.node->original[q.output?3:0]==image&&under->partitioned;
+                std::uint64_t below=0;std::size_t first=kept.size();
+                if(keyed)for(auto const& b:under->patches){auto t=intersect(b.area,q.area);if(empty(t))continue;below+=pixels(t);
+                    if(b.output!=s.output||(b.node!=s.node&&!same_pixels(*s.node,*b.node,t,0,budget))){keyed=false;break;}
+                    kept.push_back({t,b.node,b.output});}
+                if(!keyed||below!=pixels(q.area)){kept.resize(first);same=false;break;}
+            }
+            if(same&&covered==pixels(s.area))result.insert(result.end(),kept.begin(),kept.end());
+            else result.push_back(s);
+        }
+        return result;
+    }
+    // Civ III redraws a whole form every tick (diplomacy: ~55 times a second)
+    // but presents only the changed rectangle. Each partial transfer kept the
+    // rest of the front on its own older version, so a moving software cursor
+    // pinned complete screen versions that every frame re-evaluated (8 full
+    // screen expands in a diplomacy hover, October 26). Show the current
+    // version wherever it provably has the same pixels; anything Civ III
+    // changed but has not presented keeps the old version.
+    void rebase_front(Id image){
+        auto const& p=images.at(image);
+        if(!front.partitioned||!p.partitioned||front.width!=p.width||front.height!=p.height||front.format!=p.format)return;
+        std::vector<Patch> next;next.reserve(front.patches.size());bool changed=false;unsigned budget=8192;
+        std::map<Node const*,std::shared_ptr<Node>> rebased;
+        for(auto const& f:front.patches){
+            auto now=read(image,f.area);std::uint64_t covered=0;bool same=!now.patches.empty(),moved=false;
+            for(auto const& q:now.patches){covered+=std::uint64_t(q.area.right-q.area.left)*(q.area.bottom-q.area.top);moved|=q.node!=f.node;
+                if(q.output!=f.output||(q.node!=f.node&&!same_pixels(*f.node,*q.node,q.area,0,budget))){same=false;break;}}
+            // A proven crop already costs only what it shows. Moving it to
+            // Civ III's newest screen version (a new one each tick) would cut
+            // and allocate a new crop for every patch at every commit.
+            if(same&&moved&&covered==std::uint64_t(f.area.right-f.area.left)*(f.area.bottom-f.area.top)&&!cropped(*f.node)){
+                next.insert(next.end(),now.patches.begin(),now.patches.end());changed=true;continue;}
+            // A presented cursor sprite keeps the version it was drawn over.
+            auto found=rebased.find(f.node.get());
+            auto n=found!=rebased.end()?found->second:rebased[f.node.get()]=rebase_inputs(f.node,budget);
+            next.push_back({f.area,n,f.output});changed|=n!=f.node;
+        }
+        if(changed)front.patches=std::move(next);
+        coalesce(front);
+        changed|=crop_patches(front.patches);
+        if(changed)front.version=++serial;
+    }
+    // Cut once by everything these patches show of each node: presents punch
+    // holes in a crop, and a sprite's before-image arrives in row strips.
+    // Re-cutting each piece made new nodes (and outputs) at every commit.
+    bool crop_patches(std::vector<Patch>& patches){
+        auto pixels=[](Rect r){return std::uint64_t(r.right-r.left)*(r.bottom-r.top);};
+        struct Shown {Rect bounds;std::uint64_t pixels=0;};
+        std::map<Node const*,Shown> shown;bool changed=false;
+        for(auto const& f:patches){auto& v=shown[f.node.get()];auto b=v.bounds;
+            v.bounds=v.pixels?Rect{std::min(b.left,f.area.left),std::min(b.top,f.area.top),std::max(b.right,f.area.right),std::max(b.bottom,f.area.bottom)}:f.area;
+            v.pixels+=pixels(f.area);}
+        for(auto& f:patches){auto& v=shown[f.node.get()];if(2*v.pixels>=pixels(f.node->area))continue;
+            auto n=crop(f.node,pixels(v.bounds)<=2*v.pixels?v.bounds:f.area);
+            changed|=n!=f.node;f.node=std::move(n);}
+        return changed;
+    }
+    // A crop (below): the recorded command painting less than its area.
+    bool cropped(Node const& n)const{auto const& c=n.command;return n.dynamic&&pixel_local(n)&&same_rect(c.clip,n.area)&&!same_rect(n.area,intersect(c.area,n.recipe_clip));}
+    // A screen version that is a full-screen keyed transfer over the animated
+    // map is evaluated whole every frame for as long as any patch shows it:
+    // several presented versions (and the cursor's before-image) each cost a
+    // full screen. Where it shows less than half of such a node, a copy of
+    // its command painting only that area, over the same input versions, has
+    // the same pixels there; a version then costs only what it shows. Cursor
+    // restores bring back slivers of old versions a few pixels apart at each
+    // move: one live crop per version serves every sliver inside it.
+    struct CropEntry {std::weak_ptr<Node> whole,crop;};
+    std::map<Node const*,CropEntry> crop_cache;
+    std::shared_ptr<Node> crop(std::shared_ptr<Node> const& n,Rect a){
+        auto pixels=[](Rect r){return std::uint64_t(r.right-r.left)*(r.bottom-r.top);};
+        auto const& c=n->command;
+        if(!n->dynamic||!pixel_local(*n)||c.kind==Kind::native_image||c.kind==Kind::fill||2*pixels(a)>=pixels(n->area)||
+           (c.source&&(c.source==c.destination||c.source==c.detail))||(c.background_detail&&(c.background_detail==c.destination||c.background_detail==c.detail)))return n;
+        auto& entry=crop_cache[n.get()];
+        if(entry.whole.lock()==n)if(auto old=entry.crop.lock())
+            if(old->area.left<=a.left&&old->area.top<=a.top&&old->area.right>=a.right&&old->area.bottom>=a.bottom)return old;
+        if(crop_cache.size()>1024)for(auto it=crop_cache.begin();it!=crop_cache.end();)it=it->second.whole.expired()?crop_cache.erase(it):std::next(it);
+        auto m=node();crop_cache[n.get()]={n,m};m->operation=true;m->area=intersect(a,n->area);m->command=c;m->command.clip=intersect(c.clip,m->area);
+        m->recipe_clip=n->recipe_clip;m->constant=n->constant;
+        int dx=c.source_x-c.area.left,dy=c.source_y-c.area.top;
+        for(unsigned i=0;i<6;++i){m->original[i]=n->original[i];auto const& p=n->inputs[i];m->inputs[i]=p;
+            if(p.patches.empty()||i==5)continue; // record reads each other operand over the painted area
+            Rect r=i==1?Rect{m->area.left+dx,m->area.top+dy,m->area.right+dx,m->area.bottom+dy}:m->area;
+            auto& q=m->inputs[i];q.patches.clear();q.required=empty(p.required)?r:intersect(p.required,r);
+            for(auto const& part:p.patches){auto t=intersect(part.area,r);if(!empty(t))q.patches.push_back({t,part.node,part.output});}
+        }
+        for(auto const& input:m->inputs)for(auto const& q:input.patches){m->dynamic|=q.node->dynamic;m->map_dynamic|=q.node->map_dynamic;m->view_dependent|=q.node->view_dependent;}
+        return m;
+    }
+    // A small presented draw (the cursor sprite) keeps the screen version it
+    // was drawn over as its before-image, and every frame evaluated that whole
+    // old version for it. Where the current version of an input image has the
+    // same pixels, a copy of the node reads the current one instead, and an
+    // old version it still reads is cropped to what the sprite covers.
+    std::shared_ptr<Node> rebase_inputs(std::shared_ptr<Node> const& n,unsigned& budget){
+        auto pixels=[](Rect r){return std::uint64_t(r.right-r.left)*(r.bottom-r.top);};
+        if(!n->operation||n->retired||n->placement||n->view||n->projected||n->sample||!n->batch.empty()||n->projects_scene||
+           n->selected_world||n->direct.draw||n->direct.revision||n->direct.animated||n->direct.input_bytes||pixels(n->area)>65536)return n;
+        Picture inputs[6];bool changed=false;
+        for(unsigned i=0;i<6;++i){inputs[i]=n->inputs[i];auto id=n->original[i];
+            if(!id)continue;bool current=images.count(id)&&n->inputs[i].partitioned;
+            std::vector<Patch> next;
+            for(auto const& part:n->inputs[i].patches){
+                auto now=current?read(id,part.area):Picture{};std::uint64_t covered=0;bool same=current&&now.partitioned&&!now.patches.empty(),moved=false;
+                for(auto const& q:now.patches){covered+=pixels(q.area);moved|=q.node!=part.node;
+                    if(q.output!=part.output||(q.node!=part.node&&!same_pixels(*part.node,*q.node,q.area,0,budget))){same=false;break;}}
+                if(same&&moved&&covered==pixels(part.area)){next.insert(next.end(),now.patches.begin(),now.patches.end());changed=true;}
+                else next.push_back(part);
+            }
+            changed|=crop_patches(next);
+            inputs[i].patches=std::move(next);
+        }
+        if(!changed)return n;
+        auto m=node();m->operation=true;m->area=n->area;m->command=n->command;m->recipe_clip=n->recipe_clip;m->constant=n->constant;
+        for(unsigned i=0;i<6;++i){m->original[i]=n->original[i];m->inputs[i]=std::move(inputs[i]);}
+        for(auto const& input:m->inputs)for(auto const& q:input.patches){m->dynamic|=q.node->dynamic;m->map_dynamic|=q.node->map_dynamic;m->view_dependent|=q.node->view_dependent;}
+        return m;
+    }
+    // Adjacent patches of one version merge into one rectangle: a moving
+    // cursor cut the front into hundreds of fragments, each copied every frame.
+    void coalesce(Picture& p){
+        if(!p.partitioned||p.patches.size()<2)return;
+        auto merge=[&](bool rows){
+            std::sort(p.patches.begin(),p.patches.end(),[rows](Patch const& a,Patch const& b){
+                auto x=rows?std::make_tuple(a.area.top,a.area.bottom,a.area.left):std::make_tuple(a.area.left,a.area.right,a.area.top);
+                auto y=rows?std::make_tuple(b.area.top,b.area.bottom,b.area.left):std::make_tuple(b.area.left,b.area.right,b.area.top);
+                return std::make_tuple(a.node.get(),a.output,x)<std::make_tuple(b.node.get(),b.output,y);});
+            std::vector<Patch> next;next.reserve(p.patches.size());bool merged=false;
+            for(auto const& q:p.patches){
+                if(!next.empty()){auto& last=next.back();
+                    if(last.node==q.node&&last.output==q.output&&(rows?
+                       (last.area.top==q.area.top&&last.area.bottom==q.area.bottom&&last.area.right==q.area.left):
+                       (last.area.left==q.area.left&&last.area.right==q.area.right&&last.area.bottom==q.area.top))){
+                        (rows?last.area.right:last.area.bottom)=rows?q.area.right:q.area.bottom;merged=true;continue;}}
+                next.push_back(q);
+            }
+            p.patches=std::move(next);return merged;};
+        for(unsigned pass=0;pass<4;++pass)if(!(merge(true)|merge(false)))break;
     }
     Texture sample(long long ticks,long long frequency){
         work={};

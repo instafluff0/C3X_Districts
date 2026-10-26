@@ -63,11 +63,13 @@ inline unsigned channel(unsigned word,unsigned c,bool green6){return (word>>(c==
 inline unsigned expand(unsigned word,bool green6){unsigned b=channel(word,0,green6),g=channel(word,1,green6),r=channel(word,2,green6);
     return ((b<<3)|(b>>2))|((green6?((g<<2)|(g>>4)):((g<<3)|(g>>2)))<<8)|(((r<<3)|(r>>2))<<16);}
 // A complete shaped string may exceed one response tile. Keep temporary GDI
-// and 17-sample response storage at 16K pixels while admitting a 32K-pixel
-// packed result (<=128 KiB plus <=68 KiB curve payload). Each strip shapes the
+// and 17-sample response storage at 16K pixels while admitting a 512K-pixel
+// packed result (<=2 MiB plus <=68 KiB curve payload). Each strip shapes the
 // whole string, shifted by an integer row offset, so kerning and glyph order
 // remain native. No string fragmentation and no destination pixels are used.
-inline constexpr unsigned response_tile_pixels=16384,maximum_raster_pixels=32768;
+// The raster is three font heights tall, so 32K refused ordinary advisor and
+// diplomacy strings; under Renderer64 that refusal is a fatal readback.
+inline constexpr unsigned response_tile_pixels=16384,maximum_raster_pixels=524288;
 inline bool compile(HDC source,State const& font_state,char const* text,unsigned count,Raster& out,Diagnostic* diagnostic=nullptr){
     if(!count){out={};return true;}if(!text||count>1024)return refuse(diagnostic,Refusal::arguments);
     SIZE extent={};TEXTMETRICA metrics={};
