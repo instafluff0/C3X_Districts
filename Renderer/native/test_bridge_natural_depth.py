@@ -28,27 +28,26 @@ def between(text, start, end):
     return text[begin:text.index(end, begin)]
 
 
-class BridgeNaturalDepthTests(unittest.TestCase):
-    def test_bridge_depth_follows_natural_surfaces_at_any_ground_height(self):
-        native = ROOT / 'Renderer/native/render_core'
-        # Through farm_kit_material, which the rigid shader also calls.
-        projection = between((native / 'world_projection.hlsl').read_text(),
-                             'float3 project_world_content(', '\nfloat resource_natural_depth(')
-        geometry = (native / 'rigid_instance_geometry.hlsl').read_text()
-        point = between(geometry, 'struct RigidPoint', '\n// b1') if '\n// b1' in geometry else \
-            geometry[geometry.index('struct RigidPoint'):]
-        shader = (native / 'rigid_feature.hlsl').read_text()
-        depth = between(shader, ' float3 position=project_world_content(p.position,p.world,i.projection,2);',
-                        ' return o;')
-        depth = '\n'.join(line for line in depth.splitlines()
-                           if 'o.position.xy=' not in line and 'q6_world' not in line)
-        # The generated hydrology shaders sort the river on the natural basis
-        # (C3X_RIVER_NATURAL_DEPTH) with this layer bias.
-        adapter = (ROOT / 'Renderer/native/integrated_terrain.hlsl').read_text()
-        bias = re.search(r'#ifdef C3X_RIVER_NATURAL_DEPTH.*?river_bias = ([0-9.]+);', adapter, re.S)[1]
-        self.assertIn('append_ground_layer(destination.river_vertices, 9.0f,',
-                      (ROOT / 'Renderer/native/source_fidelity/ground_compiler.h').read_text())
-        program = '#define RIVER_BIAS ' + bias + 'f\n' + r'''
+def depth_program(main):
+    """The rigid feature shader's depth and the natural surfaces' depth, compiled
+    from the shader sources as C++ with a small vector shim, followed by `main`."""
+    native = ROOT / 'Renderer/native/render_core'
+    # Through farm_kit_material, which the rigid shader also calls.
+    projection = between((native / 'world_projection.hlsl').read_text(),
+                         'float3 project_world_content(', '\nfloat resource_natural_depth(')
+    geometry = (native / 'rigid_instance_geometry.hlsl').read_text()
+    point = between(geometry, 'struct RigidPoint', '\n// b1') if '\n// b1' in geometry else \
+        geometry[geometry.index('struct RigidPoint'):]
+    shader = (native / 'rigid_feature.hlsl').read_text()
+    depth = between(shader, ' float3 position=project_world_content(p.position,p.world,i.projection,2);',
+                    ' return o;')
+    depth = '\n'.join(line for line in depth.splitlines()
+                       if 'o.position.xy=' not in line and 'q6_world' not in line)
+    # The generated hydrology shaders sort the river on the natural basis
+    # (C3X_RIVER_NATURAL_DEPTH) with this layer bias.
+    adapter = (ROOT / 'Renderer/native/integrated_terrain.hlsl').read_text()
+    bias = re.search(r'#ifdef C3X_RIVER_NATURAL_DEPTH.*?river_bias = ([0-9.]+);', adapter, re.S)[1]
+    return '#define RIVER_BIAS ' + bias + 'f\n' + r'''
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -89,6 +88,14 @@ RigidInput part(float material,float ground,float height){
 float river_depth(float g,float4 projection,float wx,float wy){
  return std::fmax(.001f,natural_depth(g,projection,wx,wy)-RIVER_BIAS*c3x_viewport_reserved.x/16384.f);
 }
+''' + main
+
+
+class BridgeNaturalDepthTests(unittest.TestCase):
+    def test_bridge_depth_follows_natural_surfaces_at_any_ground_height(self):
+        self.assertIn('append_ground_layer(destination.river_vertices, 9.0f,',
+                      (ROOT / 'Renderer/native/source_fidelity/ground_compiler.h').read_text())
+        run_cpp(depth_program(r'''
 int main(){
  float4 projection={20,30,128,1192};
  // A deck or arch a little above the river it spans sorts in front of the
@@ -125,8 +132,29 @@ int main(){
  }
  std::puts("PASS bridge natural depth: equal shift with natural surfaces at every elevation");
 }
-'''
-        run_cpp(program)
+'''))
+
+    def test_sites_stand_whole_on_raised_natural_ground(self):
+        # Goody huts, barbarian camps and tile buildings (slots 21-28, owner
+        # .18-.188) kept the feature basis. Beside a mountain the ground is the
+        # mountain's continuous natural surface, about 21 units up at the hut
+        # in the Lab village, and the hut lost everything below its roofs to
+        # it (user report, October 25); lower huts lost their stone bases.
+        run_cpp(depth_program(r'''
+int main(){
+ float4 projection={20,30,128,1192};
+ for(float material:{21.18f,23.18f,26.186f,28.181f})for(float g:{0.f,21.f,40.f})for(float height:{.004f,.02f,.06f}){
+  // A part a little above the natural surface it stands on sorts in front of it.
+  RigidInput piece=part(material,g,height);RigidPoint at=rigid_point(piece);
+  assert(rigid_depth(piece)<natural_depth(at.world.z*112-2.5f-.5f,projection,at.world.x,at.world.y));
+  // Raising the ground moves the site exactly as it moves natural surfaces.
+  float site=rigid_depth(part(material,0,height))-rigid_depth(part(material,40,height));
+  float ground=natural_depth(0,projection,20.5f,30.5f)-natural_depth(40,projection,20.5f,30.5f);
+  assert(std::fabs(site-ground)<2e-6f);
+ }
+ std::puts("PASS site natural depth");
+}
+'''))
 
 
 if __name__ == '__main__':

@@ -127,11 +127,13 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     // neighboring tiles agree.
     constexpr float tunnel_foot=4.f,tunnel_reach=.2f;
     // The rendered mesh's own shape (lab/shared/natural/mountain_shape.h),
-    // built only for route, volcano, mine and tile-building tiles, so routes,
-    // a mine and tile buildings lie on its rock and a plume leaves its crater.
+    // built only for route, volcano, mine and site tiles, so routes, a mine and
+    // sites (tile buildings, huts, camps) lie on its rock, which spreads past a
+    // mountain onto its neighbours, and a plume leaves its crater.
     MountainShape mountain_shape;
     if(input.projection.tile.road_mask || input.projection.tile.railroad_mask || volcano || wonder ||
-       (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS) ||
+       (input.projection.tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS|
+           C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP)) ||
        (input.mine_ready && (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE)))
         mountain_shape=MountainShape(natural,nc,nr,lookup_natural,[](int,int){return false;});
     unsigned const mountain_count=mountain_shape.count;
@@ -239,8 +241,8 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             [&](float x,float y){return input.river_ready?float(scratch.rivers.river_sample({x,y}).distance):1000.f;}),
         [&](float u,float v){return mountain_count?float(mountain_shape.sample(natural,tile_u+u,tile_v+1.f-v).displacement)*
             (.82f/150.f):0.f;}))return {};
-    // Seated as prepare_rigid seats them: tile buildings on the drawn rock.
-    auto const lamps=tile_building_lamps(plan,assets,tile,route_height,height_natural);
+    // Seated as prepare_rigid seats site parts: on the drawn rock.
+    auto const lamps=tile_building_lamps(plan,assets,tile,route_height);
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
         clear_farm(plan,plan,assets,input.resource_boxes);
         // A plot kit lays out the areas it shares with neighbouring farms:
@@ -293,10 +295,11 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             }
             if(shared_rigid_mesh(asset)){
                 result->draws.push_back({unsigned(instance.layer),0,0,unsigned(result->rigid.size())});
-                // A tunnel entrance stands on its rail, and a mine or a tile building
-                // on the drawn rock (on the natural ground the rock covered it).
+                // A tunnel entrance stands on its rail, and a mine or a site (tile
+                // building, hut, camp) on the drawn rock (on the natural ground a
+                // neighbouring mountain's foot buried a hut to its roofs).
                 bool on_rock=asset.id.rfind("route/tunnel/",0)==0 || instance.family==mine_family ||
-                    (instance.family==site_family && tile_building_asset(asset));
+                    instance.family==site_family;
                 result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,
                     [&](float x,float y){return on_rock?route_height(x,y):height_natural(x,y);},
                     plan.farm_kit && instance.family==farm_family));

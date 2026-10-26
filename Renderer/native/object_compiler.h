@@ -2562,13 +2562,13 @@ bool place_tile_buildings(Plan& plan,Assets const& assets,c3x_renderer_tile_v1 c
 // (sitepack.night_assets, build_site_runtime): one degenerate triangle per
 // light at its point in the mesh's space, uv (mode: 0 a fire, 1-8 a city lamp;
 // strength). Each goes where its instance puts that point, above the ground the
-// instance is seated on (prepare_rigid's seat: tile buildings on the drawn
-// rock, `rock`, other sites on `natural`): world column, row and height (tile
-// units, as city effect anchors), mode, strength.
+// instance is seated on (prepare_rigid's seat for every site part: the drawn
+// ground, `rock`, with any mountain's rock over the natural ground): world
+// column, row and height (tile units, as city effect anchors), mode, strength.
 struct TileLamp {float world[3],mode,strength;};
-template<class Rock,class Natural>
+template<class Rock>
 std::vector<TileLamp> tile_building_lamps(Plan const& plan,Assets const& assets,c3x_renderer_tile_v1 const& tile,
-        Rock rock,Natural natural){
+        Rock rock){
     std::vector<TileLamp> lamps;
     auto const& bundle=assets[site_family];
     float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
@@ -2578,11 +2578,9 @@ std::vector<TileLamp> tile_building_lamps(Plan const& plan,Assets const& assets,
         std::string const name="lamps/"+owner.id;
         auto found=std::find_if(bundle.assets.begin(),bundle.assets.end(),[&](FeatureAsset const& a){return a.id==name;});
         if(found==bundle.assets.end())continue;
-        bool on_rock=tile_building_asset(owner);
-        auto height=[&](float x,float y){return on_rock?rock(x,y):natural(x,y);};
-        float x=tile_u+instance.u,y=tile_v+1.f-instance.v,ground=height(x,y)-2.5f,fit=instance.ground_fit;
+        float x=tile_u+instance.u,y=tile_v+1.f-instance.v,ground=rock(x,y)-2.5f,fit=instance.ground_fit;
         if(fit>0.f)for(int corner=0;corner<4;++corner)
-            ground=std::min(ground,height(x+(corner&1?fit:-fit),y+(corner&2?fit:-fit))-2.5f);
+            ground=std::min(ground,rock(x+(corner&1?fit:-fit),y+(corner&2?fit:-fit))-2.5f);
         float co=std::cos(instance.rotation),si=std::sin(instance.rotation);
         for(std::size_t k=0;k<found->vertices.size();k+=3){
             auto const& p=found->vertices[k];

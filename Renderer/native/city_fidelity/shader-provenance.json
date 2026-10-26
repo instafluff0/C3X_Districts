@@ -11,7 +11,7 @@
     "Renderer/native/render_core/world_projection.hlsl": "e129a3868ecedbe5176e63862f4d321627bce224bb11d888102f19bd8bdc62fb",
     "Renderer/native/render_core/rigid_instance_geometry.hlsl": "a84ed7142d165614efc223d5105bf43f6c2dc6f3ed9380afda12eb76076d2469",
     "Renderer/lab/shared/shaders/objects/resident_instance.hlsl": "bc8c8c8930fb3e90b870ddff3d41d4e717f1624c839e33983e9e25d4e713bc6c",
-    "Renderer/native/render_core/rigid_feature.hlsl": "a610a5d5bdb27497f10c4bcf96c828d88a3b54efc08ae4d1c67ab3bcd6a73d0f",
+    "Renderer/native/render_core/rigid_feature.hlsl": "8eac14e497808c4096d2c582467e78e1e556c14aecdf35d0b0b2df612c8b8c72",
     "Renderer/native/render_core/rigid_caster.hlsl": "ada23a69492c65fe03c25a907ef4da42f2f0ea326cf6c0b5cb79384071a5b3aa",
     "Renderer/native/environment_refresh/hydrology.hlsl": "c1d57a1a35317ee8d074b2206fe189ea1b2c1b27ff12c3ea643160516266eacd",
     "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "3dab1def872acbb07acbf075b99d6e79b98fe8430bd59e8586313778fdd4793c",

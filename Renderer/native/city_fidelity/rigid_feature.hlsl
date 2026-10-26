@@ -3593,7 +3593,11 @@ FeaturePixelInput VSSharedFeature(RigidInput i){
  bridge=bridge && !tunnel;
  // Farm kit trees and farmhouses stand on low relief and hills in the same way.
  bool farm=i.projection.z!=0 && farm_kit_material(i.placement_view.w);
- if(bridge || tunnel || farm){float h=p.world.z*112-2.5;
+ // So do sites (huts, camps, tile buildings: slots 21-28, owner .18-.188). On the
+ // feature basis a mountain's surrounding surface hid a goody hut to its roofs.
+ bool site=i.projection.z!=0 && i.placement_view.w>20.5 && i.placement_view.w<28.5 &&
+  abs(frac(i.placement_view.w)-.1845)<.006;
+ if(bridge || tunnel || farm || site){float h=p.world.z*112-2.5;
   position.z=position.y+h*(i.projection.z/224*.82)+h*.0016*i.projection.w;}
  o.position.z=clamp(.5-(floor(position.z*256+.5)/256+i.placement_view.z)/16384.,.001,.999);
  // The river surface (kind 9) sorts over its bed and banks 0.025*reserved.x

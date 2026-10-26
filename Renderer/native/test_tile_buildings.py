@@ -514,7 +514,7 @@ int main(){
   }
   assert(body && (body->u!=.5f || body->v!=.5f)==wet);
   auto height=[](float x,float y){return 30.f+2.f*x-y;};
-  auto found=objects::tile_building_lamps(plan,assets,tile,height,[](float,float){return -500.f;});
+  auto found=objects::tile_building_lamps(plan,assets,tile,height);
   assert(found.size()==2);
   float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
   float x=tile_u+body->u,y=tile_v+1-body->v,ground=height(x,y)-2.5f,fit=body->ground_fit;
@@ -535,8 +535,8 @@ int main(){
         # Goody huts' torches and campfire and the barbarian camp's campfire and
         # lit windows were missing: their parts were drawn unlit and their fire
         # points dropped. A hut or camp part named for a glow slot (":g<slot>",
-        # before merged_asset's ":e0") lights; its fires sit on the natural ground,
-        # as prepare_rigid seats a hut, not on the drawn rock.
+        # before merged_asset's ":e0") lights; its fires sit on the drawn ground,
+        # where prepare_rigid seats a hut.
         run_cpp(PRELUDE + r'''
 int main(){
  std::array<FeatureBundle,objects::family_count> bundles;objects::Assets assets{};
@@ -557,17 +557,30 @@ int main(){
  assert(plan.instances.size()==2);
  for(auto const& instance:plan.instances)
   assert(std::abs(instance.owner-(instance.asset==1?.186f:.18f))<1e-6f);
- auto rock=[](float,float){return 90.f;};auto natural=[](float x,float){return 20.f+x;};
- auto found=objects::tile_building_lamps(plan,assets,tile,rock,natural);
+ auto rock=[](float x,float){return 20.f+x;};
+ auto found=objects::tile_building_lamps(plan,assets,tile,rock);
  assert(found.size()==1 && found[0].mode==0.f && found[0].strength==1.3f);
  auto const& camp=plan.instances[0];
  float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
  float x=tile_u+camp.u,y=tile_v+1-camp.v,co=std::cos(camp.rotation),si=std::sin(camp.rotation);
  float lx=(.04f*co+.03f*si)*camp.scale,ly=(.04f*si-.03f*co)*camp.scale;
  assert(std::abs(found[0].world[0]-(x+lx))<1e-5f && std::abs(found[0].world[1]-(y-ly))<1e-5f);
- assert(std::abs(found[0].world[2]-(natural(x,y)+.02f*camp.scale*150.f/.82f)/112.f)<1e-5f);
+ assert(std::abs(found[0].world[2]-(rock(x,y)+.02f*camp.scale*150.f/.82f)/112.f)<1e-5f);
 }
 ''')
+
+    def test_huts_and_camps_stand_on_a_neighbouring_mountains_foot(self):
+        # A mountain's rendered rock spreads past its tile onto its neighbours.
+        # Huts and camps were seated on the natural ground under it, so a goody
+        # hut beside a mountain showed only its roofs (user report, October 25).
+        # Their tiles build the mountain shape, and every site part (and its
+        # fires) stands on the drawn rock, as mines and tile buildings do.
+        preparation = (ROOT / "Renderer/native/object_preparation.h").read_text()
+        self.assertIn("(input.projection.tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_TILE_BUILDINGS|\n"
+                      "           C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP))", preparation)
+        self.assertIn("bool on_rock=asset.id.rfind(\"route/tunnel/\",0)==0 || instance.family==mine_family ||\n"
+                      "                    instance.family==site_family;", preparation)
+        self.assertIn("[&](float x,float y){return on_rock?route_height(x,y):height_natural(x,y);}", preparation)
 
     def test_site_pack_puts_glow_maps_in_spare_slots_and_names_lit_parts(self):
         import json, struct, tempfile
@@ -628,7 +641,7 @@ int main(){
                           "        lit_color += sample_reused_resource_slot(tile_glow_code - 1.0, input.uv).rgb *\n"
                           "            environment_night_activation * environment_emissive_scale * 1.45;", shader, path)
         preparation = (ROOT / "Renderer/native/object_preparation.h").read_text()
-        self.assertIn("auto const lamps=tile_building_lamps(plan,assets,tile,route_height,height_natural);", preparation)
+        self.assertIn("auto const lamps=tile_building_lamps(plan,assets,tile,route_height);", preparation)
         self.assertIn("float(fire?city_fidelity::effect_flame:city_fidelity::effect_night_light),\n"
                       "                (fire?.09f:.075f)*lamp.strength,(fire?.18f:.075f)*lamp.strength,\n"
                       "                float(k%16u*4u)+64.f*lamp.mode,lamp.strength}});", preparation)
