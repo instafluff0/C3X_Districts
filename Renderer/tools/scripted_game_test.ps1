@@ -225,6 +225,9 @@ try {
     $cursorParked=$false
     $navigationReadyAt=$null; $navigationCheck=20.0
     $mouseIndex=0; $mouseHeld=$false; $mouseEvents=@()
+    # UI stalls count from the first scripted input: loading a save blocks
+    # Civ III's message loop for seconds by design.
+    $scriptedInputQpc=$null
     # Posted keys with QPC stamps: input-to-move latency starts here.
     $keyEvents=@()
     $mouseSteps=@(@(30,0,0,0x800,240),@(36,0,0,2),@(38,32,0,0),@(39,64,0,0),@(40,96,0,0),@(41,128,0,0),@(43,128,0,4))
@@ -516,7 +519,9 @@ try {
     }
     while ([DateTime]::UtcNow -lt $end -and -not $child.HasExited) {
         $child.Refresh(); $window=$child.MainWindowHandle
-        if ($window -ne [IntPtr]::Zero -and $Scenario -eq 'domestic-slider') { [RendererUiPing]::Start($window,20) }
+        # Every scenario measures Civ III's message latency: a frozen UI thread
+        # shows as unanswered or second-long pings, with or without Renderer64.
+        if ($window -ne [IntPtr]::Zero) { [RendererUiPing]::Start($window,20) }
         if ($window -ne [IntPtr]::Zero) {
             [uint32]$owner=0
             [void][RendererGameCommand]::GetWindowThreadProcessId($window,[ref]$owner)
@@ -598,6 +603,7 @@ try {
                 $wheelData=[uint32]([long]$wheelDelta -band 4294967295)
                 if ($step[3]) { [RendererGameCommand]::mouse_event($step[3],0,0,$wheelData,[UIntPtr]::Zero) }
                 $mouseEvents += [ordered]@{ qpc=$inputTicks; client_x=$clientX; client_y=$clientY; flags=$step[3]; wheel_delta=$wheelDelta }
+                if ($null -eq $scriptedInputQpc) { $scriptedInputQpc=$inputTicks }
                 if ($step[3] -eq 2) { $mouseHeld=$true }
                 if ($step[3] -eq 4) { $mouseHeld=$false }
                 Write-Host ('Mouse command: '+($step -join ',')); ++$mouseIndex
@@ -614,6 +620,7 @@ try {
             if ($Scenario -ne 'scroll' -and $interactionIndex -lt $interaction.Count -and $interactionElapsed -ge $interaction[$interactionIndex][0]) {
                 $key=$interaction[$interactionIndex][1]
                 Write-Host ('Interaction command: '+$interaction[$interactionIndex][2])
+                if ($null -eq $scriptedInputQpc) { $scriptedInputQpc=[System.Diagnostics.Stopwatch]::GetTimestamp() }
                 ++$interactionIndex
             }
             if ($Scenario -in @('combat','camera') -and $elapsed -ge 36 -and -not $combatAttackSent) {
@@ -679,6 +686,8 @@ try {
     if ($child.HasExited) { $earlyExit=$true; $gameExitCode=$child.ExitCode }
     Write-Host ('Posted diagnostic commands: '+$sent)
 } finally {
+    # Before the game is closed: pings to a closing window fail at once.
+    $pings=[RendererUiPing]::Stop()
     if ($cadence) { $cadence.Dispose(); $cadence=$null }
     if ($mouseHeld) { [RendererGameCommand]::mouse_event(4,0,0,0,[UIntPtr]::Zero) }
     $env:C3X_RENDERER_GAME_TEST_SAVE=$oldEnvironment
@@ -697,7 +706,6 @@ try {
     if ($child -and -not $child.HasExited) { $child.Kill(); $child.WaitForExit() }
     [IO.File]::WriteAllBytes($ini,$iniBytes)
     if ($c3xConfigBytes) { [IO.File]::WriteAllBytes($c3xConfig,$c3xConfigBytes) }
-    $pings=[RendererUiPing]::Stop()
     if ($restoreCursor) { [void][RendererGameCommand]::SetCursorPos($cursor.X,$cursor.Y) }
     if ($collector -and -not $collector.HasExited) {
         & $debug --stop | Out-Null
@@ -743,11 +751,15 @@ if(Test-Path $corePath) {
 }
 $debugReveals=([regex]::Matches($log,'stage=debug-reveal result=1')).Count
 $debugHides=([regex]::Matches($log,'stage=debug-hide result=1')).Count
+$scriptedPings=if ($null -ne $scriptedInputQpc) { @($pings | Where-Object { $_[0] -ge $scriptedInputQpc }) } else { @() }
+$pingTicks=@($scriptedPings | ForEach-Object { $_[1]-$_[0] })
+$pingMaxMs=if ($pingTicks.Count) { [Math]::Round(1000.0*($pingTicks | Measure-Object -Maximum).Maximum/[System.Diagnostics.Stopwatch]::Frequency,1) } else { $null }
+$pingStalls=@($scriptedPings | Where-Object { $_[2] -eq 0 -or ($_[1]-$_[0]) -gt [System.Diagnostics.Stopwatch]::Frequency }).Count
 $windowResult=Join-Path $session 'window\finished.json'
 $windowEvidence=if (Test-Path -LiteralPath $windowResult) { Get-Content -LiteralPath $windowResult -Raw | ConvertFrom-Json } else { $null }
 $windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $windowEvidence.frames -gt 0
 [ordered]@{ scenario=$Scenario; debug_reveals=$debugReveals; debug_hides=$debugHides; scene_samples=$SceneSamples; scene_sharpness=$SceneSharpness; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; prepared_turns=$preparedTurns; accepted_moves=$moves; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; city_zoom_widths=$cityZooms; city_anchors=$cityAnchors; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
-    game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; loading_maps_ready=$loadingMaps; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; native_rendering=[bool]$NativeRendering; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
+    game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; loading_maps_ready=$loadingMaps; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; native_rendering=[bool]$NativeRendering; ui_ping_max_ms=$pingMaxMs; ui_pings_over_1s=$pingStalls; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
 if ($MeasureCadence -and $cadenceSamples.Count -lt 2) { Write-Error 'Insufficient renderer cadence samples; inspect cadence.json and the helper channel.'; exit 1 }

@@ -385,11 +385,44 @@ public:
         return post(sizeof(wanted),[this,wanted]{if(worker_camera==wanted){
             accept_state(transport.camera_cancel(remote_camera),"camera-cancel");worker_camera=remote_camera=0;}});
     }
+    // A native operation the GPU adapter refuses on a canvas whose pixels live
+    // on the GPU needs them back on the CPU (native_image_adapter.h,
+    // cpu_ownership). Refusing that readback ended the whole image session:
+    // every later draw failed and the screen froze while music played
+    // (Foreign Advisor text, October 26). The readback now runs on the
+    // transport thread after all earlier image work, and the game thread waits
+    // for it: a short stall. Its draw prelude is an ordinary batch before it.
+    int readback(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* pixels,unsigned capacity){
+        if(!pixels||!request.pixel_count||capacity<request.pixel_count)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(request.command_count){
+            auto prelude=request;prelude.action=C3X_GPU_SUBMIT;prelude.image=0;prelude.pixels=nullptr;prelude.pixel_count=0;
+            int code=images(prelude,result,nullptr,0);if(code!=C3X_RENDERER_RESULT_OK)return code;
+        }
+        struct Job {std::mutex mutex;std::condition_variable done;bool finished=false;int code=C3X_RENDERER_RESULT_ERROR;
+            c3x_renderer_gpu_result_v1 result={sizeof(result)};std::vector<unsigned> pixels;};
+        auto job=std::make_shared<Job>();job->pixels.resize(request.pixel_count);
+        auto value=request;value.pixels=nullptr;value.commands=nullptr;value.command_count=0;value.command_struct_size=0;
+        // Charged as a request: its pixels are output, not queued payload, and an
+        // over-budget state post would fault the session it is rescuing.
+        int posted=post(sizeof(value),[this,job,value]()mutable{
+            c3x_renderer_gpu_result_v1 out={sizeof(out)};int code=C3X_RENDERER_RESULT_ERROR;
+            try{value.ticket=ticket(value.ticket);value.image=image(value.image);
+                code=transport.images(value,out,job->pixels.data(),unsigned(job->pixels.size()));}
+            catch(...){code=C3X_RENDERER_RESULT_ERROR;}
+            std::lock_guard<std::mutex> lock(job->mutex);job->code=code;job->result=out;job->finished=true;job->done.notify_all();
+        },0,"readback");
+        if(posted!=C3X_RENDERER_RESULT_OK)return posted;
+        // The job owns its pixels: one finishing after this deadline writes nothing of the caller's.
+        std::unique_lock<std::mutex> lock(job->mutex);
+        if(!job->done.wait_for(lock,std::chrono::seconds(30),[&]{return job->finished;}))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        if(job->code!=C3X_RENDERER_RESULT_OK)return job->code;
+        if(job->result.pixel_count>capacity)return C3X_RENDERER_RESULT_ERROR;
+        std::copy(job->pixels.begin(),job->pixels.begin()+job->result.pixel_count,pixels);
+        result=job->result;return C3X_RENDERER_RESULT_OK;
+    }
     int images(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* pixels,unsigned capacity){
         if(!enabled)return transport.images(request,result,pixels,capacity);
-        // A game-thread CPU lease cannot be satisfied asynchronously. Report the
-        // unsupported ownership transition; never read the custom map back.
-        if(request.action==C3X_GPU_READBACK)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(request.action==C3X_GPU_READBACK)return readback(request,result,pixels,capacity);
         auto bytes=sizeof(c3x_inputs::Images)+std::size_t(request.pixel_count)*4+
             std::size_t(request.command_count)*sizeof(c3x_renderer_gpu_command_v1);
         Id created=0;

@@ -406,8 +406,8 @@ int main(){
 using namespace std::chrono_literals;
 struct State {
  std::mutex mutex;std::condition_variable wake;bool held=false,entered=false;
- int creates=0,adoptions=0,reads=0,observations=0,pages=0,animations=0;long long current=0;
- std::vector<unsigned> uploaded;std::vector<long long> sources;
+ int creates=0,adoptions=0,reads=0,observations=0,pages=0,animations=0;long long current=0;bool refuse_reads=false;
+ std::vector<unsigned> uploaded;std::vector<long long> sources;std::vector<int> actions;
  void barrier(){std::unique_lock<std::mutex> lock(mutex);entered=true;wake.notify_all();wake.wait(lock,[&]{return !held;});}
  void hold(){std::lock_guard<std::mutex> lock(mutex);held=true;entered=false;}
  void release(){std::lock_guard<std::mutex> lock(mutex);held=false;wake.notify_all();}
@@ -438,12 +438,15 @@ struct Fake {
   assert(page.count==1&&page.tiles[0].anchor_x==17);++state.pages;return C3X_RENDERER_RESULT_OK;
  }
  int world_delta_submit(c3x_renderer_world_page_v1 const& page,int code){return world_submit(page,code);}
- int images(c3x_renderer_gpu_images_v1 const& value,c3x_renderer_gpu_result_v1& result,unsigned*,unsigned){
-  state.barrier();assert(value.ticket==100+state.current);
+ int images(c3x_renderer_gpu_images_v1 const& value,c3x_renderer_gpu_result_v1& result,unsigned* pixels,unsigned capacity){
+  state.barrier();assert(value.ticket==100+state.current);state.actions.push_back(value.action);
   for(unsigned n=0;n<value.command_count;++n){state.sources.push_back(value.commands[n].source);assert(value.commands[n].source==1000+state.current);}
   if(value.action==C3X_GPU_CREATE)result.image=2000+(++state.creates);
   else if(value.action==C3X_GPU_UPLOAD){assert(value.image>=2001);state.uploaded.assign(value.pixels,value.pixels+value.pixel_count);}
-  else if(value.action==C3X_GPU_READBACK)++state.reads;
+  else if(value.action==C3X_GPU_READBACK){
+   ++state.reads;if(state.refuse_reads)return C3X_RENDERER_RESULT_ERROR;
+   assert(pixels&&capacity>=value.pixel_count&&!value.command_count);
+   for(unsigned n=0;n<value.pixel_count;++n)pixels[n]=unsigned(value.image*10+n);result.pixel_count=value.pixel_count;}
   return C3X_RENDERER_RESULT_OK;
  }
  int images_batch(std::vector<c3x_remote_scene::ImageBatch::Operation>& operations,std::vector<c3x_remote_scene::ImageBatch::Reply>& replies){
@@ -514,7 +517,21 @@ int main(){
  image.ticket=view.image.ticket;draw.source=view.image.map_image;
  assert(client.images(image,made,nullptr,0)==C3X_RENDERER_RESULT_OK);draw.source=-1;
  client.stats();assert(state.adoptions==2&&state.sources==std::vector<long long>({1001,1002}));
- image.action=C3X_GPU_READBACK;assert(client.images(image,made,nullptr,0)==C3X_RENDERER_RESULT_BAD_ARGUMENT);assert(state.reads==0);
+ // A refused native operation needs its GPU canvas back on the CPU. Before,
+ // this readback was refused and the whole image session died (Foreign
+ // Advisor freeze). It now follows every earlier draw, including its own
+ // prelude, reads the remote identity of the local canvas, and a failed one
+ // reports its code without stalling or faulting the queue.
+ draw.source=view.image.map_image;image.action=C3X_GPU_READBACK;image.image=reserved;image.pixel_count=4;
+ unsigned back[4]={};auto order=state.actions.size();
+ assert(client.images(image,made,back,4)==C3X_RENDERER_RESULT_OK);
+ assert(state.reads==1&&made.pixel_count==4&&back[0]==20010&&back[3]==20013);
+ assert(state.actions.size()==order+2&&state.actions[order]==C3X_GPU_SUBMIT&&state.actions[order+1]==C3X_GPU_READBACK);
+ assert(client.images(image,made,nullptr,0)==C3X_RENDERER_RESULT_BAD_ARGUMENT&&state.reads==1);
+ image.command_count=0;state.refuse_reads=true;
+ auto refused=std::chrono::steady_clock::now();
+ assert(client.images(image,made,back,4)==C3X_RENDERER_RESULT_ERROR&&state.reads==2);
+ assert(std::chrono::steady_clock::now()-refused<2s&&client.alive());state.refuse_reads=false;
  assert(client.camera_cancel(camera)==C3X_RENDERER_RESULT_OK);
  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_SUPERSEDED);
 }

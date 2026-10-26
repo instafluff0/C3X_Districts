@@ -600,6 +600,10 @@ template<class Backend> class Adapter {
         if(bits==16||trimmed)c3x_native_access::set_field(source,0x28,trimmed?key&255:key);
         destination.dirty=true;++counters.translated;return true;
     }
+    // C3X_RENDERER_FORCE_TEXT_REFUSAL=N (diagnostic): refuse every Nth GPU text
+    // draw, exercising the CPU-ownership readback a real refusal takes.
+    unsigned forced_text_refusal=[]{char value[8]={};
+        return GetEnvironmentVariableA("C3X_RENDERER_FORCE_TEXT_REFUSAL",value,sizeof(value))?unsigned(std::strtoul(value,nullptr,10)):0u;}(),text_draws=0;
     void cpu_ownership(Image& image,int operation=0){
         if(image.dirty){
             bool report=image.width>=640&&image.height>=480&&large_cpu_barrier_reports++<16;
@@ -730,6 +734,8 @@ public:
             if(destination)cpu_ownership(*destination,op);return 0;
         }
         if(op==C3X_NATIVE_TEXT){
+            if(destination&&destination->owned&&forced_text_refusal&&++text_draws%forced_text_refusal==0){
+                cpu_ownership(*destination,op);++counters.fallbacks;return 0;}
             if(destination&&destination->owned&&draw_text(*destination,source,target_rect,color))return 1;
             if(destination)cpu_ownership(*destination,op);++counters.fallbacks;return 0;
         }

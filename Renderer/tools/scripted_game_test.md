@@ -117,6 +117,10 @@ scenario save with Wonder Districts needs up to 18 on a busy VM). Such a save's 
 also need `enable_districts = true` when its scenario leaves that to the custom
 config.
 
+Every scenario pings Civ III's window (`pings.json`): `result.json` reports
+`ui_ping_max_ms` and `ui_pings_over_1s` from the first scripted input (loading
+a save blocks the message loop by design), so a frozen UI thread fails visibly.
+
 `-NativeRendering` runs the same scenario with Civ III's own 2D rendering for
 an A/B against Renderer64. It sets `enable_custom_rendering`,
 `day_night_cycle_mode` and `seasonal_cycle_mode` off in `custom.c3x_config.ini`
@@ -272,8 +276,14 @@ third switches to Military), circles the pointer, closes with Esc and takes one
 camera step. Require every mouse event,
 the three interactions, one scroll step and no `native-operation-failed`.
 Before the 512K-pixel text raster cap (2026-10-26), a 43-character string at a
-27-pixel font (502x81) fell back to CPU drawing; Renderer64 rejects that
+27-pixel font (502x81) fell back to CPU drawing; Renderer64 rejected that
 readback, so the GPU image session died and the screen froze while music played.
+Renderer64 now serves such readbacks in order on its transport thread (a short
+stall). `-RendererOptions C3X_RENDERER_FORCE_TEXT_REFUSAL=25` refuses every 25th
+GPU text draw to exercise that path: it must pass with no
+`native-operation-failed`. Without the readback it failed 7,127 operations and
+the map never returned; with it, 31 ownership readbacks cost at most 65 ms each
+(diplomacy-hover: 10, 102 ms) and Civ III's worst message round trip was 106 ms.
 
 `-Scenario diplomacy-hover -Seconds 115 -SampleHz 4 -ProfileRenderer` uses the
 same 3400 BC autosave: F4, a double click on Bismarck's portrait (a single click
@@ -304,7 +314,7 @@ it either way (depth stays 10-13); judge it by the direct-visual numbers and
 `+154,-286`, 20 moves a second between 0% and the Despotism limit), 10 s on the
 luxury slider, 14 s idle, Esc and one camera step. A background thread sends
 `WM_NULL` to the game window every 20 ms (`pings.json`: Civ III's message
-latency, with or without Renderer64). `domestic_slider_lag.py CAPTURE` compares
+latency). `domestic_slider_lag.py CAPTURE` compares
 the flask's position in each window frame with the cursor's to give the
 slider's display lag. On October 26 it measured:
 native Civ III 118 ms; Renderer64 148 ms with three frames in flight (one queued

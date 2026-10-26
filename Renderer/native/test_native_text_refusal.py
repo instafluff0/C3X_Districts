@@ -93,9 +93,10 @@ int main(){
  reset();font.lfEscapement=900;d={};check(!capture(dc,state,&d)&&d.reason==Refusal::font,"rotated shaping refused");
  reset();background=CLR_INVALID;d={};check(!capture(dc,state,&d)&&d.reason==Refusal::colors,"invalid background refused");
  reset();check(capture(dc,state,&d),"restored DC admission");
- Raster out;std::string long_text(106,'W');width=1000;height=30;d={};auto before=dib_creates;
+ // Past the 512K-pixel raster cap (1340x510); ordinary advisor strings fit it.
+ Raster out;std::string long_text(106,'W');width=1000;height=170;d={};auto before=dib_creates;
  check(!compile(dc,state,long_text.data(),106,out,&d)&&d.reason==Refusal::raster_bounds,"106-byte extent refusal");
- check(d.width==1060&&d.height==90&&dib_creates==before,"refusal preserves exact measured extent and allocates no DIB");
+ check(d.width==1340&&d.height==510&&dib_creates==before,"refusal preserves exact measured extent and allocates no DIB");
  d={};check(!compile(dc,state,nullptr,106,out,&d)&&d.reason==Refusal::arguments,"missing text has distinct reason");
  width=24;height=17;d={};extent_ok=false;check(!compile(dc,state,"x",1,out,&d)&&d.reason==Refusal::extent,"extent query failure");extent_ok=true;
  d={};dib_ok=false;check(!compile(dc,state,"x",1,out,&d)&&d.reason==Refusal::dib,"DIB allocation failure");dib_ok=true;
@@ -111,7 +112,7 @@ int main(){
  check(unchanged==0xff334455&&glyph!=unchanged,"copied shaping preserves native coverage");
  // This second shape crosses a strip boundary; clipped shaping must not lose
  // the second portion or shift either half relative to the native origin.
- width=200;height=60;draws=0;maximum_dib_pixels=0;
+ width=600;height=300;draws=0;maximum_dib_pixels=0;
  d={};check(!compile(dc,state,long_text.data(),106,out,&d)&&d.reason==Refusal::raster_bounds,"large padded glyph footprint remains refused");
  width=280;height=30;d={};draws=0;
  check(compile(dc,state,long_text.data(),106,out,&d)&&out.width==340&&out.height==90,"supported glyph spans response strips");
@@ -181,7 +182,7 @@ int main(){
  check(!c.draw_text(destination,message.data(),&anchor,106)&&c.reason==c3x_native_text::Refusal::gpu_upload&&c.gpu.destroys==2&&c.text_bytes==0&&!destination.dirty,"failed upload releases both staged resources");
  Harness d;d.gpu.fail_submit=true;
  check(!d.draw_text(destination,message.data(),&anchor,106)&&d.reason==c3x_native_text::Refusal::submission&&!destination.dirty,"failed ordered submission still refuses ownership");
- width=1000;height=30;Harness oversized;
+ width=1000;height=170;Harness oversized;
  check(!oversized.draw_text(destination,message.data(),&anchor,106)&&oversized.reason==c3x_native_text::Refusal::raster_bounds&&oversized.gpu.creates==0,"oversized shape refuses before GPU allocation");
  std::cout<<"PASS actual text adapter immutable cache, clipping, ordered pair and failure retirement\n";
 }
