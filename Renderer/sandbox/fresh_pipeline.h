@@ -336,7 +336,15 @@ Output PSSandboxReflectionTerrainMaterial(P input) {
     // floor patch's rim past the shore floated over the sea; the coast took
     // that faint, dark mirror image as full coverage: dark blotches offshore.
     clip(input.world.z-NativeReflection.z-1./112);
-    return shade(input);
+    // The coastal sea also takes any mirrored terrain colour as full coverage,
+    // and the land's coastal margin fades to a few percent over the beach:
+    // mirrored over open sea, that margin read as a near-black solid. Keep
+    // ground drawn at least half opaque, at its own (unpremultiplied) values.
+    Output output=shade(input);
+    clip(output.color.a-.5);
+    float inverse=rcp(output.color.a);
+    output.color*=inverse;output.normal*=inverse;output.world*=inverse;output.properties*=inverse;
+    return output;
 }
 )");
         if(std::strcmp(entry,"PSSandboxTerrainRelight")==0)shader.append(R"(

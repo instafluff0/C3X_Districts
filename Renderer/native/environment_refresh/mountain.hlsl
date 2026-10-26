@@ -904,6 +904,6 @@ P VSReflection(V input) {
  return o;
 }
 float4 PSReflection(P input):SV_Target {
- clip(input.world.z-NativeReflection.z-.0001);
+ clip(input.world.z-NativeReflection.z-1./112);
  return PSMain(input).color*smoothstep(10,30,(input.world.z-NativeReflection.z)*112);
 }

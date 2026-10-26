@@ -102,6 +102,25 @@ float4 PSReflection(P input):SV_Target {
  return PSMain(input).color;
 }
 '''
+        if name!='objects':
+            # Ground within one height unit of the water plane mirrors onto
+            # itself (under a pixel), as in the game's terrain mirror. Terrain
+            # decals ride .18 units over their ground, so a floor patch's rim
+            # past the shore floated over the sea; the coast took that faint,
+            # dark mirror image as full coverage: dark blotches offshore.
+            clip=' clip(input.world.z-NativeReflection.z-.0001);\n return PSMain'
+            assert source.count(clip)==1
+            source=source.replace(clip,' clip(input.world.z-NativeReflection.z-1./112);\n return PSMain')
+        if name=='terrain':
+            # Mirrored terrain writes color only (the ground blend keeps no
+            # alpha), and the sea counts any mirrored color as full coverage.
+            # The land's coastal margin fades to a few percent over the beach,
+            # so mirrored over open sea it was a near-black patch taken as
+            # solid: dark blotches offshore. Keep ground the main pass draws at
+            # least half opaque, at its own (unpremultiplied) color.
+            assert source.count(' return PSMain(input).color;\n}\n')==1
+            source=source.replace(' return PSMain(input).color;\n}\n',
+                ' float4 color=PSMain(input).color;\n clip(color.a-.5);\n return float4(color.rgb/color.a,1);\n}\n')
         if name=='mountain':
             # Rivers reflect mountains but not their grassy foot, which sits
             # just above the ground and mirrors like it. Premultiplied, so

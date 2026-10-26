@@ -11,6 +11,7 @@
     "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl",
     "Renderer/native/city_fidelity/hydrology.hlsl",
     "Renderer/native/environment_refresh/reflection.h",
+    "Renderer/native/environment_refresh/prepare.py",
     "Renderer/native/source_fidelity/river_corridor.h",
     "Renderer/native/render_core/terrain_query.h",
     "Renderer/native/render_core/world_topology.h",

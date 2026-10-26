@@ -718,6 +718,8 @@ P VSReflection(V input) {
  return o;
 }
 float4 PSReflection(P input):SV_Target {
- clip(input.world.z-NativeReflection.z-.0001);
- return PSMain(input).color;
+ clip(input.world.z-NativeReflection.z-1./112);
+ float4 color=PSMain(input).color;
+ clip(color.a-.5);
+ return float4(color.rgb/color.a,1);
 }

@@ -23,6 +23,10 @@ DECALS = (ROOT / 'Renderer/lab/shared/natural/vegetation_floor_mesh_body.h',
           ROOT / 'Renderer/lab/shared/natural/surface_mesh_body.h')
 GROUND = ROOT / 'Renderer/lab/shared/natural/ground.h'
 RENDERER = ROOT / 'Renderer/native/c3x_renderer.cpp'
+# Lab previews mirror terrain and mountains through their own PSReflection
+# (environment_refresh/prepare.py, regenerated into the city profile's shaders).
+LAB_MIRRORS = tuple(ROOT / f'Renderer/native/{folder}/{name}.hlsl'
+                    for folder in ('environment_refresh', 'city_fidelity') for name in ('terrain', 'mountain'))
 
 
 def number(expression):
@@ -41,6 +45,46 @@ def mirror_ground_clip():
     found = re.search(r'clip\(input\.world\.z-NativeReflection\.z-([\d./f]+)\);', body)
     assert found, 'the mirror ground clip changed; update this model'
     return number(found.group(1))
+
+
+def lab_mirror_clips():
+    """The Lab mirror's ground clip in each generated terrain and mountain shader."""
+    clips = {}
+    for path in LAB_MIRRORS:
+        source = path.read_text()
+        entry = source.index('float4 PSReflection(P input):SV_Target {')
+        body = source[entry:source.index('}', entry)]
+        found = re.search(r'clip\(input\.world\.z-NativeReflection\.z-([\d./f]+)\);', body)
+        assert found, f'the Lab mirror clip changed in {path.name}; update this model'
+        clips[path] = number(found.group(1))
+    return clips
+
+
+def game_terrain_mirror_coverage():
+    """Least main-pass coverage the game's terrain mirror material keeps."""
+    source = PIPELINE.read_text()
+    entry = source.index('Output PSSandboxReflectionTerrainMaterial(P input) {')
+    body = source[entry:source.index('}', entry)]
+    found = re.search(r'clip\(output\.color\.a-([\d.]+)\);\n\s*float inverse=rcp\(output\.color\.a\);\n\s*'
+                      r'output\.color\*=inverse;output\.normal\*=inverse;output\.world\*=inverse;'
+                      r'output\.properties\*=inverse;', body)
+    assert found, 'the game terrain mirror keeps faint ground'
+    return number(found.group(1))
+
+
+def lab_terrain_mirror_coverage():
+    """Least main-pass coverage the Lab's terrain mirror keeps, per generated shader."""
+    kept = {}
+    for path in LAB_MIRRORS:
+        if not path.name.startswith('terrain'):
+            continue
+        source = path.read_text()
+        entry = source.index('float4 PSReflection(P input):SV_Target {')
+        body = source[entry:source.index('}', entry)]
+        found = re.search(r'clip\(color\.a-([\d.]+)\);\n return float4\(color\.rgb/color\.a,1\);', body)
+        assert found, f'the Lab terrain mirror keeps faint ground in {path.name}'
+        kept[path] = number(found.group(1))
+    return kept
 
 
 def decal_lifts():
@@ -79,6 +123,32 @@ class MirrorGroundClipTests(unittest.TestCase):
         # coastal land and cliffs still reflect.
         height_pixels = 112 * .82 * 128 / 224
         self.assertLessEqual(2 * mirror_ground_clip() * height_pixels, 1.0)
+
+    def test_the_lab_mirror_clips_as_the_game_does(self):
+        # The Lab kept the old margin, so its previews still showed the
+        # blotches (user report, October 25).
+        for path, clip in lab_mirror_clips().items():
+            self.assertEqual(clip, mirror_ground_clip(), path.relative_to(ROOT))
+
+    def test_the_lab_sea_mirrors_no_faint_coastal_ground(self):
+        # Mirrored terrain writes color only (the ground blend keeps no alpha)
+        # and the sea takes any mirrored color as full coverage. The land's
+        # coastal margin fades to a few percent over the beach, so over open
+        # sea its near-black mirror image read as solid: dark patches offshore
+        # (user report, October 25). Only ground drawn at least half opaque
+        # mirrors, at its own color.
+        water = (ROOT / 'Renderer/lab/shared/shaders/hydrology/water_natural.hlsl').read_text()
+        self.assertIn('step(1e-6,max(object.r,max(object.g,object.b)))', water)
+        for path, kept in lab_terrain_mirror_coverage().items():
+            self.assertGreaterEqual(kept, .5, path.relative_to(ROOT))
+
+    def test_the_game_sea_mirrors_no_faint_coastal_ground(self):
+        # The game's coastal sea has the same rule, and its mirror material
+        # kept the faded margin too (the waterline residue left after the
+        # October 21 fix).
+        water = (ROOT / 'Renderer/sandbox/water_surface.hlsl').read_text()
+        self.assertIn('step(1e-6, max(object.r, max(object.g, object.b)))', water)
+        self.assertGreaterEqual(game_terrain_mirror_coverage(), .5)
 
     def test_the_old_clip_kept_decal_rims(self):
         # Confirms the check against the margin behind the October 21 report.
