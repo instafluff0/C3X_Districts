@@ -117,6 +117,15 @@ scenario save with Wonder Districts needs up to 18 on a busy VM). Such a save's 
 also need `enable_districts = true` when its scenario leaves that to the custom
 config.
 
+`-NativeRendering` runs the same scenario with Civ III's own 2D rendering for
+an A/B against Renderer64. It sets `enable_custom_rendering`,
+`day_night_cycle_mode` and `seasonal_cycle_mode` off in `custom.c3x_config.ini`
+(vanilla has no cycles, and without Renderer64 they load 2D cycle art whose
+absence stops the load with an error dialog) and restores the exact bytes
+afterwards. Renderer traces stay empty: compare window frames and the UI pings
+instead. The injected load hook that accepts the "Saved Game" dialog is a
+renderer path, so add `-LoadWarnings 1`.
+
 `-Scenario reveal-scroll -Seconds 240 -SampleHz 10 -MeasureCadence -ProfileRenderer`
 extends the fresh 4000 BC `research-turn` witness: found a city, zoom to 1.75×,
 move the worker and Scout through three reveals, finish the first turn, then
@@ -289,6 +298,20 @@ path; they wait behind image batches on the helper's single worker, so the
 per-frame recomposition cost is the lever. `check_retained_growth.py` passes
 it either way (depth stays 10-13); judge it by the direct-visual numbers and
 "presents blocked", A/B in one session (runs vary by ~100 ms/s).
+
+`-Scenario domestic-slider -Seconds 100 -SampleHz 10 -ProfileRenderer` uses the
+3400 BC autosave: F1, then 20 s dragging the science slider (flask at
+`+154,-286`, 20 moves a second between 0% and the Despotism limit), 10 s on the
+luxury slider, 14 s idle, Esc and one camera step. A background thread sends
+`WM_NULL` to the game window every 20 ms (`pings.json`: Civ III's message
+latency, with or without Renderer64). `domestic_slider_lag.py CAPTURE` compares
+the flask's position in each window frame with the cursor's to give the
+slider's display lag. On October 26 it measured:
+native Civ III 118 ms; Renderer64 148 ms with three frames in flight (one queued
+frame 125 ms); 130 ms once a held mouse button makes each frame wait for every
+frame-latency grant (`test_native_visual_cadence.py`), at ~50 frames a second
+during the drag and 60 after. UI pings stayed under 10 ms with Renderer64; native
+Civ III's own blits held its thread up to ~20 ms.
 
 For user-controlled play instead of a scripted fixture, use
 [`CAPTURE_GAMEPLAY.bat`](../docs/gameplay_profile.md). Its console can finish

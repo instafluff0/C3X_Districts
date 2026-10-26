@@ -1,9 +1,9 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,360)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','volcanoes','resources','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','navigation','camera','forest-shadow','pedia-hover','foreign-advisor','diplomacy-hover')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','volcanoes','resources','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','navigation','camera','forest-shadow','pedia-hover','foreign-advisor','diplomacy-hover','domestic-slider')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
-      [switch]$ProfileRenderer, [switch]$MeasureCadence,
+      [switch]$ProfileRenderer, [switch]$MeasureCadence, [switch]$NativeRendering,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1,
       # Renderer diagnostics for the game child only, e.g. C3X_SANDBOX_PASS_COUNTS=1;C3X_RENDERER_PROFILE=1
       [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='',
@@ -21,6 +21,7 @@ if ($Scenario -eq 'city-builds' -and $Seconds -lt 180) { throw 'city-builds requ
 if ($Scenario -eq 'pedia-hover' -and $Seconds -lt 85) { throw 'pedia-hover requires at least 85 seconds.' }
 if ($Scenario -eq 'foreign-advisor' -and $Seconds -lt 95) { throw 'foreign-advisor requires at least 95 seconds.' }
 if ($Scenario -eq 'diplomacy-hover' -and $Seconds -lt 110) { throw 'diplomacy-hover requires at least 110 seconds.' }
+if ($Scenario -eq 'domestic-slider' -and $Seconds -lt 100) { throw 'domestic-slider requires at least 100 seconds.' }
 if ($Scenario -eq 'route-city' -and $Seconds -lt 245) { throw 'route-city requires at least 245 seconds.' }
 if ($Scenario -eq 'route-zoom' -and $Seconds -lt 120) { throw 'route-zoom requires at least 120 seconds.' }
 if ($Scenario -in @('research-turn','reveal-scroll') -and $Seconds -lt 200) { throw 'research-turn requires at least 200 seconds.' }
@@ -67,6 +68,29 @@ public static class RendererGameCommand {
     [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window, out Rect rect);
     [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr window, ref Point point);
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] public static extern bool WritePrivateProfileString(string section, string key, string value, string path);
+}
+// UI-thread responsiveness with or without the renderer: a background thread
+// sends WM_NULL every interval; each reply waits until Civ III's thread pumps
+// messages, so a blocked or busy UI thread shows as a long round trip.
+public static class RendererUiPing {
+    [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr key, IntPtr detail, uint flags, uint timeout, out IntPtr result);
+    static System.Threading.Thread thread; static volatile bool running;
+    static readonly System.Collections.Generic.List<long[]> samples = new System.Collections.Generic.List<long[]>();
+    public static void Start(IntPtr window, int interval) {
+        if (thread != null) return;
+        running = true;
+        thread = new System.Threading.Thread(() => {
+            while (running) {
+                long sent = System.Diagnostics.Stopwatch.GetTimestamp(); IntPtr reply;
+                bool answered = SendMessageTimeout(window, 0, IntPtr.Zero, IntPtr.Zero, 2, 5000, out reply) != IntPtr.Zero;
+                long received = System.Diagnostics.Stopwatch.GetTimestamp();
+                lock (samples) samples.Add(new long[] { sent, received, answered ? 1 : 0 });
+                System.Threading.Thread.Sleep(interval);
+            }
+        });
+        thread.IsBackground = true; thread.Start();
+    }
+    public static long[][] Stop() { running = false; if (thread != null) thread.Join(6000); lock (samples) return samples.ToArray(); }
 }
 // Read the helper's existing successful-presentation counter. This maps only
 // the IPC header read-only; it never requests pixels or submits renderer work.
@@ -117,9 +141,27 @@ foreach ($key in @('C3X_RENDERER_TRACE','C3X_RENDERER_TRACE_BUFFERED','C3X_RENDE
 }
 $ini=Join-Path $ConquestsDirectory 'conquests.ini'
 $iniBytes=[IO.File]::ReadAllBytes($ini)
+# -NativeRendering: the same scenario with Civ III's own 2D rendering, for an
+# A/B against Renderer64. enable_custom_rendering is off, and so are the
+# day/night and seasonal cycles: vanilla has neither, and without Renderer64
+# they load 2D cycle art (absent here; its error dialog stops the load).
+# The exact config bytes are restored in finally.
+$c3xConfig=Join-Path (Split-Path $renderer -Parent) 'custom.c3x_config.ini'
+$c3xConfigBytes=$null
+if ($NativeRendering) {
+    $c3xConfigBytes=[IO.File]::ReadAllBytes($c3xConfig)
+    $latin=[Text.Encoding]::GetEncoding(28591)
+    $configText=$latin.GetString($c3xConfigBytes)
+    if ($configText -notmatch '(?m)^enable_custom_rendering\s*=\s*true\s*$') { throw 'NativeRendering needs enable_custom_rendering = true in custom.c3x_config.ini.' }
+}
 $cursor=New-Object RendererGameCommand+Point
 $restoreCursor=[RendererGameCommand]::GetCursorPos([ref]$cursor)
 try {
+    if ($NativeRendering) {
+        $nativeText=$configText -replace '(?m)^enable_custom_rendering\s*=\s*true(\s*)$','enable_custom_rendering = false$1' `
+            -replace '(?m)^(day_night_cycle_mode|seasonal_cycle_mode)\s*=[^\r\n]*','$1 = off'
+        [IO.File]::WriteAllBytes($c3xConfig,$latin.GetBytes($nativeText))
+    }
     # Restore these exact bytes in finally. Native menu/file-picker loading is
     # necessary because C3X reads the renderer setting during scenario load.
     $latestSave=Join-Path (Split-Path $save -Parent) ([IO.Path]::GetFileNameWithoutExtension($save))
@@ -144,12 +186,12 @@ try {
     $env:C3X_RENDERER_UNIT_PACK=$UnitPack
     if ($SceneSamples -gt 0) { $env:C3X_RENDERER_SCENE_SAMPLES=[string]$SceneSamples }
     if ($SceneSharpness -ge 0) { $env:C3X_RENDERER_SCENE_SHARPNESS=$SceneSharpness.ToString([cultureinfo]::InvariantCulture) }
-    if ($Scenario -in @('mouse','zoom','zoom-out','near','units','hud','city','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','pedia-hover','foreign-advisor','diplomacy-hover')) { $env:C3X_RENDERER_TRACE_INPUT='1' }
+    if ($Scenario -in @('mouse','zoom','zoom-out','near','units','hud','city','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','pedia-hover','foreign-advisor','diplomacy-hover','domestic-slider')) { $env:C3X_RENDERER_TRACE_INPUT='1' }
     if ($MeasureCadence -and -not $ProfileRenderer) { $env:C3X_RENDERER_TRACE='0' }
     if ($ProfileRenderer) {
         $env:C3X_RENDERER_TRACE='2'
         $env:C3X_RENDERER_TRACE_BUFFERED='1'
-        if ($Scenario -in @('turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','zoom-out','near','units','city','pedia-hover','diplomacy-hover')) { $env:C3X_RENDERER_TRACE_MIB='64' }
+        if ($Scenario -in @('turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','zoom-out','near','units','city','pedia-hover','diplomacy-hover','domestic-slider')) { $env:C3X_RENDERER_TRACE_MIB='64' }
         if ($Scenario -in @('turn-stress','debug-scroll','route-city','city-builds')) {
             # Preserve failure evidence even when a stalled helper must be killed.
             $env:C3X_RENDERER_TRACE_BUFFERED='0'
@@ -285,6 +327,17 @@ try {
             $mouseSteps+=,@((85+0.05*$n),[int](-660+40*[Math]::Cos($phase)),[int](-150+20*[Math]::Sin($phase)),0)}
         $mouseSteps+=,@(95.5,0,0,0)
     }
+    if ($Scenario -eq 'domestic-slider') {
+        # Domestic Advisor (F1) on the user's 3400 BC autosave: drag the
+        # science slider (flask at 50%) for 20 s and the luxury slider
+        # (smiley at 0%) for 10 s at 20 moves a second between 0% and the
+        # Despotism limit, then leave the screen idle for 14 s.
+        $mouseSteps=@(@(44,154,-286,0),@(45,154,-286,2))
+        for($n=1;$n -le 400;++$n){$mouseSteps+=,@((45+0.05*$n),[int](115+55*[Math]::Sin(2*[Math]::PI*0.05*$n/4)),-285,0)}
+        $mouseSteps+=@(@(65.1,115,-285,4),@(66,73,-238,0),@(67,73,-238,2))
+        for($n=1;$n -le 200;++$n){$mouseSteps+=,@((67+0.05*$n),[int](100-40*[Math]::Cos(2*[Math]::PI*0.05*$n/4)),-238,0)}
+        $mouseSteps+=@(@(77.1,60,-238,4),@(78,0,0,0))
+    }
     if ($Scenario -eq 'forest-shadow') {
         # research-turn at the closest zoom: zoom to 3x, found the city, close
         # its screen (which returns to 1x), zoom back to 3x, move, end the turn
@@ -392,6 +445,9 @@ try {
     if ($Scenario -eq 'foreign-advisor') {
         $interaction=@(@(40,0x73,'open-foreign-advisor'),@(84,27,'close-foreign-advisor'),@(88,0x87,'scroll-after-advisor'))
     }
+    if ($Scenario -eq 'domestic-slider') {
+        $interaction=@(@(40,0x70,'open-domestic-advisor'),@(92,27,'close-domestic-advisor'),@(96,0x87,'scroll-after-advisor'))
+    }
     if ($Scenario -eq 'diplomacy-hover') {
         $interaction=@(@(40,0x73,'open-foreign-advisor'),@(98,27,'leave-diplomacy'),@(100,27,'close-foreign-advisor'),@(104,0x87,'scroll-after-diplomacy'))
     }
@@ -460,6 +516,7 @@ try {
     }
     while ([DateTime]::UtcNow -lt $end -and -not $child.HasExited) {
         $child.Refresh(); $window=$child.MainWindowHandle
+        if ($window -ne [IntPtr]::Zero -and $Scenario -eq 'domestic-slider') { [RendererUiPing]::Start($window,20) }
         if ($window -ne [IntPtr]::Zero) {
             [uint32]$owner=0
             [void][RendererGameCommand]::GetWindowThreadProcessId($window,[ref]$owner)
@@ -524,7 +581,7 @@ try {
                         foreground=([RendererGameCommand]::GetForegroundWindow() -eq $window) }
                 }
             }
-            if ($Scenario -in @('mouse','zoom','zoom-out','near','units','city','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','forest-shadow','pedia-hover','foreign-advisor','diplomacy-hover') -and $mouseIndex -lt $mouseSteps.Count -and $inputElapsed -ge $mouseSteps[$mouseIndex][0]) {
+            if ($Scenario -in @('mouse','zoom','zoom-out','near','units','city','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','forest-shadow','pedia-hover','foreign-advisor','diplomacy-hover','domestic-slider') -and $mouseIndex -lt $mouseSteps.Count -and $inputElapsed -ge $mouseSteps[$mouseIndex][0]) {
                 $step=$mouseSteps[$mouseIndex]
                 if ($mouseIndex -eq 0) { [void][RendererGameCommand]::SetForegroundWindow($window) }
                 if ([RendererGameCommand]::GetForegroundWindow() -ne $window) { throw 'Diagnostic game lost foreground before mouse input.' }
@@ -586,7 +643,7 @@ try {
                 Write-Host 'Interaction command: combat-zoom-key'
             }
             if ($key -eq 0) {
-                $pollMs=if ($Scenario -in @('zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','unit-motion','pedia-hover','foreign-advisor','diplomacy-hover')) {20} else {1000}
+                $pollMs=if ($Scenario -in @('zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','unit-motion','pedia-hover','foreign-advisor','diplomacy-hover','domestic-slider')) {20} else {1000}
                 Start-Sleep -Milliseconds $pollMs; continue
             }
             if ($Scenario -eq 'lifecycle' -and $key -eq 81) {
@@ -617,7 +674,7 @@ try {
             ++$sent
         }
         # Keep cadence observation running after Z as well as mouse input.
-        Start-Sleep -Milliseconds $(if ($Scenario -in @('zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','unit-motion','pedia-hover','foreign-advisor','diplomacy-hover')) {20} else {1000})
+        Start-Sleep -Milliseconds $(if ($Scenario -in @('zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','unit-motion','pedia-hover','foreign-advisor','diplomacy-hover','domestic-slider')) {20} else {1000})
     }
     if ($child.HasExited) { $earlyExit=$true; $gameExitCode=$child.ExitCode }
     Write-Host ('Posted diagnostic commands: '+$sent)
@@ -639,6 +696,8 @@ try {
     # copy. No scenario saves its resulting gameplay.
     if ($child -and -not $child.HasExited) { $child.Kill(); $child.WaitForExit() }
     [IO.File]::WriteAllBytes($ini,$iniBytes)
+    if ($c3xConfigBytes) { [IO.File]::WriteAllBytes($c3xConfig,$c3xConfigBytes) }
+    $pings=[RendererUiPing]::Stop()
     if ($restoreCursor) { [void][RendererGameCommand]::SetCursorPos($cursor.X,$cursor.Y) }
     if ($collector -and -not $collector.HasExited) {
         & $debug --stop | Out-Null
@@ -652,9 +711,13 @@ if ($MeasureCadence) {
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'cadence.json')
 }
 $log=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
-if ($Scenario -in @('mouse','zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','pedia-hover','foreign-advisor','diplomacy-hover')) {
+if ($Scenario -in @('mouse','zoom','zoom-out','near','units','route-city','route-zoom','city-builds','navigation','camera','reveal-scroll','pedia-hover','foreign-advisor','diplomacy-hover','domestic-slider')) {
     [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; events=$mouseEvents } |
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'mouse-events.json')
+}
+if ($pings.Count) {
+    [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; meaning='WM_NULL round trips to the game window: sent, received, answered';
+        samples=@($pings | ForEach-Object { ,@($_[0],$_[1],$_[2]) }) } | ConvertTo-Json -Depth 4 -Compress | Set-Content (Join-Path $session 'pings.json')
 }
 if ($keyEvents.Count) {
     [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; events=$keyEvents } |
@@ -684,7 +747,7 @@ $windowResult=Join-Path $session 'window\finished.json'
 $windowEvidence=if (Test-Path -LiteralPath $windowResult) { Get-Content -LiteralPath $windowResult -Raw | ConvertFrom-Json } else { $null }
 $windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $windowEvidence.frames -gt 0
 [ordered]@{ scenario=$Scenario; debug_reveals=$debugReveals; debug_hides=$debugHides; scene_samples=$SceneSamples; scene_sharpness=$SceneSharpness; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; prepared_turns=$preparedTurns; accepted_moves=$moves; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; city_zoom_widths=$cityZooms; city_anchors=$cityAnchors; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
-    game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; loading_maps_ready=$loadingMaps; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
+    game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; loading_maps_ready=$loadingMaps; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; native_rendering=[bool]$NativeRendering; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
 if ($MeasureCadence -and $cadenceSamples.Count -lt 2) { Write-Error 'Insufficient renderer cadence samples; inspect cadence.json and the helper channel.'; exit 1 }

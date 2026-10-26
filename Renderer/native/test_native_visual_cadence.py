@@ -22,6 +22,19 @@ class NativeVisualCadenceTests(unittest.TestCase):
         self.assertIn('std::array<bool,trial_frames_in_flight> visual_fence_issued{};',source)
         self.assertIn('visual_fence_index=(visual_fence_index+1)%unsigned(visual_fences.size());',source)
 
+    def test_held_mouse_button_queues_one_frame(self):
+        # Dragging the domestic advisor's science slider: three queued frames
+        # put the slider 148 ms behind the cursor against 118 ms in native
+        # Civ III; one frame measured 125 ms (domestic-slider, October 26).
+        # A runtime SetMaximumFrameLatency(1) was accepted but did not shorten
+        # the queue, so a held button makes both the cadence wait and the
+        # frame's permit require every grant: no earlier frame is queued.
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        self.assertIn('return !trial_legacy_cadence()&&((GetAsyncKeyState(VK_LBUTTON)|GetAsyncKeyState(VK_RBUTTON))&0x8000)?int(trial_frames_in_flight):1;',source)
+        self.assertIn('return trial_surface_permit.wait(timeout_ms,trial_grants_needed());',source)
+        self.assertIn('bool presentation_ready=trial_surface_permit.ready(trial_grants_needed());',source)
+        self.assertNotIn('SetMaximumFrameLatency(latency)',source)
+
     def test_camera_job_start_counts_as_an_in_job_frame(self):
         # Civ III polls a scroll step once per 78 ms tick. A display frame
         # serviced inside a short step job waited 18-28 ms on Parallels GPU
@@ -76,6 +89,16 @@ int main(){
  SetEvent(latency);assert(permit.wait(0)==1);permit.presented();assert(permit.wait(0)==0);
  auto replacement=CreateEventW(nullptr,FALSE,TRUE,nullptr);assert(replacement);
  permit.reset(replacement);assert(permit.ready());permit.presented();assert(!permit.ready());
+ // A held mouse button needs every grant of a three-frame latency: a frame
+ // starts only when no earlier frame is queued. Partial grants are kept.
+ auto slots=CreateSemaphoreW(nullptr,1,3,nullptr);assert(slots);
+ permit.reset(slots);assert(!permit.ready(3));                 // one free slot, now held
+ assert(permit.wait(0,3)==0);                                  // still two queued
+ ReleaseSemaphore(slots,1,nullptr);assert(!permit.ready(3));   // two held
+ ReleaseSemaphore(slots,1,nullptr);assert(permit.wait(50,3)==1);assert(permit.ready(3));
+ permit.presented();assert(!permit.ready(3));assert(permit.ready()&&permit.wait(0)==2); // released: one is enough
+ permit.presented();permit.presented();assert(!permit.ready());
+ ReleaseSemaphore(slots,3,nullptr);assert(permit.wait(0,3)==1);permit.reset();
 }
 ''')
 
@@ -283,10 +306,11 @@ struct Swap{HRESULT result=S_OK;unsigned presents=0;
 struct Surface{void* Get(){return nullptr;}};
 struct Owner{
  static bool trial_legacy_cadence(){return false;}
+ static int trial_grants_needed(){return 1;}
  enum class Command{trial_visual_shared,trial_required_visual_shared};
  Command command=Command::trial_visual_shared;
  struct Permit{bool admitted=false;unsigned polls=0,consumed=0;
-  bool ready(){++polls;return admitted;}void presented(){assert(admitted);admitted=false;++consumed;}
+  bool ready(int needed){assert(needed==1);++polls;return admitted;}void presented(){assert(admitted);admitted=false;++consumed;}
  }trial_surface_permit;
  struct Trace{LARGE_INTEGER frequency{1000};unsigned rows=0;
   double milliseconds(long long ticks){return double(ticks);}

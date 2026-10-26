@@ -14625,7 +14625,15 @@ public:
     // timer fallback. Never touches the device or immediate context.
     int trial_visual_wait(unsigned timeout_ms){
         if(trial_legacy_cadence())return 0;
-        return trial_surface_permit.wait(timeout_ms);
+        return trial_surface_permit.wait(timeout_ms,trial_grants_needed());
+    }
+    // While a mouse button is held (a slider or other drag on Civ III's 2D
+    // screens) a frame starts only with every grant, i.e. with no earlier
+    // frame queued: three queued frames put the domestic advisor's slider
+    // 148 ms behind the cursor (one: 125 ms; native Civ III: 118 ms) for ~15%
+    // more frames. Map scrolling and animation keep three in flight.
+    static int trial_grants_needed(){
+        return !trial_legacy_cadence()&&((GetAsyncKeyState(VK_LBUTTON)|GetAsyncKeyState(VK_RBUTTON))&0x8000)?int(trial_frames_in_flight):1;
     }
     int trial_surface_pixels(unsigned* output,unsigned capacity,unsigned& width,unsigned& height){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
@@ -16133,7 +16141,7 @@ private:
     }
     HANDLE trial_surface_handle=nullptr;
     unsigned trial_surface_width=0,trial_surface_height=0;
-    Microsoft::WRL::ComPtr<IDXGISwapChain1> trial_surface_swap;
+    Microsoft::WRL::ComPtr<IDXGISwapChain1> trial_surface_swap;bool trial_held_latency=false;
     c3x_renderer::PresentationPermit trial_surface_permit;
     Microsoft::WRL::ComPtr<ID3D11Texture2D> trial_surface_back;
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> trial_surface_view;
@@ -17775,7 +17783,9 @@ private:
                     // Its full-screen draw replaces the swap-chain buffer;
                     // copying the old frame into it first only adds a GPU
                     // transfer to every ambient opportunity.
-                    bool presentation_ready=trial_surface_permit.ready();
+                    if((trial_grants_needed()>1)!=trial_held_latency){trial_held_latency=!trial_held_latency;
+                        renderer_state.trace.write("frame-latency",trial_held_latency?"held=1":"held=0");}
+                    bool presentation_ready=trial_surface_permit.ready(trial_grants_needed());
                     if(!presentation_ready)trial_visual_permit_denials.fetch_add(1,std::memory_order_relaxed);
                     else if(command==Command::trial_visual_shared&&deferred_animating&&!frame_ends_before_adoption())presentation_ready=false;
                     else if(command==Command::trial_visual_shared&&!visual_gpu_ready()){

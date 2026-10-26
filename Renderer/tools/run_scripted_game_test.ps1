@@ -1,6 +1,6 @@
 # An elevated interactive task preserves Civ III's required token and child
 # environment. The task exists only for this bounded diagnostic invocation.
-param([Parameter(Mandatory=$true)][string]$SaveFile, [ValidateRange(35,360)][int]$Seconds=75, [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','volcanoes','resources','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','navigation','camera','forest-shadow','pedia-hover','foreign-advisor','diplomacy-hover')][string]$Scenario='scroll', [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz=2, [switch]$ProfileRenderer, [switch]$MeasureCadence, [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1, [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='', [ValidatePattern('^$|^[0-9]+,[0-9]+,[0-9]+(;[0-9]+,[0-9]+,[0-9]+)*$')][string]$Route='', [ValidateRange(0,20)][int]$LoadWarnings=0)
+param([Parameter(Mandatory=$true)][string]$SaveFile, [ValidateRange(35,360)][int]$Seconds=75, [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','near','units','volcanoes','resources','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','unit-motion','research-turn','reveal-scroll','route-city','route-zoom','city-builds','navigation','camera','forest-shadow','pedia-hover','foreign-advisor','diplomacy-hover','domestic-slider')][string]$Scenario='scroll', [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz=2, [switch]$ProfileRenderer, [switch]$MeasureCadence, [switch]$NativeRendering, [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1, [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='', [ValidatePattern('^$|^[0-9]+,[0-9]+,[0-9]+(;[0-9]+,[0-9]+,[0-9]+)*$')][string]$Route='', [ValidateRange(0,20)][int]$LoadWarnings=0)
 $ErrorActionPreference='Stop'
 $user=(Get-CimInstance Win32_ComputerSystem).UserName
 if (-not $user) { throw 'An interactive Windows login is required.' }
@@ -13,9 +13,10 @@ if ($target.Contains("'") -or $SaveFile.Contains("'") -or $out.Contains("'")) { 
 $wrapper=Join-Path $out 'run.ps1'
 $profileArgument=if ($ProfileRenderer) { '-ProfileRenderer' } else { '' }
 $cadenceArgument=if ($MeasureCadence) { '-MeasureCadence' } else { '' }
+$nativeArgument=if ($NativeRendering) { '-NativeRendering' } else { '' }
 @"
 Start-Transcript -Path '$out\launcher.log' -Force
-try { & '$target' -SaveFile '$SaveFile' -Seconds $Seconds -Scenario $Scenario -CombatCase $CombatCase -UnitPack $UnitPack -SampleHz $SampleHz $profileArgument $cadenceArgument -SceneSamples $SceneSamples -SceneSharpness $($SceneSharpness.ToString([cultureinfo]::InvariantCulture)) -RendererOptions '$RendererOptions' -Route '$Route' -LoadWarnings $LoadWarnings; exit `$LASTEXITCODE }
+try { & '$target' -SaveFile '$SaveFile' -Seconds $Seconds -Scenario $Scenario -CombatCase $CombatCase -UnitPack $UnitPack -SampleHz $SampleHz $profileArgument $cadenceArgument $nativeArgument -SceneSamples $SceneSamples -SceneSharpness $($SceneSharpness.ToString([cultureinfo]::InvariantCulture)) -RendererOptions '$RendererOptions' -Route '$Route' -LoadWarnings $LoadWarnings; exit `$LASTEXITCODE }
 finally { Stop-Transcript }
 "@ | Set-Content -LiteralPath $wrapper
 $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File "'+$wrapper+'"')
@@ -30,7 +31,8 @@ try {
         Start-Sleep -Seconds 1
         $info=Get-ScheduledTaskInfo -TaskName $name
         $state=(Get-ScheduledTask -TaskName $name).State
-    } while ([DateTime]::UtcNow -lt $deadline -and ($state -eq 'Running' -or $info.LastTaskResult -eq 267011))
+        # 267011: not yet run; 267009: the result still reads "running" just after the state changes.
+    } while ([DateTime]::UtcNow -lt $deadline -and ($state -eq 'Running' -or $info.LastTaskResult -in @(267011,267009)))
     $info | Select-Object LastRunTime,LastTaskResult | ConvertTo-Json | Set-Content (Join-Path $out 'task-result.json')
     if ($state -eq 'Running') { throw 'Diagnostic task did not finish within its bound.' }
     Get-Content -LiteralPath (Join-Path $out 'launcher.log')
