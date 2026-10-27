@@ -81,6 +81,10 @@ struct RetainedComposition {
     void invalidate_plan(){}
     // No assembled front exists in this fixture; uncommit still releases it.
     void release_front(){}
+    // Front rebasing and upload tiles only merge provably identical pixels;
+    // publication provenance is the same without them.
+    void rebase_front(Id){}
+    std::map<Id,int> upload_tiles;
     struct {float stretch=1.f;} work; // diagnostic stretch only
     std::shared_ptr<Node> node(){return std::make_shared<Node>();}
     void reserve(std::uint64_t,char const*){}

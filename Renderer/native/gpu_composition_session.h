@@ -96,6 +96,25 @@ class Session {
             OutputDebugStringA(line);auto keep=enabled;auto rate=frequency;*this=ExecuteProfile{};enabled=keep;frequency=rate;reported=now;
         }
     } execute_profile;
+    // A refused image request faults Renderer64's whole image session (every
+    // later native draw fails). Name the first refusals: request, failing
+    // command and the sizes of its images.
+    unsigned refusal_reports=0;
+    int refuse(c3x_renderer_gpu_images_v1 const& request,char const* reason,Command const* c=nullptr){
+        if(refusal_reports>=16)return C3X_RENDERER_RESULT_BAD_ARGUMENT;++refusal_reports;
+        auto size=[this](Id id){D3D11_TEXTURE2D_DESC d={};if(auto t=id?gpu.texture(id):nullptr)t->GetDesc(&d);return std::make_pair(d.Width,d.Height);};
+        char line[512];
+        if(c){auto d=size(c->destination),s=size(c->source);std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=gpu-image-refused action=%d image=%lld reason=%s kind=%d destination=%llu(%ux%u) source=%llu(%ux%u) area=%d,%d,%d,%d clip=%d,%d,%d,%d source_xy=%d,%d source_size=%d,%d color=%u detail=%llu background=%llu\n",
+            request.action,request.image,reason,int(c->kind),(unsigned long long)c->destination,d.first,d.second,(unsigned long long)c->source,s.first,s.second,
+            c->area.left,c->area.top,c->area.right,c->area.bottom,c->clip.left,c->clip.top,c->clip.right,c->clip.bottom,c->source_x,c->source_y,
+            c->source_width,c->source_height,c->color,(unsigned long long)c->detail,(unsigned long long)c->background);}
+        else{auto i=size(Id(request.image));std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=gpu-image-refused action=%d image=%lld(%ux%u) reason=%s width=%d height=%d format=%d pixels=%u revision=%lld live_images=%zu resident_bytes=%llu\n",
+            request.action,request.image,i.first,i.second,reason,request.width,request.height,request.format,request.pixel_count,request.revision,
+            gpu.live_images(),(unsigned long long)gpu.stats().resident_bytes);}
+        OutputDebugStringA(line);return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    }
     void record(Command const& command){
         if(!layers.accepting())return;
         if(hud_canvas&&(command.destination==hud_canvas||command.destination==hud_detail)){
@@ -413,7 +432,7 @@ public:
         // Draws and the immediately following resource boundary share one
         // owner handoff. Submission order and explicit CPU readback stay exact.
         if(!commands.empty()){
-            for(auto const& c:commands)if(c.destination==map||c.detail==map)return request.action==C3X_GPU_SUBMIT?C3X_RENDERER_RESULT_BAD_ARGUMENT:C3X_RENDERER_RESULT_ERROR;
+            for(auto const& c:commands)if(c.destination==map||c.detail==map)return request.action==C3X_GPU_SUBMIT?refuse(request,"map-destination",&c):C3X_RENDERER_RESULT_ERROR;
             for(std::size_t at=0;at<commands.size();){
                 auto const& c=commands[at];
                 if(c.kind>=Kind::world_begin){
@@ -443,12 +462,15 @@ public:
                         for(auto const& shadow:fixed_shadows)layers.destroy(shadow.source);
                         fixed_shadows.clear();fixed_words=c.destination;fixed_detail=c.detail;
                     }else if(c.kind==Kind::fixed_ui_end){fixed_words=fixed_detail=0;}
-                    else return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                    else return refuse(request,"unknown-boundary",&c);
                     ++at;continue;
                 }
                 auto end=at+1;while(end<commands.size()&&commands[end].kind<Kind::world_begin)++end;
                 if(profile.enabled)profile.since(mark);
-                if(!gpu.submit(commands.data()+at,end-at))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                if(!gpu.submit(commands.data()+at,end-at)){
+                    for(auto i=at;i<end;++i)if(!gpu.admits(commands[i]))return refuse(request,"invalid-command",&commands[i]);
+                    return refuse(request,"submission",&commands[at]);
+                }
                 if(profile.enabled)profile.submit_ms+=profile.since(mark);
                 for(;at<end;++at)try{record(commands[at]);}catch(std::exception const& e){
                     OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
@@ -478,7 +500,8 @@ public:
         auto counts=gpu.stats();result.image=std::int64_t(image);result.pixel_count=unsigned(output.size());
         result.resident_bytes=std::int64_t(counts.resident_bytes);result.uploads=std::int64_t(counts.uploads);
         result.commands=std::int64_t(counts.commands);result.readbacks=std::int64_t(readbacks);
-        return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        return ok?C3X_RENDERER_RESULT_OK:refuse(request,request.action==C3X_GPU_CREATE?"create":request.action==C3X_GPU_UPLOAD?"upload":
+            request.action==C3X_GPU_DESTROY?"destroy":"resource");
     }
 };
 }

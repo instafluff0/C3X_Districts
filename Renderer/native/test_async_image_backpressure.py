@@ -226,6 +226,7 @@ struct Harness {
  Gpu gpu;void* get_bits=nullptr;void* release_bits=nullptr;
  unsigned large_uploads=0,source_evictions=0;std::size_t cpu_bytes=8;
  struct {unsigned source_checks=0,source_reuses=0;std::size_t source_expanded_bytes=0;} counters;
+ Id make_image(unsigned w,unsigned h,Format f){return gpu.create(w,h,f);}
 ''' + refresh + r'''
 };
 int main(){

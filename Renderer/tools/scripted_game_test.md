@@ -323,6 +323,37 @@ frame-latency grant (`test_native_visual_cadence.py`), at ~50 frames a second
 during the drag and 60 after. UI pings stayed under 10 ms with Renderer64; native
 Civ III's own blits held its thread up to ~20 ms.
 
+`-Scenario screen-sweep -Seconds 280 -SampleHz 2` opens every 2D screen in
+turn from 40 s on: the eleven advisor and status screens F1-F11, a city
+(F1, click the first city row), diplomacy (F4, double-click the leader at
+`-SweepLeader`, default `-271,-154` for the 3400 BC autosave), the HUD's main
+menu, Civilopedia and advisors buttons, and the Esc quit dialog. Each screen
+is held 7 s, with the pointer circling over it for 4 s (hover redraws,
+tooltips, the software cursor), then closed with Esc. The schedule is written
+to `sweep-screens.json`. The run fails on any refused GPU operation
+(`native-cpu-fallback` other than pixel/bits/DC access, drain or reinit),
+any `native-operation-failed`, an early exit or a UI ping over 1 s.
+`screen_sweep_report.py CAPTURE...` breaks the same evidence down per screen:
+refused operations, CPU access, readbacks and their cost, failures and the
+worst ping. Use the 3400 BC autosave (`.cache/foreign-advisor-20261026`), a
+1498 AD save (`.cache/world-local-step/input-1498AD.SAV`) and the 1845 AD
+scenario (`.cache/wonders/scenario-1845AD.SAV -EnableDistricts -LoadWarnings 8`).
+`-EnableDistricts` sets `enable_districts = true` for that run, the same
+exact-bytes restore as `-NativeRendering`; the late save always raises two C3X
+load errors (a districts-config mismatch and a `distribution_hub_records`
+chunk), so give it Enters to spare. Compare against `-NativeRendering`: Civ
+III itself stalls 0.2-0.4 s opening the Military and Cultural advisors on the
+larger saves. On October 26 the sweep found two Renderer64 faults. The mid
+and late saves filled the helper's 512 image slots and killed the session
+(`test_async_publication.py` image limit, eviction in `make_image`). Those two
+advisors also stalled 1.1-2.2 s: they make 250k-350k JGL pixel/bits calls
+while opening, and each call cost ~3 µs of bridge bookkeeping under the VM's
+x86 emulation. Most of that was three `std::map` constructions per call in
+input recording that was not even running. After the fix
+(`test_native_pixel_access.py`) a pixel call costs ~0.1 µs. Every screen
+passes on all three saves. Military/Cultural measured 159/266 ms on the mid
+save and 387/232 ms on the late save, against native 229/354 and 275/417.
+
 For user-controlled play instead of a scripted fixture, use
 [`CAPTURE_GAMEPLAY.bat`](../docs/gameplay_profile.md). Its console can finish
 collecting evidence while the game remains frozen.

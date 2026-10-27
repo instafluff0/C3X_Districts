@@ -45,6 +45,12 @@ public:
             retire(gpu,*oldest);
         }
         auto image=gpu.create(width,height,c3x_gpu_images::Format::bgra32);
+        // A full GPU image table refuses the create: older sprites give way.
+        for(unsigned evicted=0;!image&&evicted<8;++evicted){
+            Entry* oldest=nullptr;
+            for(auto& entry:entries)if(entry.image&&(!oldest||entry.age<oldest->age))oldest=&entry;
+            if(!oldest)break;retire(gpu,*oldest);image=gpu.create(width,height,c3x_gpu_images::Format::bgra32);
+        }
         if(!image)return 0;
         if(!gpu.upload(image,1,words.data(),words.size())){gpu.destroy(image);return 0;}
         chosen->image=image;chosen->width=width;chosen->height=height;
@@ -52,6 +58,10 @@ public:
         resident+=size;++uploads;uploaded_bytes+=size;return image;
     }
     void clear(Backend& gpu){for(auto& entry:entries)retire(gpu,entry);}
+    // Frees the oldest cached sprite's image for another owner; false when none.
+    bool evict(Backend& gpu){Entry* oldest=nullptr;
+        for(auto& entry:entries)if(entry.image&&(!oldest||entry.age<oldest->age))oldest=&entry;
+        if(!oldest)return false;retire(gpu,*oldest);return true;}
     void abandon(){entries={};resident=0;}
 };
 }

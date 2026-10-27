@@ -44,6 +44,29 @@ int main(){
 }
 ''')
 
+    def test_full_gpu_image_table_evicts_older_sprites(self):
+        # Renderer64's helper compositor holds 512 images in all; a create it
+        # refuses must not lose the draw while older cached sprites remain.
+        run_cpp(r'''
+#include "Renderer/native/native_sprite_cache.h"
+#include <cassert>
+#include <map>
+using namespace c3x_gpu_images;
+struct GPU {
+ Id next=0;std::size_t capacity=6;unsigned refused=0;
+ std::map<Id,std::vector<unsigned>> live;
+ Id create(unsigned w,unsigned h,Format){if(live.size()>=capacity){++refused;return 0;}live[++next].resize(w*h);return next;}
+ bool upload(Id id,std::uint64_t,unsigned const* p,std::size_t n){live.at(id).assign(p,p+n);return true;}
+ bool destroy(Id id){assert(live.erase(id)==1);return true;}
+} gpu;
+int main(){
+ c3x_native_images::SpriteCache<GPU> cache;
+ for(unsigned n=0;n<40;++n){std::vector<unsigned> words(64,65536|n);
+  auto id=cache.select(gpu,words,8,8);assert(id&&gpu.live.at(id).front()==(65536|n)&&gpu.live.size()<=6);}
+ assert(gpu.refused>0);cache.clear(gpu);assert(gpu.live.empty());
+}
+''')
+
 
 if __name__ == '__main__':
     unittest.main()

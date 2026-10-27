@@ -103,8 +103,15 @@ template<class Backend> class Adapter {
             if(bytes>text_budget)return refused(c3x_native_text::Refusal::cache_bytes);
             while(text_bytes+bytes>text_budget){auto oldest=std::min_element(texts.begin(),texts.end(),[](Text const& a,Text const& b){return (a.age?a.age:UINT64_MAX)<(b.age?b.age:UINT64_MAX);});retire_text(*oldest);}
             cached=&*std::min_element(texts.begin(),texts.end(),[](Text const& a,Text const& b){return a.age<b.age;});retire_text(*cached);
-            auto pixels=gpu.create(raster.width,raster.height,Format::bgra32);if(!pixels)return refused(c3x_native_text::Refusal::gpu_admission);
-            auto curves=gpu.create(17,unsigned(raster.curves.size()/17),Format::bgra32);if(!curves){gpu.destroy(pixels);return refused(c3x_native_text::Refusal::gpu_admission);}
+            // A full GPU image table refuses a create; cached strings hold most
+            // images, so the oldest give way (a late-game advisor's city list).
+            auto make=[&](unsigned width,unsigned height){auto id=gpu.create(width,height,Format::bgra32);
+                for(unsigned evicted=0;!id&&evicted<16;++evicted){Text* oldest=nullptr;
+                    for(auto& entry:texts)if(entry.age&&&entry!=cached&&(!oldest||entry.age<oldest->age))oldest=&entry;
+                    if(!oldest)break;retire_text(*oldest);id=gpu.create(width,height,Format::bgra32);}
+                return id;};
+            auto pixels=make(raster.width,raster.height);if(!pixels)return refused(c3x_native_text::Refusal::gpu_admission);
+            auto curves=make(17,unsigned(raster.curves.size()/17));if(!curves){gpu.destroy(pixels);return refused(c3x_native_text::Refusal::gpu_admission);}
             if(!gpu.upload(pixels,1,raster.pixels.data(),raster.pixels.size())||!gpu.upload(curves,1,raster.curves.data(),raster.curves.size())){gpu.destroy(pixels);gpu.destroy(curves);return refused(c3x_native_text::Refusal::gpu_upload);}
             SIZE extent={};TEXTMETRICA metrics={};GetTextExtentPoint32A(dc,static_cast<char const*>(text),int(count),&extent);GetTextMetricsA(dc,&metrics);
             cached->font_state=font_state;cached->text.assign(static_cast<char const*>(text),count);
@@ -126,7 +133,21 @@ template<class Backend> class Adapter {
     bool native_sprite(void* p)const{return c3x_native_access::sprite(p);}
     static Rect rect_value(RECT r){return {r.left,r.top,r.right,r.bottom};}
     static Rect rect(void const* p){auto r=static_cast<RECT const*>(p);return {r->left,r->top,r->right,r->bottom};}
-    Image* find(void* p){for(auto& image:images)if(p&&image.native==p){image.used=++source_age;return &image;}return nullptr;}
+    // Civ III's per-pixel loops (Military and Cultural advisors) alternate
+    // between a few images hundreds of thousands of times per screen:
+    // remember the latest lookups, including absences.
+    struct Recent {void* native=nullptr;std::size_t slot=0;bool absent=false;};
+    std::array<Recent,8> recent={};unsigned recent_next=0;
+    Image* find(void* p){
+        if(!p)return nullptr;
+        auto r=std::find_if(recent.begin(),recent.end(),[p](Recent const& e){return e.native==p;});
+        if(r==recent.end()){r=recent.begin()+recent_next++%recent.size();r->native=p;}
+        else if(r->absent)return nullptr;
+        else if(images[r->slot].native==p){auto& image=images[r->slot];image.used=++source_age;return &image;}
+        auto image=std::find_if(images.begin(),images.end(),[p](Image const& i){return i.native==p;});
+        r->absent=image==images.end();if(r->absent)return nullptr;
+        r->slot=std::size_t(image-images.begin());image->used=++source_age;return &*image;
+    }
     void forget(Image& image){if(image.detail)gpu.destroy(image.detail);gpu.destroy(image.gpu);cpu_bytes-=image.cpu.size()*2;image={};}
     void trim_cpu_sources(){
         // Trim only between native operations, before borrowing any Image*.
@@ -159,7 +180,8 @@ template<class Backend> class Adapter {
         if(std::uint64_t(w)*h*2>cpu_budget-cpu_bytes)return nullptr;
         for(auto& image:images)if(!image.native){
             std::vector<std::uint16_t> bytes(std::size_t(w)*h);
-            auto id=gpu.create(w,h,format);if(!id)return nullptr;
+            auto id=make_image(unsigned(w),unsigned(h),format);if(!id)return nullptr;
+            recent={}; // ends any remembered absence of p
             image.native=p;image.used=++source_age;image.gpu=id;image.width=w;image.height=h;image.format=format;image.owned=owned;
             image.cpu=std::move(bytes);cpu_bytes+=image.cpu.size()*2;return &image;
         }return nullptr;
@@ -227,7 +249,7 @@ template<class Backend> class Adapter {
         refresh_profile.uploaded_pixels+=content.size();++(partial?refresh_profile.partial:refresh_profile.full);
         bool accepted=true;
         if(partial){
-            auto patch=gpu.create(unsigned(changed.right-changed.left),unsigned(changed.bottom-changed.top),image.format);
+            auto patch=make_image(unsigned(changed.right-changed.left),unsigned(changed.bottom-changed.top),image.format);
             Command copy={Kind::copy,image.gpu,patch,changed,changed};
             accepted=patch&&gpu.upload(patch,1,content.data(),content.size())&&gpu.submit(&copy,1);
             if(patch)gpu.destroy(patch);
@@ -276,7 +298,7 @@ template<class Backend> class Adapter {
     // validated submission, including native save/restore and partial copies.
     bool full_color(Image& image){
         if(image.detail)return true;
-        auto id=gpu.create(image.width,image.height,Format::bgra32);if(!id)return false;
+        auto id=make_image(image.width,image.height,Format::bgra32);if(!id)return false;
         Command expand={Kind::expand,id,image.gpu,{0,0,int(image.width),int(image.height)},
             {0,0,int(image.width),int(image.height)},0,0,65536};
         if(!gpu.submit(&expand,1)){gpu.destroy(id);return false;}image.detail=id;return true;
@@ -287,6 +309,7 @@ template<class Backend> class Adapter {
     }
     bool upload_sprite(std::vector<unsigned>& decoded,unsigned width,unsigned height){
         sprite_image=sprites.select(gpu,decoded,width,height);
+        for(unsigned evicted=0;!sprite_image&&evicted<16&&evict_text();++evicted)sprite_image=sprites.select(gpu,decoded,width,height);
         if(sprite_image&&((sprites.hits+sprites.uploads)%4096)==0){
             char line[224];std::snprintf(line,sizeof(line),
                 "[C3X renderer] stage=native-sprite-cache hits=%llu uploads=%llu uploaded_bytes=%llu resident_bytes=%zu\n",
@@ -334,7 +357,7 @@ template<class Backend> class Adapter {
         std::vector<std::uint16_t> captured(words,words+count);
         unsigned height=blocks<=4?128:1024;
         std::vector<std::uint32_t> pixels(std::size_t(1024)*height);std::copy(captured.begin(),captured.end(),pixels.begin());
-        if(!cache.image){cache.image=gpu.create(1024,height,Format::bgra32);if(!cache.image)return 0;}
+        if(!cache.image){cache.image=make_image(1024,height,Format::bgra32);if(!cache.image)return 0;}
         if(!gpu.upload(cache.image,++cache.revision,pixels.data(),pixels.size()))return 0;
         cache.words=std::move(captured);return cache.image;
     }
@@ -604,7 +627,28 @@ template<class Backend> class Adapter {
     // draw, exercising the CPU-ownership readback a real refusal takes.
     unsigned forced_text_refusal=[]{char value[8]={};
         return GetEnvironmentVariableA("C3X_RENDERER_FORCE_TEXT_REFUSAL",value,sizeof(value))?unsigned(std::strtoul(value,nullptr,10)):0u;}(),text_draws=0;
+    // Every refusal and CPU access of a GPU canvas passes here. Counted per
+    // operation and logged at most once a second, so a capture or the screen
+    // sweep shows refusals even while the canvas is not yet GPU-dirty (then
+    // they cost nothing; once dirty, each is a readback).
+    std::array<std::uint64_t,128> fallback_counts{};std::array<std::uint64_t,128> fallback_logged{};
+    // Renderer64's helper holds 512 GPU images in all, and cached strings and
+    // sprites can fill them (late-game advisors, screen sweep). A create it
+    // refuses first evicts the oldest cached strings, then sprites.
+    bool evict_text(){Text* oldest=nullptr;for(auto& entry:texts)if(entry.age&&(!oldest||entry.age<oldest->age))oldest=&entry;
+        if(!oldest)return false;retire_text(*oldest);return true;}
+    Id make_image(unsigned width,unsigned height,Format format){
+        auto id=gpu.create(width,height,format);
+        for(unsigned evicted=0;!id&&evicted<32&&(evict_text()||sprites.evict(gpu));++evicted)id=gpu.create(width,height,format);
+        return id;
+    }
     void cpu_ownership(Image& image,int operation=0){
+        if(image.owned||image.dirty){auto slot=unsigned(operation)&127u;auto count=++fallback_counts[slot];
+            auto now=std::uint64_t(GetTickCount64());
+            if(count==1||now-fallback_logged[slot]>=1000){fallback_logged[slot]=now;char line[192];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-cpu-fallback operation=%d count=%llu dirty=%u owned=%u width=%u height=%u\n",
+                operation,static_cast<unsigned long long>(count),unsigned(image.dirty),unsigned(image.owned),image.width,image.height);
+                OutputDebugStringA(line);}}
         if(image.dirty){
             bool report=image.width>=640&&image.height>=480&&large_cpu_barrier_reports++<16;
             LARGE_INTEGER begin={},gpu_done={},end={},frequency={};
@@ -678,6 +722,8 @@ public:
     }
     int operation(int op,void* object,void* source,void const* source_rect,void const* target_rect,unsigned color){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native GPU adapter thread changed");
+        // CPU pixel access adds no CPU source bytes or images: no trim.
+        if(op==C3X_NATIVE_PIXEL||op==C3X_NATIVE_BITS||op==C3X_NATIVE_DC){if(auto destination=find(object))cpu_ownership(*destination,op);return 0;}
         trim_cpu_sources();
         auto destination=find(object);
         if(op==C3X_NATIVE_TEXT)text_candidate(destination,object,source,target_rect,color);
@@ -690,7 +736,6 @@ public:
             if(destination)forget(*destination);
             if(!lifetime){destination=create(object,true);if(destination&&!refresh(*destination))forget(*destination);}return 0;
         }
-        if(op==C3X_NATIVE_PIXEL||op==C3X_NATIVE_BITS||op==C3X_NATIVE_DC){if(destination)cpu_ownership(*destination,op);return 0;}
         // JGL's copy returns success without changing either image when a
         // source or destination dimension is zero. Scene-owned unit bodies
         // leave just such an empty native background rectangle. Handle it

@@ -532,6 +532,23 @@ int main(){
  auto refused=std::chrono::steady_clock::now();
  assert(client.images(image,made,back,4)==C3X_RENDERER_RESULT_ERROR&&state.reads==2);
  assert(std::chrono::steady_clock::now()-refused<2s&&client.alive());state.refuse_reads=false;
+ // Renderer64 reserves a create's identity before the helper runs it; a create
+ // the helper refused faulted the session (its compositor's 512 image slots,
+ // late-game Cultural Advisor). Past the client's limit a create is refused at
+ // once, its draw prelude still runs, and a destroy makes room again.
+ c3x_renderer_gpu_images_v1 make={};make.struct_size=sizeof(make);make.action=C3X_GPU_CREATE;make.ticket=view.image.ticket;make.width=make.height=2;
+ std::vector<long long> made_ids;
+ for(int n=1;n<496;++n){assert(client.images(make,made,nullptr,0)==C3X_RENDERER_RESULT_OK);made_ids.push_back(made.image);}
+ client.stats();auto creates=state.creates;
+ assert(client.images(make,made,nullptr,0)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
+ draw.source=view.image.map_image;draw.destination=reserved;make.commands=&draw;make.command_count=1;
+ auto submits=std::count(state.actions.begin(),state.actions.end(),int(C3X_GPU_SUBMIT));
+ assert(client.images(make,made,nullptr,0)==C3X_RENDERER_RESULT_BAD_ARGUMENT);client.stats();
+ assert(state.creates==creates&&std::count(state.actions.begin(),state.actions.end(),int(C3X_GPU_SUBMIT))==submits+1&&client.alive());
+ make.commands=nullptr;make.command_count=0;
+ c3x_renderer_gpu_images_v1 gone={};gone.struct_size=sizeof(gone);gone.action=C3X_GPU_DESTROY;gone.ticket=view.image.ticket;gone.image=made_ids.back();
+ assert(client.images(gone,made,nullptr,0)==C3X_RENDERER_RESULT_OK);
+ assert(client.images(make,made,nullptr,0)==C3X_RENDERER_RESULT_OK);client.stats();assert(state.creates==creates+1);
  assert(client.camera_cancel(camera)==C3X_RENDERER_RESULT_OK);
  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_SUPERSEDED);
 }

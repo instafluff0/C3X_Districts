@@ -14835,8 +14835,15 @@ public:
         image_scope_body=nullptr;image_scope_context=nullptr;return code;
     }
     static int image_scope_execute(void* worker,c3x_renderer_gpu_images_v1 const* request,c3x_renderer_gpu_result_v1* result){
-        if(!c3x_renderer_gpu_images_valid(request,result,nullptr,0)||request->action==C3X_GPU_READBACK)
+        if(!c3x_renderer_gpu_images_valid(request,result,nullptr,0)||request->action==C3X_GPU_READBACK){
+            // A refused batch operation faults the bridge's image session: name it.
+            static std::atomic<unsigned> reports{0};
+            if(reports.fetch_add(1,std::memory_order_relaxed)<16){char line[224];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=gpu-image-refused reason=request-invalid action=%d image=%lld commands=%u pixels=%u width=%d height=%d\n",
+                request?request->action:-1,request?(long long)request->image:0ll,request?request->command_count:0u,request?request->pixel_count:0u,request?request->width:0,request?request->height:0);
+                OutputDebugStringA(line);}
             return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        }
         auto& owner=*static_cast<RendererWorker*>(worker);
         owner.gpu_request=*request;owner.gpu_pixels.clear();owner.gpu_commands.clear();
         if(request->action==C3X_GPU_UPLOAD)owner.gpu_pixels.assign(request->pixels,request->pixels+request->pixel_count);

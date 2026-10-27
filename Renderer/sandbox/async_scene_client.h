@@ -20,6 +20,13 @@ template<class Transport>class AsyncSceneClient {
     c3x_async::Publication publication;
     using Id=c3x_renderer_i64;
     Id next_image=0,next_camera=0,session=1;
+    // Renderer64 reserves a create's identity before the helper runs it, so a
+    // refused create faulted the whole image session: the late-game Cultural
+    // Advisor's text filled the helper compositor's 512 image slots (1845 AD
+    // save, screen sweep). Creates past this many live images are refused
+    // here, synchronously, as an ordinary admission refusal; the helper keeps
+    // the rest for its map, unit and overlay images.
+    static constexpr std::size_t image_limit=496;std::size_t live_images=0;
     std::map<Id,Id> image_ids,ticket_ids; // transport thread only
     Id remote_camera=0,worker_camera=0,worker_map=0;
     std::atomic<unsigned> adopted_cameras{0};
@@ -423,6 +430,14 @@ public:
     int images(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* pixels,unsigned capacity){
         if(!enabled)return transport.images(request,result,pixels,capacity);
         if(request.action==C3X_GPU_READBACK)return readback(request,result,pixels,capacity);
+        if(request.action==C3X_GPU_CREATE&&live_images>=image_limit){
+            // Its draw prelude still runs, as before a helper's admission refusal.
+            if(request.command_count){
+                auto prelude=request;prelude.action=C3X_GPU_SUBMIT;prelude.image=0;prelude.width=prelude.height=prelude.format=0;
+                int code=images(prelude,result,nullptr,0);if(code!=C3X_RENDERER_RESULT_OK)return code;
+            }
+            return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        }
         auto bytes=sizeof(c3x_inputs::Images)+std::size_t(request.pixel_count)*4+
             std::size_t(request.command_count)*sizeof(c3x_renderer_gpu_command_v1);
         Id created=0;
@@ -438,7 +453,8 @@ public:
             [](ImageBatch& target,ImageBatch& incoming){target.operations.push_back(std::move(incoming.operations[0]));},
             ImageBatch::join_bytes,ImageBatch::work_limit,ImageBatch::operation_limit,"images");
         transport.publication_pressure(publication.status().records);
-        if(accepted&&created)next_image=created;
+        if(accepted&&created){next_image=created;++live_images;}
+        if(accepted&&request.action==C3X_GPU_DESTROY&&live_images)--live_images;
         result={sizeof(result)};result.image=created?created:request.image;
         return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }

@@ -142,9 +142,9 @@ using namespace c3x_gpu_images;
 namespace c3x_native_access {HDC dc(void* p){return p;}}
 struct Backend {
  struct Upload {Id id;std::vector<unsigned> words;};
- Id next=1;unsigned creates=0,destroys=0,uploads=0,submit_count=0,fail_create=0,fail_upload=0;bool fail_submit=false;
+ Id next=1;unsigned creates=0,destroys=0,uploads=0,submit_count=0,fail_create=0,fail_upload=0,capacity=0;bool fail_submit=false;
  std::vector<Upload> content;std::vector<Command> queued;
- Id create(unsigned,unsigned,Format){++creates;return creates==fail_create?0:next++;}
+ Id create(unsigned,unsigned,Format){++creates;if(capacity&&creates-1-destroys>=capacity){--creates;return 0;}return creates==fail_create?0:next++;}
  void destroy(Id id){if(id)++destroys;}
  bool upload(Id id,unsigned,unsigned const* words,std::size_t count){++uploads;if(uploads==fail_upload)return false;content.push_back({id,{words,words+count}});return true;}
  bool submit(Command const* commands,unsigned count){++submit_count;if(fail_submit)return false;queued.insert(queued.end(),commands,commands+count);return true;}
@@ -184,6 +184,12 @@ int main(){
  check(!d.draw_text(destination,message.data(),&anchor,106)&&d.reason==c3x_native_text::Refusal::submission&&!destination.dirty,"failed ordered submission still refuses ownership");
  width=1000;height=170;Harness oversized;
  check(!oversized.draw_text(destination,message.data(),&anchor,106)&&oversized.reason==c3x_native_text::Refusal::raster_bounds&&oversized.gpu.creates==0,"oversized shape refuses before GPU allocation");
+ // Renderer64's helper compositor holds 512 images in all; cached strings hold
+ // most of them. A refused create evicts the oldest strings instead of
+ // dropping the text to the CPU (late-game Cultural Advisor, screen sweep).
+ width=515;height=14;Harness full;full.gpu.capacity=6;
+ for(char c='a';c<'a'+12;++c){message[0]=c;check(full.draw_text(destination,message.data(),&anchor,106),"full image table evicts older strings");}
+ check(full.counters.text_builds==12&&full.gpu.creates-full.gpu.destroys<=6&&full.reason==c3x_native_text::Refusal::none,"every string drawn on the GPU within capacity");
  std::cout<<"PASS actual text adapter immutable cache, clipping, ordered pair and failure retirement\n";
 }
 """

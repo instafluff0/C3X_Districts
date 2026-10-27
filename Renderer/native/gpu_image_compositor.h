@@ -803,6 +803,8 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
 
     Format format(Id id){auto image=find(id);if(!image)throw std::runtime_error("image format requested outside lifetime");return image->format;}
     ID3D11Texture2D* texture(Id id){auto image=find(id);return image?image->texture.Get():nullptr;}
+    bool admits(Command const& command){return valid(command);} // diagnostics: which command of a refused batch
+    std::size_t live_images()const{return std::size_t(std::count_if(images.begin(),images.end(),[](Image const& image){return image.id!=0;}));}
     ID3D11ShaderResourceView* view(Id id){auto image=find(id);return image?image->read.Get():nullptr;}
     Counts stats()const{auto result=counters;result.resident_bytes+=spatial.bytes();
         result.spatial_dispatches=spatial.dispatches();result.spatial_commands=spatial.commands();

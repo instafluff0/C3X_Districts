@@ -1,13 +1,17 @@
 #pragma once
 #include "native_values.h"
+#include <optional>
 namespace c3x_inputs {
 inline NativeValueStream& recorded_native_values(){static NativeValueStream stream;return stream;}
 struct NativeCall {
-    Call call;NativeValuesProvider values; c3x_native_access::Provider* prior=nullptr;bool active=false;
+    // The provider exists only while recording: MSVC's std::map allocates on
+    // construction, and Civ III's per-pixel loops (Military and Cultural
+    // advisors) enter here hundreds of thousands of times per screen.
+    Call call;std::optional<NativeValuesProvider> values; c3x_native_access::Provider* prior=nullptr;bool active=false;
     template<class Encode>NativeCall(unsigned kind,Encode encode):call(Kind::native_bridge,kind,encode){
-        if(call.id){require(!native_root(),"nested native bridge recording");native_root()=true;prior=c3x_native_access::provider();c3x_native_access::provider()=&values;active=true;}}
+        if(call.id){require(!native_root(),"nested native bridge recording");native_root()=true;values.emplace();prior=c3x_native_access::provider();c3x_native_access::provider()=&*values;active=true;}}
     ~NativeCall(){if(active){c3x_native_access::provider()=prior;native_root()=false;}}
-    template<class Encode>int result(int code,Encode encode){return call.result(code,[&](Writer& out){recorded_native_values().encode(out,values.values);encode(out);});}
+    template<class Encode>int result(int code,Encode encode){return call.result(code,[&](Writer& out){recorded_native_values().encode(out,values->values);encode(out);});}
     int result(int code){return result(code,[](Writer&){});}
 };
 inline unsigned native_id(void const* p){return runtime().object(const_cast<void*>(p));}
