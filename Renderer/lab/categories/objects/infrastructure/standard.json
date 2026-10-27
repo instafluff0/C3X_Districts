@@ -43,7 +43,8 @@
     "Renderer.native.test_farm_kit",
     "Renderer.native.test_mine_placement",
     "Renderer.native.test_bridge_natural_depth",
-    "Renderer.tools.asset_compiler.test_build_route_bridge_runtime"
+    "Renderer.tools.asset_compiler.test_build_route_bridge_runtime",
+    "Renderer.native.test_near_water_city_order"
   ],
   "references": {
     "d3d11": [
