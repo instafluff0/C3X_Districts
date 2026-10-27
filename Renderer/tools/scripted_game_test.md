@@ -695,6 +695,17 @@ capture from before its fix and to pass after it (performance review 4t, 4v,
   Its hold test confirmed both detections: holds of 300 ms and longer fail,
   150 ms passes. See `Renderer/docs/audio_skips.md`.
 
+- `python3 Renderer/tools/check_wrap_seam_basis.py CAPTURE [WRAP_PIXELS]`
+  needs `-ProfileRenderer` on a wrapping map. It fails if coastal waves and
+  resource poses were drawn a world width off screen after the camera
+  re-based across the wrap seam, which made them vanish until a turn ended
+  (review 92). To reproduce, use the user's 100x100 save
+  `Renderer/.cache/city-roads-20261027/user-2950BC.SAV` with `-Scenario debug-scroll
+  -Seconds 200`. The `-Route` should hold `0,1600,128` eight times, step rows
+  at x=0 (`0,1632,128` ... `0,1760,128`), then return to `0,1632,128` and step
+  to `64,1632,128`. The route supplies the world width. Before the fix, 380
+  draws failed; after it, none.
+
 Their logic is covered on the Mac by `test_borrowed_snapshot_reuse.py`,
 `test_hit_scene_fast_paths.py` and `test_required_geometry_admission.py`,
 together with exact hit-test answers and mutation-checked counters for the

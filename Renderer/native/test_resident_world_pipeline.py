@@ -291,32 +291,58 @@ int main(){
         self.assertNotIn('resident_world_feed', defer)
 
     def test_window_basis_follows_the_window_not_the_camera(self):
+        """Waves and resource poses stay on screen across the wrap seam.
+
+        They are window records drawn once (no wrap copies) at the capture's
+        camera: on screen at record + basis + camera, which must be the
+        window's shift (the viewport translation). Across the seam Civ III
+        re-bases the camera a world width while the window keeps its frame;
+        a basis kept from before drew them a world width off screen until the
+        window next changed, so waves and animals vanished until a turn ended
+        (the user, October 27). Fails on the basis kept per window alone.
+        """
         source = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
         update = method(source, '    void update_window_basis(){')
         run_cpp(r"""
 #define C3X_RENDERER64_FRESH
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
-struct Renderer {struct {float translation[2]={};} geometry_viewport_settings;std::uint64_t window_frame_serial=0,records_revision=0;};
+struct Trace {unsigned rebases=0;void write(char const*,char const*,bool){++rebases;}};
+struct Renderer {struct {float translation[2]={};} geometry_viewport_settings;std::uint64_t window_frame_serial=0,records_revision=0;Trace trace;};
 struct Pipeline {
- Renderer renderer;int camera_x=0,camera_y=0;
+ Renderer renderer;int camera_x=0,camera_y=0,wrap_pixels=8320;
  float window_basis_x=0,window_basis_y=0,tracked_basis_x=0,tracked_basis_y=0;
  std::uint64_t window_signature=~std::uint64_t(0),window_serial=~std::uint64_t(0);
  std::uint64_t window_revision()const{return renderer.records_revision;}
 """ + update + r"""
+ // A window record (a wave ribbon or a posed body) as the dynamic pass draws it.
+ float screen(float record){update_window_basis();return record+window_basis_x+float(camera_x);}
+ float& translation(){return renderer.geometry_viewport_settings.translation[0];}
 };
 int main(){
- Pipeline p;p.renderer.geometry_viewport_settings.translation[0]=-3000+5280;p.camera_x=-3000;
- p.update_window_basis();assert(p.window_basis_x==5280 && p.tracked_basis_x==5280);
+ float const record=700;
+ Pipeline p;p.translation()=-3000+5280;p.camera_x=-3000;
+ assert(p.screen(record)==record+p.translation() && p.window_basis_x==5280 && p.tracked_basis_x==5280);
  // A covered step keeps the window: the viewport follows the camera.
- p.camera_x=-3128;p.renderer.geometry_viewport_settings.translation[0]=-3128+5280;p.update_window_basis();assert(p.window_basis_x==5280);
- // Across the wrap seam Civ III re-bases the camera a world width (8320 px)
- // while the window keeps its frame: the basis must not follow the camera.
- p.camera_x=-3128+8320;p.update_window_basis();assert(p.window_basis_x==5280);
+ p.camera_x=-3128;p.translation()=-3128+5280;
+ assert(p.screen(record)==record+p.translation() && p.window_basis_x==5280);
+ // Across the wrap seam Civ III re-bases the camera a world width while the
+ // window keeps its frame: the record stays where the window put it.
+ p.camera_x=-3128+8320;
+ assert(p.screen(record)==record+p.translation() && p.window_basis_x==5280-8320);
+ p.camera_x=-3128+8320-64;p.translation()=-3128-64+5280; // a covered step past the seam
+ assert(p.screen(record)==record+p.translation());
+ p.camera_x=-3128-64;assert(p.screen(record)==record+p.translation()); // and back across it
+ assert(p.window_basis_x==5280 && p.tracked_basis_x==5280 && p.renderer.trace.rebases==2);
+ // Any smaller difference is the window's own: the kept basis decides.
+ p.camera_x=-3128;assert(p.window_basis_x==5280 && p.screen(record)==record+5280-3128);
  // A changed window re-bases it.
- p.renderer.window_frame_serial=1;p.renderer.geometry_viewport_settings.translation[0]=p.camera_x-3040;
- p.update_window_basis();assert(p.window_basis_x==-3040);
+ p.renderer.window_frame_serial=1;p.translation()=p.camera_x-3040;
+ assert(p.screen(record)==record+p.translation() && p.window_basis_x==-3040);
+ // Without wrapping the kept basis is never moved.
+ p.wrap_pixels=0;p.camera_x+=8320;assert(p.screen(record)==record-3040+p.camera_x);
  std::puts("PASS window basis");
 }
 """)

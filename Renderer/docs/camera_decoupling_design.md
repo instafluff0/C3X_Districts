@@ -611,7 +611,9 @@ behaviour. Expected effects are estimates from per-phase traces until measured.
        from the window, converted by the window basis. A step whose window
        moved is deferred when every window tile is stored from its current
        content (ownership from the store), and the window keeps no draw
-       records while the store drives the draw (window basis per capture).
+       records while the store drives the draw (window basis kept per
+       window, following the camera's wrap re-base in whole world widths;
+       review 92).
        Still per crossing: the rest of the window assembly (about 14 ms) and
        the caster set change. Next: resource anchors from the store, casters
        per block within the shadow field.

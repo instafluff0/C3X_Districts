@@ -3420,10 +3420,12 @@ per-step cost rather than a separate hold.
 **The window basis across the wrap seam.** With no window draw records the
 window basis was taken from each capture's view; across the wrap seam Civ III
 re-bases the camera a world width while the window keeps its frame, so in 4
-of 235 captures that basis was a world width (8,320 px) off, which would
-place resource poses and waves off screen. The basis now follows a renderer
-serial bumped whenever the window changes (`window_frame_serial`); the
-witness then found it equal to the tracked basis in all 222 captures.
+of 235 captures that basis was a world width (8,320 px) off the tracked one.
+The basis now follows a renderer serial bumped whenever the window changes
+(`window_frame_serial`); the witness then found it equal to the tracked basis
+in all 222 captures. (Section 92 corrects this: the witness compares through
+wrap copies, so it could not tell, and the per-capture basis was the one
+that put waves and poses on screen after a re-base.)
 
 **Store layout.** A tile keeps one record array with layer offsets instead
 of two vectors per layer (geometry has about 40 layers): the busy save's
@@ -4818,3 +4820,44 @@ screen measured and a quarter of that refusal.
 **Not covered.** No scripted fixture reproduces the runaway diplomacy chain,
 so the 64 limit has not yet been seen failing in game. The user's next
 `CAPTURE_GAMEPLAY.bat` session will show diplomacy's depth.
+
+## 92. Waves and animals vanished after crossing the wrap seam (October 27)
+
+**Report.** The user: animated resources and ocean waves sometimes vanish,
+briefly or until a turn ends.
+
+**Cause.** Coastal waves, resource poses, the aquatic bounds and the winter
+flurry are window records. They are drawn once, without wrap copies, at the
+capture's camera. Their window basis was kept per window (section 74):
+`window_frame_serial`, bumped when a scene render's canonical membership is
+not covered. The renderer's camera comes from the capture's first tile, so
+it re-bases a world width when that tile crosses the seam. On a covered step
+the window keeps its frame. The kept basis then drew those layers a world
+width off screen until the window next changed (a turn end, a jump, a
+non-covered scroll). The static layers have wrap copies and stayed. The
+section 74 witness compares through wrap copies, so it could not see this.
+
+**Fix.** `update_window_basis` (`sandbox/fresh_pipeline.h`) keeps the
+window's basis but follows the camera's re-base in whole world widths, and
+traces `window-basis-rebase`. A smaller difference remains the window's own.
+
+**Measured** (the user's 100x100 2950 BC save, `debug-scroll` with a route
+that steps rows at x=0 and then to x=64; same route on both trios):
+
+| Trio | Re-base traces | Draws off screen after the step | Waves and dolphins 3 s later |
+| --- | --- | --- | --- |
+| Staged before (dd4edb08) | none | 380 | none on screen |
+| Fix | 1 (`rebase=-6400`) | 0 | all on screen |
+
+A horizontal crossing (6336 to 0 to 64) re-based on the same step as a
+window change, so it was already correct. The busy 1498 AD `near` run never
+crossed the seam with a kept window.
+
+**Tests.**
+- `test_resident_world_pipeline.py::test_window_basis_follows_the_window_not_the_camera`
+  checks where a window record lands across a re-base, the return across
+  the seam, a non-wrapping map and a window change. It fails on the kept
+  basis.
+- `Renderer/tools/check_wrap_seam_basis.py` checks a capture. It failed the
+  pre-fix capture (380 draws) and passes both fixed captures and the busy
+  `near` run. Its logic is tested in `test_check_wrap_seam_basis.py`.

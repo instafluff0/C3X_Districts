@@ -2417,9 +2417,15 @@ struct SandboxFreshPipeline {
     }
     // With the store driving the draw the window keeps no draw records, so
     // its revision no longer follows it: the window basis is tracked on the
-    // renderer's window serial instead. It is not this view's: across the wrap
-    // seam Civ III re-bases the camera a world width while the window keeps
-    // its frame. The witness (which keeps the records) compares the two.
+    // renderer's window serial instead. The witness (which keeps the records)
+    // compares the two. Across the wrap seam Civ III re-bases the camera a
+    // world width while the window keeps its frame. The static records come
+    // with wrap copies, but waves, resource poses and the flurry are drawn
+    // once at this capture's camera: a basis kept from before the re-base
+    // drew them a world width off screen until the window next changed (they
+    // vanished until a turn ended, the user, October 27). The basis follows
+    // the camera's re-base in whole world widths; any smaller difference is
+    // the window's own.
     void update_window_basis(){
 #ifdef C3X_RENDERER64_FRESH
         if(window_signature!=window_revision()){
@@ -2431,6 +2437,15 @@ struct SandboxFreshPipeline {
             window_basis_x=renderer.geometry_viewport_settings.translation[0]-camera_x;
             window_basis_y=renderer.geometry_viewport_settings.translation[1]-camera_y;
             window_serial=renderer.window_frame_serial;
+        }
+        if(wrap_pixels){
+            float capture=renderer.geometry_viewport_settings.translation[0]-camera_x;
+            float rebase=std::round((capture-window_basis_x)/float(wrap_pixels))*float(wrap_pixels);
+            if(rebase!=0){
+                window_basis_x+=rebase;
+                char detail[96];std::snprintf(detail,sizeof(detail),"basis=%.0f rebase=%.0f camera=%d",window_basis_x,rebase,camera_x);
+                renderer.trace.write("window-basis-rebase",detail,true);
+            }
         }
 #endif
     }
