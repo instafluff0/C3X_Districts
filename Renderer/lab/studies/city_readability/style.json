@@ -225,6 +225,18 @@
       "asian/*": "c1e9631500667d16"
     }
   },
+  "swaps": {
+    "city/component/94205239f6665d00": "city/component/9a1ddfe378603f8a",
+    "city/component/a6b0ba98df791e28": "city/component/6e6554af2db81497",
+    "city/component/250031ae7aae29c9": "city/component/4ca87bcb37527f24",
+    "city/component/5cc9669e21c96aed": "city/component/9a1ddfe378603f8a",
+    "city/component/30995f8e2426fc5b": "city/component/bf64e91d35a671ba",
+    "city/component/64b0b12c9d1ebe33": "city/component/792c9e7ecef6407a",
+    "city/component/b61e42f5d6e822a1": "city/component/bf64e91d35a671ba",
+    "city/component/f418566eef1b34be": "city/component/9a1ddfe378603f8a",
+    "city/component/97f6603d922e3905": "city/component/9a1ddfe378603f8a",
+    "city/component/5343fb1fe85804e1": "city/component/bf64e91d35a671ba"
+  },
   "capital_towers": {
     "modern": [
       0,

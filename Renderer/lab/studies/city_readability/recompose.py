@@ -493,6 +493,17 @@ class Composer:
         # (culture, era, size, walled, variant) -> the source instances of the
         # same city without a palace
         self.siblings = siblings or {}
+        # Source building -> the library building that replaces it (style
+        # "swaps"), and one source instance of each replacement whose night
+        # lights it takes.
+        ids = {record["asset"]: index for index, record in enumerate(model_records)}
+        self.swaps = {ids[old]: ids[new] for old, new in style.get("swaps", {}).items()}
+        self.donors = {}
+        for template in library["templates"]:
+            for instance in template["instances"]:
+                if instance["model"] in self.swaps.values() and instance["lights"]:
+                    self.donors.setdefault(instance["model"], (instance["scale"], instance["rotation"],
+                                                               [list(light) for light in instance["lights"]]))
 
     def swap_palace(self, items, culture, era):
         """Give a capital its culture's palace in place of the shared generic
@@ -510,6 +521,26 @@ class Composer:
             item.scale *= max(old[2] - old[0], old[3] - old[1]) / max(new[2] - new[0], new[3] - new[1])
             item.model, item.offset = chosen, list(centre)
             item.lights = [[l[0] - shift[0], l[1] - shift[1], *l[2:]] for l in item.lights]
+
+    def swap_buildings(self, items):
+        """Give a swapped source building its replacement on the same footprint
+        centre and long side, turned a quarter when their long axes differ,
+        with the replacement's own night lights (e.g. Asian cities' bright
+        Korean buildings become the darker EastAsian ones)."""
+        for item in items:
+            new = self.swaps.get(item.model)
+            if new is None:
+                continue
+            old, fresh = box(self.hull(item.model)), box(self.hull(new))
+            turn = (old[2] - old[0] > old[3] - old[1]) != (fresh[2] - fresh[0] > fresh[3] - fresh[1])
+            yaw = item.yaw + (math.pi / 2 if turn else 0.0)
+            centre = transform([((old[0] + old[2]) / 2, (old[1] + old[3]) / 2)], item.scale, item.yaw, item.offset)[0]
+            scale = item.scale * max(old[2] - old[0], old[3] - old[1]) / max(fresh[2] - fresh[0], fresh[3] - fresh[1])
+            local = transform([((fresh[0] + fresh[2]) / 2, (fresh[1] + fresh[3]) / 2)], scale, yaw, (0.0, 0.0))[0]
+            donor = self.donors.get(new)
+            item.lights = scaled_lights(donor[2], scale / donor[0], yaw - donor[1]) if donor else []
+            item.model, item.scale, item.yaw = new, scale, yaw
+            item.offset = [centre[0] - local[0], centre[1] - local[1]]
 
     def effects(self, instances, seed):
         """Attached flame, smoke and night-light records per instance, capped
@@ -848,6 +879,7 @@ class Composer:
         limit = self.style["extent"][size]
         items = self.items(template)
         self.swap_palace(items, template["culture"], era)
+        self.swap_buildings(items)
         self.capital_towers(items, template, limit, seed)
         self.civic(items)
         removed = self.place_accents(items, era, size, limit, seed)

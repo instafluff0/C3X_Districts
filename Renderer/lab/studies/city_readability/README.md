@@ -41,6 +41,11 @@ selected mesh, material and facade light:
   `palace_audition.py` draws every imported palace for choosing;
 - `recolor` pulls one hue family of a model set's base texture to a target
   colour (the Industrial walls' terracotta coping to the wall stone);
+- `swaps` replaces a source building with another of the library's buildings
+  on the same footprint centre and long side, turned a quarter when their long
+  axes differ, with the replacement's own night lights. Asian cities' bright
+  Korean buildings (mint roofs, red walls) become the darker EastAsian ones
+  (user choice, 2026-10-26). The Korea culture palace is not swapped;
 - a crisp ground plate follows the buildings and a lane network, from an era
   paving texture (packed earth, cobble, grey cobble, concrete) made tileable and
   toned offline;

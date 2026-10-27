@@ -88,6 +88,36 @@ class RecomposeTests(unittest.TestCase):
         self.assertAlmostEqual(light[1], .3)
         self.assertAlmostEqual(light[2], .45)
 
+    def test_swapped_buildings_keep_their_footprint_and_take_the_replacement_lights(self):
+        # Asian cities' bright Korean buildings (mint roofs, red walls) looked
+        # out of place beside the EastAsian ones; style "swaps" replaces them.
+        composer = self.composer()
+        assets = {record["asset"]: index for index, record in enumerate(self.records)}
+        self.assertEqual(composer.swaps, {assets[a]: assets[b] for a, b in self.style["swaps"].items()})
+        def footprint(item):
+            b = rc.box(composer.hull(item.model))
+            centre = rc.transform([((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)], item.scale, item.yaw, item.offset)[0]
+            return centre, max(b[2] - b[0], b[3] - b[1]) * item.scale
+        swapped = 0
+        for template in self.library["templates"]:
+            items = composer.items(template)
+            before = [(item.model, footprint(item)) for item in items]
+            composer.swap_buildings(items)
+            for (model, (centre, side)), item in zip(before, items):
+                if model not in composer.swaps:
+                    continue
+                swapped += 1
+                self.assertEqual(item.model, composer.swaps[model])
+                now, length = footprint(item)
+                self.assertAlmostEqual(now[0], centre[0], places=6)
+                self.assertAlmostEqual(now[1], centre[1], places=6)
+                self.assertAlmostEqual(length, side, places=6)
+                self.assertEqual(len(item.lights), len(composer.donors[item.model][2]))
+        self.assertGreater(swapped, 100)
+        for index, template in self.sample():
+            instances, _, _ = composer.compose(json.loads(json.dumps(template)), 0, ("test", index))
+            self.assertFalse({i["model"] for i in instances} & set(composer.swaps), f"template {index}")
+
     def test_version_five_encoding_carries_flags_and_look(self):
         library = json.loads(json.dumps({k: v for k, v in self.library.items() if k != "models"}))
         library["models"] = self.library["models"]
