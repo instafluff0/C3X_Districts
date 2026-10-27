@@ -9,7 +9,8 @@
     "Renderer/native/environment_runtime.h",
     "Renderer/native/source_fidelity/light_frame.h",
     "Renderer/native/render_core/source_shadow.h",
-    "Renderer/native/city_fidelity/source_caster.hlsl"
+    "Renderer/native/city_fidelity/source_caster.hlsl",
+    "Renderer/lab/shared/seasons/autumn.hlsl"
   ],
   "recipe": {
     "terrain": 2,
@@ -34,7 +35,8 @@
     "Renderer.native.test_render_core",
     "Renderer.tools.test_season_shading",
     "Renderer.native.test_day_night_clock",
-    "Renderer.native.test_source_night_response"
+    "Renderer.native.test_source_night_response",
+    "Renderer.native.test_autumn_golden_hour"
   ],
   "references": {
     "d3d11": [

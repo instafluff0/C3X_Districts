@@ -77,6 +77,11 @@ constexpr float sky_keys[][6] = {
 // by these at full night.
 constexpr float winter_night_light = 0.42f;
 constexpr float winter_night_saturation = 0.75f;
+// Autumn's tawny ground under the gold sunrise and sunset turned one strong
+// brown. At the sun's warmest Autumn pulls it this share back toward noon's
+// colour and scales display saturation by this.
+constexpr float autumn_golden_neutral = 0.35f;
+constexpr float autumn_golden_saturation = 0.85f;
 
 // The values at an hour, eased between neighbouring keys (wrapping
 // midnight) so a continuous clock never kinks at a key.
@@ -152,6 +157,15 @@ EnvironmentState evaluate_environment(float requested_hour, int season) {
     if (season == 1) {
         result.ambient_color[0] *= 1.04f;
         result.ambient_color[1] *= 0.94f;
+        // Warmth: 0 at noon's blue-to-red balance, near 0.8 at sunset.
+        float noon_balance = direct_keys[2][3] / direct_keys[2][1];
+        float warmth = result.sun_intensity > 0.0f
+            ? clamp01(1.0f - result.sun_color[2] / result.sun_color[0] / noon_balance) : 0.0f;
+        float neutral = autumn_golden_neutral * warmth;
+        for (int channel = 0; channel < 3; ++channel)
+            result.sun_color[channel] += (direct_keys[2][channel + 1] / direct_keys[2][1] -
+                                          result.sun_color[channel]) * neutral;
+        result.saturation *= 1.0f + (autumn_golden_saturation - 1.0f) * warmth;
     } else if (season == 2) {
         result.ambient_color[0] *= 0.88f;
         result.ambient_color[2] *= 1.08f;

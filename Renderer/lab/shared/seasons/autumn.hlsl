@@ -1,6 +1,9 @@
 // Generated from the approved Lab look (Renderer/lab/studies); see seasons.py.
 #define AUTUMN_PATCH_SCALE 0.45
-#define AUTUMN_GROUND_SHIFT -20
+// Straw-coloured turf (plains) turns tawny, green turf (grassland) khaki-olive
+// (user, 2026-10-26: one shift made both the same brown at sunrise and sunset).
+#define AUTUMN_STRAW_SHIFT -22
+#define AUTUMN_GRASS_SHIFT -12
 #define AUTUMN_PATCH_HUE 18
 #define AUTUMN_STRAW_CHROMA 1.12
 #define AUTUMN_GRASS_CHROMA 0.84
@@ -90,9 +93,9 @@ float autumn_patches(float2 world) {
     return autumn_noise(world * AUTUMN_PATCH_SCALE) * 0.65 +
            autumn_noise(world * AUTUMN_PATCH_SCALE * 3.4 + 17.3) * 0.35;
 }
-// Greens turn olive-gold, straw warms toward honey; blue, grey and red stay.
-// Measured on the concept view (OKLab): grass h 111 -> 90, C x.82, L x.91;
-// plains h 92 -> 75, C x1.12; tundra h 98 -> 76; hills h 110 -> 89.
+// Grassland turns khaki-olive and plains tawny, keeping Summer's hue gap
+// between them; blue, grey and red stay. Measured on the village view at
+// noon (OKLab): grass h 111 -> 98, plains h 101 -> 87 (gap 9.6 -> 11.3).
 float3 autumn_ground(float3 albedo, float2 world) {
     float3 lch = autumn_lch(albedo);
     float patch = autumn_patches(world) - 0.5;
@@ -102,7 +105,7 @@ float3 autumn_ground(float3 albedo, float2 world) {
     // Pale desert sand keeps its own cream hue; only turf and straw turn.
     gate *= 1 - AUTUMN_PALE_KEEP * smoothstep(0.76, 0.86, lch.x) * (1 - smoothstep(0.06, 0.10, lch.y));
     float hue = lch.z;
-    lch.z += (AUTUMN_GROUND_SHIFT + patch * AUTUMN_PATCH_HUE) * gate;
+    lch.z += (lerp(AUTUMN_STRAW_SHIFT, AUTUMN_GRASS_SHIFT, smoothstep(100, 110, hue)) + patch * AUTUMN_PATCH_HUE) * gate;
     // The greenest turf (some hill and floodplain textures) is pulled further.
     lch.z -= max(0, hue - 112) * AUTUMN_GREEN_PULL * gate;
     // Pale sand and straw stay honey-coloured; they must not drift to salmon.

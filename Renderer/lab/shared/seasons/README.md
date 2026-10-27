@@ -1,7 +1,8 @@
 # Seasonal shading
 
 Shader code for C3X's seasons, from the approved Lab looks: Autumn v18
-(`lab/studies/autumn`), Winter v24-laden (`lab/studies/winter`), and Spring v20
+(`lab/studies/autumn`; since 2026-10-26 grassland and plains take two hue shifts,
+khaki-olive and tawny, in `autumn.hlsl`), Winter v24-laden (`lab/studies/winter`), and Spring v20
 (`lab/studies/spring`). Plan and decisions: `docs/seasons_integration_plan.md`.
 
 - `autumn.hlsl`, `winter_natural.hlsl`, `winter_integrated.hlsl`, and `spring.hlsl` are

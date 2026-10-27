@@ -66,6 +66,8 @@ void load_lab_keys() {
             std::fscanf(file, "%f %f %f", &night_direct[0], &night_direct[1], &night_direct[2]);
         else if (kind == "winter")
             std::fscanf(file, "%f %f", &winter_night_light, &winter_night_saturation);
+        else if (kind == "autumn")
+            std::fscanf(file, "%f %f", &autumn_golden_neutral, &autumn_golden_saturation);
         else if (kind == "direct" && std::fscanf(file, "%d", &index) == 1 && index >= 0 && index < 5) {
             float * key = direct_keys[index];
             std::fscanf(file, "%f %f %f %f %f", &key[0], &key[1], &key[2], &key[3], &key[4]);
@@ -143,6 +145,8 @@ PATCHES = (
     ("constexpr float night_direct[3]", "float night_direct[3]"),
     ("constexpr float winter_night_light", "float winter_night_light"),
     ("constexpr float winter_night_saturation", "float winter_night_saturation"),
+    ("constexpr float autumn_golden_neutral", "float autumn_golden_neutral"),
+    ("constexpr float autumn_golden_saturation", "float autumn_golden_saturation"),
     ("constexpr float direct_keys[][5]", "float direct_keys[][5]"),
     ("constexpr float sky_keys[][6]", "float sky_keys[][6]"),
     ("// The values at an hour, eased", LOADER + "\n// The values at an hour, eased"),
