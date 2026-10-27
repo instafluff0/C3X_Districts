@@ -18,12 +18,7 @@
 #define AUTUMN_SAND_FLOOR 70
 #define AUTUMN_LEAF_BIAS 1.0
 #define AUTUMN_HILL_TURF 1.32
-#define AUTUMN_WATER_HUE 240
-#define AUTUMN_WATER_PULL 0.7
-#define AUTUMN_WATER_CHROMA 1.9
-#define AUTUMN_WATER_LIGHT 0.94
 #define AUTUMN_GREEN_PULL 0.6
-#define AUTUMN_RIVER_WATER 0.5
 #define AUTUMN_TRANSLUCENCY 0.8
 #define AUTUMN_PALE_KEEP 0.85
 #define AUTUMN_HILL_FLOOR 0.055
@@ -31,13 +26,11 @@
 #define AUTUMN_LARCH_SHARE 0
 #define AUTUMN_SHRUB_SHARE 0
 #define AUTUMN_ROAD_DARK float3(0.80, 0.76, 0.74)
-#define AUTUMN_WATER_NIGHT 0.3
 #define AUTUMN_FIELD autumn_farm
 #define AUTUMN_FARM_HUE 86
 #define AUTUMN_FARM_PULL 0.85
 #define AUTUMN_FARM_CHROMA 0.85
 #define AUTUMN_FARM_LIGHT 1.02
-#define AUTUMN_WATER_PULL_START 100
 #define AUTUMN_LITTER_END autumn_keep
 #define AUTUMN_LEAF_COVER 0.75
 #define AUTUMN_LEAF_SHADE 0.74
@@ -173,21 +166,6 @@ float3 autumn_farm(float3 albedo, float2 world) {
     lch.z = lerp(lch.z, AUTUMN_FARM_HUE, AUTUMN_FARM_PULL);
     lch.y *= AUTUMN_FARM_CHROMA;
     lch.x *= AUTUMN_FARM_LIGHT;
-    return autumn_from_lch(lch);
-}
-// Clear autumn sky: open water turns a deeper, cleaner blue. Concept deep
-// water has ~2x the chroma at hue ~240; ours leans teal (~195). Sand-coloured
-// shallows and white foam are outside the hue gate and stay as they are.
-float3 autumn_water(float3 color, float strength) {
-    float3 lch = autumn_lch(color);
-    float hue = lch.z < 0 ? lch.z + 360 : lch.z;
-    float gate = smoothstep(165, 190, hue) * (1 - smoothstep(270, 290, hue)) * strength;
-    // Only already-blue water is pulled; teal coast keeps its hue so coast and
-    // sea stay apart by hue as well as lightness.
-    lch.z = lerp(hue, AUTUMN_WATER_HUE, gate * AUTUMN_WATER_PULL *
-                 smoothstep(AUTUMN_WATER_PULL_START, AUTUMN_WATER_PULL_START + 20, hue));
-    lch.y *= lerp(1, AUTUMN_WATER_CHROMA, gate);
-    lch.x *= lerp(1, AUTUMN_WATER_LIGHT, gate);
     return autumn_from_lch(lch);
 }
 // ---------------------------------------------------------------------------

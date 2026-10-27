@@ -108,18 +108,9 @@ class SeasonShading(unittest.TestCase):
         # turn in hue and chroma only; their lightness (sand, rocks, texture) is
         # kept, and lightness still changes only toward Sea and Ocean.
         game = seasons.apply(seasons.WATER_SURFACE, (ROOT / seasons.WATER_SURFACE).read_text())
-        self.assertEqual(game.count("smoothstep(.34, .63, saturate(input.surface_coordinate))"), 3)
+        self.assertEqual(game.count("smoothstep(.34, .63, saturate(input.surface_coordinate))"), 1)
         lab = seasons.apply(seasons.HYDROLOGY, (ROOT / seasons.HYDROLOGY).read_text())
         self.assertIn("input.surface_kind < 4.5 ? 0 : smoothstep(.34, .63, saturate(input.surface_coordinate))", lab)
-        for name in ("autumn_strength", "spring_strength"):
-            line = lab[lab.index(f"float {name} ="):]
-            self.assertIn("* c3x_open_sea;", line[:line.index(";") + 1])
-        # Autumn and Spring open water: weighted by the open sea alone, as before.
-        for season in (1, 3):
-            block = game[game.index(f"C3X_SEASON_INDEX == {season}"):]
-            block = block[:block.index("color = ")]
-            self.assertIn("smoothstep(.34, .63, saturate(input.surface_coordinate));\n", block)
-            self.assertNotIn("open_sea", block)
         winter = lab[lab.index("c3x-season:winter/water"):]
         winter = winter[:winter.index("c3x-season-end")]
         self.assertIn("c3x_open_sea", winter)
@@ -152,13 +143,9 @@ class SeasonShading(unittest.TestCase):
         self.assertLessEqual(max(defines["WINTER_BED_CHROMA"]), 0.05)
         game = seasons.apply(seasons.WATER_SURFACE, (ROOT / seasons.WATER_SURFACE).read_text())
         protect = "gate *= 1 - smoothstep(0.62, 0.85, lch.x) * (1 - smoothstep(0.03, 0.08, lch.y));"
-        for season in (1, 2, 3):
-            block = game[game.index(f"C3X_SEASON_INDEX == {season}"):]
-            block = block[:block.index("color = ")]
-            if season == 2:
-                self.assertLess(block.index(protect), block.index("lch.y *= "))
-            else:
-                self.assertNotIn(protect, block)
+        block = game[game.index("C3X_SEASON_INDEX == 2"):]
+        block = block[:block.index("color = ")]
+        self.assertLess(block.index(protect), block.index("lch.y *= "))
 
     def test_spring_flower_ground_keeps_the_turf(self):
         # User, 2026-10-23: the leaf shade made ground under the flower drifts
@@ -213,10 +200,30 @@ class SeasonShading(unittest.TestCase):
         # Coast, Sea and Ocean keep their family tint: a hue offset, never a pull to one hue.
         text = seasons.apply(seasons.WATER_SURFACE, (ROOT / seasons.WATER_SURFACE).read_text())
         insertion = text[text.index(seasons.BEGIN):text.rindex(seasons.END)]
-        for season in (1, 2, 3):
-            self.assertIn(f"C3X_SEASON_INDEX == {season}", insertion)
+        self.assertIn("C3X_SEASON_INDEX == 2", insertion)
         self.assertNotRegex(insertion, r"lch\.z = lerp\(")
-        self.assertEqual(insertion.count("lch.z = hue + "), 3)
+        self.assertEqual(insertion.count("lch.z = hue + "), 1)
+
+    def test_autumn_and_spring_keep_summer_water(self):
+        # User, 2026-10-26: "make spring and autumn have the same water colors
+        # (coast/sea/ocean) as summer ... So only winter would have special
+        # colors." No Autumn or Spring code touches water: not the game's water
+        # surface, nor the water evaluation (coast, sea, ocean, rivers, beds).
+        for relative in (seasons.WATER_SURFACE,) + seasons.INTEGRATED[:3]:
+            text = seasons.apply(relative, (ROOT / relative).read_text())
+            with self.subTest(file=relative):
+                self.assertNotIn("c3x-season:autumn/water", text)
+                self.assertNotIn("c3x-season:spring/water", text)
+                if relative == seasons.WATER_SURFACE:
+                    water = text[text.index(seasons.BEGIN):text.rindex(seasons.END)]
+                    for season in (1, 3):
+                        self.assertNotIn(f"C3X_SEASON_INDEX == {season}", water)
+                else:
+                    dispatch = text[:text.index("        return c3x_water;\n#if 0\n")]
+                    dispatch = dispatch[dispatch.rindex("float4 c3x_water"):]
+                    for season in (1, 3):
+                        self.assertNotIn(f"C3X_SEASON_INDEX == {season}", dispatch)
+                    self.assertIn("C3X_SEASON_INDEX == 2", dispatch)
 
     def test_volcano_apron_keeps_the_autumn_and_spring_ground(self):
         # User, 2026-10-23: volcano_surface blends a volcano's apron back toward

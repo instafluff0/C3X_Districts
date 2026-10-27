@@ -81,12 +81,6 @@
 #define SPRING_TREE_HUE_SPREAD 5
 #define SPRING_BLOSSOM_SHARE 0.12
 #define SPRING_BLOSSOM_COVER 0.8
-#define SPRING_WATER_HUE 246
-#define SPRING_WATER_PULL 0.7
-#define SPRING_WATER_CHROMA 1.9
-#define SPRING_WATER_LIGHT 0.8
-#define SPRING_RIVER_WATER 0.6
-#define SPRING_WATER_NIGHT 0.3
 // ---- Lab spring study (Renderer/lab/studies/spring) -----------------------
 // Colour work happens in OKLab lightness/chroma/hue so source texture detail
 // survives. Flowers are world-anchored marks composed into the ground albedo
@@ -443,16 +437,6 @@ float4 spring_woodland(float2 world, float fringe, float2 sun_direction) {
     float tuft;
     return spring_bloom_layer(world + 0.21, SPRING_CELL, footprint, SPRING_WOODLAND, 307u,
                               float2x2(1, 0, 0, 1), -0.21, float4(sun, 0, 0), fringe, 2, 0, tuft);
-}
-// Clear spring water: deep water a cleaner, deeper blue (concept L .42 C .055 h 248).
-float3 spring_water(float3 color, float strength) {
-    float3 lch = spring_lch(color);
-    float hue = lch.z < 0 ? lch.z + 360 : lch.z;
-    float gate = smoothstep(165, 190, hue) * (1 - smoothstep(270, 290, hue)) * strength;
-    lch.z = lerp(hue, SPRING_WATER_HUE, gate * SPRING_WATER_PULL);
-    lch.y *= lerp(1, SPRING_WATER_CHROMA, gate);
-    lch.x *= lerp(1, SPRING_WATER_LIGHT, gate);
-    return spring_from_lch(lch);
 }
 // ---------------------------------------------------------------------------
 // Per-tree palette; the atlas keeps its own light/dark leaf structure.

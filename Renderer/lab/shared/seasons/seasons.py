@@ -232,10 +232,7 @@ AUTUMN_EDITS = [
     after("autumn/farms", FIELD_SET, FARM_TINT, guard(AUTUMN, """        if (farm_kit_field_weight > 0.5)
             albedo = mine_slot < 0.5 ? AUTUMN_FIELD(albedo, input.q6_world.xy) : autumn_ground(albedo, input.q6_world.xy);""")),
     between("autumn/roads", [HYDROLOGY], ROAD_HEAD, ROAD_TAIL, guard(AUTUMN, "            track_albedo *= AUTUMN_ROAD_DARK;")),
-    before("autumn/water", INTEGRATED[:3], WATER_DISPATCH, guard(AUTUMN, """        float4 autumn_surface = c3x_water;
-        float autumn_strength = (input.surface_kind > 8.5 && input.surface_kind < 9.5 ? AUTUMN_RIVER_WATER : 1) *
-            lerp(AUTUMN_WATER_NIGHT, 1, saturate(environment_sun_intensity * 2.5)) * c3x_open_sea;
-        c3x_water = float4(autumn_water(autumn_surface.rgb, autumn_strength), autumn_surface.a);""")),
+    # No water edit: Autumn keeps Summer's coast, sea, ocean and rivers (user, 2026-10-26).
 ]
 
 # ---------------------------------------------------------------- Winter
@@ -611,32 +608,17 @@ SPRING_EDITS = [
                 pow(saturate(dot(normalize(View.xyz), -light_direction) * 0.5 + 0.5), 2) * (1 - ndl);""")),
     before("spring/underlay", INTEGRATED[:3], DEBUG_ALBEDO,
            guard(SPRING, "        albedo = spring_ground(albedo, world_position);")),
-    before("spring/water", INTEGRATED[:3], WATER_DISPATCH, guard(SPRING, """        float4 spring_surface = c3x_water;
-        float spring_strength = (input.surface_kind > 8.5 && input.surface_kind < 9.5 ? SPRING_RIVER_WATER : 1) *
-            lerp(SPRING_WATER_NIGHT, 1, saturate(environment_sun_intensity * 2.5)) * c3x_open_sea;
-        c3x_water = float4(spring_water(spring_surface.rgb, spring_strength), spring_surface.a);""")),
+    # No water edit: Spring keeps Summer's coast, sea, ocean and rivers (user, 2026-10-26).
 ]
 
 # ---------------------------------------------------------------- game open water
-# Relative recolour on top of the Sea/Ocean family tint: one hue offset and
-# chroma/lightness scale, faded at night, never a pull to a single hue. Coast
-# water keeps Summer's translucent look (user, 2026-10-22); the grade fades in
-# from Coast to Sea. Low-chroma foam and glints sit outside the gate.
-def _open_water(season, prefix, shift, chroma, light, pivot=None, contrast=None, coast=None):
-    lightness = (f"lch.x = lerp(lch.x, {pivot} * {light} + (lch.x - {pivot}) * {contrast}, gate);"
-                 if pivot is not None else f"lch.x *= lerp(1, {light}, gate);")
-    if coast is None:
-        return guard(season, f"""        float3 lch = {prefix}_lch(color);
-        float hue = lch.z < 0 ? lch.z + 360 : lch.z;
-        float gate = smoothstep(150, 185, hue) * (1 - smoothstep(280, 300, hue)) * smoothstep(0.008, 0.02, lch.y) *
-            lerp({prefix.upper()}_WATER_NIGHT, 1, saturate(environment_sun_intensity * 2.5)) *
-            smoothstep(.34, .63, saturate(input.surface_coordinate));
-        lch.z = hue + {shift} * gate;
-        lch.y *= lerp(1, {chroma}, gate);
-        {lightness}
-        color = {prefix}_from_lch(lch);""")
-    # coast = (hue shift, chroma gain) on Coast water, blending to the sea's
-    # across the families; lightness changes only toward Sea and Ocean.
+# Only Winter recolours open water: Autumn and Spring keep Summer's coast, sea and
+# ocean (user, 2026-10-26). A relative recolour on top of the Sea/Ocean family tint:
+# one hue offset and chroma/lightness scale, faded at night, never a pull to a
+# single hue. Coast takes `coast` (hue shift, chroma gain) blending to the sea's,
+# its lightness unchanged (user, 2026-10-23). Low-chroma foam and glints stay out.
+def _open_water(season, prefix, shift, chroma, light, pivot, contrast, coast):
+    lightness = f"lch.x = lerp(lch.x, {pivot} * {light} + (lch.x - {pivot}) * {contrast}, gate);"
     coast_shift, coast_chroma = coast
     return guard(season, f"""        float3 lch = {prefix}_lch(color);
         float hue = lch.z < 0 ? lch.z + 360 : lch.z;
@@ -654,15 +636,13 @@ def _open_water(season, prefix, shift, chroma, light, pivot=None, contrast=None,
 
 WATER_EDITS = [
     before("water/open", [WATER_SURFACE], "    return q6_scene_output(float4(color, alpha)).color;",
-           _open_water(AUTUMN, "autumn", 4, "AUTUMN_WATER_CHROMA", "AUTUMN_WATER_LIGHT")
-           + _open_water(WINTER, "winter", "(WINTER_WATER_HUE - WINTER_WATER_REF_HUE)", "WINTER_WATER_CHROMA",
+           _open_water(WINTER, "winter", "(WINTER_WATER_HUE - WINTER_WATER_REF_HUE)", "WINTER_WATER_CHROMA",
                          "WINTER_WATER_LIGHT", "WINTER_WATER_PIVOT", "WINTER_WATER_CONTRAST",
-                         coast=("WINTER_COAST_SHIFT", "WINTER_COAST_CHROMA_GAIN"))
-           + _open_water(SPRING, "spring", 6, "SPRING_WATER_CHROMA", "0.9")),
+                         coast=("WINTER_COAST_SHIFT", "WINTER_COAST_CHROMA_GAIN"))),
 ]
 
-# Last at the dispatch: every season has recoloured the one water evaluation
-# (Summer leaves it unchanged). The original return is preprocessed out: fxc
+# Last at the dispatch: Winter has recoloured the one water evaluation (the other
+# seasons leave it unchanged). The original return is preprocessed out: fxc
 # would otherwise inline a second, dead copy of the water material (+50% compile).
 DISPATCH_END = [before("core/water-return", INTEGRATED[:3], WATER_DISPATCH, "        return c3x_water;\n#if 0\n")]
 
