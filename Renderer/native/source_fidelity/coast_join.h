@@ -23,4 +23,21 @@ inline float desert_coast_coverage(float distance) {
 inline float coast_relief(float distance,float beach_width) {
     return coast_ramp((distance-beach_width-.22f)/.36f);
 }
+// Mountains and volcanoes meet water as a rocky coast where their rock stands
+// (stone: the stamp's own rise in units, before coast or river scaling), as
+// hills do behind a rocky shore: the cover is complete .04 tiles from the
+// water and the rise follows over .22 tiles. Behind the beach ramp a one-tile
+// island's shore (~.33 tiles out) left its peak none of its height; the hills'
+// .14-tile cliff kept it but stood it up as a sheer column. Their low foot keeps the beach.
+// Equal ends return exactly, so inland rock and full cover stay bit-identical.
+inline float mountain_coast_rock(float stone) {
+    return coast_ramp((stone-8.f)/24.f);
+}
+inline float mountain_coast_relief(float distance,float beach_width,float stone) {
+    float beach=coast_relief(distance,beach_width);
+    return beach+(coast_ramp((distance-.04f)/.22f)-beach)*mountain_coast_rock(stone);
+}
+inline float mountain_coast_coverage(float coverage,float distance,float stone) {
+    return coverage+(coast_ramp(distance/.04f)-coverage)*mountain_coast_rock(stone);
+}
 } }

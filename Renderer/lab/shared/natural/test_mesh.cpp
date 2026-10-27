@@ -47,7 +47,7 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     float world_y=float(nr)+1-(int(y)-1)*step;
                     auto sample=mountain_at(world_x,world_y);
                     auto shore=shore_sample_at(world_x,world_y);
-                    float scale=coast_relief(float(shore.distance),float(shore.beach_width))*
+                    float scale=mountain_coast_relief(float(shore.distance),float(shore.beach_width),sample.stone)*
                         mountain_river_scale(world_x,world_y);
                     float support=0;
                     surface_height[y*span+x]=height_natural(world_x,world_y,&support)+
@@ -62,7 +62,7 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     float world_x=float(nc)+x*step,world_y=float(nr)+1-y*step;
                     auto sample=mountain_at(world_x,world_y);
                     auto shore=shore_sample_at(world_x,world_y);
-                    float relief=coast_relief(float(shore.distance),float(shore.beach_width));
+                    float relief=mountain_coast_relief(float(shore.distance),float(shore.beach_width),sample.stone);
                     float river_scale=mountain_river_scale(world_x,world_y);
                     unsigned at=(y+1)*span+x+1;
                     float elevation=surface_height[at];
@@ -94,10 +94,14 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     float desert_weight=std::clamp(weights[2]/std::max(source_weight,.00001f),0.f,1.f);
                     float coverage=coast_coverage(float(shore.distance),float(shore.beach_width))*(1-desert_weight)+
                         desert_coast_coverage(float(shore.distance))*desert_weight;
+                    coverage=mountain_coast_coverage(coverage,float(shore.distance),sample.stone);
                     for(auto&weight:weights)weight/=std::max(source_weight,.00001f);
                     out.material_marsh=weights[4];out.authored_relief_height=weights[1];
                     out.authored_relief_blend=weights[2];
-                    out.base_terrain=42+coverage*source_weight;
+                    // Production rounds the covered weight (through its wonder
+                    // shore clamp) before adding the tag; no fused multiply-add.
+                    float covered=coverage*source_weight;
+                    out.base_terrain=42+covered;
                     grid[y*count+x]=out;
                 }
             }

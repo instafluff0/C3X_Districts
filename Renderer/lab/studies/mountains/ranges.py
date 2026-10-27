@@ -93,12 +93,41 @@ VOLCANO_VIEWS = (
 )
 
 
+# Coastal height layout (`--layout coastal`): sea east of raw column 1, with
+# mountains and volcanoes on the straight coast, a corner-joined coastal range,
+# one-tile islands, a two-tile island, a peninsula tip and a lake shore, plus an
+# inland pair for reference. The beach ramp used to flatten these.
+COASTAL_LAYOUT = {
+    **{(dx, dy): COAST for dx in range(2, 16) for dy in range(-16, 16) if (dx + dy) % 2 == 0},
+    (1, -9): MOUNTAINS, (1, -3): VOLCANO, (1, 3): MOUNTAINS, (1, 5): MOUNTAINS, (1, 7): MOUNTAINS,
+    (6, -10): MOUNTAINS, (6, -4): VOLCANO, (6, 2): MOUNTAINS, (7, 3): VOLCANO,
+    (2, 10): GRASSLAND, (3, 11): GRASSLAND, (4, 12): MOUNTAINS,
+    (-4, 0): COAST, (-3, 1): MOUNTAINS, (-5, -1): VOLCANO,
+    (-5, -9): MOUNTAINS, (-5, 7): VOLCANO,
+}
+COASTAL_VIEWS = (
+    ("overview", 128, (1, 0), (1600, 1000)),
+    ("coast-mountain", 256, (1, -9), (1024, 768)),
+    ("coast-volcano", 256, (1, -3), (1024, 768)),
+    ("coast-range", 256, (1, 5), (1024, 768)),
+    ("island-mountain", 256, (6, -10), (1024, 768)),
+    ("island-volcano", 256, (6, -4), (1024, 768)),
+    ("island-pair", 256, (6, 3), (1024, 768)),
+    ("peninsula", 256, (3, 11), (1024, 768)),
+    ("lake", 256, (-4, 0), (1024, 768)),
+    ("inland", 256, (-5, -9), (1024, 768)),
+)
+
+
 def use_layout(name: str) -> None:
     """Select the study layout; volcanoes render under their own output root."""
     global LAYOUT, SNOWY, VIEWS, OUT
     if name == "volcanoes":
         LAYOUT, SNOWY, VIEWS = VOLCANO_LAYOUT, set(), VOLCANO_VIEWS
         OUT = ROOT / "Renderer/lab/out/mountains/volcanoes"
+    elif name == "coastal":
+        LAYOUT, SNOWY, VIEWS = COASTAL_LAYOUT, set(), COASTAL_VIEWS
+        OUT = ROOT / "Renderer/lab/out/mountains/coastal-height"
 
 
 # Real map context: the unchanged test.biq terrain (exported by
@@ -298,7 +327,7 @@ def main() -> int:
     compare.add_argument("labels", nargs="+")
     compare.add_argument("--views")
     compare.add_argument("--hour", type=int, default=12)
-    parser.add_argument("--layout", choices=("ranges", "volcanoes"), default="ranges")
+    parser.add_argument("--layout", choices=("ranges", "volcanoes", "coastal"), default="ranges")
     args = parser.parse_args()
     use_layout(args.layout)
     views = set(args.views.split(",")) if args.views else None

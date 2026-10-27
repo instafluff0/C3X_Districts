@@ -11646,12 +11646,12 @@ public:
                 // As the mesh draws it (relief_mesh_body.h): the rise eases out at
                 // the coast and beside rivers. Without that, gems seated by water
                 // stood on rock that is not drawn and hovered over the bank.
-                float displacement=resource_mountains.sample(natural,u,v).displacement;
+                auto rock=resource_mountains.sample(natural,u,v);
                 auto shore=queries.shore(u,v);
                 float river_scale=natural.river_world?c3x_renderer::render_core::smooth01(
                     (float(natural.river_sample({u,v}).distance)-6.f)/16.f):1.f;
-                return height+displacement*c3x_renderer::fidelity::coast_relief(float(shore.distance),
-                    float(shore.beach_width))*river_scale*queries.hidden_taper(u,v);
+                return height+rock.displacement*c3x_renderer::fidelity::mountain_coast_relief(float(shore.distance),
+                    float(shore.beach_width),rock.stone)*river_scale*queries.hidden_taper(u,v);
             };
             // A tile building's ground (objects::place_tile_buildings), for this
             // tile or a neighbor: the city sites' water test and the mountain's

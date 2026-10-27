@@ -140,12 +140,13 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     auto route_height=[&](float x,float y){
         float base=height_natural(x,y);
         if(!mountain_count)return base;
-        float displacement=mountain_shape.sample(natural,x,y).displacement;
-        if(displacement<=0)return base;
+        auto rock=mountain_shape.sample(natural,x,y);
+        if(rock.displacement<=0)return base;
         auto shore=queries.shore(x,y);
         float river_scale=input.river_ready?
             smooth01((float(scratch.rivers.river_sample({x,y}).distance)-6.f)/16.f):1.f;
-        return base+displacement*coast_relief(float(shore.distance),float(shore.beach_width))*river_scale*queries.hidden_taper(x,y);
+        return base+rock.displacement*mountain_coast_relief(float(shore.distance),float(shore.beach_width),rock.stone)*
+            river_scale*queries.hidden_taper(x,y);
     };
 
     auto relief=[&](float u,float v){auto s=pickup_surface.sample(u,v);

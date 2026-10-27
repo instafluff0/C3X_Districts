@@ -40,7 +40,9 @@ struct MountainPiece {
     HeightField const* wonder_ground=nullptr;HeightField const* wonder_special=nullptr;::c3x_renderer::render_core::NaturalWonderPack::Kit const* wonder=nullptr;
 };
 struct MountainSample {
-    float displacement=0,dominant=0,height=0,u=0,v=0,snow=0;
+    // stone: the highest mountain or volcano piece (no wonder), which meets
+    // water as a rocky coast (coast_join.h mountain_coast_relief).
+    float displacement=0,dominant=0,height=0,u=0,v=0,snow=0,stone=0;
     // The highest volcano stamp here: its coverage over other pieces, its
     // texture position, authored lava channel and Civ III activity.
     float volcano=0,volcano_u=.5f,volcano_v=.5f,channel=0;unsigned activity=0;
@@ -215,6 +217,7 @@ struct MountainShape {
             // is already zero there for the shipped stamps.
             float displacement=shape*p.height*smooth01((p.reach-distance)/(.1f*p.reach));
             if(displacement<=0)continue;
+            if(!p.wonder)result.stone=std::max(result.stone,displacement);
             if(p.channel_field){
                 if(displacement>volcano){
                     volcano=displacement;result.volcano_u=u;result.volcano_v=v;

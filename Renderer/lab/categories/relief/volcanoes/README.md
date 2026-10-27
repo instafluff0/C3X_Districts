@@ -20,6 +20,8 @@ on the rendered surface.
   brightens it and adds narrow lava flows down the authored channels. With
   custom rendering on, the injected spawn patch hides Civ III's own volcano
   smoke/lava animation; the effect keeps its state.
+- Beside water the cone keeps its full height and meets the sea as a rocky
+  coast, as mountains do (accepted 2026-10-27; mountains README).
 - The retired ground provider (`render_core/relief_query.h`) contributes
   nothing for volcanoes under separate natural relief; one slot family used to
   raise a second cone there.

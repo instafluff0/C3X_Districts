@@ -1,5 +1,31 @@
 # Mountain material diagnosis
 
+## Coastal height (2026-10-27, accepted)
+
+The user found mountains and volcanoes beside water "comically" short. Cause:
+every mountain-displacement consumer scaled the stamp by the beach ramp
+`coast_relief`, which is zero until beach + .22 tiles from the water and full
+only at beach + .58. A one-tile island's shore lies ~.34 tiles from its
+centre, so island peaks kept 0% of their height, a peninsula tip 6% and a
+mountain on a straight coast 59%. Only hills could make a rocky coast.
+
+Fix (`native/source_fidelity/coast_join.h`): where a mountain or volcano stamp
+stands (`MountainSample::stone`, the highest non-wonder piece; full from 32
+units, none below 8) its rock meets the water as a rocky coast, as hills do:
+cover complete .04 tiles from the water, rise over the next .22 (the hills'
+.14 stood a one-tile island's mountain up as a sheer column). The low foot
+keeps the beach; wonder stamps and inland rock are bit-identical. The mesh,
+routes, resource seating, plume and wonder effects share
+`mountain_coast_relief`. Test: `Renderer/native/test_mountain_coast_height.py`
+(fails on the old ramp). Layout `ranges.py --layout coastal`: straight coast,
+coastal range, one- and two-tile islands, peninsula tip, lake shore, inland.
+
+```sh
+python3 Renderer/lab/studies/mountains/ranges.py --layout coastal render before --dll PATH
+python3 Renderer/lab/studies/mountains/ranges.py --layout coastal render after
+python3 Renderer/lab/studies/mountains/ranges.py --layout coastal review before after --hours 12
+```
+
 ## Volcano workover (2026-10-07, accepted)
 
 The user found volcanoes odd, too tall and missing lava, and accepted more

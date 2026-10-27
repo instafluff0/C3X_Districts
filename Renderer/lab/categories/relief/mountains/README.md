@@ -4,6 +4,18 @@ Five authored macro height/blend variants form a continuous relief surface.
 Grass, plains, tundra or desert climbs the lower slope before stone takes over.
 Terrain decals remain later.
 
+## Coastal height (2026-10-27, accepted)
+
+Mountains and volcanoes by water used to sink behind the flat beach ramp
+(`coast_relief`): one-tile islands kept none of their height, coasts ~60%.
+Where their stamp stands, their rock now meets the water as a rocky coast,
+like hills (`mountain_coast_relief`/`mountain_coast_coverage` in
+`native/source_fidelity/coast_join.h`); mesh, routes, resources, plume and wonder
+effects share it. Test `Renderer/native/test_mountain_coast_height.py`; study
+notes in `Renderer/lab/studies/mountains/README.md`. The user accepted the Lab
+result. An A/B `-Scenario resources` game run on the 1498 AD save shows the
+flattened coastal volcano and mountain by Lahore standing.
+
 ## Joined ranges, snow caps and shadows (accepted 2026-10-07)
 
 The user accepted the Lab result ("Looks good, I approve putting in the

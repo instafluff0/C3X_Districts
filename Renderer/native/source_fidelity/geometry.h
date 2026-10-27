@@ -54,8 +54,9 @@ if(fidelity_profile) {
         float x=float(nc)+.5f,y=float(nr)+.5f;
         auto shore=shore_sample_at(x,y);
         float river_scale=river_terrain_near?smooth01((float(river_at(x,y))-6.f)/16.f):1.f;
-        float crater=height_natural(x,y)+cone.sample(natural,x,y).displacement*
-            coast_relief(float(shore.distance),float(shore.beach_width))*river_scale*hidden_taper_at(x,y);
+        auto rock=cone.sample(natural,x,y);
+        float crater=height_natural(x,y)+rock.displacement*
+            mountain_coast_relief(float(shore.distance),float(shore.beach_width),rock.stone)*river_scale*hidden_taper_at(x,y);
         c3x_renderer::city_fidelity::Surfaces plume;
         if(c3x_renderer::city_fidelity::volcano_plume(cities.library,nc,nr,crater,queries.tile(nc,nr).erupting,
                 project_natural,false,plume))
@@ -68,8 +69,9 @@ if(fidelity_profile) {
         auto relief_at=[&](float x,float y){
             auto shore=shore_sample_at(x,y);
             float river_scale=river_terrain_near?smooth01((float(river_at(x,y))-6.f)/16.f):1.f;
-            return height_natural(x,y)+shape.sample(natural,x,y).displacement*
-                coast_relief(float(shore.distance),float(shore.beach_width))*river_scale*hidden_taper_at(x,y);
+            auto rock=shape.sample(natural,x,y);
+            return height_natural(x,y)+rock.displacement*
+                mountain_coast_relief(float(shore.distance),float(shore.beach_width),rock.stone)*river_scale*hidden_taper_at(x,y);
         };
         c3x_renderer::city_fidelity::Surfaces effects;
         if(c3x_renderer::city_fidelity::wonder_effects(cities.library,nc,nr,wonder_kit->effects,relief_at,
