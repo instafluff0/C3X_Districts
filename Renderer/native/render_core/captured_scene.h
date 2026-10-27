@@ -25,10 +25,10 @@ public:
     // second step can arrive before the first step's view is drawn.
     static constexpr unsigned hidden_ring=1u<<24;
     static constexpr int ring_reach=2;
-    // Raw-coordinate offsets within ring_reach tiles (excluding the tile);
-    // stops and returns true when visit does.
-    template<class Visit>static bool each_ring_offset(Visit visit){
-        constexpr int reach=2*ring_reach;
+    // Raw-coordinate offsets within `tiles` tiles, ring_reach by default
+    // (excluding the tile); stops and returns true when visit does.
+    template<class Visit>static bool each_ring_offset(Visit visit,int tiles=ring_reach){
+        int const reach=2*tiles;
         for(int dy=-reach;dy<=reach;++dy)for(int dx=-reach;dx<=reach;++dx)
             if(!((dx+dy)&1) && (dx||dy) && dx+dy>=-reach && dx+dy<=reach && dy-dx>=-reach && dy-dx<=reach && visit(dx,dy))return true;
         return false;

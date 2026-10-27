@@ -24,10 +24,12 @@ public:
     unsigned held_waiting=0,held_undrawn=0;
 private:
     // reveal_content: what the tile showed when Civ III revealed it
-    // (content_hash), compared with what the drawn view drew there.
-    struct Cell {unsigned native=0,shown=0,displayed=0;std::vector<Arrival> waits;unsigned long long seen=0,reveal_content=0;bool sampled=false;};
+    // (content_hash), compared with what the drawn view drew there;
+    // reveal_unit: a unit stood on it (bodies pose only on seen tiles).
+    struct Cell {unsigned native=0,shown=0,displayed=0;std::vector<Arrival> waits;unsigned long long seen=0,reveal_content=0;bool sampled=false,reveal_unit=false;};
     std::map<std::pair<int,int>,Cell> cells;
     std::vector<c3x_renderer_tile_v1> tiles;
+    std::vector<Cell*> sampled_cells;
     unsigned long long scope=0,sample_id=0;
     long long capture_ticks=-1,capture_frequency=0;
     bool admitted=false;
@@ -59,7 +61,8 @@ public:
             auto found=cells.find(key);
             if(found==cells.end())found=cells.emplace(key,Cell{native,native,{}}).first;
             auto& cell=found->second;cell.seen=sample_id;
-            if((native&C3X_RENDERER_TILE_EXPLORED) && !(cell.native&C3X_RENDERER_TILE_EXPLORED))cell.reveal_content=content_hash(tile);
+            if((native&C3X_RENDERER_TILE_EXPLORED) && !(cell.native&C3X_RENDERER_TILE_EXPLORED)){
+                cell.reveal_content=content_hash(tile);cell.reveal_unit=tile.unit_type_id>=0;}
             if((native&cell.native)!=cell.native){cell.shown&=native;cell.waits.clear();}
             if(native!=cell.native){
                 if((native&~cell.shown)&&!represented.empty())cell.waits=represented;
@@ -80,34 +83,45 @@ public:
         if(!frame.tiles||frame.tile_count>8192)return result;
         tiles.assign(frame.tiles,frame.tiles+frame.tile_count);
         // The view draws explored ground, and unexplored tiles near it as
-        // terrain (the hidden ring, CapturedScene), so lifting fog of war or
-        // a reveal there needs no new view: the overlay lifts as soon as
-        // native sight arrives. Only cells newly shown need the check.
+        // terrain with their contents (the hidden ring, CapturedScene), so
+        // fog of war lifts on it as soon as native sight arrives. A reveal
+        // lifts on it only when it draws every newly explored tile whole:
+        // - contents as revealed: the ring draws Civ III's capture of the
+        //   tile (ring_content) but withholds cities and live effects, and
+        //   unit bodies pose only on seen tiles;
+        // - ring terrain all around, so explored land within one tile: a
+        //   tile two away meets undrawn ground, a sharp edge in the fade.
+        // Otherwise all of them wait for the view built with the reveal, so
+        // tiles, contents and soft edges appear at once (the user, October 27).
         std::set<std::pair<int,int>> explored;
         auto wrap=[](int value,int extent,bool wraps){return wraps && extent>0?((value%extent)+extent)%extent:value;};
-        auto drawn=[&](c3x_renderer_tile_v1 const& tile,Cell const& cell){
-            if(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED)return bits;
-            // The view drew Civ III's capture of this unexplored tile as the
-            // hidden ring (CapturedScene::ring_content). A reveal showing more
-            // (a city, or improvements learned with it) waits for a view
-            // drawing it, so the tile appears with its contents.
-            if(cell.reveal_content && content_hash(CapturedScene::ring_content(tile))!=cell.reveal_content)return tile.tile_flags&bits;
-            if(explored.empty())for(auto const& other:tiles)if(other.tile_flags&C3X_RENDERER_TILE_EXPLORED)explored.emplace(other.tile_x,other.tile_y);
+        auto whole=[&](c3x_renderer_tile_v1 const& tile,Cell const& cell){
+            if(cell.reveal_unit || (cell.reveal_content && content_hash(CapturedScene::ring_content(tile))!=cell.reveal_content))return false;
+            if(explored.empty())for(unsigned i=0;i<frame.tile_count;++i)
+                if(frame.tiles[i].tile_flags&C3X_RENDERER_TILE_EXPLORED)explored.emplace(frame.tiles[i].tile_x,frame.tiles[i].tile_y);
             return CapturedScene::each_ring_offset([&](int dx,int dy){
                 return explored.count({wrap(tile.tile_x+dx,frame.world_width_tiles,frame.world_wrap_x!=0),
                                        wrap(tile.tile_y+dy,frame.world_height_tiles,frame.world_wrap_y!=0)})!=0;
-            })?bits:tile.tile_flags&bits;
+            },CapturedScene::ring_reach-1);
         };
-        for(auto& tile:tiles){
+        bool reveal=true;sampled_cells.assign(tiles.size(),nullptr);
+        for(std::size_t i=0;i<tiles.size();++i){auto const& tile=tiles[i];
             auto found=cells.find({tile.tile_x,tile.tile_y});
             if(found==cells.end())continue;
-            auto& cell=found->second;
+            auto& cell=found->second;sampled_cells[i]=&cell;
             cell.waits.erase(std::remove_if(cell.waits.begin(),cell.waits.end(),[&](auto const& arrival){
                 return std::find(pending.begin(),pending.end(),arrival)==pending.end();
             }),cell.waits.end());
             if(cell.waits.empty())cell.shown=cell.native;
+            if((cell.shown&C3X_RENDERER_TILE_EXPLORED) && !(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED))
+                reveal=reveal && whole(tile,cell);
+        }
+        for(std::size_t i=0;i<tiles.size();++i){auto& tile=tiles[i];
+            if(!sampled_cells[i])continue;
+            auto& cell=*sampled_cells[i];
             // An older view cannot expose new geometry, or undo a newer loss.
-            auto allowed=tile.tile_flags&bits;if(cell.shown&~allowed)allowed=drawn(tile,cell);
+            auto allowed=tile.tile_flags&bits;
+            if((cell.shown&~allowed) && ((tile.tile_flags&C3X_RENDERER_TILE_EXPLORED) || reveal))allowed=bits;
             held_waiting+=(cell.native&~cell.shown)!=0;held_undrawn+=(cell.shown&~allowed)!=0;
             tile.tile_flags=(tile.tile_flags&~bits)|(cell.shown&allowed);
             auto displayed=tile.tile_flags&bits;

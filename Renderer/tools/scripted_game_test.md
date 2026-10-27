@@ -706,6 +706,16 @@ capture from before its fix and to pass after it (performance review 4t, 4v,
   to `64,1632,128`. The route supplies the world width. Before the fix, 380
   draws failed; after it, none.
 
+- `python3 Renderer/tools/check_reveal_whole.py CAPTURE` needs
+  `-ProfileRenderer` and a unit's reveal. It fails if one native capture's
+  reveal was shown in more than one displayed sample. That happened when the
+  fog lifted on the drawn view for some tiles while the rest waited for the
+  next view, so tiles appeared before their contents and neighbours, with
+  sharp edges (the user, October 27). `reveal-scroll` on
+  `Renderer/.cache/perf-review-20261004/newgame-4000BC.SAV`: before the fix,
+  the Scout's second step showed 4 cells and then 1 cell 72 ms later; after
+  it, all 4 reveals were whole (review 93).
+
 Their logic is covered on the Mac by `test_borrowed_snapshot_reuse.py`,
 `test_hit_scene_fast_paths.py` and `test_required_geometry_admission.py`,
 together with exact hit-test answers and mutation-checked counters for the

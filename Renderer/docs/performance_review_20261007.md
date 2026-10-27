@@ -4861,3 +4861,73 @@ crossed the seam with a kept window.
 - `Renderer/tools/check_wrap_seam_basis.py` checks a capture. It failed the
   pre-fix capture (380 draws) and passes both fixed captures and the busy
   `near` run. Its logic is tested in `test_check_wrap_seam_basis.py`.
+
+## 93. A reveal appears whole: tiles, contents and edges together (October 27)
+
+**Report.** When a unit revealed unseen tiles, each tile appeared a moment
+before what was on it (resources, units, cities, animated waves) and before
+the unseen tiles around it, which showed as a sharp edge.
+
+**Cause.** The fog pass admits Civ III's new sight when a scene job starts,
+after the unit's visual arrival (the reveal capture came 0-186 ms after it in
+`reveal-scroll`). Since review 82 the overlay lifts at once on the view
+already drawn for hidden-ring tiles (two tiles around explored land), while
+the job builds the view with the reveal (125-430 ms). That older view was
+not the whole reveal:
+- Waves, moving resource bodies and the winter flurry skip tiles the view's
+  coverage calls unexplored (`visibility_coverage.state()==0`), so ring
+  tiles had none.
+- Unit bodies pose only on tiles the view's frame sees.
+- A ring tile two tiles out borders tiles three out, which the view does not
+  draw. The fade reaches 0.05-0.225 tile into them, so it cut off at the tile
+  edge.
+- A tile with a city (withheld by the ring) waited for its view, but the
+  rest of its reveal did not.
+
+**Fix.**
+- `UnitArrivalVisibility::sample`: a reveal lifts on the drawn view only when
+  that view draws every newly explored tile whole. Each tile must be within
+  one tile of the view's explored land, so its neighbours are ring terrain.
+  Its contents must be as revealed (review 84), with no unit on it.
+  Otherwise every one of them waits for the view built with the reveal. Fog
+  of war lifting over explored ground is unchanged.
+- `drawn_ground` (`c3x_renderer.cpp`) counts the hidden ring as drawn ground,
+  and so does a tile Civ III has explored since the view's coverage. Coastal
+  waves (both paths), moving resource bodies, the flurry and water motion
+  follow it. They are drawn under the overlay with the ring's ground, so a
+  reveal on the drawn view shows them with their tile.
+- `CapturedScene::each_ring_offset` takes a reach.
+
+**Measured** (`reveal-scroll` on `newgame-4000BC`, staged HEAD dbb44a38
+against an isolated HEAD-plus-fix trio 1bb96f47, times after the unit's
+visual arrival):
+
+| Step | Before | Fix |
+| --- | --- | --- |
+| Worker, 3 cells beside explored land | +111 ms on the drawn view | +121 ms on the drawn view |
+| Scout's second step, 5 cells (a village two out) | 4 cells +81 ms, 1 cell +153 ms | 5 cells together when the job's view arrived |
+| Wave ribbons in the first view (cells) | 1 (28) | 7 (88): ring coast |
+| `check_reveal_whole.py` | FAIL, 1 split of 4 | PASS, 0 of 4 |
+
+The fixed run's Scout reveal came +615 ms after arrival, but that run was
+CPU-contended: a peer's VM build started during it. Its job did the same
+work (15 tiles built, 86 reused) with every phase 3 to 10 times slower
+(features 115 ms against 0.9, workers 567 ms against 203, unit admission
+lag 377 ms against 0, UI pings to 603 ms against 212). Unloaded, that job
+took 125 ms, so the whole reveal lands where the last piece did before,
+about +150 ms. Window samples show the village, mountain and gold appearing
+in one frame with soft edges, where before the village tile appeared after
+its neighbours.
+
+**Tests.** Each was confirmed to fail on the previous code.
+- `test_unexplored_ground`:
+  - A reveal two tiles out waits whole, its near tile too.
+  - A unit on a revealed tile waits.
+  - A city's reveal waits whole.
+  - A tile beside explored land still lifts at once (passes on both).
+- `test_fogged_resource_motion`: ring bodies are posed. `drawn_ground` covers
+  seen, fogged, ring, since-explored and unexplored tiles, and the wave,
+  flurry and water gates use it (a coverage-only `drawn_ground` fails).
+- `Renderer/tools/check_reveal_whole.py` fails a capture whose reveal was
+  shown in more than one sample. The pre-fix `reveal-scroll` failed: the
+  Scout's second step showed 4 cells, then 1 cell 72 ms later.

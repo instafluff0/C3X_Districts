@@ -14,7 +14,11 @@ published; a further move cancelled that job. Now:
   (two: a unit on a mountain sees two tiles, and a quick second step can
   arrive before the first step's view is drawn);
 - a reveal changes no terrain input, so it invalidates nothing;
-- the fog lifts on the view already drawn, since it holds the ring.
+- the fog lifts on the view already drawn, since it holds the ring, when that
+  view draws the whole reveal: every newly explored tile within one tile of
+  explored land (its neighbours drawn), with its contents and no unit.
+  Otherwise the whole reveal waits for its view (the user, October 27: tiles
+  appeared before their contents and with sharp edges).
 """
 import unittest
 
@@ -63,7 +67,7 @@ int main(){
 }
 ''')
 
-    def test_fog_lifts_on_the_drawn_view_over_the_ring(self):
+    def test_reveal_beside_explored_land_lifts_on_the_drawn_view(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/unit_arrival_visibility.h"
 #include <cassert>
@@ -73,25 +77,89 @@ using namespace c3x_renderer::render_core;
 constexpr unsigned known=C3X_RENDERER_TILE_VISIBILITY_KNOWN,explored=C3X_RENDERER_TILE_EXPLORED,
  visible=C3X_RENDERER_TILE_VISIBLE;
 int main(){
- // The drawn view: (4,4) explored; (6,4) and (8,4) one and two tiles away
- // (drawn as ring terrain); (10,4) three tiles away (not drawn).
- std::vector<c3x_renderer_tile_v1> drawn(4);
- // As Civ III's capture reports a tile without a city.
- for(int i=0;i<4;++i){drawn[i].tile_x=4+2*i;drawn[i].tile_y=4;drawn[i].tile_flags=known;
-  drawn[i].city_id=drawn[i].city_owner_id=drawn[i].city_size=drawn[i].city_culture_group=drawn[i].city_era=-1;}
+ // The drawn view: (4,4) explored; (6,4) one tile away, drawn as ring
+ // terrain with the ring all around it.
+ std::vector<c3x_renderer_tile_v1> drawn(2);
+ // As Civ III's capture reports a tile without a city or unit.
+ for(int i=0;i<2;++i){drawn[i].tile_x=4+2*i;drawn[i].tile_y=4;drawn[i].tile_flags=known;
+  drawn[i].city_id=drawn[i].city_owner_id=drawn[i].city_size=drawn[i].city_culture_group=drawn[i].city_era=-1;
+  drawn[i].unit_type_id=drawn[i].unit_owner_id=-1;}
  drawn[0].tile_flags|=explored|visible;
- c3x_renderer_frame_v1 view{};view.tiles=drawn.data();view.tile_count=4;view.world_width_tiles=view.world_height_tiles=20;
+ c3x_renderer_frame_v1 view{};view.tiles=drawn.data();view.tile_count=2;view.world_width_tiles=view.world_height_tiles=20;
  UnitArrivalVisibility arrival;arrival.capture(view,1);arrival.sample(view,1);
- // Civ III now reports all three revealed (no unit travel is pending).
- auto native=drawn;for(int i=1;i<4;++i)native[i].tile_flags=known|explored|visible;
+ // Civ III now reports it revealed (no unit travel is pending).
+ auto native=drawn;native[1].tile_flags=known|explored|visible;
  c3x_renderer_frame_v1 now=view;now.tiles=native.data();arrival.capture(now,1);
  auto shown=arrival.sample(view,1);
- // The ring tiles show at once on the drawn view; the far one waits for a
- // view that holds its geometry.
+ assert((shown.tiles[1].tile_flags&(explored|visible))==(explored|visible));
+ assert(arrival.revealed==1 && arrival.held_undrawn==0);
+ std::printf("PASS instant reveal: ring_shown=1\n");
+}
+''')
+
+    def test_reveal_two_tiles_out_waits_whole_for_its_view(self):
+        # A unit on a hill or mountain sees two tiles. The drawn view draws
+        # the ring two tiles around explored land, so a tile two away met
+        # undrawn ground: its outer edge showed a sharp cut in the fade until
+        # the next view, and its neighbour one tile away showed before it
+        # (the user, October 27). The whole reveal now waits for its view.
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_arrival_visibility.h"
+#include <cassert>
+#include <cstdio>
+#include <vector>
+using namespace c3x_renderer::render_core;
+constexpr unsigned known=C3X_RENDERER_TILE_VISIBILITY_KNOWN,explored=C3X_RENDERER_TILE_EXPLORED,
+ visible=C3X_RENDERER_TILE_VISIBLE;
+int main(){
+ // The drawn view: (4,4) explored; (6,4) and (8,4) one and two tiles away.
+ std::vector<c3x_renderer_tile_v1> drawn(3);
+ for(int i=0;i<3;++i){drawn[i].tile_x=4+2*i;drawn[i].tile_y=4;drawn[i].tile_flags=known;
+  drawn[i].city_id=drawn[i].city_owner_id=drawn[i].city_size=drawn[i].city_culture_group=drawn[i].city_era=-1;
+  drawn[i].unit_type_id=drawn[i].unit_owner_id=-1;}
+ drawn[0].tile_flags|=explored|visible;
+ c3x_renderer_frame_v1 view{};view.tiles=drawn.data();view.tile_count=3;view.world_width_tiles=view.world_height_tiles=20;
+ UnitArrivalVisibility arrival;arrival.capture(view,1);arrival.sample(view,1);
+ auto native=drawn;for(int i=1;i<3;++i)native[i].tile_flags=known|explored|visible;
+ c3x_renderer_frame_v1 now=view;now.tiles=native.data();arrival.capture(now,1);
+ // Both wait on the drawn view, the near one too.
+ auto shown=arrival.sample(view,1);
+ for(int i=1;i<3;++i)assert(!(shown.tiles[i].tile_flags&explored));
+ assert(arrival.revealed==0 && arrival.held_undrawn==2);
+ // The view built with the reveal shows both at once.
+ shown=arrival.sample(now,1);
  for(int i=1;i<3;++i)assert((shown.tiles[i].tile_flags&(explored|visible))==(explored|visible));
- assert(!(shown.tiles[3].tile_flags&explored));
- assert(arrival.revealed==2 && arrival.held_undrawn==1);
- std::printf("PASS instant reveal: ring_shown=2 far_waits=1\n");
+ assert(arrival.revealed==2 && arrival.held_undrawn==0);
+ std::printf("PASS whole reveal: two_out_waits=1 near_waits=1 shown_together=2\n");
+}
+''')
+
+    def test_reveal_with_a_unit_waits_for_its_view(self):
+        # Unit bodies pose only on tiles the drawn view sees, so a unit on a
+        # revealed tile appeared a moment after its tile (the user, October
+        # 27). Such a reveal waits for the view that sees it.
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_arrival_visibility.h"
+#include <cassert>
+#include <cstdio>
+#include <vector>
+using namespace c3x_renderer::render_core;
+constexpr unsigned known=C3X_RENDERER_TILE_VISIBILITY_KNOWN,explored=C3X_RENDERER_TILE_EXPLORED,
+ visible=C3X_RENDERER_TILE_VISIBLE;
+int main(){
+ std::vector<c3x_renderer_tile_v1> drawn(2);
+ for(int i=0;i<2;++i){drawn[i].tile_x=4+2*i;drawn[i].tile_y=4;drawn[i].tile_flags=known;
+  drawn[i].city_id=drawn[i].city_owner_id=drawn[i].city_size=drawn[i].city_culture_group=drawn[i].city_era=-1;
+  drawn[i].unit_type_id=drawn[i].unit_owner_id=-1;}
+ drawn[0].tile_flags|=explored|visible;
+ c3x_renderer_frame_v1 view{};view.tiles=drawn.data();view.tile_count=2;view.world_width_tiles=view.world_height_tiles=20;
+ UnitArrivalVisibility arrival;arrival.capture(view,1);arrival.sample(view,1);
+ // Civ III reveals (6,4), one tile away, with a foreign warrior on it.
+ auto native=drawn;native[1].tile_flags=known|explored|visible;native[1].unit_type_id=3;native[1].unit_owner_id=2;
+ c3x_renderer_frame_v1 now=view;now.tiles=native.data();arrival.capture(now,1);
+ assert(!(arrival.sample(view,1).tiles[1].tile_flags&explored) && arrival.held_undrawn==1);
+ assert(arrival.sample(now,1).tiles[1].tile_flags&visible);
+ std::printf("PASS unit reveal waits for its view\n");
 }
 ''')
 
@@ -271,7 +339,9 @@ int main(){
     def test_reveal_with_new_contents_waits_for_its_view(self):
         # A reveal can show what the drawn ring tile lacks (a city, or
         # improvements learned with it). Lifting the fog then showed the
-        # contents a moment later; the tile now waits for a view drawing it.
+        # contents a moment later; the tile now waits for a view drawing it,
+        # and so does the rest of its reveal, which appears with it (the
+        # tiles around a city appeared first, the user, October 27).
         run_cpp(r'''
 #include "Renderer/native/render_core/unit_arrival_visibility.h"
 #include <cassert>
@@ -281,25 +351,29 @@ using namespace c3x_renderer::render_core;
 constexpr unsigned known=C3X_RENDERER_TILE_VISIBILITY_KNOWN,explored=C3X_RENDERER_TILE_EXPLORED,
  visible=C3X_RENDERER_TILE_VISIBLE;
 int main(){
- // The drawn view: (4,4) explored, (6,4) and (8,4) drawn as ring terrain.
+ // The drawn view: (4,4) explored, (6,4) and (5,5) beside it, drawn as
+ // ring terrain.
  std::vector<c3x_renderer_tile_v1> drawn(3);
- for(int i=0;i<3;++i){drawn[i].tile_x=4+2*i;drawn[i].tile_y=4;drawn[i].tile_flags=known;drawn[i].resource_id=-1;
-  drawn[i].city_id=drawn[i].city_owner_id=drawn[i].city_size=drawn[i].city_culture_group=drawn[i].city_era=-1;}
+ int const at[3][2]={{4,4},{6,4},{5,5}};
+ for(int i=0;i<3;++i){drawn[i].tile_x=at[i][0];drawn[i].tile_y=at[i][1];drawn[i].tile_flags=known;drawn[i].resource_id=-1;
+  drawn[i].city_id=drawn[i].city_owner_id=drawn[i].city_size=drawn[i].city_culture_group=drawn[i].city_era=-1;
+  drawn[i].unit_type_id=drawn[i].unit_owner_id=-1;}
  drawn[0].tile_flags|=explored|visible;
  c3x_renderer_frame_v1 view{};view.tiles=drawn.data();view.tile_count=3;view.world_width_tiles=view.world_height_tiles=20;
  UnitArrivalVisibility arrival;arrival.capture(view,1);arrival.sample(view,1);
- // Civ III reveals both: (6,4) as drawn, (8,4) with a city it had captured
+ // Civ III reveals both: (6,4) as drawn, (5,5) with a city it had captured
  // but the ring withheld (city bodies are known once explored).
  drawn[2].city_id=9;drawn[2].city_owner_id=2;view.tiles=drawn.data();
  auto native=drawn;for(int i=1;i<3;++i)native[i].tile_flags=known|explored|visible;
  c3x_renderer_frame_v1 now=view;now.tiles=native.data();arrival.capture(now,1);
  auto shown=arrival.sample(view,1);
- assert(shown.tiles[1].tile_flags&visible);
- assert(!(shown.tiles[2].tile_flags&explored) && arrival.held_undrawn==1);
- // A view drawing the city shows it, whole.
+ for(int i=1;i<3;++i)assert(!(shown.tiles[i].tile_flags&explored));
+ assert(arrival.held_undrawn==2);
+ // A view drawing the city shows the reveal, whole.
  auto next=native;c3x_renderer_frame_v1 later=view;later.tiles=next.data();
- assert(arrival.sample(later,1).tiles[2].tile_flags&visible);
- std::printf("PASS whole reveal: drawn_now=1 city_waits=1\n");
+ shown=arrival.sample(later,1);
+ for(int i=1;i<3;++i)assert(shown.tiles[i].tile_flags&visible);
+ std::printf("PASS whole reveal: city_waits=1 beside_waits=1\n");
 }
 ''')
 

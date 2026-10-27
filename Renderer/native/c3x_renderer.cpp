@@ -4980,6 +4980,17 @@ public:
         return frame.presentation_time_ticks/std::max<c3x_renderer_i64>(1,frame.presentation_frequency/samples_per_second);
     }
 
+    // Ground the view draws: explored, or the hidden ring around it, drawn
+    // under the overlay as explored terrain (CapturedScene; its world input
+    // carries EXPLORED, as a natively explored tile's does). Waves, moving
+    // bodies and flurries are drawn with that ground, so a reveal lifting
+    // the overlay on the drawn view shows them with their tile.
+    bool drawn_ground(int tile_x,int tile_y)const{
+        if(!visibility_pass || visibility_coverage.state(tile_x,tile_y))return true;
+        auto input=topology_cache.world_input(topology_cache.key(tile_x,tile_y));
+        return input && (input->occurrence.tile_flags&C3X_RENDERER_TILE_EXPLORED);
+    }
+
     bool make_wave_cell_room(std::size_t bytes) {
         constexpr std::size_t budget=32u*1024u*1024u,entries=16384;
         if(bytes>budget)return false;
@@ -5008,7 +5019,7 @@ public:
         auto cells=captured_wave_cells(frame,C3X_RENDERER_TILE_RENDER);
         // Pin the complete requested set before any admission can evict cells.
         for(auto const& cell:cells){int c=cell.first.first,r=cell.first.second;
-            if(visibility_pass&&!visibility_coverage.state(c+r,c-r))continue;
+            if(!drawn_ground(c+r,c-r))continue;
             auto found=retained_wave_cells.find(cell.first);
             if(found!=retained_wave_cells.end())found->second.used=retained_wave_epoch;}
         unsigned visible_cells=0,ribbons=0;
@@ -5016,8 +5027,7 @@ public:
         int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
         for(auto const& entry:cells) {
             int c=entry.first.first,r=entry.first.second;
-            unsigned visibility=visibility_pass?visibility_coverage.state(c+r,c-r):2;
-            if(!visibility)continue; // Black, never-explored coast needs no resident wave geometry.
+            if(!drawn_ground(c+r,c-r))continue; // Black, undrawn coast needs no resident wave geometry.
             ++visible_cells;
             auto found=retained_wave_cells.find(entry.first);
             if(found==retained_wave_cells.end()) {
@@ -5100,7 +5110,7 @@ public:
         std::size_t bytes=0;
         for(auto const& entry:cells){
             int c=entry.first.first,r=entry.first.second;
-            unsigned visibility=visibility_pass?visibility_coverage.state(c+r,c-r):2;if(!visibility)continue;
+            if(!drawn_ground(c+r,c-r))continue;
             auto identity=world_coast.world().index(c,r);if(identity==std::size_t(-1))continue;
             auto hash=c3x_renderer::stable_hash(unsigned(identity)*193u+71u);
             float seed=c3x_renderer::stable_random(hash),seed2=c3x_renderer::stable_random(hash+23u);
@@ -5162,7 +5172,7 @@ public:
         auto ignore=[](auto,auto){};
         for(unsigned i=0;i<frame.tile_count;++i){auto const& t=frame.tiles[i];
             if(!(t.tile_flags&C3X_RENDERER_TILE_RENDER) || t.real_terrain_type!=6)continue;
-            if(visibility_pass && !visibility_coverage.state(t.tile_x,t.tile_y))continue;
+            if(!drawn_ground(t.tile_x,t.tile_y))continue;
             int c=(t.tile_x+t.tile_y)/2,r=(t.tile_x-t.tile_y)/2;
             c3x_renderer::fidelity::SurfaceQueries query(world_coast,samples,t.tile_x,t.tile_y,ignore,ignore,true,&natural);
             float const ground=2.5f+query.low_height(natural,float(c)+1.f,float(r));
@@ -5320,8 +5330,7 @@ public:
             float submersion=pose_only && anchor.submerged?animation.submersion:0.f;
             // A body's depth stands on the highest ground under its footprint.
             float depth_ground=anchor.ground+anchor.depth_lift;
-            unsigned visibility=visibility_pass?visibility_coverage.state(anchor.tile_x,anchor.tile_y):2;
-            if(!visibility)continue; // Never-explored objects contribute no body or shadow.
+            if(!drawn_ground(anchor.tile_x,anchor.tile_y))continue; // Undrawn objects contribute no body or shadow.
             // Explored resources keep moving in fog, as water does (the user,
             // October 10); they were posed at time zero while not visible.
             double time=c3x_renderer::ambient_animation_time(ticks,frame.presentation_frequency,
@@ -9642,7 +9651,8 @@ public:
         bool water_active=false;visible_water_animations=0;
         if(water_motion && city_profile)
             for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
-                if(!c3x_renderer::render_core::water_scene_tile(tile,frame,visibility_pass))continue;
+                // Hidden-ring water moves under the overlay, as its waves do.
+                if(!c3x_renderer::render_core::water_scene_tile(tile,frame,visibility_pass && !drawn_ground(tile.tile_x,tile.tile_y)))continue;
                 water_active=true;
                 ++visible_water_animations;
             }

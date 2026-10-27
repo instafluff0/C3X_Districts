@@ -13,7 +13,7 @@ class ResourceInstanceTests(unittest.TestCase):
             '        std::vector<c3x_renderer::FeatureSourceVertex> posed;', 1)[0]
         samples = compose.split('        for (auto const & anchor:resource_anchors) {', 1)[1].split(
             '            if(city_profile) {', 1)[0]
-        clock = function(source, 'resource_clock')
+        clock = function(source, 'resource_clock') + function(source, 'drawn_ground')
         ticks = compose.split('        auto ticks=clock*', 1)[1].split(';', 1)[0]
         run_cpp(r'''
 #include "Renderer/native/render_core/resource_instances.h"
@@ -25,6 +25,9 @@ using namespace c3x_renderer;using namespace c3x_renderer::render_core;
 using LONG=int;struct D3D11_RECT {LONG left,top,right,bottom;};
 struct Sampler {
  VisibilityCoverage visibility_coverage;bool visibility_pass=true,world_backdrops=true;
+ // No world inputs: the hidden ring is covered by test_fogged_resource_motion.
+ struct {struct Input {c3x_renderer_tile_v1 occurrence;};
+  std::uint64_t key(int,int)const{return 0;} Input const* world_input(std::uint64_t)const{return nullptr;}} topology_cache;
  int width=2240,height=1260;
  struct {unsigned pose_samples=0,backdrop_blocks=0;}resource_preparation;
  struct Anchor {unsigned asset=0,seed=0;int tile_x=4,tile_y=4;float ground=0,depth_lift=0;bool submerged=true;};
