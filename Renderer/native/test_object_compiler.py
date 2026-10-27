@@ -1317,7 +1317,7 @@ int main(){
   auto const& out=rigid.vertices[0];assert(out.u==.4f && out.v==.5f && out.macro_u==.6f && out.relief_owner_u==.7f);
   assert(out.normal_z==1 && out.material_grass==1 && out.authored_relief_height==1 && out.base_terrain==105);
   assert(ground.vertices[0].base_terrain==60 && paving.vertices[0].base_terrain==62.5f);
-  assert(ground.vertices[0].world_z==(4.f+.005f)/112);
+  assert(ground.vertices[0].world_z==(4.f+city_fidelity::ground_lift)/112);
  }
 }
 ''')

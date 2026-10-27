@@ -418,6 +418,13 @@ bool wonder_effects(Library const& library,int nc,int nr,std::vector<float> cons
     }
     return output.chunks.size()>before;
 }
+// Paving and source ground lie this many height units over the natural surface
+// and test depth read-only. The terrain is flat between its own grid points
+// (24 per tile around hills) and a plate between its .02-tile points, so on a
+// curved hill the two cross: at .005 units the terrain cut streaks through the
+// plate. Two units clear hill curvature at that grid, stay under draped farm
+// fields (~2.9 units) and routes, and move the plate under a pixel at 1x.
+constexpr float ground_lift=2.f;
 template<class Height,class Project,class Stop=ContinueCompilation,class Site=EverySite>
 bool compile(Library const& library,Composition const& selected,int nc,int nr,
         Height height_natural,Project project_natural,Surfaces& output,Stop stop={},bool indexed=false,Site site={}){
@@ -563,7 +570,7 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
             for(auto const&v:p.vertices){
                 if((unsigned(&v-p.vertices.data())&255u)==0 && stop())return false;
                 float world[3],n[3],tangent[3],bitangent[3];placement.position(v.position,world);
-                if(material.ground)world[2]=(height_natural(world[0],world[1])+.005f)/112;
+                if(material.ground)world[2]=(height_natural(world[0],world[1])+ground_lift)/112;
                 auto out=project_natural(world[0],world[1],world[2]*112);
                 placement.source_direction(v.normal,n);placement.source_direction(v.tangent,tangent);placement.source_direction(v.bitangent,bitangent);
                 out.u=v.uv0[0];out.v=v.uv0[1];out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];
@@ -587,7 +594,7 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
         // shader tag. The coverage still controls its feathered edge.
         float const tag=(library.materials[p.material].channels&2u)?64.f:62.f;
         auto pave=[&](float x,float y,float coverage){
-            auto out=project_natural(x,y,height_natural(x,y)+.005f);
+            auto out=project_natural(x,y,height_natural(x,y)+ground_lift);
             out.u=x/p.period[0];out.v=y/p.period[1];
             out.base_terrain=tag+coverage*site.ground(x,y);
             transformed.push_back(out);
