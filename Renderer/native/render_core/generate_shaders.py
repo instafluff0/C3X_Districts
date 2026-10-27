@@ -10,6 +10,34 @@ import json
 import re
 
 ROOT = Path(__file__).resolve().parent
+# Every shadow removes noon's share of open-ground light at every hour (user,
+# 2026-10-27): shadow strength past 1 also shades the sky fill, which carries
+# most night light. tools/overlay_shadow_sky.py carries this into the pack.
+SHADOW_SKY = (
+    ("    float direct_visibility = 1.0 - environment_shadow_strength *\n"
+     "        (1.0 - shadow_visibility);\n"
+     "    float3 ambient = environment_ambient_color *\n"
+     "        (0.46 * ambient_visibility);\n",
+     "    // Strength past 1 also shades the sky fill, so every hour's shadow\n"
+     "    // removes noon's share of open-ground light (environment_runtime.cpp).\n"
+     "    float direct_visibility = 1.0 - saturate(environment_shadow_strength) *\n"
+     "        (1.0 - shadow_visibility);\n"
+     "    float3 ambient = environment_ambient_color *\n"
+     "        (0.46 * ambient_visibility * (1.0 - saturate(environment_shadow_strength - 1.0) *\n"
+     "         (1.0 - shadow_visibility)));\n"),
+    ("    if (l13a_layout < 0.5)\n        return environment_shadow_strength;\n",
+     "    if (l13a_layout < 0.5)\n        return saturate(environment_shadow_strength);\n"),
+    ("    return max(environment_shadow_strength, minimum_strength);\n",
+     "    return max(saturate(environment_shadow_strength), minimum_strength);\n"),
+)
+
+
+def shadow_sky(text):
+    for old, new in SHADOW_SKY:
+        if new not in text:
+            assert text.count(old) == 1, old
+            text = text.replace(old, new)
+    return text
 
 
 def generate(source_root=None, output_root=None, output_name='terrain_scene.hlsl', *, complete_rock_channels=False):
@@ -28,7 +56,7 @@ def generate(source_root=None, output_root=None, output_name='terrain_scene.hlsl
         if source.name == 'scene_linear_v1.hlsl':
             begin = text.index('#ifdef C3X_GAME_RENDERER')
             finish = text.index('#else', begin)
-            text = text[:begin] + settings + text[finish:]
+            text = shadow_sky(text[:begin] + settings + text[finish:])
             # The captured source OWNER supplies activity on neighboring land.
             text = text.replace('? input.active_effect : q4_volcano_active(input,fixture_active)',
                                 '? input.relief_material.w : q4_volcano_active(input,fixture_active)')

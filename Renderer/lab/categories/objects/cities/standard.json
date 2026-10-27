@@ -64,6 +64,7 @@
     "Renderer.native.test_city_submission",
     "Renderer.native.test_city_site",
     "Renderer.native.test_city_plate_lift",
+    "Renderer.native.test_preview_effects",
     "Renderer.lab.studies.city_readability.test_recompose",
     "Renderer.tools.test_overlay_city_shading",
     "Renderer.native.test_custom_renderer_fireworks"

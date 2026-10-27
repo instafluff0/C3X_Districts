@@ -68,7 +68,9 @@ inline float dynamic_shadow_opacity(EnvironmentState const& e) {
         float direct=e.sun_color[i]*e.sun_intensity*(.16f+.84f*z)+
             e.moon_color[i]*e.moon_intensity*(.20f+.80f*z)*.82f*2.2f;
         open+=luma[i]*(ambient+direct);
-        shaded+=luma[i]*(ambient+direct*(1-e.shadow_strength));
+        // Strength past 1 also shades the sky fill (frame_illumination).
+        float s=e.shadow_strength;
+        shaded+=luma[i]*(ambient*(1-std::clamp(s-1,0.f,1.f))+direct*(1-std::clamp(s,0.f,1.f)));
     }
     return c3x_dynamic_shadow_opacity(open,shaded);
 }

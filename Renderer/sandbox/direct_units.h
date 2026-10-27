@@ -475,7 +475,7 @@ float4 PSShadow(Output i):SV_Target {
         beauty_values[3]=2.05f*response.strength;
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
-        beauty_values[14]=.469979f;beauty_values[15]=environment.shadow_strength;beauty_values[16]=1;
+        beauty_values[14]=.469979f;beauty_values[15]=std::min(environment.shadow_strength,1.f);beauty_values[16]=1;
         context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);work->upload_buffer(beauty);
         double seconds=double(frame.presentation_time_ticks)/
             double(std::max<c3x_renderer_i64>(1,frame.presentation_frequency));
@@ -829,7 +829,7 @@ float4 PSShadow(Output i):SV_Target {
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
         // Self-shadowed limbs lose the share of direct light world shadows do.
-        beauty_values[14]=.469979f;beauty_values[15]=environment.shadow_strength;beauty_values[16]=float(shadow_fit.extent);
+        beauty_values[14]=.469979f;beauty_values[15]=std::min(environment.shadow_strength,1.f);beauty_values[16]=float(shadow_fit.extent);
         if(!look_read){char option[64]={};look_read=true;
             look_override=GetEnvironmentVariableA("C3X_RENDERER_UNIT_LOOK",option,sizeof(option))&&
                sscanf_s(option,"%f,%f,%f",&look[0],&look[1],&look[2])==3;

@@ -16,7 +16,7 @@
     },
     {
       "path": "generated/shaders/lighting/generated/scene_linear_v1.hlsl",
-      "sha256": "9a3893af51b0495acfb853ac642d36bdee311c476ace3de056d6cd5ed62213ff"
+      "sha256": "f76f05a6b2d6ce01a631ee50b3c9ac09b4208fa48534aba06823ff191aae0cac"
     },
     {
       "path": "generated/shaders/lighting/scene_shadow_v1.hlsl",
@@ -40,7 +40,7 @@
     },
     {
       "path": "terrain_scene.hlsl",
-      "sha256": "2a5f7e8550f3964b255d34e54f8f6bd4daaff1907715ea44f11a38591ec90067"
+      "sha256": "11f9512d92581df0b21a6219000fbdf122b6960ea94e626bdc07d9367adde2c2"
     }
   ]
 }

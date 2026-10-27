@@ -76,6 +76,13 @@ reading, with OKLab lightness relative to noon measured on the concept view
   calmer variants (a tinted grade, silvered highlights) lost the vibrancy and
   the user chose this match.
 
+Every shadow removes noon's share of open flat-ground light (0.58) at every
+hour and in every season, by the user's choice (2026-10-27): Civ VI's night
+shadows (units 0.24) read too faint. `shadow_strength` runs to 2. Up to 1 it
+removes direct light; past 1 `frame_illumination` also shades that fraction of
+the sky fill, which carries most night light. Lit ground is unchanged. A unit
+limb in its own body's shadow loses direct light only.
+
 Seasons share the curve. Winter alone scales its night light (ambient and
 moonlight) and display saturation toward `winter_night_light` and
 `winter_night_saturation` with the night activation: snow is a bright neutral

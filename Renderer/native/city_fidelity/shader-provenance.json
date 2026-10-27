@@ -3,7 +3,7 @@
     "current-selected-city-recipes"
   ],
   "source_sha256": {
-    "Renderer/native/environment_refresh/feature.hlsl": "cc3b2b6466eb9a7ec87775f849dacfd6504232c87fc90fc045f12a6830dce609",
+    "Renderer/native/environment_refresh/feature.hlsl": "1353b1f98154975eac3245378d0f0d8f6e4c41bf6455dd141d8c542c3f1fc6a9",
     "Renderer/lab/shared/shaders/lighting/local_facade_lights.hlsl": "264bd350d639f897924489c2773434b2f9e0af5cf37e8f3c7034764ae47bb2c3",
     "Renderer/lab/shared/shaders/objects/city_scene_material.hlsl": "10f58c9512bc3643ca693163079f072e27dc5aae1b763454f57d06c7c5e64238",
     "Renderer/lab/shared/shaders/lighting/city_environment.hlsl": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9",
@@ -13,7 +13,7 @@
     "Renderer/lab/shared/shaders/objects/resident_instance.hlsl": "bc8c8c8930fb3e90b870ddff3d41d4e717f1624c839e33983e9e25d4e713bc6c",
     "Renderer/native/render_core/rigid_feature.hlsl": "8eac14e497808c4096d2c582467e78e1e556c14aecdf35d0b0b2df612c8b8c72",
     "Renderer/native/render_core/rigid_caster.hlsl": "ada23a69492c65fe03c25a907ef4da42f2f0ea326cf6c0b5cb79384071a5b3aa",
-    "Renderer/native/environment_refresh/hydrology.hlsl": "c1d57a1a35317ee8d074b2206fe189ea1b2c1b27ff12c3ea643160516266eacd",
+    "Renderer/native/environment_refresh/hydrology.hlsl": "40f2c5dce4eae0dd9d54f8a1e5074d4a6e5214e7491f69e1f6422fce8142d5cc",
     "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "3dab1def872acbb07acbf075b99d6e79b98fe8430bd59e8586313778fdd4793c",
     "Renderer/native/environment_refresh/terrain.hlsl": "dbe3cf36e34c7bc2aaf2d52b70aaac98256a917d45fff69e89d4f7c240bbc818",
     "Renderer/native/environment_refresh/mountain.hlsl": "be6c23e699ac5eba1ebde5382c3b4dd84a96d09697ae64b8b2be03a98b864c1c",

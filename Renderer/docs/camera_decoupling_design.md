@@ -26,7 +26,9 @@ In order. Details for each are under "Stages" and in the review sections cited.
    request; done, review 75). City smoke, flames, night lights and volcano
    plumes share the city effect layer, which zoom preview frames skipped, so
    they vanished for the whole zoom and after jumps. Previews now draw that
-   layer without the resampled depth. Item 4 removes the case entirely.
+   layer against the reconstructed depth, biased like the live water; drawn
+   without depth (October 11 to 27), torches behind houses shone on their
+   roofs. Item 4 removes the case entirely.
 3. **Cheaper geometry** (added October 11; the 16-bit vertex quantization
    was approved the same day, stage 5 step 2), plus fewer draw calls. Less
    GPU memory means fewer evictions (which also churn the store) and a

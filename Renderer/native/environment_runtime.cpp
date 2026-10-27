@@ -82,6 +82,10 @@ constexpr float winter_night_saturation = 0.75f;
 // colour and scales display saturation by this.
 constexpr float autumn_golden_neutral = 0.35f;
 constexpr float autumn_golden_saturation = 0.85f;
+// Every shadow removes noon's share of open flat-ground light at every hour
+// (user, 2026-10-27): strength 0.84 at noon. Civ VI's night shadows were
+// fainter (0.24), which the user found too faint.
+constexpr float shadow_darkening = 0.5835f;
 
 // The values at an hour, eased between neighbouring keys (wrapping
 // midnight) so a continuous clock never kinks at a key.
@@ -175,8 +179,21 @@ EnvironmentState evaluate_environment(float requested_hour, int season) {
         result.moon_intensity *= night_light;
         result.saturation *= 1.0f + (winter_night_saturation - 1.0f) * result.night_activation;
     }
-    result.shadow_strength = clamp01(0.16f + 0.68f * result.sun_intensity +
-                                     0.10f * result.moon_intensity);
+    // Direct light's share of open flat ground under the key light, as the
+    // gameplay frame_illumination lights it. Strength up to 1 removes direct
+    // light; past 1 it also shades that fraction of the sky fill, which
+    // carries most of the night's light.
+    float luma[3] = {0.2126f, 0.7152f, 0.0722f}, sky_light = 0.0f, direct_light = 0.0f;
+    for (int channel = 0; channel < 3; ++channel) {
+        sky_light += luma[channel] * result.ambient_color[channel] * 0.46f *
+               (1.0f + night_ambient_lift * result.night_activation);
+        direct_light += luma[channel] * (0.16f + 0.84f * 0.8037f) *
+            (result.sun_color[channel] * result.sun_intensity +
+             moon_response * result.moon_color[channel] * result.moon_intensity);
+    }
+    float share = direct_light / std::max(1e-6f, sky_light + direct_light);
+    result.shadow_strength = share >= shadow_darkening ? shadow_darkening / share
+        : 1.0f + (shadow_darkening - share) / (1.0f - share);
     result.emissive_scale = 0.25f + 1.10f * result.night_activation;
     result.water_fresnel = 0.04f + 0.08f * result.night_activation;
     result.water_specular = clamp01(0.20f + 0.42f * result.sun_intensity + 0.30f * result.moon_intensity);

@@ -304,10 +304,13 @@ float3 frame_illumination(float3 normal, float shadow_visibility,
 {
     float sun_diffuse = saturate(dot(normal, environment_sun_direction));
     float moon_diffuse = saturate(dot(normal, environment_moon_direction));
-    float direct_visibility = 1.0 - environment_shadow_strength *
+    // Strength past 1 also shades the sky fill, so every hour's shadow
+    // removes noon's share of open-ground light (environment_runtime.cpp).
+    float direct_visibility = 1.0 - saturate(environment_shadow_strength) *
         (1.0 - shadow_visibility);
     float3 ambient = environment_ambient_color *
-        (0.46 * ambient_visibility);
+        (0.46 * ambient_visibility * (1.0 - saturate(environment_shadow_strength - 1.0) *
+         (1.0 - shadow_visibility)));
     float3 sunlight = environment_sun_color * environment_sun_intensity *
         (0.16 + sun_diffuse * 0.84) * direct_visibility;
     float3 moonlight = environment_moon_color * environment_moon_intensity *
@@ -330,12 +333,12 @@ float frame_output_exposure()
 float frame_cast_shadow_strength()
 {
     if (l13a_layout < 0.5)
-        return environment_shadow_strength;
+        return saturate(environment_shadow_strength);
     float light_height = saturate(frame_light_direction().z);
     float daylight_floor = 0.48 + (1.0 - light_height) * 0.30;
     float minimum_strength = lerp(0.26, daylight_floor,
                                   1.0 - environment_night_activation);
-    return max(environment_shadow_strength, minimum_strength);
+    return max(saturate(environment_shadow_strength), minimum_strength);
 }
 
 float raised_form_response(float diffuse)

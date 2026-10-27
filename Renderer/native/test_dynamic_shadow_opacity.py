@@ -1,4 +1,4 @@
-"""Unit and animated-resource ground shadows match world shadows.
+"""Every shadow matches noon's, and unit and resource shadows match world shadows.
 
 World shadows (terrain, relief, forests, cities, static resources) remove the
 shadow-strength share of direct light in the production `frame_illumination`
@@ -48,6 +48,7 @@ def program():
         "float resource_" + str(index) + "(float coverage){\n" + resource_alpha(path.read_text()) +
         "\n return alpha;\n}\n" for index, path in enumerate(RESOURCE_SHADOWS))
     return r'''
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>
@@ -73,7 +74,7 @@ float unit_self_visibility(float occluded){''' + unit_visibility(UNIT_SHADER.rea
 ''' + illumination + providers + r'''
 int main(){try{
  float noon=0;unsigned samples=0;
- for(int season=0;season<3;++season)for(int step=0;step<48;++step){
+ for(int season=0;season<4;++season)for(int step=0;step<48;++step){
   auto e=evaluate_environment(step*.5f,season);auto light=lighting::key_light(e);
   environment_sun_direction=environment_moon_direction=vec(light.direction.data());
   environment_sun_color=vec(e.sun_color);environment_moon_color=vec(e.moon_color);
@@ -85,8 +86,15 @@ int main(){try{
   float unit=lighting::dynamic_shadow_opacity(e);
   float resource[2]={resource_0(1),resource_1(1)};
   if(step==24 && season==0)noon=world;
-  // The unit beauty frame carries the environment strength in View.w.
-  View.w=e.shadow_strength;
+  // Every hour's shadow removes noon's share of open-ground light (user,
+  // 2026-10-27); sky-lit nights once left 0.08, invisible on grass.
+  if(std::fabs(world-.5835f)>.005f){
+   std::printf("hour %.1f season %d world shadow %.4f strength %.3f\n",step*.5f,season,world,e.shadow_strength);
+   throw std::runtime_error("a shadow is not as dark as noon's");
+  }
+  // The unit beauty frame carries the strength in View.w; self-shadow is
+  // direct light only, so it stops at 1.
+  View.w=std::min(e.shadow_strength,1.f);
   for(float occluded:{.5f,1.f}){
    float limb=unit_self_visibility(occluded);
    float direct=dot(frame_illumination(up,1-occluded,0),luma)/dot(frame_illumination(up,1,0),luma);
@@ -123,9 +131,9 @@ class DynamicShadowOpacityTests(unittest.TestCase):
         direct = DIRECT.read_text()
         self.assertIn("placement_values[14]=c3x_renderer::lighting::dynamic_shadow_opacity(environment);", direct)
         # Every unit beauty frame (live and preview) fills the strength.
-        self.assertEqual(direct.count("beauty_values[15]=environment.shadow_strength;"), 2)
+        self.assertEqual(direct.count("beauty_values[15]=std::min(environment.shadow_strength,1.f);"), 2)
         self.assertEqual(direct.count("beauty_values[14]=.469979f;"), 2)
-        self.assertIn("beauty[15]=environment.shadow_strength;", UNIT_BODIES.read_text())
+        self.assertIn("beauty[15]=std::min(environment.shadow_strength,1.f);", UNIT_BODIES.read_text())
         shader = UNIT_SHADER.read_text()
         self.assertEqual(shader.count("(i,albedo,n,visibility)") + shader.count("emission,visibility)"), 2)
         self.assertNotIn("1-occluded)", shader)

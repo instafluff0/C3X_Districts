@@ -402,7 +402,7 @@ public:
         }
         beauty[3]=2.05f*response.strength;
         beauty[7]=1;beauty[11]=.62f;beauty[12]=.490290f;beauty[13]=-.735435f;beauty[14]=.469979f;
-        beauty[15]=environment.shadow_strength;beauty[16]=float(shadow.extent);beauty[17]=look[0];beauty[18]=look[1];beauty[19]=look[2];
+        beauty[15]=std::min(environment.shadow_strength,1.f);beauty[16]=float(shadow.extent);beauty[17]=look[0];beauty[18]=look[1];beauty[19]=look[2];
         context->UpdateSubresource(beauty_frame,0,nullptr,beauty,0,0);
         context->PSSetConstantBuffers(1,1,&beauty_frame);context->PSSetSamplers(1,1,&samplers[3]);
         pose_ms+=elapsed();

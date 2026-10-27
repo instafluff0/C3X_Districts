@@ -2011,6 +2011,18 @@ struct SandboxFreshPipeline {
     // water pass is biased toward the camera while the static layer is a
     // preview. Exact (restored) frames never use it.
     bool static_preview=false;ID3D11RasterizerState* preview_water_raster=nullptr;std::uint64_t preview_raster_device=~0ull;
+    // Four pixel-depth units (depth = 0.5 - pixels/16384) toward the camera,
+    // in D24 steps, for live layers over a preview's reconstructed depth.
+    ID3D11RasterizerState* preview_bias_raster(){
+        if(preview_raster_device!=renderer.device_generation){
+            if(preview_water_raster){preview_water_raster->Release();preview_water_raster=nullptr;}
+            D3D11_RASTERIZER_DESC desc={};renderer.rasterizer_state->GetDesc(&desc);
+            desc.DepthBias=-INT(4.0*16777216.0/16384.0);
+            if(SUCCEEDED(renderer.device->CreateRasterizerState(&desc,&preview_water_raster)))
+                preview_raster_device=renderer.device_generation;
+        }
+        return preview_water_raster;
+    }
     // Slot selection is fixed for this synchronous draw. A resumable owner must
     // capture this slot address before its batches and hold it through retirement.
     auto& current_raster(){return static_rasters.current();}
@@ -5590,15 +5602,8 @@ struct SandboxFreshPipeline {
             if(!composited && static_preview && preview_overlays){
                 // The preview already holds the near-water overlays; only the
                 // animated water is live (over resampled depth, so biased).
-                if(preview_raster_device!=renderer.device_generation){
-                    if(preview_water_raster){preview_water_raster->Release();preview_water_raster=nullptr;}
-                    D3D11_RASTERIZER_DESC desc={};renderer.rasterizer_state->GetDesc(&desc);
-                    desc.DepthBias=-INT(4.0*16777216.0/16384.0);
-                    if(SUCCEEDED(renderer.device->CreateRasterizerState(&desc,&preview_water_raster)))
-                        preview_raster_device=renderer.device_generation;
-                }
                 auto* raster=renderer.rasterizer_state;
-                if(preview_water_raster && !preview_depth_exact)renderer.rasterizer_state=preview_water_raster;
+                if(!preview_depth_exact)if(auto* biased=preview_bias_raster())renderer.rasterizer_state=biased;
                 bool drawn=draw_layer(water_visible,geometry_water,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale)) &&
                     draw_layer(water_visible,geometry_river,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale));
                 renderer.rasterizer_state=raster;
@@ -5619,16 +5624,8 @@ struct SandboxFreshPipeline {
             }
             if(!composited){
                 ++overlay_misses;if(!overlay_frame.valid)++overlay_miss_unshifted;
-                if(static_preview && preview_raster_device!=renderer.device_generation){
-                    if(preview_water_raster){preview_water_raster->Release();preview_water_raster=nullptr;}
-                    D3D11_RASTERIZER_DESC desc={};renderer.rasterizer_state->GetDesc(&desc);
-                    // Four pixel-depth units (depth = 0.5 - pixels/16384) in D24 steps.
-                    desc.DepthBias=-INT(4.0*16777216.0/16384.0);
-                    if(SUCCEEDED(renderer.device->CreateRasterizerState(&desc,&preview_water_raster)))
-                        preview_raster_device=renderer.device_generation;
-                }
                 auto* raster=renderer.rasterizer_state;
-                if(static_preview && preview_water_raster && !preview_depth_exact)renderer.rasterizer_state=preview_water_raster;
+                if(static_preview && !preview_depth_exact)if(auto* biased=preview_bias_raster())renderer.rasterizer_state=biased;
                 bool drawn=draw_scene(water_visible,settings,full,glow.linear.target,
                         glow.linear.depth,false,float(scene_scale));
                 renderer.rasterizer_state=raster;
@@ -5658,18 +5655,23 @@ struct SandboxFreshPipeline {
         }
         mark_dynamic(dynamic_waves);
         // Flames, smoke, night lights and volcano plumes above city bodies,
-        // below units. A static preview is resampled from another zoom while
-        // the new static layer builds, and a zoom is many previews: tested
-        // against the resampled depth these effects flashed as bright bursts,
-        // and skipped they vanished for the whole zoom (the user, October 11).
-        // Previews draw them without that depth: the quads face the camera
-        // above their own bodies, and their shaders read no scene depth.
+        // below units, tested against the scene depth. A static preview is
+        // resampled from another zoom while the new static layer builds, and
+        // a zoom is many previews. Skipped there, the effects vanished for the
+        // whole zoom (the user, October 11); drawn without depth, torches
+        // behind a house shone on its roof at every zoom step (the user,
+        // 2026-10-27). Previews test them against the reconstructed depth,
+        // biased toward the camera like the live water.
         // C3X_RENDERER_PREVIEW_EFFECTS=0 skips them on previews again.
         char preview_effects[4]={};
         bool const skip_preview_effects=c3x_renderer::render_core::cached_environment("C3X_RENDERER_PREVIEW_EFFECTS",
             preview_effects,sizeof(preview_effects)) && preview_effects[0]=='0';
-        if(!(static_preview && skip_preview_effects) && !effect_visible[geometry_city].empty() && !draw_layer(effect_visible,geometry_city,settings,full,
-                glow.linear.target,static_preview?nullptr:glow.linear.depth,false,float(scene_scale)))return fail("city_effects");
+        auto* const effect_raster=renderer.rasterizer_state;
+        if(static_preview && !preview_depth_exact)if(auto* biased=preview_bias_raster())renderer.rasterizer_state=biased;
+        bool const effects_drawn=(static_preview && skip_preview_effects) || effect_visible[geometry_city].empty() ||
+            draw_layer(effect_visible,geometry_city,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale));
+        renderer.rasterizer_state=effect_raster;
+        if(!effects_drawn)return fail("city_effects");
         // Winter mountain flurry (seasons D4): the renderer's per-view quads,
         // drawn like the attached effects but only on screen (never mirrored),
         // and only while a tile is at least 64 pixels wide; the shader thins
@@ -5682,8 +5684,11 @@ struct SandboxFreshPipeline {
             record.translation_x+=int(window_basis_x);record.translation_y+=int(window_basis_y);
 #endif
             snow[geometry_city].push_back(record);
-            if(!draw_layer(snow,geometry_city,settings,full,glow.linear.target,static_preview?nullptr:glow.linear.depth,
-                    false,float(scene_scale)))return fail("winter_flurry");
+            if(static_preview && !preview_depth_exact)if(auto* biased=preview_bias_raster())renderer.rasterizer_state=biased;
+            bool const snow_drawn=draw_layer(snow,geometry_city,settings,full,glow.linear.target,glow.linear.depth,
+                    false,float(scene_scale));
+            renderer.rasterizer_state=effect_raster;
+            if(!snow_drawn)return fail("winter_flurry");
         }
         renderer.visible_city_effects=unsigned(effect_visible[geometry_city].size())+(flurry?renderer.flurry_quads:0u);
         c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"water_city_effects");
